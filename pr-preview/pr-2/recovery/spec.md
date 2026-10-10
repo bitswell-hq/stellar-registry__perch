@@ -1515,8 +1515,11 @@ the call stack (`cap-0071.md` C8). The rules that follow from it:
 - **The controller reads the account only from its own external entry
   points.** These are `begin_*`, `publish_baseline`, and evidence
   submission, through `account::RecoveryAccountClient`.
-- **`__check_auth` never calls the controller.** The freeze is a local
-  mirror (§9).
+- **`__check_auth`'s own checks never read the controller.** The freeze is
+  a local mirror (§9). The controller runs beneath `__check_auth` only as
+  the recovery rule's policy: OZ's `do_check_auth` calls its `enforce` when
+  a context selects the recovery rule, which only a completion's
+  `apply_doc` does (T5).
 - **Evidence for an account should not be submitted through that account's
   own `execute`.** The account would then be on the stack when the
   controller reads its views or sets its freeze mirror, and the submission
