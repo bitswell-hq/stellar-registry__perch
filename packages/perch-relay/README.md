@@ -90,4 +90,5 @@ attempt ([`docs/deploy/testnet-exercise.md`](../../docs/deploy/testnet-exercise.
 
 Admission by simulation costs one RPC call per post. Rate limiting, the KV
 namespace, routes, and retention belong to the operator; Nido's hosted relay
-is one deployment of this package.
+is one deployment of this package. The package is not published to npm;
+operators use it from this repository.
