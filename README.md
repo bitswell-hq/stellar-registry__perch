@@ -132,8 +132,8 @@ docs/DEFERRED.md      work deferred until after the audit
 docs/recovery/        account recovery: the authoritative spec, statement layouts,
                       CAP-0071 reliance, the implementation map, budgets, and formal
                       coverage
-docs/zk/              ZK recovery circuit, pool, adapter, measurements, and the depth
-                      decision
+docs/zk/              ZK recovery circuit, pool, adapter, and measurements (the
+                      depth decision is in docs/recovery/budgets.md)
 docs/deploy/          build order, manifests, pin verification, and the testnet exercise
                       report
 docs/verification/    what is proved, differentially tested, and tested only (PLAN.md);
