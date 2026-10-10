@@ -10,7 +10,11 @@ The factory pins, at build time:
 
 The account itself pins the compiler, interpreter, and spending limit, so
 `perch-account.wasm` must be built after those are published, and this crate
-after the account (`docs/deploy/README.md`, "Build order"). Populate the cache
-with `scripts/fetch-infra-wasm.sh` (from a deployment manifest) or
-`scripts/deploy-stack.sh` (from a fresh build). A missing file is a build
-error naming it.
+after the account ([`docs/deploy/README.md`](../../../docs/deploy/README.md),
+"Why order matters" and "Tiers"). Populate the cache with
+`scripts/fetch-infra-wasm.sh` (from a deployment manifest) or
+`scripts/build-stack.sh --registry <id>` (from a fresh build;
+`scripts/deploy-stack.sh` runs it). A missing file is a build error naming
+it, and replacing one rebuilds the factory. After a refresh, `cargo test -p
+perch-integration-tests --test testnet_pins` checks the compiled pins
+against the manifest.

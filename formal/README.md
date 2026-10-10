@@ -1,10 +1,11 @@
 # The perch formal model
 
-An executable Lean 4 twin of the perch-program v1 semantics, the core of the
-verification-guided-development plan in
-[`docs/verification/PLAN.md`](../docs/verification/PLAN.md), in the style of
+An executable Lean 4 twin of the perch-program v1 semantics and of the
+CANON v1 canonical form, in the style of
 [AWS Cedar's `cedar-spec`](https://github.com/cedar-policy/cedar-spec). No
 dependencies beyond Lean core; the toolchain is pinned by `lean-toolchain`.
+[`docs/verification/PLAN.md`](../docs/verification/PLAN.md) places these
+proofs among Perch's other evidence and lists what has no formal model.
 
 | File | Contents |
 |---|---|
@@ -16,6 +17,15 @@ dependencies beyond Lean core; the toolchain is pinned by `lean-toolchain`.
 | `PerchFormal/CanonProofs.lean` | round-trips + `emitDoc_injective` (doc_hash names exactly one document) + the fragment-hash theorems (config_hash names one recovery configuration, rule_hash one rule) |
 | `CheckAxioms.lean` | the axiom audit: fails unless every `PerchFormal` declaration depends only on `propext`, `Classical.choice`, and `Quot.sound` (a `sorry` would appear as `sorryAx`). CI runs it after `lake build` |
 | `Main.lean` | `lake exe drt`. Replays `testdata/eval/eval-vectors.json` through the model, and round-trips Rust-emitted canonical documents and (after `--recovery`) recovery members through the verified canonicalizer |
+
+## Modeling assumptions
+
+The model is host-agnostic. Soroban `Val` decoding is abstracted to a typed
+`Value` domain in which a decode failure is an explicit case, matching the
+leaf fail-closed rule: any decode failure evaluates to `Unknown`, never
+`False`. An invocation is its contract, function, typed arguments, signer
+count, self address, and ledger sequence. That the model's leaf meanings
+match the Rust leaf implementations is tested (below), not proved.
 
 ## Theorems (all sorry-free)
 
@@ -36,6 +46,12 @@ checks what every declaration actually depends on.
   stack cap, guaranteed in Rust by compile's re-validation) evaluates to a
   definite `F` on any invocation with zero authenticated signers. This is
   INV-1 at the model level.
+- **T6** `lowering_preserves`: the machine over `build_program`'s postfix
+  output computes exactly the rule's doc-level Kleene conjunction, where the
+  doc side is stated over predicates directly and `leafEval_lowerPred` proves
+  the op translation meaning-preserving. So encoding, machine, and
+  translation are all inside the theorem; only the model↔Rust leaf-semantics
+  link remains empirical (the vectors + differential suite below).
 - **T7** `emitDoc_injective`: the CANON v1 canonical form is injective on the
   document domain, proved by exhibiting a verified inverse parser
   (`pDoc_rt : pDoc (emitDoc d ++ rest) = some (d, rest)`), covering the JCS
@@ -51,8 +67,7 @@ checks what every declaration actually depends on.
   parsing a document's canonical bytes returns that document, so its
   identity preimage is those same bytes. That is why a recovery target's
   two digests (`target_bytes_hash`, `target_doc_hash`) agree under CANON
-  v1. As of our survey (2026-08), no other machine-verified implementation
-  of an RFC 8785 subset exists.
+  v1.
 - **T8** fragment hashes (`CANONICAL.md`, "Fragment hashes"):
   `configPreimage_injective` and `rulePreimage_injective`. The preimages
   `"perch/recovery/config" || recovery_canonical_json` and
@@ -67,12 +82,6 @@ checks what every declaration actually depends on.
   everything outside the `recovery` member (a key rotation is not a
   reconfiguration). That the code hashes exactly these preimages is tested,
   not proved (below).
-- **T6** `lowering_preserves`: the machine over `build_program`'s postfix
-  output computes exactly the rule's doc-level Kleene conjunction, where the
-  doc side is stated over predicates directly and `leafEval_lowerPred` proves
-  the op translation meaning-preserving. So encoding, machine, and
-  translation are all inside the theorem; only the model↔Rust leaf-semantics
-  link remains empirical (the vectors + differential suite below).
 
 ## What ties the model to the shipped code
 
@@ -97,8 +106,8 @@ and delegated signers, `all` and `threshold` principals, a cap,
 `crates/perch-ir/tests/recovery.rs` regenerates the recovery-member fixtures
 from Rust and fails when they are stale.
 
-The model↔Rust link is differential (empirical), not deductive. The
-theorems are about the Lean emitter; the fixtures and the fuzz targets
+The model↔Rust link is differential (empirical), not deductive: no Verus
+or Aeneas proof connects them. The theorems are about the Lean emitter; the fixtures and the fuzz targets
 (`fuzz/fuzz_targets/ir_parse_roundtrip.rs`,
 `recovery_canonical_roundtrip.rs`) are the evidence that `canon.rs` emits
 the same bytes. Two tests tie T8 to the code that computes the hashes:
@@ -108,58 +117,27 @@ the same bytes. Two tests tie T8 to the code that computes the hashes:
   equal `sha256("perch/recovery/config" || fixture bytes)` recomputed with
   `sha2`, and that every single-field change move it to the recomputed hash
   of the changed text. It runs against the native compiler on every PR and,
-  in `release_stack.rs`, against a release stack's compiler wasm (in CI, the
-  one built from the PR's source; locally, also the deployed testnet one,
-  fetched with `scripts/fetch-infra-wasm.sh --stack`).
+  in `release_stack.rs`, against a release stack's compiler wasm: in CI, the
+  one built from the tested source, and the deployed testnet one (fetched
+  with `scripts/fetch-infra-wasm.sh --stack`) when the deployment's commit
+  is an ancestor of the tested commit.
 - `rule_hash`: `testdata/rule-hashes.json` is cut out of the canonical
   fixtures by an independent script (`scripts/rule-hash-vectors.py`) and
   checked against the Rust `rule_hash` and the provenance `perch-compile`
   stamps into every program (`perch-recovery-interface/tests/vectors.rs`,
   `integration-tests/tests/fragment_hashes.rs`).
 
-See PLAN.md phase 2 for the planned deepening (Verus or Aeneas).
-
 ## What is not modeled
 
 The model covers two things: the per-invocation evaluator and lowering
-(T1–T6), and the canonical form and its hashes (T7, T8). Nothing else in
-the recovery stack has a model or a proof:
-
-- **The recovery controller's state machine** (`crates/perch-recovery`):
-  attempts and their lifecycle, the `Protected` freeze, cancellation and
-  the cancel cap, evidence freshness and expiry, epochs, nullifier spending,
-  baselines, upgrade approvals, and the two-digest target binding (`enforce`
-  checks `sha256` of the completing bytes against `target_bytes_hash`, then
-  `rcv_sync` checks the compiled identity against `target_doc_hash`). These
-  are pinned by enforcing-auth integration tests
-  (`crates/integration-tests/tests/recovery.rs`, `target_binding.rs`), not
-  proofs. The only formal fact behind the claim that `target_bytes_hash ==
-  target_doc_hash` under CANON v1 is `canonical_bytes_identity`: an honest
-  completion's bytes compile to the identity the attempt recorded. T7 adds
-  that the identity names one document. For the Rust parser the same round
-  trip is fuzzed (`ir_parse_roundtrip` checks `parse(emit(doc)) == doc`).
-- **Account authorization paths** (`crates/perch-smart-account`:
-  `__check_auth`, OZ context-rule selection, `execute`, `apply_doc`,
-  upgrades). Tests only (`account_capabilities.rs`, `matrix.rs`). That
-  includes the delta `apply_doc`: T8 shows equal `rule_hash` preimages
-  mean equal rule text, but that the account then touches exactly the
-  changed rules is tested (the delta tests, the `apply_doc_delta` fuzz
-  target), not proved. The configuration revision and `apply_doc`'s
-  `expected_revision` (#110) are account state outside the document: no
-  hash here covers them, and T7 names a document, not an account state.
-  After A→B→A the same `doc_hash` returns at a later revision, by design
-  (`revision.rs`).
-- **The ZK circuit, verifier, adapter, and pool** (`circuits/`,
-  `crates/perch-zk-adapter`, the membership pool): real-proof tests and
-  cross-implementation Poseidon2 vectors (`docs/zk/README.md`), no proofs.
-- **The document compiler** beyond the canonical bytes and `config_hash`:
-  validation, `derive_target`, and the rest of the compiled recovery
-  configuration.
-- **The recovery statement's encoding** (`docs/recovery/statement.md`), so
-  CANONICAL.md's claim that the fragment tags are separated from the
-  statement tags is not proved.
-- **SHA-256** itself: every "names exactly one" claim above holds up to a
-  SHA-256 collision.
+(T1–T6), and the canonical form and its hashes (T7, T8). Nothing else has
+a model or a proof: not the recovery controller's state machine, account
+authorization, the ZK circuit, verifier, adapter, and pool, the document
+compiler beyond canonical bytes and `config_hash`, or the recovery
+statement encoding.
+[`docs/verification/PLAN.md`](../docs/verification/PLAN.md#not-modeled-tested-only)
+lists each with the tests that cover it instead. SHA-256 is assumed: every
+"names exactly one" claim above holds up to a SHA-256 collision.
 
 ## Setup
 
