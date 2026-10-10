@@ -9,6 +9,10 @@ They are randomized, so two proofs of one statement differ, and the on-chain
 adapter verifies them (see [`docs/zk/`](../../docs/zk/README.md)). `verify`
 checks a proof locally with bb.js before you submit it.
 
+The package is not published to npm. Consumers use it from this repository,
+for example as an npm workspace of a `perch` submodule
+([`docs/DEFERRED.md`](../../docs/DEFERRED.md#npm-publishing-of-perch-zk-and-the-contract-clients)).
+
 ```ts
 import { init, commitment, PoolWitnessIndex, prove, verify, evidence, randomSecret } from '@stellar-registry/perch-zk';
 import circuit from '@stellar-registry/perch-zk/artifacts/perch_zk_recovery.json' with { type: 'json' };

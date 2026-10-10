@@ -9,15 +9,10 @@ anything written later.
 
 This document is the authoritative definition of those bytes. It is normative;
 the code implements it, not the other way around. Implementations **must not**
-delegate canonicalization to a language JSON serializer whose output could drift
-between versions (`serde_json`, `JSON.stringify`, …). They implement the rules
-below directly, and the shared conformance vector pins the result.
-
-> Why not "just use the serializer's output"? Because serializer output is not a
-> stable contract. Biscuit shipped its signed format over protobuf and
-> discovered protobuf encoding is not deterministic; it had to move to an
-> explicit, versioned byte layout. Perch avoids that trap by defining the bytes
-> here and never depending on a serializer being canonical.
+delegate canonicalization to a language JSON serializer (`serde_json`,
+`JSON.stringify`, …), whose output is not a stable contract and can drift
+between versions. They implement the rules below directly, and the shared
+conformance vector pins the result.
 
 ## Version
 
@@ -32,22 +27,12 @@ explicit, greppable, reviewable event. **Any change here is a breaking change** 
 bump `CANON_VERSION`, re-freeze the conformance vectors, and be treated as a new
 format, never a silent hash drift.
 
-## Codec decision: JSON (JCS), not CBOR
+## Encoding
 
 The canonical form is JSON per RFC 8785 (JSON Canonicalization Scheme),
-restricted to the subset a `PolicyDoc` can produce (below). DAG-CBOR was
-considered (it is what UCAN uses, because CBOR defines deterministic
-map-key ordering) and rejected for v1:
-
-- A `PolicyDoc` is a human-authored, human-reviewed artifact. JSON stays
-  diffable in a PR and readable in a wallet prompt; a binary codec does not.
-- The parity guarantee CBOR would buy, byte-identical output across languages,
-  is already met. `perch-ir` (Rust) and `perch-js` (TypeScript) reproduce
-  the same canonical bytes and `doc_hash` for the shared `ci-publish` fixture,
-  proven in CI on both sides.
-
-Revisit only if a future value type makes JSON canonicalization painful
-(e.g. arbitrary-precision or binary fields). If so, that is a
+restricted to the subset a `PolicyDoc` can produce (below), so a document
+stays readable in review and in a wallet prompt. A value type this subset
+cannot carry (arbitrary precision, binary fields) would be a
 `CANON_VERSION` bump, per above.
 
 ## The bytes
@@ -124,7 +109,7 @@ under a domain tag of its own.
 
 | Hash | Fragment `F` | Preimage | Used by |
 | --- | --- | --- | --- |
-| `rule_hash` | one element of the top-level `rules` array, without the separating commas | `"perch/rule" ‖ F` | interpreter program provenance: the hash an installed program carries in place of the whole document's `doc_hash`. Also how a delta `apply_doc` tells which rules changed. |
+| `rule_hash` | one element of the top-level `rules` array, without the separating commas | `"perch/rule" ‖ F` | interpreter program provenance: an installed program carries its rule's `rule_hash` (in the `InstallParams` field named `doc_hash`), so editing one rule leaves every other rule's install parameters unchanged and a delta `apply_doc` reinstalls only what changed (`docs/recovery/spec.md` §3.2, §7.5) |
 | `config_hash` | the value of the top-level `recovery` member | `"perch/recovery/config" ‖ F` | recovery configuration identity (`docs/recovery/spec.md` §3.2) |
 
 Both are `SHA-256` of the preimage. The tags are ASCII and are part of the
@@ -160,10 +145,11 @@ value, and must be treated like one.
 
 Code:
 
-- Rust: `perch_recovery_interface::fragment::rule_hash` and
-  `perch_recovery_interface::config::config_hash`.
-- The doc compiler computes both from the canonical bytes it already
-  emits.
+- Rust, on-chain: `perch_recovery_interface::fragment::rule_hash` and
+  `perch_recovery_interface::config::config_hash`; the doc compiler computes
+  both from the canonical bytes it already emits. Rust, native:
+  `perch_ir::rule_hash`.
+- TypeScript: `ruleHash` and `configHash` in `perch-js`.
 
 ## Conformance
 
