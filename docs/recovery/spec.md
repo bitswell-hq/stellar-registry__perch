@@ -944,8 +944,11 @@ role; a document rule by its name and compiled scope (context type)**:
 - An installed rule whose slot the target lacks is removed, before
   anything is added; a target rule whose slot is not installed is added.
 
-The installed rule set that results authorizes exactly what a full replace
-would. A full replace takes replacement for every rule and deregisters and
+The installed rule set that results has the same normalized structure and
+installation parameters as a full replace; its authorization matches a full
+replace except for retained runtime policy state (a kept spending-limit window,
+see [`implementation.md`](implementation.md)) and expiry-sensitive behavior. A
+full replace takes replacement for every rule and deregisters and
 re-registers every signer and policy, so taking the cheaper way per rule
 means no apply writes more ledger entries than a full replace. Writes are
 not the only limit: the in-place path can cost more instructions than a
