@@ -220,7 +220,10 @@ window survives an in-place edit but a full replace reinstalls its policy and
 resets the window, so on a rule whose cap is already partly spent the delta
 and the oracle diverge by construction. The generator applies to fresh state,
 where no window is yet spent; persistent spending budgets across replacements
-are deferred ([`DEFERRED.md`](../DEFERRED.md)).
+are deferred ([`DEFERRED.md`](../DEFERRED.md)). The generator also never
+advances the ledger between steps, so a rule whose `not-after-ledger` expires
+mid-sequence is outside the oracle's coverage; rule-expiry semantics are a
+separate open item (`DEFERRED.md`).
 
 | Property | Test |
 | --- | --- |
