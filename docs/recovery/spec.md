@@ -127,9 +127,10 @@ account built without recovery support cannot enroll in place.
   rule scoped to the controller, or a `Default` rule.
 
   The reserved-name guard (§15, invariant I1) is what keeps such a rule's
-  signers away from the controller's sensitive entry points. It refuses
-  `rcv_sync`, `rcv_cancel`, `rcv_upgrade`, `install`, `uninstall`, and
-  `enforce` on any contract, whatever rule is selected. What such a rule
+  signers away from the controller's sensitive entry points. It refuses all
+  eight reserved names — `install`, `uninstall`, `enforce`, `rcv_sync`,
+  `rcv_cancel`, `rcv_upgrade`, `rcv_insert`, and `rcv_gate` (D12, §15) — on any
+  contract, whatever rule is selected. What such a rule
   grants is exactly what it says: its signers approve, as this account,
   statements for accounts that list this account as a guardian. The account
   cannot list itself (§15), so the rule never touches the account's own
@@ -1365,11 +1366,11 @@ freshness (§4) and owns all nullifier state (§11).
 ```text
 public:  root, nullifier, statement_hash
 private: secret, account_hi, account_lo, enrollment_hi, enrollment_lo,
-         digest_hi, digest_lo, path_siblings[D], path_bits[D]
+         digest_hi, digest_lo, leaf_index, siblings[D]
 
 inner = P2(DOM_LEAF, secret)
 leaf  = P2(DOM_BIND, account_hi, account_lo, enrollment_hi, enrollment_lo, inner)
-assert merkle_root(leaf, path_siblings, path_bits) == root     // bits boolean, interior P2(l, r)
+assert merkle_root(leaf, leaf_index, siblings) == root         // leaf_index decomposed to D little-endian bits in-circuit (range-checks it to [0, 2^D)); interior P2(l, r)
 assert P2(DOM_NULLIFIER, account_hi, account_lo, enrollment_hi, enrollment_lo, secret) == nullifier
 assert P2(DOM_AUTH, account_hi, account_lo, enrollment_hi, enrollment_lo, digest_hi, digest_lo) == statement_hash
 ```
