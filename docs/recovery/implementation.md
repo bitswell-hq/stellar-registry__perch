@@ -173,9 +173,12 @@ and re-registers every signer and policy, so taking the cheaper way per
 rule means no apply writes more ledger entries than a full replace. Writes
 are the only priced resource: an in-place edit can cost more instructions
 than a replacement, which is what binds at the document caps
-([`budgets.md`](budgets.md#document-caps)). The rule set that results
-authorizes exactly what a full replace would. An in-place edit keeps the
-rule id, the retained signers' registry ids, and the kept policies' state.
+([`budgets.md`](budgets.md#document-caps)). The rule set that results has the
+same normalized structure and installation parameters as a full replace would
+leave; its authorization matches a full replace except for retained runtime
+policy state (a kept spending-limit window) and expiry-sensitive behavior. An
+in-place edit keeps the rule id, the retained signers' registry ids, and the
+kept policies' state.
 A replaced rule gets a new id and its policies are reinstalled, which
 resets a spending limit's window.
 
@@ -222,8 +225,7 @@ and the oracle diverge by construction. The generator applies to fresh state,
 where no window is yet spent; persistent spending budgets across replacements
 are deferred ([`DEFERRED.md`](../DEFERRED.md)). The generator also never
 advances the ledger between steps, so a rule whose `not-after-ledger` expires
-mid-sequence is outside the oracle's coverage; rule-expiry semantics are a
-separate open item (`DEFERRED.md`).
+mid-sequence is outside the oracle's coverage.
 
 | Property | Test |
 | --- | --- |

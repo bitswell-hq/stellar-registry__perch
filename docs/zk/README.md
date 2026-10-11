@@ -171,8 +171,10 @@ Consequences ([`measurements.md`](measurements.md) has the figures):
   Proof bytes are therefore no identifier (per the upstream README); the
   nullifier is.
 - A proof is checked against the embedded verification key and relation, not
-  against a version number. A proof whose format or key does not match fails at
-  the pairing check, not at parse time; the verifier reads no version.
+  against a version number. A malformed or wrong-length proof is refused at the
+  parsing and structural checks; a structurally valid but incompatible proof is
+  refused at a later verification step, not necessarily the final pairing. The
+  verifier reads no version.
   Separately, `scripts/zk-toolchain.sh`, the prover crate, and the TS package
   pin bb to the tested version and refuse others, so Perch's own tooling never
   produces a proof under another version.
@@ -230,14 +232,18 @@ tested under enforcing authorization in `crates/integration-tests`.
 
 - **Every ZK action**: `LostKey`, `Compromise`, `Cancel`,
   `Reconfigure(Set)`, `Reconfigure(Remove)`, and `Upgrade` each have a
-  fixture proof over the statement the controller builds. Each verifies, and
-  none verifies as any other (`crates/perch-zk-adapter/src/test.rs`).
+  fixture proof over a synthetic statement built by
+  `crates/perch-zk-prover/src/bin/fixtures.rs` (not the controller). Each
+  verifies, and none verifies as any other
+  (`crates/perch-zk-adapter/src/test.rs`). End-to-end proofs over statements
+  the controller actually builds are the `release_stack` tests.
 - **Mismatches**: changing any statement field (network, controller, epoch,
   configuration hash, delay, expiry, validity bound, attempt, source, target,
   replacements), the account, the enrollment id, the nullifier, the tree id,
-  or the pool refuses the evidence. So do a fabricated or evicted root, a
-  non-canonical root or nullifier, a malformed proof, a tampered proof, and a
-  binding for another circuit.
+  or the pool refuses the evidence. So do a fabricated or unknown root (one the
+  tree never had — roots are never evicted; every historical root stays valid,
+  §14.3), a non-canonical root or nullifier, a malformed proof, a tampered
+  proof, and a binding for another circuit.
 - **Replay**: evidence cannot be redirected to another attempt, action,
   configuration, or epoch, because the statement binds them. A replay of
   identical evidence for the identical statement passes the adapter, which
