@@ -88,9 +88,13 @@ canonical bytes (`MAX_DOC_CANONICAL_BYTES`), or a rule name over 20 bytes
 (`MAX_RULE_NAME_BYTES`, OZ's `MAX_NAME_SIZE`). The recovery rule the account
 generates is additional to the 11 document rules. The caps are sized so that
 a worst-case completion, compromise restore, or `Protected` reconfiguration
-stays within 75% of every per-transaction limit
+stays within 75% of every *measured* per-transaction limit — instructions,
+memory, write bytes, and write entries
 ([`budgets.md`](recovery/budgets.md), "Document caps"; the `worst_case_*`
-tests in `crates/integration-tests/tests/release_stack.rs`).
+tests in `crates/integration-tests/tests/release_stack.rs`). Disk read bytes
+are not yet measured for any row (budgets.md: "Required before launch"), so
+this within-budget guarantee is conditional on completing that measurement
+before mainnet.
 
 **Why it is safe to defer:** the caps exist so that a thief holding the
 owner key cannot make a recovery too expensive to complete (spec §7.5). A

@@ -47,10 +47,15 @@ results against them, and the depth decision are in
    are required before launch
    ([`budgets.md`](../recovery/budgets.md#results)).
 
-The full-transaction measurements are complete: every recovery transaction
-is measured in process on the release wasm and on testnet against the
-deployed wasm, and every row is within budget
-([`budgets.md`](../recovery/budgets.md#results)).
+The full-transaction measurements are substantially complete but not
+finished: every recovery transaction is measured in process on the release
+wasm and on testnet against the deployed wasm, and every measured row is
+within budget. Rows still open before launch are disk read bytes (every row),
+§3 end-to-end latency, and the §4 controller-state and `renew`-fee rows; a few
+rows (completion after rule churn, promotion with many siblings) are bounded
+by construction rather than measured.
+[`budgets.md`](../recovery/budgets.md#results) is the authoritative release
+checklist, and its status column lists each outstanding row.
 
 ## How a proof is checked
 
@@ -165,9 +170,12 @@ Consequences ([`measurements.md`](measurements.md) has the figures):
 - Proofs are randomized: two proofs of one witness differ, and both verify.
   Proof bytes are therefore no identifier (per the upstream README); the
   nullifier is.
-- Proofs from any other bb version do not verify. They fail at the pairing
-  check, not at parse time. `scripts/zk-toolchain.sh`, the prover crate, and
-  the TS package all refuse other versions.
+- A proof is checked against the embedded verification key and relation, not
+  against a version number. A proof whose format or key does not match fails at
+  the pairing check, not at parse time; the verifier reads no version.
+  Separately, `scripts/zk-toolchain.sh`, the prover crate, and the TS package
+  pin bb to the tested version and refuse others, so Perch's own tooling never
+  produces a proof under another version.
 
 ## Reproducing the artifacts
 
