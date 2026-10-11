@@ -214,6 +214,14 @@ world mocks authorization and lifts resource limits: these tests check
 equivalence and accounting; authorization and atomicity are
 `delta_security.rs`'s, under enforcing authorization.
 
+Equivalence is over normalized rule structure and installation parameters,
+not over retained per-policy runtime state. A kept rule's spending-limit
+window survives an in-place edit but a full replace reinstalls its policy and
+resets the window, so on a rule whose cap is already partly spent the delta
+and the oracle diverge by construction. The generator applies to fresh state,
+where no window is yet spent; persistent spending budgets across replacements
+are deferred ([`DEFERRED.md`](../DEFERRED.md)).
+
 | Property | Test |
 | --- | --- |
 | Any document sequence: the delta account and the oracle accept and refuse the same documents and end every step in the same state (proptest, shrinking) | `apply_delta.rs::delta_apply_matches_full_replace` |

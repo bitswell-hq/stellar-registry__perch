@@ -542,10 +542,13 @@ The stored states are `Collecting`, `Authorized`, `Completed`,
   `AttemptState::Invalidated`, and emits `AttemptInvalidated`.
 
   The attempt was still collecting, so the record sits in temporary
-  storage (§3.6) and lasts **at least its evidence window**. After the entry
-  expires, evidence naming that attempt is refused as `NoSuchAttempt`
-  rather than `AttemptNotLive`. The effect is the same: the evidence window
-  has ended, so the attempt can never be promoted.
+  storage (§3.6) and lasts **at least its evidence window** — unless its
+  evidence window is longer than the network's maximum TTL, in which case
+  §3.6 stores it persistently. For a temporary record, after the entry
+  expires evidence naming that attempt is refused as `NoSuchAttempt`. A
+  persistent record is archived rather than deleted, is restored on access,
+  and stays refused as `AttemptNotLive`. Either way the attempt can never be
+  promoted: its evidence window has ended.
 - **Every other invalidation is derived:** an epoch change, or a sibling's
   authorization (`invalidate_below`). Nothing is written for these, because
   the cause is already in storage and an attempt from an older epoch or
@@ -1201,6 +1204,13 @@ replacement set declared (§7.3). The account always leaves recovery with a
 working ZK factor that the recovering party holds. A `Protected` account is
 never left with a dead factor that would make it impossible to reconfigure
 or upgrade.
+
+This liveness holds only when the recovering party correctly generated and
+retained the new secret. The replacement set declares the fresh enrollment's
+commitment, but the statement proves possession of the *old* secret, not of
+the replacement; the protocol does not check knowledge of the replacement
+secret. A party that completes with a replacement commitment whose secret it
+did not keep installs a ZK factor it cannot later prove.
 
 ## 12. Account upgrades
 
