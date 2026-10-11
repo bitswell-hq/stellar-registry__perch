@@ -204,7 +204,14 @@ UltraHonk verifier at `c2160987…`, plus Perch's delta: `src/zk.rs` (new,
 README maps every delta function to the audited function it mirrors and its
 Barretenberg v0.87.0 reference; `crates/perch-zk-adapter/tests/vendor.rs`
 fails if anything else differs from upstream. No audit covered the delta
-before this one ([`zk/README.md`](zk/README.md)).
+before this one ([`zk/README.md`](zk/README.md)). For an offline handoff, a
+review of the delta needs the Barretenberg v0.87.0 reference sources the
+README maps to (the ZK-flavour reference files — e.g. `honk_zk_contract.hpp`,
+`small_subgroup_ipa.hpp`, `shplemini.hpp`, `sumcheck.hpp`, and
+`row_disabling_polynomial.hpp`) at their exact upstream commit, not only the
+`v0.87.0` release tag, plus the generated Solidity verifier for the committed
+recovery VK; record that commit and ship the reference files (checksummed) in
+the handoff bundle.
 
 ### Consumed JS packages
 
