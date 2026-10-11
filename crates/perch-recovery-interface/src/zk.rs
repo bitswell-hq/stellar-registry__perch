@@ -243,11 +243,14 @@ pub trait ZkAdapterInterface {
     /// as `binding.enrollment_id` for `statement.account`, against a root the
     /// enrolled pool accepts, for exactly this statement. Writes nothing.
     ///
-    /// Required checks, in order: `binding.circuit_id` is this adapter's;
-    /// root and nullifier are canonical field elements; the pool accepts
-    /// `(evidence.tree_id, evidence.root)`; the proof verifies against
-    /// [`public_inputs`] built from the root, the nullifier, and
-    /// `Poseidon2(`[`ZkStatementFields::auth_preimage`]`)`.
+    /// Required checks, in order (spec §13.2): the proof is exactly
+    /// `PROOF_BYTES` long; `binding.circuit_id` is this adapter's; root and
+    /// nullifier are canonical field elements; the pool accepts
+    /// `(evidence.tree_id, evidence.root)`; the statement projects to the
+    /// public inputs; the proof verifies against [`public_inputs`] built from
+    /// the root, the nullifier, and
+    /// `Poseidon2(`[`ZkStatementFields::auth_preimage`]`)`. `MalformedProof`
+    /// means only "not exactly `PROOF_BYTES` long".
     fn verify(
         e: &Env,
         statement: RecoveryStatement,
