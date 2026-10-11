@@ -152,7 +152,11 @@ including `crates/perch-zk-adapter/tests/{zk_verifier,vendor}.rs`; the
 statement vectors `testdata/recovery/statement-v2.json`; the Lean model
 (`formal/`); `release_stack.rs` on real Wasm with real proofs. The map from
 each spec requirement to its code and tests is
-[`recovery/implementation.md`](recovery/implementation.md).
+[`recovery/implementation.md`](recovery/implementation.md). Coverage note:
+Perch's recovery integration world uses delegated stand-in keys, so recovery
+target binding with External (WebAuthn) credentials — where the credential-id
+suffix and key canonicalization matter — is exercised by Nido's suite
+(`crates/integration-tests` in the superproject), not Perch's.
 
 ## Perch OZ materialization
 
