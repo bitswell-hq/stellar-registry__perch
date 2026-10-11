@@ -199,11 +199,16 @@ Merging the pull requests is
 `vendor/ultrahonk-soroban-verifier` is NethermindEth's audited, non-ZK
 UltraHonk verifier at `c2160987…`, plus Perch's delta: `src/zk.rs` (new,
 1,030 lines; the `UltraKeccakZKFlavor` verifier), three added lines in
-`src/lib.rs`, and visibility-only changes in `src/transcript.rs`,
-`src/sumcheck.rs`, `src/utils.rs`, and `src/verifier.rs`. The vendored
-README maps every delta function to the audited function it mirrors and its
-Barretenberg v0.87.0 reference; `crates/perch-zk-adapter/tests/vendor.rs`
-fails if anything else differs from upstream. No audit covered the delta
+`src/lib.rs`, visibility-only changes in `src/transcript.rs`,
+`src/sumcheck.rs`, `src/utils.rs`, and `src/verifier.rs`, the `Cargo.toml`
+changes the NOTICE records (`soroban-sdk` pinned to the upstream workspace's
+version and the `[dev-dependencies]` dropped), and the vendored `README.md`
+that documents the delta. The README maps each delta function to the audited
+function it mirrors, where one exists, and its Barretenberg v0.87.0 reference;
+the ZK flavour also adds functions with no non-ZK counterpart (its own
+proof-verification path). `crates/perch-zk-adapter/tests/vendor.rs` fails if
+any file outside the delta differs from upstream's `UPSTREAM.sha256` bytes; it
+does not re-audit the delta. No audit covered the delta
 before this one ([`zk/README.md`](zk/README.md)). For an offline handoff, a
 review of the delta needs the Barretenberg v0.87.0 reference sources the
 README maps to (the ZK-flavour reference files — e.g. `honk_zk_contract.hpp`,
