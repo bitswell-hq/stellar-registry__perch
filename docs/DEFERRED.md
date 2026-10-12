@@ -349,3 +349,44 @@ the deployment manifest. Review any difference as a code change.
 **Owner:** Perch (publishing) and each consumer (switching).
 
 **Tracking:** none yet.
+
+## Completion input-byte binding
+
+**Deferred:** requiring a recovery completion's `apply_doc` to carry the
+*exact* authorized target bytes, not merely a document that compiles to the
+authorized canonical identity.
+
+**Current behaviour:** at T5 the controller's `enforce` checks
+`sha256(target_bytes) = A.target_bytes_hash` for the context it authorizes and
+writes a completion marker holding the canonical identity
+`(attempt_id, A.target_doc_hash, L)`. The account's `apply_doc` body runs
+`rcv_sync` with the identity it compiled; `rcv_sync` consumes a marker when the
+identity, ledger, and authorized attempt match, and does not re-check the
+consuming invocation's input bytes against `A.target_bytes_hash`. Because
+`enforce` runs for every context in an authorization tree — including a
+sub-invocation that never executes — a marker can be left behind, and within
+the same ledger and authorized window an `apply_doc` under ordinary owner
+authorization that carries a differently formatted spelling of the same
+canonical target can consume it and be classified as a completion rather than
+refused as an ordinary write (recovery [`spec.md`](recovery/spec.md) §10 T5).
+
+**Why it is safe to defer:** the completed document is still the authorized
+canonical target, so the identity is bound — this neither installs a different
+policy nor bypasses the `Protected` freeze. The effect is a misclassification:
+an owner-authorized ordinary write over the authorized target, in the same
+ledger as a leftover marker, runs the completion's revocation,
+nullifier-spending, and epoch effects, rather than a loss of the target
+binding.
+
+**Exit criterion and follow-up review:** `rcv_sync` receives the completing
+invocation's input-byte hash from the account (`sha256` of the `apply_doc`
+input bytes) and requires it to equal the authorized attempt's
+`target_bytes_hash` before consuming a completion marker; the leftover-marker
+regression gains an active attempt and a second owner-authorized, differently
+formatted target in the same ledger, which must be refused. This changes the
+account↔controller `rcv_sync` ABI, so it reaches only newly-built accounts
+(infra is pinned by wasm hash) — a coordinated redeploy, not a live upgrade.
+
+**Owner:** Perch.
+
+**Tracking:** none yet.
