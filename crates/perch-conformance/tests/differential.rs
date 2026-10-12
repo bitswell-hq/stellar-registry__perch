@@ -83,14 +83,11 @@ fn gen_arg_pred(rng: &mut Rng) -> ArgPred {
             ArgPred::StringIn(StringInPred { values })
         }
         _ => ArgPred::StringPrefix(StringPrefixPred {
-            // Occasionally an over-long prefix: valid per perch-ir (no length
-            // limit), lowered verbatim, and must fail closed at eval time —
-            // exercises the prefix-side str_bytes failure path in leaf.rs.
-            prefix: if rng.chance(6) {
-                "x".repeat(257)
-            } else {
-                STRINGS[rng.below(STRINGS.len() as u32) as usize].into()
-            },
+            // perch-ir now refuses an over-long prefix (one longer than the
+            // interpreter's string buffer could never match, so the whole
+            // predicate is unsatisfiable), so the generator stays within the
+            // limit and produces only prefixes the interpreter can evaluate.
+            prefix: STRINGS[rng.below(STRINGS.len() as u32) as usize].into(),
         }),
     }
 }
@@ -287,11 +284,16 @@ fn ref_pred(pred: &ArgPred, inv: &GInv, index: u32) -> Verdict {
         },
         ArgPred::StringPrefix(p) => match arg {
             GVal::Str(s) => {
-                if s.len() > MAX_STR || p.prefix.len() > MAX_STR {
+                if p.prefix.len() > MAX_STR {
+                    // An over-long prefix is unsatisfiable; perch-ir refuses it,
+                    // so a valid document never reaches here.
                     Verdict::Unknown
                 } else if p.prefix.len() > s.len() {
                     Verdict::False
                 } else {
+                    // Only the first prefix-length bytes matter, so an argument
+                    // longer than the buffer is still checked against the
+                    // prefix, not denied for its length.
                     Verdict::from(s.as_bytes()[..p.prefix.len()] == *p.prefix.as_bytes())
                 }
             }

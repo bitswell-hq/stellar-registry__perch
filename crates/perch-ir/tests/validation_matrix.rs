@@ -688,7 +688,11 @@ fn rejects_string_prefix_over_limit() {
 }
 
 #[test]
-fn rejects_string_in_value_over_limit() {
+fn accepts_string_in_value_over_limit() {
+    // An over-long `string-in` value is a dead candidate, not an unsatisfiable
+    // predicate: the set stays live through its other values, so validation
+    // accepts it and leaves the dead candidate to the analyzer/runtime. Only an
+    // over-long `string-prefix`, which kills the whole predicate, is refused.
     let mut doc = base_doc();
     doc.rules[0].args = Some(vec![arg(
         2,
@@ -696,14 +700,7 @@ fn rejects_string_in_value_over_limit() {
             values: vec!["a".into(), "v".repeat(MAX_STRING_PRED_LEN + 1)],
         }),
     )]);
-    assert_rejects(
-        &doc,
-        &ValidationError::StringPredicateTooLong {
-            rule: "admin".into(),
-            index: 2,
-            len: MAX_STRING_PRED_LEN + 1,
-        },
-    );
+    assert_accepts(&doc);
 }
 
 #[test]
