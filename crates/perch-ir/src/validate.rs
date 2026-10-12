@@ -4,11 +4,11 @@
 //! so a review tool can show the complete list in one pass. Every error names
 //! the offending signer or rule.
 //!
-//! Address checks are *structural* strkey shape checks only (leading version
-//! letter, base32 charset, length 56); the CRC16 checksum is deliberately not
-//! verified here — full checksum validation belongs to the layer that actually
-//! touches the network, and skipping it keeps this crate dependency-light.
-//! This is noted per-variant below.
+//! Address checks verify strkey shape (leading version letter, base32 charset,
+//! length 56) and the CRC16 checksum, computed inline so the crate stays
+//! dependency-light. A bad checksum fails validation with the same per-field
+//! error as a bad shape, so `compile_doc` returns a typed `DocInvalid` rather
+//! than trapping when it later decodes the address.
 //!
 //! Beyond the spec's enumerated checks, the same fail-closed rationale is
 //! applied to a few additional ambiguity/sloppiness cases: empty signer ids
@@ -84,7 +84,7 @@ pub enum ValidationError {
         len: usize,
     },
     /// A signer's `verifier` is not shaped like a C-address strkey
-    /// (checksum not verified — see module docs).
+    /// (including the CRC16 checksum).
     InvalidVerifierAddress {
         /// The offending signer id.
         id: String,
@@ -92,7 +92,7 @@ pub enum ValidationError {
         address: String,
     },
     /// A delegated signer's `address` is not shaped like a G- or C-address
-    /// strkey (checksum not verified — see module docs).
+    /// strkey (including the CRC16 checksum).
     InvalidDelegatedAddress {
         /// The offending signer id.
         id: String,
@@ -111,7 +111,7 @@ pub enum ValidationError {
         name: String,
     },
     /// A `contract` scope address is not shaped like a C-address strkey
-    /// (checksum not verified — see module docs).
+    /// (including the CRC16 checksum).
     InvalidContractAddress {
         /// The offending rule name.
         rule: String,
@@ -159,7 +159,7 @@ pub enum ValidationError {
         rule: String,
     },
     /// A `self-authenticating` rule's `policy` is not shaped like a C-address
-    /// strkey (checksum not verified — see module docs).
+    /// strkey (including the CRC16 checksum).
     InvalidPolicyAddress {
         /// The offending rule name.
         rule: String,
@@ -189,6 +189,15 @@ pub enum ValidationError {
         /// The offending rule name.
         rule: String,
         /// The duplicated function name.
+        name: String,
+    },
+    /// A rule's `functions` list contains a name that is not a valid Soroban
+    /// `Symbol` (1–32 characters from `[a-zA-Z0-9_]`). It would panic in
+    /// `Symbol::new` when lowered, so it is refused here with a typed error.
+    InvalidFunctionName {
+        /// The offending rule name.
+        rule: String,
+        /// The invalid function name.
         name: String,
     },
     /// A rule's `args` list is present but empty — ambiguous for the same
@@ -224,7 +233,7 @@ pub enum ValidationError {
         value: String,
     },
     /// An `address-eq` predicate's address is not shaped like a C- or
-    /// G-address strkey (checksum not verified — see module docs).
+    /// G-address strkey (including the CRC16 checksum).
     InvalidArgAddress {
         /// The offending rule name.
         rule: String,
@@ -253,7 +262,7 @@ pub enum ValidationError {
         rule: String,
     },
     /// A `cap`'s `token` is present but not shaped like a C-address strkey
-    /// (checksum not verified — see module docs).
+    /// (including the CRC16 checksum).
     InvalidCapToken {
         /// The offending rule name.
         rule: String,
@@ -342,7 +351,7 @@ pub enum ValidationError {
         address: String,
     },
     /// A recovery mode's guardian address is not shaped like a C- or
-    /// G-address strkey (checksum not verified — see module docs).
+    /// G-address strkey (including the CRC16 checksum).
     InvalidGuardianAddress {
         /// The malformed address string.
         address: String,
@@ -358,7 +367,7 @@ pub enum ValidationError {
         n: u32,
     },
     /// A recovery mode's `adapter` is not shaped like a C-address strkey
-    /// (checksum not verified — see module docs).
+    /// (including the CRC16 checksum).
     InvalidRecoveryAdapter {
         /// The malformed address string.
         address: String,
@@ -382,7 +391,7 @@ pub enum ValidationError {
         commitment: String,
     },
     /// A recovery mode's `pool` is not shaped like a C-address strkey
-    /// (checksum not verified — see module docs).
+    /// (including the CRC16 checksum).
     InvalidRecoveryPool {
         /// The malformed address string.
         address: String,
@@ -460,6 +469,9 @@ impl fmt::Display for ValidationError {
             }
             E::DuplicateFunction { rule, name } => {
                 write!(f, "rule `{rule}`: duplicate function `{name}`")
+            }
+            E::InvalidFunctionName { rule, name } => {
+                write!(f, "rule `{rule}`: function `{name}` is not a valid Soroban Symbol")
             }
             E::EmptyArgs { rule } => write!(
                 f,
@@ -578,6 +590,61 @@ fn is_strkey_shape(s: &str, leads: &[u8]) -> bool {
     bytes.len() == 56
         && leads.contains(&bytes[0])
         && bytes.iter().all(|b| matches!(b, b'A'..=b'Z' | b'2'..=b'7'))
+        && strkey_checksum_ok(bytes)
+}
+
+/// A valid Soroban `Symbol`: 1–32 bytes from `[a-zA-Z0-9_]`. A function name
+/// outside this set panics in `Symbol::new` during lowering, so it is rejected
+/// at validation instead.
+fn is_valid_symbol(s: &str) -> bool {
+    let b = s.as_bytes();
+    (1..=32).contains(&b.len())
+        && b.iter()
+            .all(|c| matches!(c, b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'_'))
+}
+
+/// Verify a 56-char base32 strkey's CRC16-XModem checksum, computed inline (no
+/// dependency). The caller has checked the shape; this base32-decodes the 35
+/// bytes and checks the trailing little-endian checksum over the first 33.
+fn strkey_checksum_ok(bytes: &[u8]) -> bool {
+    if bytes.len() != 56 {
+        return false;
+    }
+    let mut data = [0u8; 35];
+    let (mut buf, mut bits, mut out) = (0u32, 0u32, 0usize);
+    for &c in bytes {
+        let v = match c {
+            b'A'..=b'Z' => c - b'A',
+            b'2'..=b'7' => c - b'2' + 26,
+            _ => return false,
+        };
+        buf = (buf << 5) | u32::from(v);
+        bits += 5;
+        if bits >= 8 {
+            bits -= 8;
+            if out >= 35 {
+                return false;
+            }
+            data[out] = (buf >> bits) as u8;
+            out += 1;
+        }
+    }
+    if out != 35 {
+        return false;
+    }
+    let want = u16::from_le_bytes([data[33], data[34]]);
+    let mut crc: u16 = 0;
+    for &b in &data[..33] {
+        crc ^= u16::from(b) << 8;
+        for _ in 0..8 {
+            crc = if crc & 0x8000 != 0 {
+                (crc << 1) ^ 0x1021
+            } else {
+                crc << 1
+            };
+        }
+    }
+    crc == want
 }
 
 /// Whether `s` is shaped like a contract address strkey (`C...`, 56 chars,
@@ -796,6 +863,11 @@ fn validate_rule(rule: &Rule, declared: &BTreeSet<&str>, errors: &mut Vec<Valida
         for func in functions {
             if func.is_empty() {
                 errors.push(ValidationError::EmptyFunctionName { rule: name() });
+            } else if !is_valid_symbol(func) {
+                errors.push(ValidationError::InvalidFunctionName {
+                    rule: name(),
+                    name: func.clone(),
+                });
             }
             if !seen.insert(func) {
                 errors.push(ValidationError::DuplicateFunction {
