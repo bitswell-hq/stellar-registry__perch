@@ -114,13 +114,32 @@ pub(crate) fn admin_rule(e: &Env, id: u32, signers: &Vec<Signer>) -> InstalledRu
     }
 }
 
+/// Whether a rule's lowered `valid_until` is already past at the current
+/// ledger, so OZ's `add_context_rule`/`update_context_rule_valid_until`
+/// would refuse it (`PastValidUntil`: `valid_until < sequence`). Such a rule
+/// is dead — it authorizes nothing — so it is dropped at install rather than
+/// handed to OZ, keeping the "a document that compiles also installs"
+/// invariant (`perch-doc-compiler`): a document the compiler accepts always
+/// installs, and a recovery target stays installable even when one of its
+/// bounded rules expired between publish and completion. The anti-brick
+/// check (`admin_survives`) refuses any document whose only admin rule is
+/// bounded, so this drop can never remove the account's sole admin rule.
+fn expired(e: &Env, valid_until: Option<u32>) -> bool {
+    valid_until.is_some_and(|v| v < e.ledger().sequence())
+}
+
 /// The rules `compiled` asks for, with each policy's install parameters
-/// (aligned with `rule.policies`). Ids are unset.
+/// (aligned with `rule.policies`). Ids are unset. A document rule whose
+/// `not-after-ledger` has already passed ([`expired`]) is dropped: it is dead
+/// and OZ would refuse to install it.
 pub(crate) fn desired(e: &Env, compiled: &CompiledDoc) -> (Vec<InstalledRule>, Vec<Vec<Val>>) {
     let mut rules = Vec::new(e);
     let mut params = Vec::new(e);
     for rule in compiled.rules.iter() {
         let (r, p) = document_rule(e, &rule);
+        if expired(e, r.valid_until) {
+            continue;
+        }
         rules.push_back(r);
         params.push_back(p);
     }

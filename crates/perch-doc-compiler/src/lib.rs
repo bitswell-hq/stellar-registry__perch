@@ -254,12 +254,26 @@ pub struct CompilerCapabilities {
     pub config_hash_tag: String,
 }
 
-/// Whether a compiled rule set keeps a policy-free self-admin rule with at
-/// least one signer — the anti-brick check every applied document and every
-/// recovery target must pass, so the admin path never depends on a policy.
+/// Whether a compiled rule set keeps a policy-free, never-expiring self-admin
+/// rule with at least one signer — the anti-brick check every applied
+/// document and every recovery target must pass, so the admin path never
+/// depends on a policy and never lapses.
+///
+/// The surviving admin rule must have no `valid_until`: a self-admin rule
+/// bounded by `not-after-ledger` is a latent brick — once its bound passes,
+/// `apply_doc` can no longer be authorized through it and the account can
+/// never be managed again (nor can a bounded rule even be reinstalled: OZ
+/// refuses a past `valid_until`). A bounded self-admin rule is therefore
+/// never a surviving admin rule, whether its bound is already past or still
+/// in the future. This keeps the "a document that compiles also installs"
+/// invariant sound alongside the install-time drop of dead bounded rules
+/// (`perch-smart-account`'s `rules::desired`): that drop can never remove the
+/// account's only admin rule, because an admin rule that could ever be
+/// dropped fails this check first.
 pub fn admin_survives(rules: &Vec<CompiledRule>) -> bool {
     rules.iter().any(|r| {
         matches!(r.scope, RuleScope::SelfAdmin)
+            && r.valid_until.is_none()
             && !r.signers.is_empty()
             && r.install.is_empty()
             && r.cap.is_empty()
