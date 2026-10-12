@@ -67,5 +67,8 @@ fn a_valid_function_and_address_still_compile() {
         strkey(&w.target)
     );
     let r = w.compiler().try_compile_doc(&doc(&w, &rule));
-    assert!(matches!(r, Ok(Ok(_))), "valid doc should compile, got {r:?}");
+    assert!(
+        matches!(r, Ok(Ok(_))),
+        "valid doc should compile, got {r:?}"
+    );
 }
