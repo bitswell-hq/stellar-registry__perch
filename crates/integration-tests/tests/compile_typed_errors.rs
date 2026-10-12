@@ -1,4 +1,4 @@
-//! Regression (CANON audit, F-CANONTYPE): a document that passes validation
+//! Regression: a document that passes validation
 //! but whose later lowering would trap — a function name that is not a Soroban
 //! `Symbol`, or an address strkey with a bad CRC16 checksum — is refused with a
 //! typed `DocCompilerError`, never an untyped host trap. `try_compile_doc`
