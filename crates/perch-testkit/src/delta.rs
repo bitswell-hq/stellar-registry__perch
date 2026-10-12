@@ -304,7 +304,7 @@ impl DocModel {
         };
         let spelling = Spelling {
             upper_hex: u.ratio(1, 3)?,
-            limit_prefix: *u.choose(&LIMIT_PREFIXES)?,
+            limit_prefix: u.choose(&LIMIT_PREFIXES)?,
         };
         Ok(DocModel {
             signers,
