@@ -70,6 +70,39 @@ fields that carry document hashes, and the migration of existing accounts.
 [#105](https://github.com/stellar-registry/perch/issues/105) (Merkle-style
 document hash).
 
+## Canonical value spellings
+
+**Deferred:** enforcing one canonical spelling for every value a CANON v1
+document carries, so that two logically equal documents always share a
+`doc_hash`.
+
+**Current behaviour:** CANON v1 ([`CANONICAL.md`](../CANONICAL.md)) fixes
+byte-level serialization but not every value-level spelling, and `perch-ir`
+and `perch-js` disagree on a few. A cap `limit` with a leading `+` or leading
+zeros (`+1000`, `01000`) is accepted as distinct bytes from `1000`; signer key
+hex is accepted in either case; and perch-js's `canonicalJson` accepts or emits
+number forms (`1.0`, `1e0`, `-0`, exponent output) that `perch-ir` refuses or
+spells differently. So two documents that mean the same thing can compile to
+different `doc_hash`es.
+
+**Why it is safe to defer:** the wallet's Rust and TypeScript builders emit the
+canonical spelling, so documents produced through the supported path already
+agree. The residual is a hand-written or third-party document whose
+non-canonical spelling hashes differently from its canonical twin; it still
+authorizes exactly what it says, and the account enforces the document it
+received. Enforcing canonical spellings changes the `doc_hash` of existing
+non-canonical inputs, so it is a versioned change, not a silent one.
+
+**Exit criterion and follow-up review:** define the one valid spelling per
+field (lowercase hex, a decimal `limit` with no sign or leading zeros, integer
+number forms), enforce it in `perch-ir::validate` and `perch-js`, add
+cross-language parity vectors, and bump `CANON_VERSION` with the rest of
+CANON v2.
+
+**Owner:** Perch.
+
+**Tracking:** CANON v2, RFC [#109](https://github.com/stellar-registry/perch/issues/109).
+
 ## Versioned policy backend and larger limits
 
 **Deferred:** a policy backend other than the OpenZeppelin context-rule
