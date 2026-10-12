@@ -38,10 +38,13 @@ pub const ACK_SENTINEL: &str = "this-policy-authenticates-or-anyone-can-fire-thi
 /// are verifier-defined opaque bytes and commitment-style keys can be large.
 pub const MAX_SIGNER_KEY_LEN: usize = 256;
 
-/// Maximum length, in bytes, of a `string-prefix` prefix or a `string-in`
-/// value. Matches the interpreter's fixed string buffer: a longer predicate
-/// string can never be evaluated there, so the installed rule would deny
-/// every call instead of enforcing what the document says.
+/// Maximum length, in bytes, of a `string-prefix` prefix. Matches the
+/// interpreter's fixed string buffer: a longer prefix can never be evaluated
+/// there, so the whole predicate is unsatisfiable and the installed rule would
+/// deny every call instead of enforcing what the document says. (A `string-in`
+/// value over this length is a different case: it is one dead candidate in a
+/// set that may still be satisfiable through its other values, so it is left to
+/// the analyzer/runtime rather than refused here.)
 pub const MAX_STRING_PRED_LEN: usize = 256;
 
 /// A single semantic violation found by [`validate`]. Each variant names the
@@ -238,9 +241,9 @@ pub enum ValidationError {
         /// The duplicated value.
         value: String,
     },
-    /// A `string-prefix` prefix or a `string-in` value is longer than
-    /// [`MAX_STRING_PRED_LEN`] bytes, so the interpreter could never evaluate
-    /// it as written.
+    /// A `string-prefix` prefix is longer than [`MAX_STRING_PRED_LEN`] bytes,
+    /// so the interpreter could never evaluate it and the whole predicate is
+    /// unsatisfiable.
     StringPredicateTooLong {
         /// The offending rule name.
         rule: String,
@@ -933,13 +936,13 @@ fn validate_rule(rule: &Rule, declared: &BTreeSet<&str>, errors: &mut Vec<Valida
                                 value: value.clone(),
                             });
                         }
-                        if value.len() > MAX_STRING_PRED_LEN {
-                            errors.push(ValidationError::StringPredicateTooLong {
-                                rule: name(),
-                                index: constraint.index,
-                                len: value.len(),
-                            });
-                        }
+                        // An over-long `string-in` value is a dead candidate,
+                        // not an unsatisfiable predicate: the set stays live
+                        // through its other values, and the interpreter skips a
+                        // candidate it cannot hold. It is left to the analyzer
+                        // rather than refused here. Only `string-prefix`, whose
+                        // single over-long prefix kills the whole predicate, is
+                        // refused below.
                     }
                 }
                 ArgPred::StringPrefix(pred) => {
