@@ -243,7 +243,11 @@ pub enum ValidationError {
         address: String,
     },
     /// A rule's `not-after-ledger` is `0`, which would make the rule dead on
-    /// arrival. Omit the field for "no expiry".
+    /// arrival. Omit the field for "no expiry". Only `0` is refused here:
+    /// static validation has no ledger, so a bound that is already past
+    /// relative to the applying ledger is handled at install instead — the
+    /// account drops such a dead rule rather than letting OZ refuse it
+    /// (`perch-smart-account`'s `rules::desired`; spec §7.5).
     ZeroNotAfterLedger {
         /// The offending rule name.
         rule: String,
