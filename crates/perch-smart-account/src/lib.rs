@@ -31,7 +31,7 @@ use perch_recovery_interface::controller::{
 };
 use perch_recovery_interface::credential::{revocations, Credential};
 use perch_recovery_interface::zk::MembershipPoolClient;
-use perch_recovery_interface::UpgradeSubject;
+use perch_recovery_interface::{address_payload, UpgradeSubject};
 use soroban_sdk::{
     auth::{Context, ContractContext, CustomAccountInterface},
     contractevent, contracttrait, contracttype,
@@ -195,13 +195,90 @@ pub struct AccountCapabilities {
     /// How the applied `doc_hash` is computed: `canon_v1`, `sha256` of the
     /// CANON v1 canonical bytes.
     pub doc_identity: Symbol,
-    /// What a signer signs: `oz_rule_ids`, OZ's
-    /// `sha256(signature_payload || context_rule_ids.to_xdr())`.
+    /// What a signer signs: `addr_oz_v1`, OZ's
+    /// `sha256(bound_payload || context_rule_ids.to_xdr())`, where
+    /// `bound_payload = sha256(AUTH_ADDR_DOMAIN || account_id ||
+    /// signature_payload)` binds the account's own address so a signature
+    /// cannot be replayed on another account ([`AUTH_ADDR_DOMAIN`]). The
+    /// earlier `oz_rule_ids` scheme omitted the account address; a client
+    /// reads this symbol to tell which digest an account expects.
     pub auth_digest: Symbol,
     /// How a document is applied: `one_tx`, one `apply_doc` transaction.
     pub apply_modes: Vec<Symbol>,
     /// [`SNAPSHOT_VERSION`].
     pub snapshot_version: u32,
+}
+
+/// Domain tag binding a Perch account's authorization digest to the account's
+/// own address (the `addr_oz_v1` scheme [`AccountCapabilities::auth_digest`]
+/// names).
+///
+/// Soroban's `signature_payload` for a non-delegated custom-account credential
+/// (`HashIdPreimage::SorobanAuthorization`) binds the network, nonce,
+/// expiration, and invocation, but not the address of the account whose
+/// `__check_auth` runs, and the host's per-account nonce namespace prevents
+/// reuse only *within* one account. OZ then layers only the selected rule ids
+/// into the signed digest. Without this binding, two accounts that share an
+/// `External` key and matching rule ids demand a byte-identical digest, so a
+/// signature collected for one is replayable on the other. [`bind_payload`]
+/// folds the account's own 32-byte contract id into the payload before OZ
+/// layers the rule ids on top, so the digest an `External` signer authenticates
+/// against is unique to this account. The `Signer::Delegated` (CAP-0071) path
+/// never consumes this digest — the host validates it under
+/// `SorobanAuthorizationWithAddress`, which is already address-bound — so this
+/// changes nothing for delegated signers.
+pub const AUTH_ADDR_DOMAIN: &[u8] = b"perch/account/auth-addr-v1";
+
+/// `AUTH_ADDR_DOMAIN || account_id || signature_payload`: the one preimage
+/// both binding wrappers hash, so they can never drift.
+fn auth_preimage(e: &Env, account_id: &[u8; 32], signature_payload: &BytesN<32>) -> Bytes {
+    let mut preimage = Bytes::from_slice(e, AUTH_ADDR_DOMAIN);
+    preimage.extend_from_array(account_id);
+    preimage.extend_from_array(&signature_payload.to_array());
+    preimage
+}
+
+/// Fold `account_id` (a 32-byte contract id) into `signature_payload`:
+/// `sha256(AUTH_ADDR_DOMAIN || account_id || signature_payload)`. The pure,
+/// account-context-free core of [`bind_payload`]; off-chain signers
+/// (`perch-js`, `perch-deploy`) reproduce exactly this. `perch-js`'s
+/// `signingDigest` and `perch-testkit`'s `auth_digest` are pinned against the
+/// on-chain result by `integration-tests/tests/auth_vectors.rs`.
+pub fn bind_signature_payload(
+    e: &Env,
+    account_id: &BytesN<32>,
+    signature_payload: &BytesN<32>,
+) -> BytesN<32> {
+    e.crypto()
+        .sha256(&auth_preimage(e, &account_id.to_array(), signature_payload))
+        .to_bytes()
+}
+
+/// [`bind_signature_payload`] for `account`, reading its 32-byte contract id
+/// from the address. For off-account callers (test helpers, host-side signers)
+/// that build the digest without being inside the account's `__check_auth`.
+pub fn bind_signature_payload_for_account(
+    e: &Env,
+    account: &Address,
+    signature_payload: &BytesN<32>,
+) -> BytesN<32> {
+    let id = address_payload(e, account)
+        .map(|(_, id)| id)
+        .unwrap_or([0u8; 32]);
+    bind_signature_payload(e, &BytesN::from_array(e, &id), signature_payload)
+}
+
+/// [`bind_signature_payload`] for the account currently executing: its own
+/// contract id is read from `e.current_contract_address()`.
+fn bind_payload(e: &Env, signature_payload: &Hash<32>) -> Hash<32> {
+    let me = e.current_contract_address();
+    // A deployed account is always a `C...` contract, so `address_payload`
+    // yields its 32-byte contract id.
+    let id = address_payload(e, &me)
+        .map(|(_, id)| id)
+        .unwrap_or([0u8; 32]);
+    e.crypto()
+        .sha256(&auth_preimage(e, &id, &signature_payload.to_bytes()))
 }
 
 /// The account's consumer interface version: the views
@@ -640,7 +717,7 @@ pub trait PerchSmartAccount: CustomAccountInterface + SmartAccount {
         AccountCapabilities {
             interface_version: INTERFACE_VERSION,
             doc_identity: Symbol::new(e, "canon_v1"),
-            auth_digest: Symbol::new(e, "oz_rule_ids"),
+            auth_digest: Symbol::new(e, "addr_oz_v1"),
             apply_modes: Vec::from_array(e, [Symbol::new(e, "one_tx")]),
             snapshot_version: SNAPSHOT_VERSION,
         }
@@ -721,8 +798,11 @@ pub fn check_auth(
             return Err(PerchAuthError::AccountFrozen.into());
         }
     }
-    smart_account::do_check_auth(e, signature_payload, signatures, auth_contexts)
-        .map_err(Into::into)
+    // Bind the digest to this account's address before OZ layers the selected
+    // rule ids on top, so an `External` signature cannot be replayed on another
+    // account that shares the key and rule ids (`AUTH_ADDR_DOMAIN`).
+    let bound = bind_payload(e, signature_payload);
+    smart_account::do_check_auth(e, &bound, signatures, auth_contexts).map_err(Into::into)
 }
 
 /// One `apply_doc` context on this account, selecting the recovery rule.

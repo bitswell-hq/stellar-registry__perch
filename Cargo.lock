@@ -1614,6 +1614,7 @@ dependencies = [
  "perch-smart-account",
  "perch-spending-limit",
  "perch-testkit",
+ "perch-webauthn-verifier",
  "perch-zk-pool",
  "perch-zk-primitives",
  "perch-zk-prover",
