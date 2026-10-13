@@ -11,9 +11,11 @@ use soroban_sdk::{auth::Context, Address, Bytes, Env, String, Symbol, TryFromVal
 
 use crate::{EvalInputs, Verdict};
 
-/// Longest string argument `ArgStrPrefix`/`ArgStrIn` will inspect. A longer
-/// argument decodes to [`Verdict::Unknown`] (fail closed) rather than risk an
-/// unbounded copy in `no_std`.
+/// Longest string `ArgStrPrefix`/`ArgStrIn` will buffer. A longer `ArgStrIn`
+/// argument or predicate string decodes to [`Verdict::Unknown`] (fail
+/// closed) rather than risk an unbounded copy in `no_std`; `ArgStrPrefix`
+/// buffers only the argument's first prefix-length bytes. `perch-ir`
+/// validation rejects predicate strings over this length.
 const MAX_STR_ARG_LEN: usize = 256;
 
 /// Decode argument `i` of a contract-call context as `T`.
@@ -111,6 +113,20 @@ fn str_bytes(s: &String, buf: &mut [u8; MAX_STR_ARG_LEN]) -> Option<usize> {
     Some(n)
 }
 
+/// Copy the first `n` bytes of a soroban [`String`] into a fixed buffer, or
+/// `false` if the string is shorter than `n`. The string itself may be any
+/// length; only `n` (bounded by [`MAX_STR_ARG_LEN`]) bytes are copied.
+#[sig(fn(s: &String, n: usize{n <= MAX_STR_ARG_LEN}, buf: &mut [u8; _]) -> bool)]
+fn str_head(s: &String, n: usize, buf: &mut [u8; MAX_STR_ARG_LEN]) -> bool {
+    if (s.len() as usize) < n {
+        return false;
+    }
+    s.to_bytes()
+        .slice(..n as u32)
+        .copy_into_slice(&mut buf[..n]);
+    true
+}
+
 /// Equality of two buffered strings by their filled prefixes. Flux proves
 /// both slice reads in-bounds from the length preconditions.
 #[sig(fn(a: &[u8; _], an: usize{an <= MAX_STR_ARG_LEN}, b: &[u8; _], bn: usize{bn <= MAX_STR_ARG_LEN}) -> bool)]
@@ -148,12 +164,14 @@ pub(crate) fn arg_str_prefix(env: &Env, inputs: &EvalInputs, i: u32, prefix: &St
     let Some(s) = arg::<String>(env, inputs.context, i) else {
         return Verdict::Unknown;
     };
-    let mut sbuf = [0u8; MAX_STR_ARG_LEN];
     let mut pbuf = [0u8; MAX_STR_ARG_LEN];
-    let (Some(sn), Some(pn)) = (str_bytes(&s, &mut sbuf), str_bytes(prefix, &mut pbuf)) else {
+    let Some(pn) = str_bytes(prefix, &mut pbuf) else {
         return Verdict::Unknown;
     };
-    if pn > sn {
+    // Only the argument's first `pn` bytes matter, so an argument longer
+    // than the buffer is still checked rather than denied.
+    let mut sbuf = [0u8; MAX_STR_ARG_LEN];
+    if !str_head(&s, pn, &mut sbuf) {
         return Verdict::False;
     }
     Verdict::from(sbuf[..pn] == pbuf[..pn])

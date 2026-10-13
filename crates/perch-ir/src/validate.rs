@@ -38,6 +38,15 @@ pub const ACK_SENTINEL: &str = "this-policy-authenticates-or-anyone-can-fire-thi
 /// are verifier-defined opaque bytes and commitment-style keys can be large.
 pub const MAX_SIGNER_KEY_LEN: usize = 256;
 
+/// Maximum length, in bytes, of a `string-prefix` prefix. Matches the
+/// interpreter's fixed string buffer: a longer prefix can never be evaluated
+/// there, so the whole predicate is unsatisfiable and the installed rule would
+/// deny every call instead of enforcing what the document says. (A `string-in`
+/// value over this length is a different case: it is one dead candidate in a
+/// set that may still be satisfiable through its other values, so it is left to
+/// the analyzer/runtime rather than refused here.)
+pub const MAX_STRING_PRED_LEN: usize = 256;
+
 /// A single semantic violation found by [`validate`]. Each variant names the
 /// signer or rule it concerns; `Display` renders a human-readable message.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -231,6 +240,17 @@ pub enum ValidationError {
         index: u32,
         /// The duplicated value.
         value: String,
+    },
+    /// A `string-prefix` prefix is longer than [`MAX_STRING_PRED_LEN`] bytes,
+    /// so the interpreter could never evaluate it and the whole predicate is
+    /// unsatisfiable.
+    StringPredicateTooLong {
+        /// The offending rule name.
+        rule: String,
+        /// The argument index the predicate applies to.
+        index: u32,
+        /// The byte length of the over-long string.
+        len: usize,
     },
     /// An `address-eq` predicate's address is not shaped like a C- or
     /// G-address strkey (including the CRC16 checksum).
@@ -491,6 +511,11 @@ impl fmt::Display for ValidationError {
             E::DuplicateStringInValue { rule, index, value } => write!(
                 f,
                 "rule `{rule}`: string-in at arg {index} repeats value `{value}`"
+            ),
+            E::StringPredicateTooLong { rule, index, len } => write!(
+                f,
+                "rule `{rule}`: string predicate at arg {index} is {len} bytes, \
+                 over the {MAX_STRING_PRED_LEN}-byte limit"
             ),
             E::InvalidArgAddress {
                 rule,
@@ -911,6 +936,22 @@ fn validate_rule(rule: &Rule, declared: &BTreeSet<&str>, errors: &mut Vec<Valida
                                 value: value.clone(),
                             });
                         }
+                        // An over-long `string-in` value is a dead candidate,
+                        // not an unsatisfiable predicate: the set stays live
+                        // through its other values, and the interpreter skips a
+                        // candidate it cannot hold. It is left to the analyzer
+                        // rather than refused here. Only `string-prefix`, whose
+                        // single over-long prefix kills the whole predicate, is
+                        // refused below.
+                    }
+                }
+                ArgPred::StringPrefix(pred) => {
+                    if pred.prefix.len() > MAX_STRING_PRED_LEN {
+                        errors.push(ValidationError::StringPredicateTooLong {
+                            rule: name(),
+                            index: constraint.index,
+                            len: pred.prefix.len(),
+                        });
                     }
                 }
                 ArgPred::AddressEq(pred) => {
@@ -922,7 +963,7 @@ fn validate_rule(rule: &Rule, declared: &BTreeSet<&str>, errors: &mut Vec<Valida
                         });
                     }
                 }
-                ArgPred::IsSelf(_) | ArgPred::StringPrefix(_) | ArgPred::U32Eq(_) => {}
+                ArgPred::IsSelf(_) | ArgPred::U32Eq(_) => {}
             }
         }
     }
