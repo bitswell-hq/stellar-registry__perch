@@ -103,6 +103,59 @@ CANON v2.
 
 **Tracking:** CANON v2, RFC [#109](https://github.com/stellar-registry/perch/issues/109).
 
+## PolicyDoc JSON Schema: strict profile and out-of-schema checks
+
+**Deferred:** a strict *canonical* profile of the versioned PolicyDoc JSON
+Schema ([`schema.md`](schema.md)) that rejects the non-canonical value spellings
+its v1 profile accepts, plus any schema expression of the document checks JSON
+Schema structurally cannot state.
+
+**Current behaviour:** the shipped `policy.schema.json` describes document
+`version: 1` and, by design, accepts exactly what `perch-ir`'s parser accepts,
+so that schema validation and the parser agree (a schema that rejected a
+document the parser accepts would mislead an offline editor). It therefore
+accepts the same non-canonical spellings the "Canonical value spellings" entry
+above lists: a `cap.limit` with a leading `+` or leading zeros, and signer-key
+hex in either case. It *does* pin the 64-lowercase-hex digest fields
+(`doc-hash`, `circuit-id`, `enrollment-id`, `commitment`) because the parser
+already requires that form. Several checks also stay outside JSON Schema
+entirely, with the authority unchanged:
+
+- uniqueness of signer ids and of rule names, compared by key across siblings —
+  `perch-ir::validate`;
+- reference resolution (a principal/`replaceable` id resolving to a declared
+  signer; a cap `token` matching the rule's contract scope) — `perch-ir::validate`;
+- the canonical-byte budget (`max_canonical_bytes`), a property of the
+  canonically-encoded bytes rather than the parsed tree — the compiler
+  (`perch-doc-compiler`), mirrored client-side by perch-js `checkLimits`;
+- the BN254 field-element range on a recovery `commitment`, and the exact
+  `i128` upper bound on a `cap.limit` — `perch-ir::validate`;
+- guardian `quorum <= count` for guardian sets larger than the schema's
+  enumerated depth (guardians have no dedicated cap constant today) —
+  `perch-ir::validate`;
+- signatures and authorization — `__check_auth` / OZ policy enforcement.
+
+**Why it is safe to defer:** the v1 profile already encodes every representable
+format/range/collection rule and the per-document count/name caps, and the
+parser, compiler, and account remain the authority for everything else, so no
+check is lost — only not yet mirrored into the schema. Tightening the schema to
+a canonical profile before the parser enforces one spelling would make it reject
+documents the chain still accepts.
+
+**Exit criterion and follow-up review:** once "Canonical value spellings" lands
+(one valid spelling enforced in `perch-ir::validate` and `perch-js`), add the
+matching strict profile to the generated schema — lowercase-only signer-key hex,
+a `cap.limit` with no sign and no leading zeros, and the settled integer
+number-form spelling — regenerate the committed artifact, and extend the
+drift/parity/conformance suites so the strict schema and the parser still agree
+in both directions. A dedicated guardian-count cap would let the schema encode
+`quorum <= count` fully. Review the regenerated schema against the parser's new
+spelling rules and the cross-language parity vectors.
+
+**Owner:** Perch.
+
+**Tracking:** CANON v2, RFC [#109](https://github.com/stellar-registry/perch/issues/109).
+
 ## Versioned policy backend and larger limits
 
 **Deferred:** a policy backend other than the OpenZeppelin context-rule
