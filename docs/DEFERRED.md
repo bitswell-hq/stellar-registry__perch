@@ -349,3 +349,31 @@ the deployment manifest. Review any difference as a code change.
 **Owner:** Perch (publishing) and each consumer (switching).
 
 **Tracking:** none yet.
+
+## Contract-admin governance behind a multisig and timelock
+
+**Deferred:** moving the mutable contract-admin surfaces — the publishing
+registry's admin and the Nido factory's upgrade — behind a 2-of-3
+Perch-account multisig and an admin timelock (a visible, cancelable delay on
+admin actions).
+
+**Current behaviour:** the publishing registry's `admin`/`manager` is a single
+human-held key, backed up encrypted in 1Password. The deployment is testnet
+only; no mainnet deployment lands before the audit. The registry's
+`upgrade`/`set_admin`/`set_manager`/`remove_manager` take effect the moment
+that key authorizes them.
+
+**Why it is safe to defer:** the admin key is human-held and backed up
+encrypted in 1Password, and the only live deployment is on testnet, so no
+mainnet value is governed by it before the audit. The deferred change hardens
+key custody and adds a delay; it does not alter any audited on-chain
+authorization path.
+
+**Exit criterion and follow-up review:** adopt the multisig + timelock before
+any mainnet deployment, and review the timelock contract, the multisig policy
+document, and the admin cutover. Driving the multisig on-chain additionally
+needs multi-sig signing tooling (noted in the tracked PR).
+
+**Owner:** Perch and Nido.
+
+**Tracking:** [stellar-registry/perch#123](https://github.com/stellar-registry/perch/pull/123).
