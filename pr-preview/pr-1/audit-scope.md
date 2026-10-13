@@ -170,7 +170,15 @@ suffix and key canonicalization matter — is exercised by Nido's suite
 
 **Evidence:** `crates/integration-tests/tests/{apply_delta,delta_security,doc_caps}.rs`;
 the full-replace oracle `crates/perch-testkit/src/delta.rs` and the fuzz
-target `fuzz/fuzz_targets/apply_doc_delta.rs`; `release_stack.rs`
+target `fuzz/fuzz_targets/apply_doc_delta.rs`. The full replace shares
+compile and the desired rule set (expiry drop, recovery rule) with the
+delta, so it checks the reconcile only; each accepted step is also checked
+against the grant the document model computes on its own
+(`DocModel::expected_rules` against `live_rules`, read from OZ's context
+rules and the policies' stored parameters). The generator reaches the
+document caps, permutes signer lists, spells keys in either hex case and cap
+limits with leading zeros or a sign, and advances the ledger past rule
+expiries between documents; `release_stack.rs`
 (`worst_case_*`, `signer_transitions`, `cap_sweep`,
 `the_metered_footprint_is_the_simulated_transactions`);
 [`recovery/budgets.md`](recovery/budgets.md), "Document caps", which sizes
