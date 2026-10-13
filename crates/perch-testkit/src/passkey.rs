@@ -145,7 +145,7 @@ pub fn auth_entry(
 
     let payload = signature_payload(env, nonce, signature_expiration_ledger, &invocation);
     let ids = vec![env, rule_id];
-    let digest = crate::auth_digest(env, &BytesN::from_array(env, &payload), &ids);
+    let digest = crate::auth_digest(env, account, &BytesN::from_array(env, &payload), &ids);
     let signer = Signer::External(verifier.clone(), Bytes::from_slice(env, &key.key_data()));
     let auth = AuthPayload {
         signers: map![env, (signer, sig_data(env, &key.assert(&digest)))],

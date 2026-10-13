@@ -39,7 +39,7 @@ use perch_compile::{compile, CompileConfig, LoweredRule, ScopeSpec, SignerSpec};
 #[cfg(feature = "contract")]
 use perch_recovery_interface::config;
 #[cfg(feature = "contract")]
-use soroban_sdk::{contract, contractimpl, IntoVal, Map, Val};
+use soroban_sdk::{contract, contractimpl, IntoVal, Map, TryFromVal, Val};
 
 /// Document caps (`docs/recovery/spec.md` §7.5): the compiler refuses a
 /// document with more declared signers, more rules, or longer canonical
@@ -88,8 +88,15 @@ pub enum DocCompilerError {
     /// [`MAX_DOC_RULES`], [`MAX_DOC_CANONICAL_BYTES`],
     /// [`MAX_RULE_NAME_BYTES`]).
     DocTooLarge,
-    /// A signer's verifier could not canonicalize its key, so the credential
-    /// cannot be fingerprinted for revocation.
+    /// A signer's external `key` is not its verifier-canonical form: either the
+    /// verifier could not canonicalize it at all, or the declared bytes differ
+    /// from the canonical form the verifier returns (e.g. a WebAuthn key
+    /// carrying a credential-id suffix the verifier drops, or a non-canonical
+    /// point encoding). The compiler refuses it rather than silently
+    /// canonicalizing, so the bytes the document hash — and a recovery
+    /// attempt's `replacements_hash` — bind are exactly the bytes the installed
+    /// credential uses, and two signers cannot hide one physical key under two
+    /// spellings.
     KeyNotCanonicalizable,
     /// `derive_target`: the current document enrolls no recovery.
     NotEnrolled,
@@ -271,6 +278,10 @@ pub struct CompilerCapabilities {
 /// account's only admin rule, because an admin rule that could ever be
 /// dropped fails this check first.
 pub fn admin_survives(rules: &Vec<CompiledRule>) -> bool {
+    // A bounded self-admin rule is excluded (`valid_until.is_none()`): once its
+    // bound passes it can no longer authorize `apply_doc`, so a document whose
+    // only admin rule is bounded is a latent brick and is refused up front.
+    // Regression: integration-tests/tests/recovery_installability.rs.
     rules.iter().any(|r| {
         matches!(r.scope, RuleScope::SelfAdmin)
             && r.valid_until.is_none()
@@ -522,6 +533,20 @@ fn canonical_credentials(
             .map_err(|_| DocCompilerError::KeyNotCanonicalizable)?;
         if keys.len() != batch.len() {
             return Err(DocCompilerError::KeyNotCanonicalizable);
+        }
+        // Refuse a key that is not already its verifier-canonical form, rather
+        // than silently canonicalizing it. The declared bytes are what the
+        // document hash — and a recovery attempt's `replacements_hash` — bind;
+        // a non-canonical spelling would bind bytes the installed (canonical)
+        // credential ignores, and could hide a second signer that resolves to
+        // the same physical key. CANON refuses non-canonical input.
+        // Regression: integration-tests/tests/key_canonicalization.rs.
+        for i in 0..batch.len() {
+            let declared = Bytes::try_from_val(e, &batch.get_unchecked(i))
+                .map_err(|_| DocCompilerError::KeyNotCanonicalizable)?;
+            if declared != keys.get_unchecked(i) {
+                return Err(DocCompilerError::KeyNotCanonicalizable);
+            }
         }
         canonical.set(verifier, keys);
     }
