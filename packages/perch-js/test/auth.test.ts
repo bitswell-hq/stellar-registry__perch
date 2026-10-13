@@ -19,12 +19,12 @@ describe('Rust parity: the signing digest', () => {
   for (const v of vectors.signing_digest) {
     it(`rule ids [${v.rule_ids.join(', ')}]`, () => {
       expect(bytesToHex(ruleIdsXdr(v.rule_ids))).toBe(v.rule_ids_xdr);
-      expect(bytesToHex(signingDigest(hexToBytes(v.signature_payload), v.rule_ids))).toBe(v.digest);
+      expect(bytesToHex(signingDigest(v.account, hexToBytes(v.signature_payload), v.rule_ids))).toBe(v.digest);
     });
   }
 
   it('refuses a payload that is not 32 bytes', () => {
-    expect(() => signingDigest(new Uint8Array(31), [0])).toThrow();
+    expect(() => signingDigest('CC5QACNC45UM2FLTKPXD2TME7647YHUPF4PGHQBFRP26PHHDQ6LWAPBF', new Uint8Array(31), [0])).toThrow();
   });
 });
 
