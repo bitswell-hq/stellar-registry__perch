@@ -182,7 +182,7 @@ describe('selection by name and scope', () => {
     // on chain (the account's authentication fails with ContextRuleNotFound),
     // and that failure maps to StaleSelection.
     const payload = new Uint8Array(32).fill(7);
-    const stale = buildAuthPayload(at1, await sim.sign({ ...signRequest(at1), digest: signingDigest(payload, at1.ruleIds) }));
+    const stale = buildAuthPayload(at1, await sim.sign({ ...signRequest(at1), digest: signingDigest(at1.account, payload, at1.ruleIds) }));
     const failure = (() => {
       try {
         sim.submitCall(OTHER, payload, stale);
@@ -195,7 +195,7 @@ describe('selection by name and scope', () => {
       new StaleSelection(at1.ruleIds),
     );
     // Re-resolved at r3, the same call is authorized.
-    const fresh = buildAuthPayload(at3, await sim.sign({ ...signRequest(at3), digest: signingDigest(payload, at3.ruleIds) }));
+    const fresh = buildAuthPayload(at3, await sim.sign({ ...signRequest(at3), digest: signingDigest(at3.account, payload, at3.ruleIds) }));
     expect(() => sim.submitCall(OTHER, payload, fresh)).not.toThrow();
   });
 

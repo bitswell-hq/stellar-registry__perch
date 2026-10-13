@@ -118,7 +118,10 @@ export interface SnapshotOptions {
 export function checkCapabilities(c: AccountCapabilities): void {
   if (c.interfaceVersion < 1) throw new UnsupportedCapability(`account interface ${c.interfaceVersion}`);
   if (c.docIdentity !== 'canon_v1') throw new UnsupportedCapability(`document identity ${c.docIdentity}`);
-  if (c.authDigest !== 'oz_rule_ids') throw new UnsupportedCapability(`authorization digest ${c.authDigest}`);
+  // `addr_oz_v1`: the account-address-bound digest (see `signingDigest`). The
+  // earlier `oz_rule_ids` scheme omitted the account address and is no longer
+  // produced; this perch-js signs only the bound digest, so it refuses it.
+  if (c.authDigest !== 'addr_oz_v1') throw new UnsupportedCapability(`authorization digest ${c.authDigest}`);
   if (c.snapshotVersion !== 1) throw new UnsupportedCapability(`snapshot format ${c.snapshotVersion}`);
 }
 
