@@ -1,14 +1,18 @@
 //! The authorization encodings a wallet produces off chain, pinned for
 //! perch-js (`packages/perch-js/test/auth.test.ts`):
 //!
-//! - the signing digest OZ checks every signature against,
-//!   `sha256(signature_payload || context_rule_ids.to_xdr())`;
+//! - the signing digest the account's `check_auth` makes an `External` signer
+//!   authenticate against (the `addr_oz_v1` scheme): `sha256(bound_payload ||
+//!   context_rule_ids.to_xdr())`, where `bound_payload = sha256(
+//!   AUTH_ADDR_DOMAIN || account_id || signature_payload)` folds the account's
+//!   own address in so a signature cannot be replayed on another account;
 //! - OZ's `AuthPayload`, as the `ScVal` an auth entry carries.
 //!
 //! `testdata/auth/auth-vectors.json` is written by this file from the
 //! account's own types (`PERCH_BLESS=1 cargo test --test auth_vectors`) and
-//! read back by both suites. The digest is also checked against the one OZ's
-//! `do_check_auth` hands a verifier, so the formula is OZ's, not a copy.
+//! read back by both suites. The digest is also checked against the one the
+//! account's `check_auth` hands a verifier, so the formula is the account's,
+//! not a copy.
 
 use perch_account::PerchAccount;
 use soroban_sdk::auth::{Context, ContractContext};
@@ -41,9 +45,13 @@ fn payload(e: &Env, n: u8) -> BytesN<32> {
     e.crypto().sha256(&Bytes::from_array(e, &[n; 7])).to_bytes()
 }
 
-/// OZ's digest (`storage.rs`, `do_check_auth`).
-fn signing_digest(e: &Env, payload: &BytesN<32>, ids: &Vec<u32>) -> BytesN<32> {
-    let mut preimage: Bytes = payload.clone().into();
+/// The account's digest: `sha256(bound_payload || rule_ids.to_xdr())`, where
+/// `bound_payload` folds the account's own address in
+/// ([`perch_smart_account::bind_signature_payload_for_account`]). OZ layers the
+/// rule ids; the account layers the address binding underneath.
+fn signing_digest(e: &Env, account: &Address, payload: &BytesN<32>, ids: &Vec<u32>) -> BytesN<32> {
+    let bound = perch_smart_account::bind_signature_payload_for_account(e, account, payload);
+    let mut preimage: Bytes = bound.into();
     preimage.append(&ids.clone().to_xdr(e));
     e.crypto().sha256(&preimage).to_bytes()
 }
@@ -82,15 +90,19 @@ fn signer_json(s: &Signer) -> serde_json::Value {
 fn vectors() -> serde_json::Value {
     let e = Env::default();
     let id_lists: [&[u32]; 5] = [&[], &[0], &[3], &[1, 2, 3], &[u32::MAX, 7]];
+    // The account the digest is bound to (a `C...` contract — accounts always
+    // are). perch-js folds this account's contract id into the digest.
+    let account = Address::from_str(&e, ACCOUNTS[1]);
     let mut digests = std::vec::Vec::new();
     for (n, ids) in id_lists.iter().enumerate() {
         let ids = Vec::from_slice(&e, ids);
         let p = payload(&e, n as u8);
         digests.push(serde_json::json!({
+            "account": ACCOUNTS[1],
             "signature_payload": hex::encode(p.to_array()),
             "rule_ids": ids_json(&ids),
             "rule_ids_xdr": hex::encode(raw(&ids.clone().to_xdr(&e))),
-            "digest": hex::encode(signing_digest(&e, &p, &ids).to_array()),
+            "digest": hex::encode(signing_digest(&e, &account, &p, &ids).to_array()),
         }));
     }
 
@@ -231,6 +243,6 @@ fn the_signing_digest_is_the_one_oz_verifies() {
     let seen = RecorderClient::new(&e, &recorder).seen();
     assert_eq!(
         seen,
-        Bytes::from(signing_digest(&e, &payload.to_bytes(), &ids))
+        Bytes::from(signing_digest(&e, &account, &payload.to_bytes(), &ids))
     );
 }
