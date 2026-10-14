@@ -376,7 +376,16 @@ for the previous deployment, not part of the reading order.
 ## Deferred until after the audit
 
 [`DEFERRED.md`](DEFERRED.md) holds one entry per deferral: CANON v2
-identity, a versioned policy backend and larger limits, revision-bound
-ordinary signatures, stable numeric rule ids, persistent spending budgets,
-additional formal models, the OZ fork pull requests, and npm publishing of
-`perch-zk` and the contract clients.
+identity, canonical value spellings, the PolicyDoc JSON Schema's strict
+profile and out-of-schema checks, a versioned policy backend and larger
+limits, revision-bound ordinary signatures, stable numeric rule ids,
+persistent spending budgets, additional formal models, the OZ fork pull
+requests, npm publishing of `perch-zk` and the contract clients, completion
+input-byte binding, and contract-admin governance behind a multisig and
+timelock.
+
+[Completion input-byte binding](DEFERRED.md#completion-input-byte-binding)
+affects authorization: a leftover completion marker lets an `apply_doc`
+under ordinary owner authority, carrying a differently formatted spelling of
+the authorized canonical target in the same ledger and authorized window, be
+classified as a recovery completion instead of an ordinary write.
