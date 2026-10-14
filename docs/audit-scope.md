@@ -56,11 +56,11 @@ changes with it.
 **Reproduction record.** On 2026-10-14, on a macOS arm64 host with the
 manifest's toolchain, a `git archive` export of `7b164b6` at another path,
 built by `scripts/build-stack.sh` with the manifest's builder and
-`registry.id`, reproduced all ten `contracts.<name>.sha256` values. Pass the
-registry from the manifest at this commit: the export's own
-`deployments/testnet.json` names the previous deployment's registry, and the
-account and the factory bake the registry id, so building against it gives
-other account and factory hashes. Other hosts and toolchains have not been
+`registry.id`, reproduced all ten `contracts.<name>.sha256` values. Take
+`registry.id` from this commit's manifest, not the export's: the export's
+own `deployments/testnet.json` names the previous deployment's registry, and
+the account and the factory bake the registry id, so building against it
+gives other account and factory hashes. Other hosts and toolchains have not been
 checked; `stellar scaffold build` optimizes with the wasm-opt its own version
 ships.
 

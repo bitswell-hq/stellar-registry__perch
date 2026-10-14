@@ -116,8 +116,8 @@ JSON Schema structurally cannot state.
 [`packages/perch-js/schemas/policy.schema.json`](../packages/perch-js/schemas/policy.schema.json)
 (generator `crates/perch-schema`, drift-checked by `cargo test`), describes
 document `version: 1`. `@stellar-registry/perch` lists `schemas/` in its
-published files; the latest npm release, 0.3.2, predates the schema and does
-not contain it. By design the schema accepts what `perch-ir`'s parser accepts,
+published files; npm release 0.3.2 predates the schema and does not contain
+it. By design the schema accepts what `perch-ir`'s parser accepts,
 so that schema validation and the parser agree (a schema that rejected a
 document the parser accepts would mislead an offline editor). It therefore
 accepts the same non-canonical spellings the "Canonical value spellings" entry
@@ -153,8 +153,8 @@ authority unchanged:
 authority for every check the schema leaves out, so no check is lost — only
 not yet mirrored into the schema. A schema-valid document that fails one of
 them is refused by `compile_doc` with a typed error (`DocParse`,
-`DocInvalid`, or `DocTooLarge`), so the gap fails closed: an editor can accept a document the chain will refuse, never the
-reverse. Tightening the schema to a canonical profile before the parser
+`DocInvalid`, or `DocTooLarge`), so the gap fails closed: an editor can
+accept a document the chain will refuse, never the reverse. Tightening the schema to a canonical profile before the parser
 enforces one spelling would make it reject documents the chain still accepts.
 
 **Exit criterion and follow-up review:** add the `Symbol` pattern for
