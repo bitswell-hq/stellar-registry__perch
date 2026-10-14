@@ -54,6 +54,8 @@ CANONICAL.md          normative definition of the canonical form, doc_hash, and 
                       fragment hashes (CANON v1)
 crates/
   perch-ir/           policy document model: canonical JSON, doc_hash, validation
+  perch-schema/       host-side generator for the versioned PolicyDoc JSON Schema
+                      (draft 2020-12), derived from perch-ir's constants; see docs/schema.md
   perch-program/      on-chain constraint encoding + fail-closed evaluation (no_std rlib)
   perch-interpreter/  the deployable OZ Policy contract that evaluates programs
   perch-compile/      lowering: PolicyDoc → OZ rules, each policy-free or with a program
@@ -101,7 +103,8 @@ packages/
   perch-js/           @stellar-registry/perch: schemas, builder, canonical JSON and
                       hashes, statement encodings, and the consumer interface
                       (revision-consistent reads, rule selection, signing digests,
-                      the apply lifecycle)
+                      the apply lifecycle); ships the generated policy.schema.json
+                      under schemas/ (see docs/schema.md)
   perch-interpreter-js/  @stellar-registry/perch-interpreter: interpreter client
                       bindings (generated from the wasm; `just bindings-interpreter-js`)
   perch-zk/           ZK recovery proof helpers: commitments, witnesses, bb.js proving,
@@ -138,11 +141,14 @@ docs/deploy/          build order, manifests, pin verification, and the testnet 
                       report
 docs/verification/    what is proved, differentially tested, and tested only (PLAN.md);
                       enforceability theory (THEORY.md)
+docs/schema.md        the PolicyDoc JSON Schema: generation, drift, release path, versioning,
+                      and the boundary between schema-valid and authorized/canonical
 docs/testnet-deployment.md  the release pipeline's canonical testnet registry and
                       author account
 docs/slides/          the perch story as an HTML deck (served via GitHub Pages)
 testdata/             golden vectors shared by the Rust, TypeScript, and Lean suites
                       (frozen); see testdata/README.md
+testdata/schema/      shared PolicyDoc JSON Schema conformance cases (Rust + perch-js suites)
 ```
 
 The release pipeline (`.github/workflows/release.yml`) publishes the
