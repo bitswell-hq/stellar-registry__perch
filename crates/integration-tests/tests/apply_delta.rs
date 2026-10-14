@@ -74,6 +74,20 @@ fn apply_both(w: &DeltaWorld, d: &DocModel) {
         &storage_state(&w.env, &w.oracle, History::Keep),
         "delta vs full replace",
     );
+    // The oracle shares compile and the desired rule set with the delta;
+    // the model's own grant shares neither.
+    if delta.is_ok() {
+        assert_eq!(
+            live_rules(w, &w.delta),
+            d.expected_rules(w, &w.delta),
+            "the delta account's live rules vs the model's grant for {d:?}"
+        );
+        assert_eq!(
+            live_rules(w, &w.oracle),
+            d.expected_rules(w, &w.oracle),
+            "the full replace's live rules vs the model's grant for {d:?}"
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -83,15 +97,17 @@ fn apply_both(w: &DeltaWorld, d: &DocModel) {
 proptest! {
     #![proptest_config(config(48))]
 
-    /// For any sequence of documents, the delta account and the
-    /// full-replace oracle accept and refuse the same documents and end every
-    /// step with identical normalized storage: rules, signers, policies and
-    /// their parameters, registries, the canonical applied document, and the
-    /// recovery wiring.
+    /// For any sequence of documents, with the ledger advancing between
+    /// them past rule expiries, the delta account and the full-replace
+    /// oracle accept and refuse the same documents and end every step with
+    /// identical normalized storage: rules, signers, policies and their
+    /// parameters, registries, the canonical applied document, and the
+    /// recovery wiring. Both grant exactly the rules the model computes.
     #[test]
     fn delta_apply_matches_full_replace(bytes in proptest::collection::vec(any::<u8>(), 0..2048)) {
         let w = DeltaWorld::new();
-        for d in DocModel::sequence(&mut Unstructured::new(&bytes), 5).unwrap() {
+        for (advance, d) in DocModel::sequence(&mut Unstructured::new(&bytes), 5).unwrap() {
+            w.advance(advance);
             apply_both(&w, &d);
         }
     }
@@ -184,7 +200,8 @@ fn policy_set(r: &InstalledRule) -> BTreeSet<String> {
 
 fn same_content(a: &InstalledRule, b: &InstalledRule) -> bool {
     same_slot(a, b)
-        && signer_set(a) == signer_set(b)
+        // OZ keeps signer order, so a reorder is a change.
+        && a.signers == b.signers
         && policy_set(a) == policy_set(b)
         && a.valid_until == b.valid_until
 }
@@ -427,6 +444,7 @@ fn doc(signers: std::vec::Vec<SignerModel>, rules: std::vec::Vec<RuleModel>) -> 
         signers,
         rules,
         recovery: None,
+        spelling: Spelling::default(),
     }
 }
 
@@ -803,6 +821,27 @@ fn a_one_signer_rule_swaps_its_only_signer_in_place() {
         names(&events, &w.delta),
         sorted(&["signer_added", "signer_removed", "rule_edited"])
     );
+}
+
+#[test]
+fn reordering_a_rules_signers_gives_oz_and_the_record_the_new_order() {
+    // The same signer set in a new order: OZ's context rule keeps the order
+    // it was given, so the rule is edited in place (one signer swap, no
+    // signer added or removed) and both OZ and the record take the new
+    // order, as a full replace would.
+    let a = doc(delegated(3), std::vec![admin(&[0, 1, 2])]);
+    let b = doc(delegated(3), std::vec![admin(&[2, 0, 1])]);
+    let (w, events, before, after) = case(&a, &b);
+    let id = id_of(&after, "admin");
+    assert_eq!(id_of(&before, "admin"), id);
+    assert_eq!(names(&events, &w.delta), sorted(&["rule_edited"]));
+    let record = after.iter().find(|r| r.id == id).unwrap();
+    assert_ne!(
+        record.signers,
+        before.iter().find(|r| r.id == id).unwrap().signers
+    );
+    let oz = perch_account::PerchAccountClient::new(&w.env, &w.delta).get_context_rule(&id);
+    assert_eq!(oz.signers, record.signers);
 }
 
 /// `n` declared signers using keys `first..first + n` of the pool.

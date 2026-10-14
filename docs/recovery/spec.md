@@ -688,24 +688,40 @@ recovery rule. OZ defers the whole check to the rule's one policy
   timelock ends);
 - `sha256(target_bytes) = A.target_bytes_hash` (`WrongTarget`).
 
-Authorization therefore binds the exact bytes. A different document is
-refused here, and so is a non-canonical spelling of the target (same
-identity, other bytes). Then `enforce` writes a completion marker
-`(attempt_id, A.target_doc_hash, L)` in temporary storage. The account's
-`apply_doc` body runs `rcv_sync` with the identity of the document it
-compiled from those bytes. `rcv_sync` removes any marker it finds, and
-treats the call as a completion only if the marker's identity equals that
-identity, the marker was written in the current ledger, and its attempt is
-still the authorized one. Otherwise it classifies the call as an ordinary
-change (§10). `enforce` runs for every context in an authorization tree,
-including a sub-invocation that never executes, so a left-over marker is
-never trusted.
+`enforce` binds the exact bytes of the context it authorizes: for that
+context a different document is refused, and so is a non-canonical spelling of
+the target (same identity, other bytes). `enforce` then writes a completion
+marker `(attempt_id, A.target_doc_hash, L)` in temporary storage.
 
-Application therefore binds the identity. If the two digests ever disagreed
-(a faulty compiler), the only bytes `enforce` accepts would compile to
-another identity. Then `rcv_sync` would refuse the apply as an ordinary
-change during the authorized window (`AttemptAuthorized`), nothing would be
-applied, and the attempt could only be cancelled or expire.
+The marker records only the canonical **identity** of the target, not the
+exact bytes of the invocation that will consume it. The account's `apply_doc`
+body runs `rcv_sync` with the identity of the document it compiled, and
+`rcv_sync` removes any marker it finds and treats the call as a completion
+when the marker's identity equals that identity, the marker was written in the
+current ledger, and its attempt is still the authorized one. It does **not**
+re-check the consuming invocation's input bytes against `A.target_bytes_hash`.
+Otherwise it classifies the call as an ordinary change (§10).
+
+`enforce` runs for every context in an authorization tree, including a
+sub-invocation that never executes, so a marker can be left behind. Because
+consumption is by identity, within the same ledger and authorized window an
+`apply_doc` under ordinary owner authorization that carries a differently
+formatted spelling of the same canonical target can consume such a leftover
+marker and be classified as a completion rather than refused as an ordinary
+write. The completed document is still the authorized canonical target — the
+identity is bound, so this neither installs a different policy nor bypasses the
+`Protected` freeze — but the exact-input-byte / same-invocation guarantee
+across a leftover marker is **not** enforced today. Tightening it (have
+`rcv_sync` receive the completing invocation's input-byte hash and require it
+to equal `A.target_bytes_hash`) is tracked in
+[`../DEFERRED.md`](../DEFERRED.md) ("Completion input-byte binding"); it is an
+account↔controller ABI change, so it reaches only newly-built accounts.
+
+Application therefore binds the identity, not the exact input bytes. If the two
+digests ever disagreed (a faulty compiler), the only bytes `enforce` accepts
+would compile to another identity. Then `rcv_sync` would refuse the apply as an
+ordinary change during the authorized window (`AttemptAuthorized`), nothing
+would be applied, and the attempt could only be cancelled or expire.
 
 On a completion the account applies its own completion effects (§10),
 including clearing its freeze mirror. Every write belongs to the same

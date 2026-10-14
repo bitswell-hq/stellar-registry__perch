@@ -103,6 +103,59 @@ CANON v2.
 
 **Tracking:** CANON v2, RFC [#109](https://github.com/stellar-registry/perch/issues/109).
 
+## PolicyDoc JSON Schema: strict profile and out-of-schema checks
+
+**Deferred:** a strict *canonical* profile of the versioned PolicyDoc JSON
+Schema ([`schema.md`](schema.md)) that rejects the non-canonical value spellings
+its v1 profile accepts, plus any schema expression of the document checks JSON
+Schema structurally cannot state.
+
+**Current behaviour:** the shipped `policy.schema.json` describes document
+`version: 1` and, by design, accepts exactly what `perch-ir`'s parser accepts,
+so that schema validation and the parser agree (a schema that rejected a
+document the parser accepts would mislead an offline editor). It therefore
+accepts the same non-canonical spellings the "Canonical value spellings" entry
+above lists: a `cap.limit` with a leading `+` or leading zeros, and signer-key
+hex in either case. It *does* pin the 64-lowercase-hex digest fields
+(`doc-hash`, `circuit-id`, `enrollment-id`, `commitment`) because the parser
+already requires that form. Several checks also stay outside JSON Schema
+entirely, with the authority unchanged:
+
+- uniqueness of signer ids and of rule names, compared by key across siblings —
+  `perch-ir::validate`;
+- reference resolution (a principal/`replaceable` id resolving to a declared
+  signer; a cap `token` matching the rule's contract scope) — `perch-ir::validate`;
+- the canonical-byte budget (`max_canonical_bytes`), a property of the
+  canonically-encoded bytes rather than the parsed tree — the compiler
+  (`perch-doc-compiler`), mirrored client-side by perch-js `checkLimits`;
+- the BN254 field-element range on a recovery `commitment`, and the exact
+  `i128` upper bound on a `cap.limit` — `perch-ir::validate`;
+- guardian `quorum <= count` for guardian sets larger than the schema's
+  enumerated depth (guardians have no dedicated cap constant today) —
+  `perch-ir::validate`;
+- signatures and authorization — `__check_auth` / OZ policy enforcement.
+
+**Why it is safe to defer:** the v1 profile already encodes every representable
+format/range/collection rule and the per-document count/name caps, and the
+parser, compiler, and account remain the authority for everything else, so no
+check is lost — only not yet mirrored into the schema. Tightening the schema to
+a canonical profile before the parser enforces one spelling would make it reject
+documents the chain still accepts.
+
+**Exit criterion and follow-up review:** once "Canonical value spellings" lands
+(one valid spelling enforced in `perch-ir::validate` and `perch-js`), add the
+matching strict profile to the generated schema — lowercase-only signer-key hex,
+a `cap.limit` with no sign and no leading zeros, and the settled integer
+number-form spelling — regenerate the committed artifact, and extend the
+drift/parity/conformance suites so the strict schema and the parser still agree
+in both directions. A dedicated guardian-count cap would let the schema encode
+`quorum <= count` fully. Review the regenerated schema against the parser's new
+spelling rules and the cross-language parity vectors.
+
+**Owner:** Perch.
+
+**Tracking:** CANON v2, RFC [#109](https://github.com/stellar-registry/perch/issues/109).
+
 ## Versioned policy backend and larger limits
 
 **Deferred:** a policy backend other than the OpenZeppelin context-rule
@@ -347,6 +400,47 @@ packaging rule above): for `perch-zk`, its circuit artifacts match
 the deployment manifest. Review any difference as a code change.
 
 **Owner:** Perch (publishing) and each consumer (switching).
+
+**Tracking:** none yet.
+
+## Completion input-byte binding
+
+**Deferred:** requiring a recovery completion's `apply_doc` to carry the
+*exact* authorized target bytes, not merely a document that compiles to the
+authorized canonical identity.
+
+**Current behaviour:** at T5 the controller's `enforce` checks
+`sha256(target_bytes) = A.target_bytes_hash` for the context it authorizes and
+writes a completion marker holding the canonical identity
+`(attempt_id, A.target_doc_hash, L)`. The account's `apply_doc` body runs
+`rcv_sync` with the identity it compiled; `rcv_sync` consumes a marker when the
+identity, ledger, and authorized attempt match, and does not re-check the
+consuming invocation's input bytes against `A.target_bytes_hash`. Because
+`enforce` runs for every context in an authorization tree — including a
+sub-invocation that never executes — a marker can be left behind, and within
+the same ledger and authorized window an `apply_doc` under ordinary owner
+authorization that carries a differently formatted spelling of the same
+canonical target can consume it and be classified as a completion rather than
+refused as an ordinary write (recovery [`spec.md`](recovery/spec.md) §10 T5).
+
+**Why it is safe to defer:** the completed document is still the authorized
+canonical target, so the identity is bound — this neither installs a different
+policy nor bypasses the `Protected` freeze. The effect is a misclassification:
+an owner-authorized ordinary write over the authorized target, in the same
+ledger as a leftover marker, runs the completion's revocation,
+nullifier-spending, and epoch effects, rather than a loss of the target
+binding.
+
+**Exit criterion and follow-up review:** `rcv_sync` receives the completing
+invocation's input-byte hash from the account (`sha256` of the `apply_doc`
+input bytes) and requires it to equal the authorized attempt's
+`target_bytes_hash` before consuming a completion marker; the leftover-marker
+regression gains an active attempt and a second owner-authorized, differently
+formatted target in the same ledger, which must be refused. This changes the
+account↔controller `rcv_sync` ABI, so it reaches only newly-built accounts
+(infra is pinned by wasm hash) — a coordinated redeploy, not a live upgrade.
+
+**Owner:** Perch.
 
 **Tracking:** none yet.
 
