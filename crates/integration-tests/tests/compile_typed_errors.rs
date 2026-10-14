@@ -1,10 +1,8 @@
-//! Regression: a document that passes validation
-//! but whose later lowering would trap — a function name that is not a Soroban
-//! `Symbol`, or an address strkey with a bad CRC16 checksum — is refused with a
-//! typed `DocCompilerError`, never an untyped host trap. `try_compile_doc`
-//! returns the typed error as `Err(Ok(DocCompilerError::_))`; a host trap would
-//! be `Err(Err(_))`. No change to which documents are accepted: these were
-//! already rejected, previously by trapping.
+//! A document whose lowering would trap — a function name that is not a
+//! Soroban `Symbol`, or an address strkey with a bad CRC16 checksum — is
+//! refused by validation with a typed `DocCompilerError`, never an untyped
+//! host trap. `try_compile_doc` returns the typed error as
+//! `Err(Ok(DocCompilerError::_))`; a host trap would be `Err(Err(_))`.
 
 mod support;
 

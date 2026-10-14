@@ -11,11 +11,13 @@ use soroban_sdk::{auth::Context, Address, Bytes, Env, String, Symbol, TryFromVal
 
 use crate::{EvalInputs, Verdict};
 
-/// Longest string `ArgStrPrefix`/`ArgStrIn` will buffer. A longer `ArgStrIn`
-/// argument or predicate string decodes to [`Verdict::Unknown`] (fail
-/// closed) rather than risk an unbounded copy in `no_std`; `ArgStrPrefix`
-/// buffers only the argument's first prefix-length bytes. `perch-ir`
-/// validation rejects predicate strings over this length.
+/// Longest string `ArgStrPrefix`/`ArgStrIn` will buffer, so no copy in
+/// `no_std` is unbounded. An `ArgStrIn` argument or an `ArgStrPrefix` prefix
+/// over this length evaluates to [`Verdict::Unknown`] (fail closed), and an
+/// over-long `ArgStrIn` candidate never matches. `ArgStrPrefix` buffers only
+/// the argument's first prefix-length bytes, so its argument may be any
+/// length. `perch-ir` validation refuses a `string-prefix` prefix over this
+/// length (`MAX_STRING_PRED_LEN`).
 const MAX_STR_ARG_LEN: usize = 256;
 
 /// Decode argument `i` of a contract-call context as `T`.
@@ -168,8 +170,8 @@ pub(crate) fn arg_str_prefix(env: &Env, inputs: &EvalInputs, i: u32, prefix: &St
     let Some(pn) = str_bytes(prefix, &mut pbuf) else {
         return Verdict::Unknown;
     };
-    // Only the argument's first `pn` bytes matter, so an argument longer
-    // than the buffer is still checked rather than denied.
+    // Only the argument's first `pn` bytes are read, so the argument's own
+    // length is unbounded.
     let mut sbuf = [0u8; MAX_STR_ARG_LEN];
     if !str_head(&s, pn, &mut sbuf) {
         return Verdict::False;
