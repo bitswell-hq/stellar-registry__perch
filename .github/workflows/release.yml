@@ -2,14 +2,14 @@ name: Release
 
 # Two chained halves:
 #
-#   1. `detect-releases` — on every push to main, tag any contract whose crate
-#      manifest `version` has no matching `<contract>-v<version>` tag yet (i.e.
-#      it was bumped in the merged PR). Releases are ON-CHAIN wasm publishes, not
-#      crates.io, so this is pure git — NO release-plz / `cargo package`, which
-#      couldn't resolve the workspace's git-only + intra-workspace path deps
-#      against the crates.io index and also packaged the immutable last-release
-#      tags as its diff baseline, wedging the pipeline. To release a contract,
-#      bump its version in a PR.
+#   1. `detect-releases` — once CI passes on a push to main, tag any contract
+#      whose crate manifest `version` has no matching `<contract>-v<version>`
+#      tag yet (i.e. it was bumped in the merged PR). Releases are ON-CHAIN
+#      wasm publishes, not crates.io, so this is pure git — NO release-plz /
+#      `cargo package`, which couldn't resolve the workspace's git-only +
+#      intra-workspace path deps against the crates.io index and also packaged
+#      the immutable last-release tags as its diff baseline, wedging the
+#      pipeline. To release a contract, bump its version in a PR.
 #   2. The infra publishes (`publish-plan` → `constructorless-build` →
 #      `constructorless-publish`) — a generic, contract-AGNOSTIC fan-out:
 #      whichever infra contracts this run released (the ALLOW list in
@@ -39,11 +39,26 @@ name: Release
 # factory) is deployed in pin order by scripts/deploy-stack.sh, which writes
 # the deployment manifest (deployments/<network>.json) every consumer's
 # build-time pins are fetched and verified from (scripts/fetch-infra-wasm.sh,
-# docs/deploy/README.md). Its contracts are tagged and version-tracked here
-# like the rest, but are not in the publish-plan allow-list: publishing them
-# to the canonical registry is a separate, deliberate step (see the
-# publish-plan comment). The account and the factory pin what they consume,
-# so their release always follows the publication of their tier-0 pins.
+# docs/deploy/README.md). Its recovery-specific contracts are NOT in the
+# publish-plan allow-list — the `deploy-stack` job below publishes them
+# (authored by the same smart account, signed by the same delegate) and reuses
+# the allow-listed tier-0 the constructorless jobs publish, because the account
+# and factory must pin the EXACT on-chain tier-0 bytes and a rebuild would not
+# reproduce them. That job is gated off (vars.PERCH_DEPLOY_STACK) until the
+# manager bootstraps each recovery-stack name, so merging ships their source
+# and version tracking without an on-chain publish before that is deliberate.
+#
+# Nothing here runs on a raw push: this workflow fires when the CI workflow
+# completes, and the `ci-green` job lets the rest proceed only when CI passed
+# on a push to main and that commit is still main's tip (the reusable build
+# can only build the run's default-branch sha, so the tagged commit and the
+# built commit must be the same). Every job checks out the commit CI tested
+# (github.event.workflow_run.head_sha), never the default ref. A version bump
+# that lands on a commit whose CI fails is therefore never tagged — tagging is
+# the point of no return (detect-releases never re-tags a version) — and the
+# bump stays pending in the manifests until a later commit passes CI as main's
+# tip; that run tags and publishes it. The same holds for a commit main moved
+# past before its CI finished.
 #
 # All publish halves hang off `needs:` in the SAME run (gated on the
 # detect-releases `releases` output) instead of a tag/release trigger, so they
@@ -73,7 +88,13 @@ name: Release
 # `publish_tag` dispatch input (detect-releases never re-tags a version).
 
 on:
-  push:
+  # Release work starts only after CI finishes on main; ci-green checks the
+  # conclusion. `branches` filters on the CI run's head branch, which a pull
+  # request from a fork can also name `main`, so ci-green also requires a push
+  # event from this repository: no run here executes code a fork controls.
+  workflow_run: # zizmor: ignore[dangerous-triggers]
+    workflows: [CI]
+    types: [completed]
     branches: [main]
   # Recovery path — PUBLISH-ONLY: re-run the on-chain half against the
   # existing, already-attested release asset for the tag (e.g. after a
@@ -93,9 +114,9 @@ on:
 permissions: {}
 
 # Dispatch recovery runs get their own group: the shared group has ONE pending
-# slot, and a push landing while another push run is active would silently
+# slot, and a CI-gated run arriving while another one is active would silently
 # cancel a queued dispatch (cancel-in-progress only protects the RUNNING run).
-# A dispatch racing a push run is on-chain-safe: the fetch_hash preflight
+# A dispatch racing a CI-gated run is on-chain-safe: the fetch_hash preflight
 # skips a same-hash republish and refuses a different-hash one, and
 # deploy_stateless is idempotent.
 concurrency:
@@ -103,6 +124,37 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The gate every other job hangs off: CI concluded `success` on a push to
+  # main of this repository, and the commit it tested is the sha this run was
+  # given as the default-branch tip. When main moved on before CI finished,
+  # the newer commit's own CI run does the release instead.
+  ci-green:
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      go: ${{ steps.tip.outputs.go }}
+    steps:
+      - name: Is the commit CI tested still main's tip?
+        id: tip
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          TIP_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$HEAD_SHA" = "$TIP_SHA" ]; then
+            echo "go=true" >>"$GITHUB_OUTPUT"
+            echo "CI passed on $HEAD_SHA — releasing from it" >>"$GITHUB_STEP_SUMMARY"
+          else
+            echo "go=false" >>"$GITHUB_OUTPUT"
+            echo "CI passed on $HEAD_SHA, but main is now at $TIP_SHA — that commit's CI run releases any pending bump" >>"$GITHUB_STEP_SUMMARY"
+          fi
+
   # Detect which contracts to release — WITHOUT release-plz or `cargo package`.
   # Perch never publishes to crates.io (releases are on-chain wasm publishes), so
   # release-plz's `cargo package --workspace` change-detection was a structural
@@ -115,7 +167,8 @@ jobs:
   # git, no packaging. Emits the same `releases` shape the publish halves consume,
   # so everything downstream is unchanged.
   detect-releases:
-    if: github.event_name == 'push'
+    needs: ci-green
+    if: needs.ci-green.outputs.go == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write # create + push the per-contract tags
@@ -128,9 +181,10 @@ jobs:
       # Default token + persisted credentials are enough to push a tag. Tags
       # pushed with GITHUB_TOKEN do NOT retrigger workflows, but the publish
       # halves below run via `needs:` in THIS same run, so no retrigger (and no
-      # GitHub App) is needed.
+      # GitHub App) is needed. The tags land on the commit CI tested.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 # zizmor: ignore[artipacked]
         with:
+          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0 # full tag history for the version-bump comparison
       - name: Detect released contracts (manifest version bumped past its tag)
         id: detect
@@ -213,7 +267,7 @@ jobs:
           } >>"$GITHUB_OUTPUT"
 
   # Version bumps + changelogs — git-cliff driven, NO cargo package. Companion to
-  # detect-releases (which tags on merge): on every push to main this computes
+  # detect-releases (which tags on merge): once CI passes on main, this computes
   # each contract's next version from its conventional commits (scoped to its
   # crate tree + the intra-workspace libs it embeds), bumps the manifest,
   # regenerates crates/<c>/CHANGELOG.md, and opens/updates one "chore: release"
@@ -223,7 +277,8 @@ jobs:
   # (The PR is opened with GITHUB_TOKEN, so its own CI checks don't run — the
   # bumps are mechanical; real CI ran on the feature PRs.)
   release-pr:
-    if: github.event_name == 'push'
+    needs: ci-green
+    if: needs.ci-green.outputs.go == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -231,6 +286,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 # zizmor: ignore[artipacked]
         with:
+          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0 # git-cliff needs full history + tags
       - name: Install git-cliff
         run: |
@@ -238,11 +294,11 @@ jobs:
           curl -fsSL https://github.com/orhun/git-cliff/releases/download/v2.14.1/git-cliff-2.14.1-x86_64-unknown-linux-gnu.tar.gz -o "$RUNNER_TEMP/gc.tar.gz"
           echo "bb40f68e752db1a32526c43e0108e8eff785f7c24c67024cffe1c316e034372975fd78c9af8e9a48148235aad15c9a103f1a5b490c282f1db09a7a793794b69f  $RUNNER_TEMP/gc.tar.gz" | sha512sum -c -
           tar -xz -C "$RUNNER_TEMP/gc" --strip-components=1 -f "$RUNNER_TEMP/gc.tar.gz"
-          echo "$RUNNER_TEMP/gc" >>"$GITHUB_PATH"
       - name: Compute version bumps + changelogs
         id: prep
         run: |
           set -uo pipefail
+          export PATH="$RUNNER_TEMP/gc:$PATH" # git-cliff, installed above
           # Each contract's changelog/version scope = its own crate tree + the
           # intra-workspace lib crates it embeds, so a lib change re-releases the
           # contract that ships it. Update these lists if a contract's perch deps
@@ -359,6 +415,8 @@ jobs:
         if: steps.prep.outputs.any == 'true'
         uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
         with:
+          # The checkout is a detached commit, so the PR's base must be named.
+          base: main
           branch: release/next
           delete-branch: true
           title: "chore: release"
@@ -380,12 +438,13 @@ jobs:
   # commits. Requires the NPM_TOKEN repo secret (an npm automation token that
   # can publish the @stellar-registry scope). If the secret is absent the
   # publish step fails and the job can be re-run after the secret is added —
-  # the tag and github.sha are unchanged on a re-run, so it publishes exactly
-  # the tagged commit.
+  # the tag and the CI-tested head sha are unchanged on a re-run, so it
+  # publishes exactly the tagged commit.
   npm-publish:
-    needs: detect-releases
+    needs: [ci-green, detect-releases]
     if: >-
-      !cancelled() && needs.detect-releases.outputs.npm_released == 'true'
+      !cancelled() && needs.ci-green.outputs.go == 'true' &&
+      needs.detect-releases.outputs.npm_released == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -400,6 +459,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.event.workflow_run.head_sha }}
           persist-credentials: false
       # No dependency cache in a publish job (zizmor cache-poisoning: nothing a
       # cache write could later inject into a signed publish).
@@ -433,11 +493,11 @@ jobs:
   # Which constructorless contracts did THIS run release (or was one passed by
   # hand)? Emit the publish matrix; empty ⇒ publish-constructorless skips.
   publish-plan:
-    needs: detect-releases
+    needs: [ci-green, detect-releases]
     if: >-
       !cancelled() && (
         (github.event_name == 'workflow_dispatch' && inputs.publish_tag != '') ||
-        (github.event_name == 'push' && needs.detect-releases.outputs.releases_created == 'true')
+        (needs.ci-green.outputs.go == 'true' && needs.detect-releases.outputs.releases_created == 'true')
       )
     runs-on: ubuntu-latest
     permissions: {}
@@ -459,13 +519,12 @@ jobs:
           # The recovery stack (perch-recovery, perch-zk-pool,
           # perch-zk-adapter, perch-webauthn-verifier, perch-account-factory)
           # is deliberately NOT in this allow-list: it is tagged/versioned
-          # (CONTRACTS above) so its intra-workspace pins stay tracked, but
-          # publishing it to the canonical registry is a separate, deliberate
-          # decision. Until then scripts/deploy-stack.sh deploys it, in pin
-          # order, to its own registry (deployments/testnet.json). Adding
-          # these here also needs the manager's one-time initial publish of
-          # each new name, and the factory must publish after the account
-          # build it pins.
+          # (CONTRACTS above) so its intra-workspace pins stay tracked, but it
+          # is a build-time pin chain, not a contract-agnostic matrix. The
+          # `deploy-stack` job below publishes it to the canonical registry in
+          # pin order (reusing these allow-listed tier-0 bytes for the account's
+          # pins) and records the deployment manifest. That job stays gated off
+          # until the manager's one-time initial publish of each new name.
           ALLOW='["perch-interpreter","perch-doc-compiler","perch-ed25519-verifier","perch-spending-limit"]'
           if [ -n "$DISPATCH_TAG" ]; then
             # Strict allow-list regex, not a prefix glob: the tag and the package
@@ -505,13 +564,14 @@ jobs:
   # perch-deploy shim, no smart-account flags.
 
   # Attested build (scaffold build + optimize + GitHub release + provenance).
-  # Push-only: the reusable workflow has no ref input and builds this run's sha
-  # (the detect-releases-tagged commit); a dispatch republishes the existing asset.
+  # CI-gated runs only: the reusable workflow has no ref input and builds this
+  # run's github.sha, which ci-green requires to equal the CI-tested head sha
+  # detect-releases tagged; a dispatch republishes the existing asset.
   constructorless-build:
-    needs: publish-plan
+    needs: [ci-green, publish-plan]
     if: >-
-      !cancelled() && needs.publish-plan.outputs.any == 'true' &&
-      github.event_name == 'push'
+      !cancelled() && needs.ci-green.outputs.go == 'true' &&
+      needs.publish-plan.outputs.any == 'true'
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.publish-plan.outputs.matrix) }}
@@ -519,7 +579,7 @@ jobs:
       id-token: write
       contents: write
       attestations: write
-    uses: stellar-registry/actions/.github/workflows/contract-release.yml@470d61ccad7240f496497c66906a03e6540e8405 # main 2026-08
+    uses: stellar-registry/actions/.github/workflows/contract-release.yml@57bfdf4b96279a28961cb76a48ec4204300b5818 # main 2026-10-14
     with:
       package: ${{ matrix.package }}
       release_name: ${{ matrix.tag }}
@@ -530,14 +590,15 @@ jobs:
       release_token: ${{ secrets.GITHUB_TOKEN }}
 
   # On-chain publish via the reusable registry-publish (upload + smart-account-
-  # signed publish_hash + deploy_stateless), authored by the SA. On push it
-  # consumes the freshly attested asset; on dispatch it republishes the existing
-  # one (build is skipped by design).
+  # signed publish_hash + deploy_stateless), authored by the SA. On a CI-gated
+  # run it consumes the freshly attested asset; on dispatch it republishes the
+  # existing one (build is skipped by design).
   constructorless-publish:
-    needs: [publish-plan, constructorless-build]
+    needs: [ci-green, publish-plan, constructorless-build]
     if: >-
       !cancelled() && needs.publish-plan.outputs.any == 'true' && (
-        needs.constructorless-build.result == 'success' ||
+        (needs.ci-green.outputs.go == 'true' &&
+         needs.constructorless-build.result == 'success') ||
         (github.event_name == 'workflow_dispatch' &&
          needs.constructorless-build.result == 'skipped')
       )
@@ -550,7 +611,7 @@ jobs:
     permissions:
       contents: write
       id-token: write # gh attestation verify
-    uses: stellar-registry/actions/.github/workflows/registry-publish.yml@fcfebed27b865a8ddfe5439926a13ba9013ccef7 # main 2026-09
+    uses: stellar-registry/actions/.github/workflows/registry-publish.yml@57bfdf4b96279a28961cb76a48ec4204300b5818 # main 2026-10-14
     with:
       # The constructorless subregistry (unverified/perch/constructorless) id and
       # the perch-author-account smart account (C…). Repo/testnet vars.
@@ -561,7 +622,198 @@ jobs:
       release_tag: ${{ matrix.tag }}
       wasm_asset: ${{ matrix.package }}_v${{ matrix.version }}.wasm
       network: testnet
+      # The publish job runs in this environment, so the signing_key reference
+      # below resolves to its CI_PUBLISH_SECRET_KEY environment secret.
+      environment: testnet
     secrets:
       # perch-ci: the account's ci-publish delegate (also the fee source).
+      # A job that calls a reusable workflow cannot take `environment:`, and the
+      # pinned registry-publish declares none, so this resolves the REPOSITORY
+      # secret, not the `testnet` environment's copy. It moves into the
+      # environment once registry-publish accepts an environment input.
       signing_key: ${{ secrets.CI_PUBLISH_SECRET_KEY }}
       release_token: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── Recovery-stack deploy ─────────────────────────────────────────────────
+  # The recovery stack is a build-time pin chain (docs/deploy/README.md), so it
+  # cannot be a contract-agnostic matrix like the constructorless publishes: the
+  # account and factory must be built against the EXACT tier-0 bytes on-chain,
+  # in pin order, and published in that order. scripts/deploy-stack.sh does this;
+  # this job runs its canonical, smart-account-authored mode.
+  #
+  # The account pins the compiler/interpreter/spending-limit. Those (and the
+  # ed25519 verifier) are the ALLOW-listed tier-0 the constructorless jobs above
+  # already published; a rebuild here would not reproduce their bytes (scaffold
+  # vs scaffold+optimize, unpinned rustc in the reusable build — see
+  # docs/deploy/README.md and design step 7), so the account would pin a hash
+  # the registry never deploy_stateless'd. The deploy therefore REUSES those
+  # published bytes (fetched by hash) and publishes only the recovery-specific
+  # names (webauthn verifier, ZK pool/adapter, controller) and the factory,
+  # authored by the perch-author smart account and signed by the CI delegate
+  # through the theahaco/stellar-cli fork — the same authority as the
+  # constructorless publishes.
+
+  # Did THIS run release a recovery-stack contract (the ones deploy-stack
+  # deploys)? Empty ⇒ deploy-stack skips.
+  deploy-plan:
+    needs: [ci-green, detect-releases]
+    if: >-
+      !cancelled() && needs.ci-green.outputs.go == 'true' &&
+      needs.detect-releases.outputs.releases_created == 'true'
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      any: ${{ steps.plan.outputs.any }}
+    env:
+      RELEASES: ${{ needs.detect-releases.outputs.releases }}
+    steps:
+      - name: Any recovery-stack contract released?
+        id: plan
+        run: |
+          set -euo pipefail
+          # What deploy-stack deploys: the recovery-specific tier-0 (webauthn
+          # verifier, ZK pool/adapter, controller), the account, and the
+          # factory. The allow-list tier-0 (doc-compiler, interpreter,
+          # spending-limit, ed25519) are published by the constructorless jobs
+          # and REUSED by the deploy, not deployed here. A change to a reused
+          # tier-0 re-releases the account/factory (release-pr's paths_for
+          # cascade), so it still lands in this set.
+          DEPLOY_SET="perch-webauthn-verifier perch-recovery perch-zk-pool perch-zk-adapter perch-account perch-account-factory"
+          any=false
+          for c in $DEPLOY_SET; do
+            if jq -e --arg c "$c" 'any(.[]; .package_name == $c)' <<<"$RELEASES" >/dev/null; then
+              any=true; break
+            fi
+          done
+          echo "any=$any" >>"$GITHUB_OUTPUT"
+          if [ "$any" = true ]; then
+            echo "recovery-stack contract(s) released — deploy-stack will run" >>"$GITHUB_STEP_SUMMARY"
+          else
+            echo "no recovery-stack contract released — deploy-stack skips" >>"$GITHUB_STEP_SUMMARY"
+          fi
+
+  # Deploy the recovery stack to the canonical registry, SA-authored, in pin
+  # order, and open a deploy(<network>) PR with the manifest + regenerated
+  # bindings a human merges.
+  #
+  # Runs in the `testnet` GitHub Environment, so CI_PUBLISH_SECRET_KEY is read
+  # from that environment's secrets rather than the repository's. A mainnet
+  # deploy belongs in its own job under the `mainnet` environment (required
+  # reviewer, `main`-only branch policy) signing with its own delegate secret,
+  # CI_PUBLISH_MAINNET_SECRET_KEY, never this one. The job `if:` is evaluated
+  # before the environment is entered, so vars.PERCH_DEPLOY_STACK must stay a
+  # repository variable.
+  #
+  # Gated to run only when vars.PERCH_DEPLOY_STACK == 'true'. The recovery-stack
+  # names are NOT yet in the canonical registry, and a managed registry refuses
+  # a new name without the manager's one-time initial publish (#12
+  # ManagerRequired). Until the manager bootstraps each name (docs/deploy/
+  # README.md "The testnet registry") and sets that variable, this job is
+  # skipped rather than failing every release — the same deliberate-decision
+  # split the publish-plan ALLOW list uses for shipping a contract's source
+  # before its first on-chain publish.
+  deploy-stack:
+    needs: [ci-green, detect-releases, deploy-plan, constructorless-publish]
+    if: >-
+      !cancelled() && needs.ci-green.outputs.go == 'true' &&
+      needs.deploy-plan.outputs.any == 'true' &&
+      vars.PERCH_DEPLOY_STACK == 'true' &&
+      (needs.constructorless-publish.result == 'success' ||
+       needs.constructorless-publish.result == 'skipped')
+    runs-on: ubuntu-latest
+    environment: testnet
+    permissions:
+      contents: write # commit the manifest + bindings onto the deploy branch
+      pull-requests: write # open the deploy(<network>) PR
+      id-token: write # build-provenance attestation
+      attestations: write
+    env:
+      STELLAR_NETWORK: testnet
+      STELLAR_RPC_URL: https://soroban-testnet.stellar.org
+      STELLAR_NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
+      # The ALLOW-listed tier-0 to reuse (published by the constructorless jobs,
+      # not rebuilt here). Kept in step with publish-plan's ALLOW list.
+      REUSE: "perch-doc-compiler perch-interpreter perch-spending-limit perch-ed25519-verifier"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
+        with:
+          toolchain: stable
+          targets: wasm32v1-none
+      # No dependency cache: this job hands the CI publish seed to `stellar`, so
+      # nothing a poisoned cache could inject may reach that build (same stance
+      # as the constructorless publishes and setup-stellar).
+      - name: Install the smart-account-signing stellar-cli (theahaco fork) and scaffold, checksummed
+        # Version-pinned AND integrity-checked: this job later hands `stellar`
+        # the CI publish seed, so a swapped release asset could exfiltrate it.
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/stellar.tgz \
+            "https://github.com/theahaco/stellar-cli/releases/download/v28.0.0-aha.0/stellar-cli-28.0.0-aha.0-x86_64-unknown-linux-gnu.tar.gz"
+          echo "580a2d469767028e575e1c57ccf55bc5a661c0ee4032fd52aaeabb9098943685  /tmp/stellar.tgz" | sha256sum -c -
+          sudo tar -xzf /tmp/stellar.tgz -C /usr/local/bin stellar
+          curl -fsSL -o /tmp/scaffold.tgz \
+            "https://github.com/AhaLabs/scaffold-stellar/releases/download/stellar-scaffold-cli-v0.0.27/stellar-scaffold-cli-v0.0.27-x86_64-unknown-linux-gnu.tar.gz"
+          echo "f24709de57e33155efd72547c9286b522d4360a379bde5af9eeb5519396f10cc  /tmp/scaffold.tgz" | sha256sum -c -
+          sudo tar -xzf /tmp/scaffold.tgz -C /usr/local/bin stellar-scaffold
+          stellar --version
+          stellar scaffold --version
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+      - name: Deploy the stack (smart-account-authored, reusing the published tier-0)
+        # Secrets go through the environment, never argv: STELLAR_ACCOUNT is the
+        # source/fee delegate and STELLAR_SIGN_WITH_KEY signs the account's
+        # publish_hash authorization (the fork discovers its context rule). The
+        # author is the perch-author smart account; the registry is canonical.
+        env:
+          STELLAR_ACCOUNT: ${{ secrets.CI_PUBLISH_SECRET_KEY }}
+          STELLAR_SIGN_WITH_KEY: ${{ secrets.CI_PUBLISH_SECRET_KEY }}
+          REGISTRY: ${{ vars.PERCH_REGISTRY_CONTRACT_ID }}
+          AUTHOR: ${{ vars.PERCH_AUTHOR_ADDRESS }}
+        run: |
+          set -euo pipefail
+          scripts/deploy-stack.sh --registry "$REGISTRY" --author "$AUTHOR" --reuse "$REUSE"
+      - name: Collect the freshly built wasm (not the reused tier-0) to attest
+        id: built
+        run: |
+          set -euo pipefail
+          paths=""
+          for pkg in $(jq -r '.artifacts[].package' target/stack/build.json); do
+            case " $REUSE " in *" $pkg "*) continue ;; esac
+            paths="${paths}target/stack/${pkg//-/_}.wasm"$'\n'
+          done
+          {
+            echo "paths<<EOF"
+            printf '%s' "$paths"
+            echo "EOF"
+          } >>"$GITHUB_OUTPUT"
+      - name: Attest build provenance for each deployed wasm
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: ${{ steps.built.outputs.paths }}
+      - name: Regenerate the deployment bindings (@stellar-registry/perch-contracts)
+        run: scripts/bindings-contracts.sh
+      - name: Open the deploy(testnet) manifest PR
+        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
+        with:
+          # The checkout is a detached commit, so the PR's base must be named.
+          base: main
+          branch: deploy/testnet
+          delete-branch: true
+          title: "deploy(testnet): recovery stack"
+          commit-message: "deploy(testnet): recovery stack @ ${{ github.event.workflow_run.head_sha }}"
+          add-paths: |
+            deployments/testnet.json
+            packages/perch-contracts/src
+          body: >
+            Automated by the `deploy-stack` job: the recovery stack deployed to
+            the canonical `constructorless` registry, smart-account-authored, in
+            pin order, from the tagged `main` commit
+            ${{ github.event.workflow_run.head_sha }} (always in `main`'s
+            history, so this record survives any merge method). Merging
+            updates `deployments/testnet.json` and the regenerated
+            `@stellar-registry/perch-contracts` bindings, which flips consumers —
+            and CI's deployed-bytes checks — onto this deployment.

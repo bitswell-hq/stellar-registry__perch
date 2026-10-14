@@ -22,7 +22,7 @@ jobs:
           fetch-depth: 0
       # Pinned to the v1 tag on master, whose history is never rewritten; the
       # `stable` branch is regenerated, which orphans any commit pinned on it.
-      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # v1
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
         with:
           toolchain: stable
           targets: wasm32v1-none
@@ -38,24 +38,38 @@ jobs:
       - uses: ./.github/actions/fetch-infra-wasm
         with:
           stack: target/stack
-      # Whether the recorded deployment is this branch's: built from a commit
-      # in its history. A pull request below the deployment record changes
-      # contracts the deployment predates, so its tests pin this source's own
-      # build (pin order, against the manifest's registry) instead of the
-      # deployed bytes, and the checks of the deployed bytes (testnet_pins,
-      # and the release-stack suite below) skip until the next deployment.
-      - name: Is the deployment this branch's?
+      # Classify the recorded deployment against this source, three ways, so a
+      # deployment that is merely behind this branch's contracts reads as a
+      # non-blocking "redeploy" signal, not as a regression (scripts/deployment-state.sh):
+      #   foreign  deployed commit not in this history (a rebased PR, or a
+      #            squash-merged main that dropped the deploy commit): pin this
+      #            source's own build; the deployed-bytes checks skip.
+      #   stale    an ancestor, but a deployable contract's source changed
+      #            since: the deployed bytes are older than this source, so the
+      #            deployed-bytes *behavioral* suite is skipped and a
+      #            non-blocking notice is emitted. The manifest self-checks
+      #            (testnet_pins, verify-deployment.sh) still run.
+      #   current  an ancestor and every contract tree is byte-identical: the
+      #            deployed-bytes behavioral suite is a hard gate.
+      # release-stack-source below always gates HEAD's own fresh bytes, so
+      # demoting the deployed-bytes suite under stale/foreign loses no safety.
+      - name: Classify the deployment against this source
         id: deployment
         run: |
           deployed="$(jq -r .source.commit deployments/testnet.json)"
-          if git merge-base --is-ancestor "$deployed" HEAD 2>/dev/null; then
-            echo "ours=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "ours=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::deployments/testnet.json was built from $deployed, outside this branch's history: tests pin this source's build, and the deployed-bytes checks skip until the next deployment"
-          fi
+          state="$(scripts/deployment-state.sh)"
+          echo "state=$state" >> "$GITHUB_OUTPUT"
+          case "$state" in
+            foreign)
+              echo "::notice::deployments/testnet.json was built from $deployed, outside this branch's history: pinning this source's build; deployed-bytes checks skip until the next deployment" ;;
+            stale)
+              changed="$(scripts/deployment-state.sh --changed | paste -sd, -)"
+              echo "::warning::deployment behind: contract sources changed since $deployed ($changed); the deployed-bytes behavioral suite is skipped — redeploy to re-gate it" ;;
+            current)
+              echo "::notice::deployment $deployed matches this source: the deployed-bytes behavioral suite runs as a hard gate" ;;
+          esac
       - name: Pin this source's build
-        if: steps.deployment.outputs.ours == 'false'
+        if: steps.deployment.outputs.state == 'foreign'
         run: |
           scripts/build-stack.sh --builder contract \
             --registry "$(jq -r .registry.id deployments/testnet.json)" --out target/source-stack
@@ -63,31 +77,34 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - name: cargo test --workspace
         env:
-          OURS: ${{ steps.deployment.outputs.ours }}
+          STATE: ${{ steps.deployment.outputs.state }}
         run: |
-          if [ "$OURS" = true ]; then
-            cargo test --workspace
-          else
-            cargo test --workspace -- --skip consumers_pin_the_deployment_manifest
-          fi
+          case "$STATE" in
+            # Fresh source build: its pins no longer match the (foreign)
+            # manifest, so skip the manifest pin check.
+            foreign) cargo test --workspace -- --skip consumers_pin_the_deployment_manifest ;;
+            # Deployed bytes are older than this source: skip the one
+            # deployed-bytes behavioral test (it would run HEAD's expectations
+            # against older bytes); the manifest pin check still holds.
+            stale) cargo test --workspace -- --skip a_new_passkey_account_applies_a_document_signed_by_its_passkey ;;
+            # Deployed bytes match this source: every check is a hard gate.
+            current) cargo test --workspace ;;
+          esac
       # The manifest against the chain: every contract at its content address
       # running its recorded wasm, and what the factory, adapter, pool, and
       # exercised accounts actually resolve.
       - run: scripts/verify-deployment.sh
       # Every recovery flow through the deployed bytes, with real proofs from
-      # the pinned nargo/bb under enforcing authorization, when they are this
-      # branch's: built from a commit in its history. A deployment from
-      # outside it (a rebased branch) runs other contract code, which this
-      # source's types and flows do not describe; release-stack-source runs
-      # the suite on this source, and verify-deployment.sh above still checks
-      # the chain against the manifest.
+      # the pinned nargo/bb under enforcing authorization — the deployed-bytes
+      # behavioral suite. A hard gate only when the deployment is `current`
+      # (every deployable contract's source byte-identical to the deployed
+      # commit's); a `stale` or `foreign` deployment runs other contract code
+      # than this source describes, so this is skipped (release-stack-source
+      # runs the suite on this source's fresh bytes, and verify-deployment.sh
+      # above still checks the chain against the manifest).
       - name: Release stack with real proofs
+        if: steps.deployment.outputs.state == 'current'
         run: |
-          deployed="$(jq -r .source.commit deployments/testnet.json)"
-          if ! git merge-base --is-ancestor "$deployed" HEAD 2>/dev/null; then
-            echo "::notice::deployments/testnet.json was built from $deployed, outside this branch's history: skipping the deployed-bytes release suite until the next deployment"
-            exit 0
-          fi
           eval "$(scripts/zk-toolchain.sh)"
           cargo test -p perch-integration-tests --test release_stack -- --ignored --test-threads 2 \
             --skip cap_sweep
@@ -110,7 +127,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # v1
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
         with:
           toolchain: stable
           targets: wasm32v1-none
