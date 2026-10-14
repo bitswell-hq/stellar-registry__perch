@@ -25,45 +25,56 @@ commit's SHA.
 The testnet deployment is a record of built bytes, not the reviewed source.
 [`deployments/testnet.json`](../deployments/testnet.json) is its
 authoritative record; `scripts/verify-deployment.sh` checks it against the
-chain ([`deploy/README.md`](deploy/README.md)).
+chain ([`deploy/README.md`](deploy/README.md)). This section names the
+manifest's fields instead of copying its hashes:
 
-| Field | Value |
-| --- | --- |
-| Build commit | `7ae915dc1ac6ae36cacf6db87794b056923d3b1f`, clean tree (`source`) |
-| Network, channel | testnet (`Test SDF Network ; September 2015`), `beta` |
-| Deployed | 2026-10-09T21:39:53Z, from ledger 5111647 |
-| Build toolchain | rustc 1.97.1 (8bab26f4f 2026-07-14), stellar 27.0.0, scaffold 0.0.27 (`builder`: `scaffold`) |
-| Registry instance | `CCUC5RDRGRFFC5VGG7HCB3OMNNSYDFAQOSA7SBGYUM2GDXAJBUWI5TFQ`, Wasm `4b2d9ea4148474715076e81067cff06b765248d9c4cd7d0e99e53df3e368adec` |
-| ZK circuit | `circuit_id` `9e39c41f4f35aad43e64b255dfe3ba13f10e8c9d36d6f56fce23c2d97c0a0b4a`, tree depth 32 |
+```sh
+jq '{source, deployed_at, deployed_ledger, toolchain, registry, zk}' deployments/testnet.json
+jq -r '.contracts | to_entries[] | [.key, .value.version, .value.tier, .value.sha256] | @tsv' \
+  deployments/testnet.json
+```
 
-| Contract | Version | Wasm SHA-256 | Tier |
-| --- | --- | --- | --- |
-| `perch-doc-compiler` | 0.3.1 | `e0f8aacd3ffba3e5ceb2373049319e62cb238d77280d1303e99074b68d6dfdad` | 0 |
-| `perch-interpreter` | 0.1.3 | `2254f17dd722e5113caee901be96849c13e5a6853a6213d62473abe637ae33e1` | 0 |
-| `perch-spending-limit` | 0.1.2 | `f2f0560ce501ab59144ed71a10349b30bcefaf344ca121c0bd9841577b83c2b7` | 0 |
-| `perch-ed25519-verifier` | 10.0.0 | `851cb7bc36f7917548431cc1490880488f165264516aaf6bd72b93c31b6b39cc` | 0 |
-| `perch-webauthn-verifier` | 0.1.0 | `9e9fbe7886d9bb149a6e3ee10de15954c57bbdf20f817ed94e1370c01b9c669e` | 0 |
-| `perch-zk-pool` | 0.1.1 | `5389aef52582831184715bd06ff34e6265800e4b439536af6664882498626105` | 0 |
-| `perch-zk-adapter` | 0.1.1 | `8a1deec2bbc9ec5d43dbbea7ed91bbd1b4c75397d1f6231e403ff520c8255057` | 0 |
-| `perch-recovery` | 0.1.1 | `fb4425cf9e59ffc90122e34831614961ee65ebc0551671d1d0c9ae6ce4456afe` | 0 |
-| `perch-account` | 0.3.1 | `bbb30174bbd85a2956a2f6146a156769621254011a6bdcac707cf787ce7bcd52` | 1 |
-| `perch-account-factory` | 0.1.1 | `b71bd8881bd84798493e9088c30fbd21b9f397ed8cdada1a363e84cd53343a42` | 2 |
+| Field | Manifest field | Value in the manifest at this commit |
+| --- | --- | --- |
+| Build commit | `source.commit`, `source.dirty` | `7b164b6ea99119569c9ceacdf2860713212f00a9`, clean tree |
+| Network, channel | `network_passphrase`, `channel` | testnet (`Test SDF Network ; September 2015`), `beta` |
+| Deployed | `deployed_at`, `deployed_ledger` | 2026-10-12T17:27:53Z, from ledger 5160473 |
+| Build toolchain | `toolchain` | rustc 1.97.1 (8bab26f4f 2026-07-14), stellar 27.0.0, scaffold 0.0.27 (`builder`: `scaffold`) |
+| Registry instance | `registry.id`, `registry.wasm_hash` | `CAR2DSSOBJB76GGD6MAAKWUK36Y7I7O3NDWTN7HTIRV5I3XZ27U3ZBVZ`, an instance of the canonical registry's Wasm |
+| ZK circuit | `zk.circuit_id`, `zk.tree_depth` | the circuit in `circuits/manifest.json`, tree depth 32 |
+| Contracts | `contracts.<name>.version`, `.sha256`, `.address`, `.pins` | the ten below |
 
-Addresses, sizes, and each consumer's pins are in the manifest.
+| Tier | Contracts | Pins |
+| --- | --- | --- |
+| 0 | `perch-doc-compiler`, `perch-interpreter`, `perch-spending-limit`, `perch-ed25519-verifier`, `perch-webauthn-verifier`, `perch-zk-pool`, `perch-zk-adapter`, `perch-recovery` | none |
+| 1 | `perch-account` | the doc compiler, interpreter, and spending limit |
+| 2 | `perch-account-factory` | the account and the WebAuthn verifier |
 
-**Reproduction record.** On 2026-10-09, on the deploying machine (macOS
-arm64), a fresh clone of `7ae915d` at another path, built by
-`scripts/build-stack.sh` with the manifest's builder and registry and the
-recorded toolchain, reproduced all ten contract hashes above. Other hosts
-and toolchains have not been checked; `stellar scaffold build` optimizes
-with the wasm-opt its own version ships.
+A redeploy rewrites the manifest, and the third column of the first table
+changes with it.
 
-**Relating the deployment to the reviewed source.** Deployment evidence
-(`verify-deployment.sh`, the [testnet exercise](deploy/testnet-exercise.md))
-applies to the hashes above only. To carry it to the reviewed commit,
+**Reproduction record.** On 2026-10-14, on a macOS arm64 host with the
+manifest's toolchain, a `git archive` export of `7b164b6` at another path,
+built by `scripts/build-stack.sh` with the manifest's builder and
+`registry.id`, reproduced all ten `contracts.<name>.sha256` values. Pass the
+registry from the manifest at this commit: the export's own
+`deployments/testnet.json` names the previous deployment's registry, and the
+account and the factory bake the registry id, so building against it gives
+other account and factory hashes. Other hosts and toolchains have not been
+checked; `stellar scaffold build` optimizes with the wasm-opt its own version
+ships.
+
+**Relating the deployment to the reviewed source.** `verify-deployment.sh`
+applies to the manifest's hashes only. The [testnet
+exercise](deploy/testnet-exercise.md) is evidence for the previous
+deployment (build commit `7ae915d`). Six of its contracts have the same hash
+in the current deployment: the interpreter, the spending limit, both
+verifiers, the ZK pool, and the ZK adapter. The doc compiler, the recovery
+controller, the account, and the factory have new hashes that no testnet
+exercise has run. To carry the deployment evidence to the reviewed commit,
 rebuild the stack there with `scripts/build-stack.sh --registry <registry
-id>` and the recorded toolchain, and compare each hash with the table; the
-handoff records the result. A contract whose hash differs is covered by
+id>` and the recorded toolchain, and compare each hash with the manifest;
+the handoff records the result. A contract whose hash differs is covered by
 source review and in-process tests, not by the deployment evidence.
 
 ### Toolchains and locked inputs
@@ -85,7 +96,7 @@ source review and in-process tests, not by the deployment evidence.
 
 | npm package | Path | Manifest version | Published |
 | --- | --- | --- | --- |
-| `@stellar-registry/perch` | `packages/perch-js` | 0.3.1 | Yes (`release.yml` `NPM_PACKAGES`, `npm publish --provenance`). Its CHANGELOG lists releases through 0.3.1 and an Unreleased section (the consumer interface), so no release it records contains this source. |
+| `@stellar-registry/perch` | `packages/perch-js` | 0.3.2 | Yes (`release.yml` `NPM_PACKAGES`, `npm publish --provenance`). 0.3.2 (2026-10-10) contains the consumer interface; this source differs from it in `src/apply.ts`, `src/auth.ts`, and `src/snapshot.ts`, and adds `schemas/policy.schema.json`, so no published release equals this source. |
 | `@stellar-registry/perch-interpreter` | `packages/perch-interpreter-js` | 0.1.0 | Yes (0.1.0, 2026-09-09) |
 | `@stellar-registry/perch-zk` | `packages/perch-zk` | 0.1.0 | No ([deferred](DEFERRED.md#npm-publishing-of-perch-zk-and-the-contract-clients)) |
 | `@stellar-registry/perch-contracts` | `packages/perch-contracts` | 0.1.0 | No ([deferred](DEFERRED.md#npm-publishing-of-perch-zk-and-the-contract-clients)) |
@@ -360,7 +371,7 @@ Each is stated in full where linked.
     deployment verification.
 
 The [testnet exercise](deploy/testnet-exercise.md) is an evidence report
-for the deployed build, not part of the reading order.
+for the previous deployment, not part of the reading order.
 
 ## Deferred until after the audit
 

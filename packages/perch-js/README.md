@@ -20,11 +20,10 @@ npm install @stellar-registry/perch
 ESM-only. Ships compiled JS + `.d.ts`; regular dependencies are `zod` and
 `@noble/hashes`.
 
-The consumer interface ("Using a Perch account" below) is in this
-repository's source; the package CHANGELOG lists it as unreleased, so the
-npm releases it records (through 0.3.1) do not contain it. A consumer that
-switches between the repository source and a published version must check
-they are the same code
+The consumer interface ("Using a Perch account" below) first shipped in
+0.3.2. The repository source can be ahead of the latest npm release, so a
+consumer that switches between the repository source and a published
+version must check they are the same code
 ([`docs/DEFERRED.md`](../../docs/DEFERRED.md), "Packaging rule").
 
 ## Usage
