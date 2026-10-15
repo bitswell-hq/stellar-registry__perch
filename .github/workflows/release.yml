@@ -417,7 +417,7 @@ jobs:
             # scripts/test-release-scripts.py checks this list against).
             # Its constants.json is generated into packages/perch-artifacts/
             # by a test that fails while stale, so a changed limit moves it.
-            perch-artifacts) echo "packages/perch-artifacts deployments circuits testdata/auth/auth-vectors.json testdata/auth/diagnostic-events.json testdata/recovery/statement-v2.json testdata/rule-hashes.json testdata/eval/eval-vectors.json scripts/fetch-infra-wasm.sh scripts/zk-toolchain.sh";;
+            perch-artifacts) echo "packages/perch-artifacts deployments circuits testdata/auth/auth-vectors.json testdata/auth/diagnostic-events.json testdata/recovery/statement-v2.json testdata/rule-hashes.json testdata/eval/eval-vectors.json scripts/fetch-infra-wasm.sh scripts/stellar-rpc.sh scripts/zk-toolchain.sh";;
             *) echo "packages/$1";;
           esac; }
           NPM_PACKAGES="perch-js perch-interpreter-js perch-zk perch-relay perch-contracts perch-artifacts"
@@ -767,7 +767,9 @@ jobs:
       attestations: write
     env:
       STELLAR_NETWORK: testnet
-      STELLAR_RPC_URL: https://soroban-testnet.stellar.org
+      # No STELLAR_RPC_URL: an override disables the fallback. deploy-stack.sh
+      # defaults to SDF's testnet RPC and, only while that is down, a guarded
+      # fallback (scripts/stellar-rpc.sh).
       STELLAR_NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
       # The ALLOW-listed tier-0 to reuse (published by the constructorless jobs,
       # not rebuilt here). Kept in step with publish-plan's ALLOW list.

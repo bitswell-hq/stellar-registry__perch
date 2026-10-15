@@ -10,6 +10,13 @@ inputs:
     description: Also fetch every deployed artifact into this directory (with a build.json) for the release-stack suite.
     required: false
     default: ""
+  rpc-url:
+    description: >
+      Read the chain through this RPC endpoint only (RPC_URL). Default: the
+      manifest's rpc_url, with a guarded fallback while it is down
+      (scripts/stellar-rpc.sh).
+    required: false
+    default: ""
 runs:
   using: composite
   steps:
@@ -18,4 +25,5 @@ runs:
       shell: bash
       env:
         STACK: ${{ inputs.stack }}
+        RPC_URL: ${{ inputs.rpc-url || env.RPC_URL }}
       run: scripts/fetch-infra-wasm.sh ${STACK:+--stack "$STACK"}

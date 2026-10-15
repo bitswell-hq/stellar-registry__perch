@@ -24,7 +24,7 @@ Each file is copied from the repository when the package is built
 | `vectors/rule-hashes.json` | `testdata/` |
 | `vectors/eval-vectors.json` | `testdata/eval/` |
 | `constants.json` | the `MAX_*` constants of `perch-doc-compiler` and `perch-program` |
-| `scripts/fetch-infra-wasm.sh`, `scripts/zk-toolchain.sh` | `scripts/` |
+| `scripts/fetch-infra-wasm.sh`, `scripts/stellar-rpc.sh`, `scripts/zk-toolchain.sh` | `scripts/` |
 
 ## JSON
 
@@ -68,7 +68,14 @@ because the ZK adapter compiles them in.
   sha256 matches the manifest and its address is the content address under
   the manifest's registry. Needs the Stellar CLI and jq. A perch checkout's
   build-time pin caches (`crates/*/wasm/`) are not filled from here, so
-  `--stack` is required.
+  `--stack` is required. The chain is read through the manifest's `rpc_url`;
+  `RPC_URL` (or `STELLAR_RPC_URL`) overrides it. Without an override, while
+  that endpoint is down (no response, or HTTP 5xx) the fetch moves to a
+  fallback: `PERCH_RPC_FALLBACKS` (space-separated, in order), by default
+  Gateway.fm's public endpoint on testnet and none elsewhere. A fallback is
+  used only if it reports the manifest's network passphrase and a ledger at
+  most `PERCH_RPC_MAX_LAG` (default 10) behind another source's (Horizon,
+  `PERCH_HORIZON_URL`). `scripts/stellar-rpc.sh` documents the rules.
 - `perch-zk-toolchain`: installs nargo and bb at the versions the circuits
   pin, checksummed, under `./target/zk-toolchain` (or
   `PERCH_ZK_TOOLCHAIN_DIR`), and prints `NARGO`/`BB` for `eval`:

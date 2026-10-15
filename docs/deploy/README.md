@@ -98,6 +98,40 @@ runs the release-stack suite on those fresh bytes, so a change that only a
 rebuilt stack would break fails CI. The `packages` job runs
 `check-packages.sh`.
 
+## RPC endpoints
+
+`fetch-infra-wasm.sh`, `verify-deployment.sh`, and `deploy-stack.sh` read
+the chain through one endpoint, chosen by `scripts/stellar-rpc.sh`. The
+helper keeps the default fallback list in one place.
+
+| Variable | Effect |
+| --- | --- |
+| `RPC_URL`, else `STELLAR_RPC_URL` | Use this endpoint and nothing else: no probe, no fallback. |
+| `PERCH_RPC_FALLBACKS` | Space-separated fallbacks, in order. Unset: Gateway.fm's public endpoint (`https://soroban-rpc.testnet.stellar.gateway.fm`) on testnet, none on any other network (mainnet has no implicit fallback). Empty: no fallback. |
+| `PERCH_RPC_MAX_LAG` | How many ledgers a fallback may trail the newest other source (default 10). |
+| `PERCH_HORIZON_URL` | The Horizon used as a freshness reference (default `horizon-testnet` / `horizon` for testnet / pubnet; empty disables). |
+| `PERCH_RPC_PROBE_ATTEMPTS`, `PERCH_RPC_TIMEOUT` | Probe tries while an endpoint is down (default 3), and the per-request timeout in seconds (default 10). |
+
+Without an override, the primary (the manifest's `rpc_url`; for
+`deploy-stack.sh`, SDF's testnet RPC) is used whenever it answers
+`getNetwork` with the expected passphrase and `getLatestLedger`. A fallback
+is considered only while the primary is down: no response, or an HTTP 5xx,
+after the bounded retries. A fallback is used only if it reports the same
+network passphrase and a ledger at most `PERCH_RPC_MAX_LAG` behind the newest
+ledger another source reports (another candidate, or Horizon). One that is
+stale, on another network, or that nothing else can vouch for is refused
+and logged. A call that fails against a healthy endpoint, such as a
+contract error, a missing entry, or a fetched wasm whose hash does not match,
+fails as before and never falls back. Each call logs the endpoint that
+served it (`rpc: ...` on stderr).
+
+`deploy-stack.sh` chooses its endpoint once, before it submits anything, and
+sends every read and signed write there. It does not fail over mid-run: it
+stops, and because the run is idempotent, a rerun chooses again and writes
+only what is missing. The manifest records the override or SDF's URL, never
+a fallback. CI's `fetch-infra-wasm` action takes the override as its
+`rpc-url` input.
+
 ## What is verified, and where
 
 | Claim | Check |

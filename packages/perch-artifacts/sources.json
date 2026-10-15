@@ -7,5 +7,6 @@
   "vectors/rule-hashes.json": "testdata/rule-hashes.json",
   "vectors/eval-vectors.json": "testdata/eval/eval-vectors.json",
   "scripts/fetch-infra-wasm.sh": "scripts/fetch-infra-wasm.sh",
+  "scripts/stellar-rpc.sh": "scripts/stellar-rpc.sh",
   "scripts/zk-toolchain.sh": "scripts/zk-toolchain.sh"
 }
