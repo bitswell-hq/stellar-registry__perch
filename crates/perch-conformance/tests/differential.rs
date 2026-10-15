@@ -83,10 +83,10 @@ fn gen_arg_pred(rng: &mut Rng) -> ArgPred {
             ArgPred::StringIn(StringInPred { values })
         }
         _ => ArgPred::StringPrefix(StringPrefixPred {
-            // perch-ir now refuses an over-long prefix (one longer than the
-            // interpreter's string buffer could never match, so the whole
-            // predicate is unsatisfiable), so the generator stays within the
-            // limit and produces only prefixes the interpreter can evaluate.
+            // perch-ir refuses a prefix longer than MAX_STRING_PRED_LEN (the
+            // interpreter could never evaluate it, so the whole predicate
+            // would be unsatisfiable), so valid documents carry only prefixes
+            // within the limit.
             prefix: STRINGS[rng.below(STRINGS.len() as u32) as usize].into(),
         }),
     }
@@ -291,9 +291,8 @@ fn ref_pred(pred: &ArgPred, inv: &GInv, index: u32) -> Verdict {
                 } else if p.prefix.len() > s.len() {
                     Verdict::False
                 } else {
-                    // Only the first prefix-length bytes matter, so an argument
-                    // longer than the buffer is still checked against the
-                    // prefix, not denied for its length.
+                    // Only the argument's first prefix-length bytes are read,
+                    // so the argument's own length is unbounded.
                     Verdict::from(s.as_bytes()[..p.prefix.len()] == *p.prefix.as_bytes())
                 }
             }
