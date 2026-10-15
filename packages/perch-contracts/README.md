@@ -45,4 +45,4 @@ must be simulated with its recovery-rule authorization entry already in the
 transaction. Recording-mode simulation never runs `__check_auth`, so the
 controller's `enforce` never marks the call as the completion and
 `rcv_sync` refuses it as a change during the authorized window. See
-[`docs/deploy/README.md`](../../docs/deploy/README.md).
+[`docs/deploy/README.md`](../../docs/deploy/README.md#simulating-a-recovery-completion).

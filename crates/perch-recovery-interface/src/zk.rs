@@ -243,11 +243,16 @@ pub trait ZkAdapterInterface {
     /// as `binding.enrollment_id` for `statement.account`, against a root the
     /// enrolled pool accepts, for exactly this statement. Writes nothing.
     ///
-    /// Required checks, in order: `binding.circuit_id` is this adapter's;
-    /// root and nullifier are canonical field elements; the pool accepts
-    /// `(evidence.tree_id, evidence.root)`; the proof verifies against
-    /// [`public_inputs`] built from the root, the nullifier, and
-    /// `Poseidon2(`[`ZkStatementFields::auth_preimage`]`)`.
+    /// Required checks, in order, returning the first failure (spec §13.2):
+    /// `binding.circuit_id` is this adapter's (`CircuitMismatch`); the
+    /// statement projects onto circuit fields (`InvalidStatement`); root and
+    /// nullifier are canonical field elements (`NonCanonicalField`); the proof
+    /// is exactly `PROOF_BYTES` long (`MalformedProof`, which means only
+    /// that); the pool accepts `(evidence.tree_id, evidence.root)`
+    /// (`UnknownRoot`, or `PoolUnavailable` if the call fails); the proof
+    /// verifies against [`public_inputs`] built from the root, the nullifier,
+    /// and `Poseidon2(`[`ZkStatementFields::auth_preimage`]`)`
+    /// (`ProofRejected`, or `VerifierUnavailable`).
     fn verify(
         e: &Env,
         statement: RecoveryStatement,
