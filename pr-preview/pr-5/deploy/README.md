@@ -130,9 +130,9 @@ own bytes and the account pins exactly those. The **canonical** mode
 
 **The same version is different bytes in the two registries.** The current
 deployment ([`deployments/testnet.json`](../../deployments/testnet.json)) is a
-rehearsal in its own registry instance. It carries versions that `release.yml`
-also publishes canonically (interpreter 0.1.3, compiler 0.3.1, spending limit
-0.1.2, ed25519 verifier 10.0.0), but `release.yml` builds through
+rehearsal in its own registry instance. Its interpreter, compiler, spending
+limit, and ed25519 verifier carry versions that `release.yml` also publishes
+canonically, but `release.yml` builds through
 stellar-registry/actions' attested release build and `build-stack.sh` runs its
 own scaffold build, so the bytes differ (interpreter 0.1.3 is `2254f17d…` in
 the deployment and `e4d7fb8d…` canonically, as observed on 2026-10-09).
