@@ -2,10 +2,12 @@
 """Tests for the release and build-provenance scripts: what a contract's
 release scope covers (scripts/release-deps.py, used by release.yml's
 release-pr job), that release.yml publishes every npm package under
-packages/ with a manifest that installs from the registry, what a stack
-build records as dirty (scripts/source-dirty.sh, used by
-scripts/build-stack.sh), and the committed build-time pins' drift check
-(scripts/check-pins.sh).
+packages/ with a manifest that installs from the registry, an npm package's
+scope and version bump (scripts/npm-release.sh, used by release-pr and by
+deploy-stack's perch-artifacts bump), the Nido dispatch plan
+(scripts/nido-dispatch-plan.sh), what a stack build records as dirty
+(scripts/source-dirty.sh, used by scripts/build-stack.sh), and the committed
+build-time pins' drift check (scripts/check-pins.sh).
 
   python3 scripts/test-release-scripts.py
 
@@ -13,20 +15,28 @@ The git-cliff tests need `git-cliff` on PATH (CI installs the release job's
 pinned build); without it they are skipped unless PERCH_REQUIRE_GIT_CLIFF=1.
 """
 
+import base64
+import hashlib
+import http.server
+import io
 import json
 import os
 import re
 import shlex
 import shutil
 import subprocess
+import tarfile
 import tempfile
 import textwrap
+import threading
 import unittest
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RELEASE_DEPS = os.path.join(REPO, "scripts", "release-deps.py")
 SOURCE_DIRTY = os.path.join(REPO, "scripts", "source-dirty.sh")
 CHECK_PINS = os.path.join(REPO, "scripts", "check-pins.sh")
+NPM_RELEASE = os.path.join(REPO, "scripts", "npm-release.sh")
+NIDO_PLAN = os.path.join(REPO, "scripts", "nido-dispatch-plan.sh")
 RELEASE_YML = os.path.join(REPO, ".github", "workflows", "release.yml")
 GIT_CLIFF = shutil.which("git-cliff")
 
@@ -355,10 +365,9 @@ def npm_lists():
 
 
 def npm_paths_for(pkg, cwd=REPO):
-    """release.yml's `npm_paths_for()` for `pkg`, as the git-cliff
-    --include-path arguments release-pr builds from it in `cwd`."""
-    fn = re.search(r"^ *(npm_paths_for\(\) \{ case .*?esac; \})", release_yml(), re.S | re.M).group(1)
-    paths = run(["bash", "-c", f'{fn}\nnpm_paths_for "$1"', "_", pkg], cwd).stdout.split()
+    """scripts/npm-release.sh's scope for `pkg`, as the git-cliff
+    --include-path arguments its `bump` builds from it in `cwd`."""
+    paths = run([NPM_RELEASE, "paths", pkg], cwd).stdout.split()
     return paths, [a for d in paths for a in ("--include-path", f"{d}/**" if os.path.isdir(os.path.join(cwd, d)) else d)]
 
 
@@ -424,6 +433,264 @@ class NpmScope(unittest.TestCase):
         repo.write("deployments/testnet.json", '{"a": 1}')
         repo.commit("feat: redeploy")
         self.assertEqual(run(cliff, repo.dir).stdout.strip(), "perch-artifacts-v0.2.0")
+
+
+NPM = shutil.which("npm")
+
+
+def deploy_pr_add_paths():
+    """The paths release.yml's deploy-stack commits into its deploy PR."""
+    block = re.search(r"^ *- name: Open the deploy\(testnet\) manifest PR\n(.*?)^ *body:", release_yml(), re.S | re.M).group(1)
+    return re.search(r"add-paths: \|\n((?: +\S+\n)+)", block).group(1).split()
+
+
+@unittest.skipUnless(GIT_CLIFF or os.environ.get("PERCH_REQUIRE_GIT_CLIFF"), "git-cliff not on PATH")
+@unittest.skipUnless(NPM or os.environ.get("PERCH_REQUIRE_GIT_CLIFF"), "npm not on PATH")
+class NpmBump(unittest.TestCase):
+    """scripts/npm-release.sh bump, as release-pr runs it for every package
+    and deploy-stack runs it for perch-artifacts over its deploy commit."""
+
+    def setUp(self):
+        self.repo = Repo()
+        shutil.copy(os.path.join(REPO, "cliff.toml"), os.path.join(self.repo.dir, "cliff.toml"))
+        self.repo.write("packages/perch-artifacts/package.json", json.dumps(
+            {"name": "@stellar-registry/perch-artifacts", "version": "0.1.0"}, indent=2) + "\n")
+        self.repo.write("packages/perch-artifacts/package-lock.json", json.dumps({
+            "name": "@stellar-registry/perch-artifacts", "version": "0.1.0", "lockfileVersion": 3,
+            "packages": {"": {"name": "@stellar-registry/perch-artifacts", "version": "0.1.0"}},
+        }, indent=2) + "\n")
+        self.repo.write("deployments/testnet.json", '{"a": 1}\n')
+        self.repo.write("crates/perch-account/wasm/stateless.id", "C1")
+        self.repo.commit("feat(perch-artifacts): first release")
+
+    def tearDown(self):
+        self.repo.cleanup()
+
+    def bump(self):
+        return run([NPM_RELEASE, "bump", "perch-artifacts"], self.repo.dir).stdout.strip()
+
+    def version(self, name):
+        with open(os.path.join(self.repo.dir, "packages", "perch-artifacts", name)) as f:
+            return json.load(f)["version"]
+
+    def test_an_untagged_package_is_not_bumped(self):
+        self.assertEqual(self.bump(), "")
+
+    def test_a_deploy_commit_bumps_perch_artifacts(self):
+        # deploy-stack's step: commit the new record, bump, uncommit.
+        run(["git", "tag", "perch-artifacts-v0.1.0"], self.repo.dir)
+        self.assertEqual(self.bump(), "")
+        self.repo.write("deployments/testnet.json", '{"a": 2}\n')
+        self.repo.commit("deploy(testnet): recovery stack @ " + "ab" * 20)
+        self.assertEqual(self.bump(), "0.1.0 0.1.1")
+        self.assertEqual(self.version("package.json"), "0.1.1")
+        self.assertEqual(self.version("package-lock.json"), "0.1.1")
+        with open(os.path.join(self.repo.dir, "packages", "perch-artifacts", "CHANGELOG.md")) as f:
+            changelog = f.read()
+        self.assertIn("## [0.1.1]", changelog)
+        self.assertIn("*(testnet)* Recovery stack @ " + "ab" * 20, changelog)
+        # Every file the bump writes rides in the deploy PR's one commit.
+        changed = run(["git", "status", "--porcelain", "--untracked-files=all"], self.repo.dir).stdout.split()[1::2]
+        for path in changed:
+            self.assertTrue(any(path == p or path.startswith(p + "/") for p in deploy_pr_add_paths()), path)
+        # The bumped version is current: no further bump until a later change.
+        self.repo.commit("chore: take the bump")
+        self.assertEqual(self.bump(), "")
+
+    def test_a_pin_only_change_is_no_release(self):
+        run(["git", "tag", "perch-artifacts-v0.1.0"], self.repo.dir)
+        self.repo.write("crates/perch-account/wasm/stateless.id", "C2")
+        self.repo.commit("deploy(testnet): recovery stack")
+        self.assertEqual(self.bump(), "")
+
+    def test_a_version_already_tagged_is_not_proposed_again(self):
+        # detect-releases tagged the merged bump before release-pr ran.
+        run(["git", "tag", "perch-artifacts-v0.1.0"], self.repo.dir)
+        self.repo.write("deployments/testnet.json", '{"a": 2}\n')
+        self.repo.commit("deploy(testnet): recovery stack")
+        self.assertEqual(self.bump(), "0.1.0 0.1.1")
+        self.repo.commit("chore: take the bump")
+        run(["git", "tag", "perch-artifacts-v0.1.1"], self.repo.dir)
+        self.assertEqual(self.bump(), "")
+
+
+class Registry:
+    """A local npm registry serving perch-artifacts version documents and
+    tarballs, for scripts/nido-dispatch-plan.sh."""
+
+    def __init__(self):
+        self.files = {}
+        files = self.files
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                body = files.get(self.path)
+                self.send_response(200 if body is not None else 404)
+                self.end_headers()
+                if body is not None:
+                    self.wfile.write(body)
+
+            def log_message(self, *args):
+                pass
+
+        self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.url = f"http://127.0.0.1:{self.server.server_port}"
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+
+    def publish(self, version, git_head, files, provenance=True, integrity=None):
+        buf = io.BytesIO()
+        with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+            for path, data in files.items():
+                info = tarfile.TarInfo(f"package/{path}")
+                info.size = len(data)
+                tar.addfile(info, io.BytesIO(data))
+        tgz = buf.getvalue()
+        tarball = f"/@stellar-registry/perch-artifacts/-/perch-artifacts-{version}.tgz"
+        dist = {
+            "tarball": self.url + tarball,
+            "integrity": integrity or "sha512-" + base64.b64encode(hashlib.sha512(tgz).digest()).decode(),
+        }
+        if provenance:
+            dist["attestations"] = {"provenance": {"predicateType": "https://slsa.dev/provenance/v1"}}
+        self.files[tarball] = tgz
+        self.files[f"/@stellar-registry%2fperch-artifacts/{version}"] = json.dumps(
+            {"version": version, "gitHead": git_head, "dist": dist}).encode()
+
+    def close(self):
+        self.server.shutdown()
+        self.server.server_close()
+
+
+def manifest(network, n):
+    return (json.dumps({"schema": 1, "network": network, "n": n, "source": {"commit": "cd" * 20}}, indent=2) + "\n").encode()
+
+
+class NidoDispatchPlan(unittest.TestCase):
+    """scripts/nido-dispatch-plan.sh: which manifests a perch-artifacts
+    release announces to Nido, and the package it must find first."""
+
+    def setUp(self):
+        self.repo = Repo()
+        self.registry = Registry()
+        self.repo.write("deployments/testnet.json", manifest("testnet", 1).decode())
+        self.repo.commit("feat: first deployment")
+        self.tag("0.1.0")
+
+    def tearDown(self):
+        self.registry.close()
+        self.repo.cleanup()
+
+    def tag(self, version):
+        run(["git", "tag", f"perch-artifacts-v{version}"], self.repo.dir)
+        return self.head()
+
+    def head(self):
+        return run(["git", "rev-parse", "HEAD"], self.repo.dir).stdout.strip()
+
+    def publish(self, version, **over):
+        files = {}
+        for path in ("deployments/testnet.json", "deployments/mainnet.json"):
+            full = os.path.join(self.repo.dir, path)
+            if os.path.exists(full):
+                with open(full, "rb") as f:
+                    files[path] = f.read()
+        args = {"git_head": self.head(), "files": files, **over}
+        self.registry.publish(version, **args)
+
+    def plan(self, *args, check=True):
+        env = {**os.environ, "REPOSITORY": "stellar-registry/perch", "RUN_URL": "https://example.com/run/1",
+               "NPM_REGISTRY": self.registry.url, "REGISTRY_TRIES": "1"}
+        out = subprocess.run([NIDO_PLAN, *args], cwd=self.repo.dir, capture_output=True, text=True, env=env)
+        if check:
+            self.assertEqual(out.returncode, 0, out.stderr)
+            return json.loads(out.stdout)
+        self.assertNotEqual(out.returncode, 0, out.stdout)
+        return out.stderr
+
+    def redeploy(self, n, version):
+        self.repo.write("deployments/testnet.json", manifest("testnet", n).decode())
+        self.repo.commit("deploy(testnet): recovery stack")
+        return self.tag(version)
+
+    def test_a_release_with_a_new_manifest_dispatches_its_version(self):
+        sha = self.redeploy(2, "0.1.1")
+        self.publish("0.1.1")
+        [target] = self.plan("release", "perch-artifacts-v0.1.1")
+        self.assertEqual(target["network"], "testnet")
+        self.assertEqual(target["payload"], {
+            "schema": 1,
+            "repository": "stellar-registry/perch",
+            "network": "testnet",
+            "perch_sha": sha,
+            "manifest_path": "deployments/testnet.json",
+            "manifest_sha256": hashlib.sha256(manifest("testnet", 2)).hexdigest(),
+            "source_commit": "cd" * 20,
+            "run_url": "https://example.com/run/1",
+            "artifacts_package": "@stellar-registry/perch-artifacts",
+            "artifacts_version": "0.1.1",
+        })
+
+    def test_a_release_with_no_manifest_change_dispatches_nothing(self):
+        # Without asking the registry: nothing is announced.
+        self.repo.write("circuits/x.nr", "fn main() {}\n")
+        self.repo.commit("fix: a circuit")
+        self.tag("0.1.1")
+        self.assertEqual(self.plan("release", "perch-artifacts-v0.1.1"), [])
+
+    def test_the_first_release_dispatches_every_manifest(self):
+        self.publish("0.1.0")
+        self.assertEqual([t["network"] for t in self.plan("release", "perch-artifacts-v0.1.0")], ["testnet"])
+
+    def test_only_the_networks_whose_manifest_changed(self):
+        self.repo.write("deployments/mainnet.json", manifest("mainnet", 1).decode())
+        self.repo.commit("deploy(mainnet): recovery stack")
+        self.tag("0.2.0")
+        self.publish("0.2.0")
+        self.assertEqual([t["network"] for t in self.plan("release", "perch-artifacts-v0.2.0")], ["mainnet"])
+
+    def test_resend_names_the_latest_release(self):
+        self.redeploy(2, "0.1.1")
+        self.publish("0.1.1")
+        sha = self.redeploy(3, "0.1.2")
+        self.publish("0.1.2")
+        [target] = self.plan("resend", "testnet")
+        self.assertEqual((target["payload"]["artifacts_version"], target["payload"]["perch_sha"]), ("0.1.2", sha))
+
+    def test_an_unpublished_version_is_refused(self):
+        self.redeploy(2, "0.1.1")
+        self.assertIn("not on the registry", self.plan("release", "perch-artifacts-v0.1.1", check=False))
+
+    def test_a_package_from_another_commit_is_refused(self):
+        self.redeploy(2, "0.1.1")
+        self.publish("0.1.1", git_head="ef" * 20)
+        self.assertIn("was published from", self.plan("release", "perch-artifacts-v0.1.1", check=False))
+
+    def test_a_package_without_provenance_is_refused(self):
+        self.redeploy(2, "0.1.1")
+        self.publish("0.1.1", provenance=False)
+        self.assertIn("no provenance", self.plan("release", "perch-artifacts-v0.1.1", check=False))
+
+    def test_a_tarball_not_matching_its_integrity_is_refused(self):
+        self.redeploy(2, "0.1.1")
+        self.publish("0.1.1", integrity="sha512-AAAA")
+        self.assertIn("integrity", self.plan("release", "perch-artifacts-v0.1.1", check=False))
+
+    def test_a_package_shipping_other_manifest_bytes_is_refused(self):
+        self.redeploy(2, "0.1.1")
+        self.publish("0.1.1", files={"deployments/testnet.json": manifest("testnet", 1)})
+        self.assertIn("does not ship deployments/testnet.json", self.plan("release", "perch-artifacts-v0.1.1", check=False))
+
+    def test_a_file_that_is_not_the_networks_manifest_is_refused(self):
+        self.repo.write("deployments/testnet.json", manifest("mainnet", 2).decode())
+        self.repo.commit("deploy(testnet): wrong network")
+        self.tag("0.1.1")
+        self.publish("0.1.1")
+        self.assertIn("is not a schema-1 testnet manifest", self.plan("release", "perch-artifacts-v0.1.1", check=False))
+
+    def test_only_a_perch_artifacts_tag(self):
+        run(["git", "tag", "perch-contracts-v0.1.0"], self.repo.dir)
+        self.assertIn("is not a perch-artifacts-v<semver> tag", self.plan("release", "perch-contracts-v0.1.0", check=False))
+        self.assertIn("unknown network", self.plan("resend", "devnet", check=False))
 
 
 class SourceDirty(unittest.TestCase):

@@ -36,7 +36,9 @@ name: Release
 # perch-relay → @stellar-registry/perch-relay, perch-contracts →
 # @stellar-registry/perch-contracts, perch-artifacts →
 # @stellar-registry/perch-artifacts), and the npm-publish matrix job then
-# publishes each released package to npm (NPM_TOKEN secret).
+# publishes each released package to npm (NPM_TOKEN secret). A
+# perch-artifacts release then runs notify-nido, which tells nidohq/nido about
+# each deployment manifest it ships (nido-dispatch.yml).
 #
 # The recovery stack (verifiers, ZK pool and adapter, controller, account,
 # factory) is deployed in pin order by scripts/deploy-stack.sh, which writes
@@ -180,6 +182,7 @@ jobs:
       releases: ${{ steps.detect.outputs.releases }}
       npm_released: ${{ steps.npm.outputs.npm_released }}
       npm_releases: ${{ steps.npm.outputs.npm_releases }}
+      artifacts_tag: ${{ steps.npm.outputs.artifacts_tag }}
     steps:
       # Default token + persisted credentials are enough to push a tag. Tags
       # pushed with GITHUB_TOKEN do NOT retrigger workflows, but the publish
@@ -264,6 +267,8 @@ jobs:
             git tag "$tag"
             git push origin "$tag"
             npm_releases=$(jq -c --arg p "$p" --arg t "$tag" --arg v "$ver" '. + [{package:$p, tag:$t, version:$v}]' <<<"$npm_releases")
+            # notify-nido announces the deployment records this release ships.
+            [ "$p" != perch-artifacts ] || echo "artifacts_tag=$tag" >>"$GITHUB_OUTPUT"
             echo "released $tag"
             echo "- $tag (npm)" >>"$GITHUB_STEP_SUMMARY"
           done
@@ -407,33 +412,13 @@ jobs:
           fi
           # The npm packages ride the same convention: tag-pattern <pkg>-v*,
           # scoped to packages/<pkg> plus the repository files the package
-          # ships. Bump via `npm version` so package-lock.json stays in sync
-          # with the manifest. A package with no tag yet gets no bump here
-          # (git-cliff has no release to bump from); detect-releases tags and
-          # publishes its manifest version.
-          npm_paths_for() { case "$1" in
-            # perch-artifacts copies these at build time
-            # (packages/perch-artifacts/sources.json, which
-            # scripts/test-release-scripts.py checks this list against).
-            # Its constants.json is generated into packages/perch-artifacts/
-            # by a test that fails while stale, so a changed limit moves it.
-            perch-artifacts) echo "packages/perch-artifacts deployments circuits testdata/auth/auth-vectors.json testdata/auth/diagnostic-events.json testdata/recovery/statement-v2.json testdata/rule-hashes.json testdata/eval/eval-vectors.json scripts/fetch-infra-wasm.sh scripts/zk-toolchain.sh";;
-            *) echo "packages/$1";;
-          esac; }
+          # ships (scripts/npm-release.sh, which deploy-stack also runs to
+          # bump perch-artifacts in the deploy(<network>) PR).
           NPM_PACKAGES="perch-js perch-interpreter-js perch-zk perch-relay perch-contracts perch-artifacts"
           for p in $NPM_PACKAGES; do
-            inc=()
-            for d in $(npm_paths_for "$p"); do
-              if [ -d "$d" ]; then inc+=(--include-path "$d/**"); else inc+=(--include-path "$d"); fi
-            done
-            next_tag=$(git cliff --config cliff.toml --tag-pattern "$p-v.*" "${inc[@]}" --bumped-version 2>/dev/null) || true
-            next_ver=${next_tag#"$p"-v}
-            cur=$(jq -r .version "packages/$p/package.json")
-            [ -n "$next_ver" ] || continue
-            [ "$next_ver" != "$cur" ] || continue
-            [ "$(printf '%s\n%s\n' "$cur" "$next_ver" | sort -V | tail -1)" = "$next_ver" ] || continue
-            npm version "$next_ver" --no-git-tag-version --prefix "packages/$p" >/dev/null
-            git cliff --config cliff.toml --tag-pattern "$p-v.*" "${inc[@]}" --bump -o "packages/$p/CHANGELOG.md" 2>/dev/null
+            out=$(scripts/npm-release.sh bump "$p") || { echo "::error::scripts/npm-release.sh failed for $p"; exit 1; }
+            [ -n "$out" ] || continue
+            read -r cur next_ver <<<"$out"
             summary="${summary}- \`$p\` (npm \`$(jq -r .name "packages/$p/package.json")\`): $cur -> $next_ver"$'\n'
             echo "bump $p: $cur -> $next_ver"
           done
@@ -512,6 +497,23 @@ jobs:
       - run: npm publish --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # Tell nidohq/nido about each deployment record this run's
+  # @stellar-registry/perch-artifacts release ships (nido-dispatch.yml). It
+  # runs only after npm-publish, so the package version the dispatch names
+  # already carries the manifest; nido-dispatch.yml checks that on the
+  # registry before sending. `!cancelled()` lets another package's failed leg
+  # pass: the registry check is what gates the send.
+  notify-nido:
+    needs: [ci-green, detect-releases, npm-publish]
+    if: >-
+      !cancelled() && needs.ci-green.outputs.go == 'true' &&
+      needs.detect-releases.outputs.artifacts_tag != ''
+    permissions:
+      contents: read
+    uses: ./.github/workflows/nido-dispatch.yml
+    with:
+      tag: ${{ needs.detect-releases.outputs.artifacts_tag }}
 
   # ── Constructorless contract publishes ────────────────────────────────────
   # The generic, contract-agnostic half: any released infra contract in the
@@ -777,6 +779,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           persist-credentials: false
+          fetch-depth: 0 # git-cliff needs full history + tags (perch-artifacts bump)
       - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
         with:
           toolchain: stable
@@ -801,6 +804,13 @@ jobs:
           stellar scaffold --version
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
+      # Before the deploy, so a failed install costs nothing on-chain.
+      - name: Install git-cliff (bumps perch-artifacts below)
+        run: |
+          mkdir -p "$RUNNER_TEMP/gc"
+          curl -fsSL https://github.com/orhun/git-cliff/releases/download/v2.14.1/git-cliff-2.14.1-x86_64-unknown-linux-gnu.tar.gz -o "$RUNNER_TEMP/gc.tar.gz"
+          echo "bb40f68e752db1a32526c43e0108e8eff785f7c24c67024cffe1c316e034372975fd78c9af8e9a48148235aad15c9a103f1a5b490c282f1db09a7a793794b69f  $RUNNER_TEMP/gc.tar.gz" | sha512sum -c -
+          tar -xz -C "$RUNNER_TEMP/gc" --strip-components=1 -f "$RUNNER_TEMP/gc.tar.gz"
       - name: Deploy the stack (smart-account-authored, reusing the published tier-0)
         # Secrets go through the environment, never argv: STELLAR_ACCOUNT is the
         # source/fee delegate and STELLAR_SIGN_WITH_KEY signs the account's
@@ -834,6 +844,40 @@ jobs:
           subject-path: ${{ steps.built.outputs.paths }}
       - name: Regenerate the deployment bindings (@stellar-registry/perch-contracts)
         run: scripts/bindings-contracts.sh
+      # @stellar-registry/perch-artifacts ships deployments/, so the PR that
+      # records a deployment also releases it: merging the PR tags and
+      # publishes that version (detect-releases, npm-publish), then
+      # notify-nido tells Nido, naming it. The bump is release-pr's own
+      # (scripts/npm-release.sh), computed with the deploy commit in the
+      # history: commit the record locally, bump, then uncommit it all so the
+      # PR step below makes the one deploy(testnet) commit.
+      - name: Bump @stellar-registry/perch-artifacts for the new deployment record
+        env:
+          MESSAGE: "deploy(testnet): recovery stack @ ${{ github.event.workflow_run.head_sha }}"
+          MANIFEST: deployments/testnet.json
+        run: |
+          set -euo pipefail
+          export PATH="$RUNNER_TEMP/gc:$PATH" # git-cliff, installed above
+          git add -- "$MANIFEST"
+          if git diff --cached --quiet -- "$MANIFEST"; then
+            git reset -q
+            echo "$MANIFEST is unchanged — no perch-artifacts release" >>"$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git -c user.name=github-actions -c user.email=github-actions@users.noreply.github.com \
+            commit -q -m "$MESSAGE"
+          out=$(scripts/npm-release.sh bump perch-artifacts)
+          git reset -q --soft HEAD~1
+          git reset -q
+          # The deployment is already on-chain, so its record PR still opens;
+          # the next release PR then proposes the bump, and Nido hears of this
+          # record when that release publishes.
+          if [ -z "$out" ]; then
+            echo "::warning::$MANIFEST changed but scripts/npm-release.sh proposed no perch-artifacts bump; the release PR will"
+            exit 0
+          fi
+          read -r cur next <<<"$out"
+          echo "\`@stellar-registry/perch-artifacts\`: $cur -> $next" >>"$GITHUB_STEP_SUMMARY"
       - name: Open the deploy(testnet) manifest PR
         uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
         with:
@@ -848,6 +892,9 @@ jobs:
             crates/perch-smart-account/wasm
             crates/perch-account-factory/wasm
             packages/perch-contracts/src
+            packages/perch-artifacts/package.json
+            packages/perch-artifacts/package-lock.json
+            packages/perch-artifacts/CHANGELOG.md
           body: >
             Automated by the `deploy-stack` job: the recovery stack deployed to
             the canonical `constructorless` registry, smart-account-authored, in
@@ -857,4 +904,7 @@ jobs:
             updates `deployments/testnet.json`, the account's and factory's
             committed build-time pins, and the regenerated
             `@stellar-registry/perch-contracts` bindings, which flips consumers —
-            and CI's deployed-bytes checks — onto this deployment.
+            and CI's deployed-bytes checks — onto this deployment. It also
+            bumps `@stellar-registry/perch-artifacts` (version and changelog,
+            from the release tooling), so the merge publishes a package
+            carrying this manifest before Nido is notified.
