@@ -110,7 +110,7 @@ helper keeps the default fallback list in one place.
 | `PERCH_RPC_FALLBACKS` | Space-separated fallbacks, in order. Unset: Gateway.fm's public endpoint (`https://soroban-rpc.testnet.stellar.gateway.fm`) on testnet, none on any other network (mainnet has no implicit fallback). Empty: no fallback. |
 | `PERCH_RPC_MAX_LAG` | How many ledgers a fallback may trail the newest other source (default 10). |
 | `PERCH_HORIZON_URL` | The Horizon used as a freshness reference (default `horizon-testnet` / `horizon` for testnet / pubnet; empty disables). |
-| `PERCH_RPC_PROBE_ATTEMPTS`, `PERCH_RPC_TIMEOUT` | Probe tries while an endpoint is down (default 3), and the per-request timeout in seconds (default 10). |
+| `PERCH_RPC_PROBE_ATTEMPTS`, `PERCH_RPC_CALL_ATTEMPTS`, `PERCH_RPC_TIMEOUT` | Probe tries while an endpoint is down (default 3), tries of a call the endpoint failed server-side before moving on (default 3), and the per-request timeout in seconds (default 10). |
 
 Without an override, the primary (the manifest's `rpc_url`; for
 `deploy-stack.sh`, SDF's testnet RPC) is used whenever it answers
@@ -120,9 +120,13 @@ after the bounded retries. A fallback is used only if it reports the same
 network passphrase and a ledger at most `PERCH_RPC_MAX_LAG` behind the newest
 ledger another source reports (another candidate, or Horizon). One that is
 stale, on another network, or that nothing else can vouch for is refused
-and logged. A call that fails against a healthy endpoint, such as a
-contract error, a missing entry, or a fetched wasm whose hash does not match,
-fails as before and never falls back. Each call logs the endpoint that
+and logged. Mid-run, a call moves to the next guarded fallback only when the
+endpoint failed it: its own error is server-side (an HTTP 5xx, a JSON-RPC
+`InternalError`, no response), retried first, or a fresh probe finds the
+endpoint down. A flapping endpoint can answer a probe right after failing a
+call, so the call's own error is enough. A call that fails against a healthy
+endpoint, such as a contract error, a missing entry, or a fetched wasm whose
+hash does not match, fails as before and never falls back. Each call logs the endpoint that
 served it (`rpc: ...` on stderr).
 
 `deploy-stack.sh` chooses its endpoint once, before it submits anything, and
