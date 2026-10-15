@@ -20,6 +20,20 @@ its `vendor/perch` submodule. A finding that changes a contract or signing
 behaviour produces a new commit, and the review baseline moves to that
 commit's SHA.
 
+The reviewed source includes the build-time pins the account and the
+factory compile in: `crates/perch-smart-account/wasm/` and
+`crates/perch-account-factory/wasm/` (`stateless.id` and one
+`<name>.sha256` per pinned contract). They name the deployment a plain build
+of those crates at this commit resolves infra from, and
+`scripts/check-pins.sh` (CI's `committed-pins` job) checks them against
+`deployments/testnet.json`. A `deploy(<network>)` commit updates them
+together with the manifest, without a version bump (`release.yml`'s
+`release-pr` leaves `crates/*/wasm/**` out of every contract's scope), so
+the account's and factory's version numbers do not identify their bytes;
+the commit does. `scripts/build-stack.sh` rewrites them for the
+build it makes, so a rebuild of a deployment does not depend on them
+([Deployment provenance](#deployment-provenance)).
+
 ### Deployment provenance
 
 The testnet deployment is a record of built bytes, not the reviewed source.
@@ -39,7 +53,7 @@ jq -r '.contracts | to_entries[] | [.key, .value.version, .value.tier, .value.sh
 | Build commit | `source.commit`, `source.dirty` | `4e7ae8044b761c7e7ee8b82d3dd5d135f9905fd5`, the release commit on `main`; `dirty: true` (below) |
 | Network, channel | `network_passphrase`, `channel` | testnet (`Test SDF Network ; September 2015`), `beta` |
 | Deployed | `deployed_at`, `deployed_ledger` | 2026-10-15T06:43:23Z, from ledger 5204567 |
-| Build toolchain | `toolchain` | rustc 1.99.0 (b940084d7 2026-09-28), stellar 28.0.0-aha.0 (the `theahaco/stellar-cli` fork), scaffold 0.0.27 (`builder`: `scaffold`) |
+| Build toolchain | `toolchain` | rustc 1.99.0 (b940084d7 2026-09-28) and scaffold 0.0.27 (`builder`: `scaffold`), which determine the bytes; stellar 28.0.0-aha.0 (the `theahaco/stellar-cli` fork), the CLI that ran the deploy. Each contract's `cliver` metadata is `27.0.0#5a7c5fe…`, the stellar-cli library scaffold 0.0.27 links, not the deploy CLI |
 | Registry | `registry.id`, `registry.wasm_hash` | `CDX2DMYMMEYU6FGN3HPJ2GQSSL5EZHIAMEJD4SPF55FZE5LEUBPPPDA7`, the canonical `constructorless` registry ([`testnet-deployment.md`](testnet-deployment.md)) |
 | ZK circuit | `zk.circuit_id`, `zk.tree_depth` | the circuit in `circuits/manifest.json`, tree depth 32 |
 | Contracts | `contracts.<name>.version`, `.sha256`, `.address`, `.pins` | the ten below |
@@ -61,46 +75,50 @@ the ed25519 verifier. It reused the bytes the registry already serves for
 them, which `release.yml`'s attested release build produced. It built the
 other six with `scripts/build-stack.sh` on a GitHub-hosted Linux runner,
 using the manifest's toolchain, and attested each one's build provenance.
-`source.dirty` is `true`: when it built, the job's checkout had uncommitted
-changes in an input `scripts/source-dirty.sh` checks. The manifest does not
-record which input changed.
+`source.dirty` is `true` because `4e7ae80`'s `Cargo.lock` was stale: it
+still named eleven workspace members at their previous versions.
+`build-stack.sh` builds without `--locked`, so cargo rewrote those version
+lines, and `source-dirty.sh` counts `Cargo.lock` as a build input. The
+rewritten lock equals the one `8b8339b` committed, and the change does not
+affect the bytes: the rebuild below matches every hash.
 
-**Reproduction record.** No reproduction of this manifest's hashes has been
-recorded. Because the tree was dirty, rebuilding `4e7ae80` is not
-guaranteed to give the six built hashes. The four reused contracts come
-from the attested release build, not from `build-stack.sh`, so rebuilding
-them with `build-stack.sh` gives other bytes
-([`deploy/README.md`](deploy/README.md#the-canonical-registry-and-publishing-the-stack-to-it)).
-The previous deployment (build commit `7b164b6`, clean tree, manifest
+**Reproduction record.** On 2026-10-15 the recipe in
+[`deploy/README.md`](deploy/README.md#reproducing-a-deployment) rebuilt
+`4e7ae80` on linux/amd64 (`debian:bookworm` by digest, rustc 1.99.0,
+scaffold 0.0.27, run under Docker emulation on a macOS arm64 host) and
+reproduced all ten hashes in this manifest. That includes the four reused
+tier-0, built with the `source_repo` metadata entry the attested release
+build adds. On a macOS arm64 host with the same toolchain, six hashes
+reproduce. The doc compiler and the controller build to different bytes
+there, and so do the account and the factory, which pin the doc compiler
+directly or through the account, so a reproduction must run on
+linux/amd64. The previous deployment (build
+commit `7b164b6`, clean tree, manifest
 [`deployments/testnet.json` at `845c49a`](https://github.com/stellar-registry/perch/blob/845c49a376c08aeeed9f5d3c63356b753dc617f4/deployments/testnet.json))
-was reproduced in full on 2026-10-14. On a macOS arm64 host with that
-manifest's toolchain, `scripts/build-stack.sh` built a `git archive` export
-of `7b164b6` against that manifest's `registry.id` and reproduced all ten
-hashes.
+was reproduced in full on 2026-10-14 on macOS arm64.
 
 **Relating the deployment to the reviewed source.** `verify-deployment.sh`
 applies to the manifest's hashes only. The [testnet
 exercise](deploy/testnet-exercise.md) is evidence for an earlier deployment
 (build commit `7ae915d`). None of that deployment's contract hashes appear
 in the current deployment, so no testnet exercise has run the current
-bytes. To relate the deployment to the reviewed commit, rebuild the stack
-there with `scripts/build-stack.sh --registry <registry id>` and the
-recorded toolchain, and compare each built hash with the manifest; the
-handoff records the result. For the four reused contracts, compare against
-the attested release build of their tagged versions instead. Source review
-and in-process tests cover any contract whose hash differs; the deployment
-evidence does not.
+bytes. The reproduction above relates the deployment to its build commit,
+`4e7ae80`. To relate it to the reviewed commit, run the same recipe with
+`BUILD_COMMIT` set to the reviewed commit and compare each built hash with
+the manifest; the handoff records the result. Source review and in-process
+tests cover any contract whose hash differs; the deployment evidence does
+not.
 
 ### Toolchains and locked inputs
 
 | Input | Pin | Where |
 | --- | --- | --- |
-| Rust | channel `stable`, target `wasm32v1-none`. **Not version-pinned**: reproducing the deployed hashes needs the recorded rustc 1.99.0 | `rust-toolchain.toml` |
+| Rust | channel `stable`, target `wasm32v1-none`. **Not version-pinned**: reproducing the deployed hashes needs the recorded rustc 1.99.0 (`RUSTUP_TOOLCHAIN=1.99.0` overrides the file) | `rust-toolchain.toml` |
 | Release profile | `opt-level = "z"`, `overflow-checks = true`, `panic = "abort"`, `lto = true`, `codegen-units = 1` | `Cargo.toml` `[profile.release]` |
 | Wasm stack | 64 KiB per contract, 128 KiB for the ZK adapter (an overflow traps) | `crates/*/build.rs` |
 | Soroban | `soroban-sdk` 27.0.6, `soroban-env-host` 27.0.1 (test host), `soroban-poseidon` 27.0.0 | `Cargo.lock` |
 | OpenZeppelin accounts | `stellar-accounts` 0.7.1 at theahaco/stellar-contracts-OZ `33726766a1fd5e7e3d2977d79f64ee29e1ea3ca9` | `Cargo.toml`, `Cargo.lock` |
-| Stellar CLI | deployment build: stellar 28.0.0-aha.0 (the `theahaco/stellar-cli` fork) and scaffold 0.0.27, SHA-256-checked by `release.yml`'s `deploy-stack` (manifest `toolchain`); CI: stellar-cli 27.1.0, SHA-256-checked | `.github/workflows/release.yml`, `.github/actions/setup-stellar` |
+| Stellar CLI | deployment build: scaffold 0.0.27 builds, and stellar 28.0.0-aha.0 (the `theahaco/stellar-cli` fork) deploys, both SHA-256-checked by `release.yml`'s `deploy-stack` (manifest `toolchain`); the tier-0 release build: rustc 1.99.0 and scaffold 0.0.27, the defaults of stellar-registry/actions `contract-release.yml@57bfdf4`; CI: stellar-cli 27.1.0, SHA-256-checked | `.github/workflows/release.yml`, `.github/actions/setup-stellar` |
 | ZK proving | nargo 1.0.0-beta.9, bb 0.87.0, every download SHA-256-pinned per platform; proofs are `UltraKeccakZKFlavor` | `scripts/zk-toolchain.sh`, `circuits/manifest.json` |
 | ZK proving (JS) | `@noir-lang/noir_js` 1.0.0-beta.9, `@aztec/bb.js` 0.87.0, exact versions | `packages/perch-zk/package.json` |
 | UltraHonk verifier base | NethermindEth/rs-soroban-ultrahonk `c2160987260284c656ffbdad8344210fc162b177` | `vendor/ultrahonk-soroban-verifier/NOTICE`, `UPSTREAM.sha256` |
@@ -305,15 +323,21 @@ checked by hash. They are not reviewed line by line.
   `bindings-contracts.sh`, `bootstrap-testnet.sh`,
   `.github/workflows/`, `crates/perch-deploy`, `crates/perch-derive-id`):
   they choose what is deployed and published. The deployed bytes are checked
-  by hash against the manifest, and the manifest's hashes are reproducible
-  from source ([Deployment provenance](#deployment-provenance)).
+  by hash against the manifest, and the current manifest's hashes were
+  reproduced from source ([Deployment provenance](#deployment-provenance)).
 - **The registry contract** (Wasm `4b2d9ea4…`): a
   `crates/perch-stateless-registry` build that `deploy-stack.sh` reuses by
   hash from the canonical registry instead of rebuilding; this repository
   does not record which commit built it. Its `deploy_stateless` places code
-  at the content addresses the account and factory derive.
+  at the content addresses the account and factory derive. Its admin key,
+  a single human-held key at this revision, is therefore the root of trust
+  for content addressing: an address depends on the registry and the salt,
+  not on the code deployed there, so an upgraded registry could place any
+  code at an infra address that is not yet occupied, such as the one the
+  next infra build pins. Code at an occupied address cannot change.
   `verify-deployment.sh` checks that each address runs its recorded Wasm,
-  and that check must pass for each new deployment before it is used.
+  and that check must pass for each new deployment before it is used
+  ([spec](recovery/spec.md) §2, trust boundary 3).
 - **Off-chain tooling and harnesses** (`crates/perch-testnet`,
   `crates/perch-zk-prover`, `crates/perch-testkit`, `crates/perch-bench*`,
   `crates/perch-conformance`, `crates/perch-golden`, `crates/perch-analyze`,
@@ -321,6 +345,31 @@ checked by hash. They are not reviewed line by line.
   code.
 - **Documentation and slides** (`docs/**`, `*.md`). The recovery spec is
   normative for both Perch units.
+
+## Trust boundaries
+
+The contracts check the shape of these inputs, not who controls them. A
+wallet or reviewer must enforce each one off chain. [spec](recovery/spec.md)
+§2 states each with its code and tests.
+
+1. **Every contract a document names is fully trusted.** The recovery
+   controller, a ZK mode's adapter and pool, and each `External` signer's
+   verifier are only checked to be contract addresses. A named controller is
+   the only policy of the zero-signer recovery rule, so outside a
+   `Protected` freeze it can authorize any call on the account (`execute`,
+   `apply_doc`, `schedule_upgrade`) with no signature. Consumers must refuse documents that name any controller,
+   adapter, pool, or verifier other than the deployment manifest's.
+2. **A rule's cap and program bind only that rule.** OZ runs only the
+   policies of the rule an auth entry selects. A capped rule's signers who
+   can satisfy another rule reaching the same contract can select that rule
+   and spend past the cap. The compiler does not refuse such overlaps.
+3. **The registry admin key is the root of content addressing** (see the
+   registry contract above).
+4. **WebAuthn assertions are not bound to a relying party on chain.** The
+   verifier, OZ's `webauthn::verify`, does not check the origin, the
+   `rpIdHash`, the signature counter, extensions, or attestation. The
+   browser and the authenticator scope a passkey to the wallet's relying
+   party.
 
 ## Generated and vendored content
 
@@ -363,6 +412,8 @@ Each is stated in full where linked.
   ([`recovery/budgets.md`](recovery/budgets.md) §1).
 - `rust-toolchain.toml` does not pin a Rust version (see the toolchain
   table).
+- Four trust boundaries are left to wallets and reviewers
+  ([Trust boundaries](#trust-boundaries)).
 
 ## Reading order
 

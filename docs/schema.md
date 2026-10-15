@@ -66,9 +66,7 @@ it encodes is taken from the one place that declares it:
   and perch-schema is in no contract's build graph — nothing reaches a wasm
   build).
 
-Two guards keep schema and source from silently diverging (the reason this work
-started — a tightened string-length rule that broke a fixture a single declared
-source would have caught):
+Two guards keep schema and source from silently diverging:
 
 - `crates/perch-schema/tests/drift.rs` — the committed file equals the
   generator output (so tightening a constant without regenerating fails CI);
@@ -130,11 +128,12 @@ substitute:
   element (below the scalar modulus); and the **exact** `i128` upper bound on
   `cap.limit` (the schema caps the *digit width* but not the precise maximum
   value). These are perch-ir's `validate` (and the compiler's lowering). The
-  `m <= N` and guardian `quorum <= count` ranges are now *mostly* encoded (see
-  above); they stay with the validator only for guardian sets larger than
+  schema encodes the `m <= N` and guardian `quorum <= count` ranges (see
+  above) except for guardian sets larger than
   `MAX_DOC_SIGNERS`, which the `if`/`then` chain does not enumerate (guardians
   have no dedicated cap constant — a guardian-count cap would let the schema
-  cover them fully; recorded as CANON v2 follow-up).
+  cover them fully; recorded as a CANON v2 follow-up). The validator checks
+  those sets.
 - **Value checks the schema does not encode.** The CRC16 checksum of every
   address strkey (the schema pins only the shape); each `functions` entry
   being a Soroban `Symbol` (1–32 characters from `[a-zA-Z0-9_]`); and a
@@ -144,8 +143,8 @@ substitute:
   the *canonically-encoded* document, not a property of the parsed JSON tree —
   is not expressible as a schema keyword. It lives in
   `perch-doc-compiler::doc_limits()` and is mirrored client-side by perch-js's
-  `checkLimits`. (The other per-document caps — `max_signers`, `max_rules`,
-  `max_rule_name_bytes` — are now encoded by the schema; see above.)
+  `checkLimits`. (The schema encodes the other per-document caps,
+  `max_signers`, `max_rules`, and `max_rule_name_bytes`; see above.)
 - **Canonical spelling (CANON v2).** The schema accepts everything today's
   parser accepts, including non-canonical spellings of a valid value: a
   `cap.limit` with leading zeros or a leading `+` (`007`, `+5`), and uppercase
@@ -176,9 +175,9 @@ perch-ir's real parser + validator **at the applicable boundary**:
 | non-ASCII rule name within the byte cap | **rejects** | validator accepts — the one place the schema is deliberately stricter (byte cap via ASCII) |
 | cross-reference / semantic | **accepts** | validator rejects (documented gap) |
 
-The `m <= N` / `quorum <= count` and `limit`-positivity cases, previously in the
-last (documented-gap) row, now land in the "representable constraint" row —
-schema and validator reject together. The negative examples (unknown fields,
+The `m <= N` / `quorum <= count` and `limit`-positivity cases are in the
+"representable constraint" row: schema and validator reject them together.
+The negative examples (unknown fields,
 missing fields, wrong tags/variant shape, bad ranges, over-cap collections) live
 in `testdata/schema/cases.json` plus the generated boundary cases in the Rust
 suite.
@@ -190,7 +189,7 @@ consume is held to the same contract.
 
 ## No contract-Wasm footprint
 
-Generation adds nothing to any contract build (criterion 5). `perch-schema` is
+Generation adds nothing to any contract build. `perch-schema` is
 host-only: it is a dependency of no deployable contract, uses `serde_json` only
 to assemble JSON off-chain, and the `jsonschema` validator is a test-only
 dependency. It reads the compiler caps from `perch-doc-compiler` with

@@ -41,7 +41,12 @@ signer can call repeatedly to exceed any intended total. A cumulative limit
 is a rule's `cap`: the compiler lowers it onto OZ's stateful
 `spending_limit` policy (deployed as `perch-spending-limit`), attached to the
 same context rule beside the interpreter, and OZ enforces every attached
-policy, so both must pass. Replacing a capped rule, or changing its cap,
+policy, so both must pass. Both bind only the rule they are on: OZ runs the
+policies of the rule each authorization selects, so signers who can also
+satisfy another rule reaching the same contract can select that rule
+instead, and the compiler does not refuse such overlaps
+([`docs/recovery/spec.md`](./docs/recovery/spec.md#2-roles-and-trust) §2,
+trust boundary 2). Replacing a capped rule, or changing its cap,
 starts an empty spending window
 ([`docs/DEFERRED.md`](./docs/DEFERRED.md#persistent-spending-budgets-across-replacements)).
 [`docs/verification/THEORY.md`](./docs/verification/THEORY.md) states which

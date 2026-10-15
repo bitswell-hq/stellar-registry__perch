@@ -63,10 +63,11 @@
 #               republishing. The account and factory pin the exact on-chain
 #               bytes, and those names are left untouched (verified, not
 #               published). This is how a canonical deploy consumes the tier-0
-#               the release pipeline already published there — the account's
-#               compiler/interpreter/spending-limit pins would not reproduce
-#               under this toolchain (scaffold vs scaffold+optimize, unpinned
-#               rustc), so they must be the fetched bytes. Needs --registry.
+#               the release pipeline already published there. The attested
+#               release build adds a `source_repo` meta entry build-stack.sh
+#               does not, and pins its rustc, so a rebuild here would give the
+#               account's compiler/interpreter/spending-limit pins other
+#               hashes; they must be the fetched bytes. Needs --registry.
 #   --channel   recorded in the manifest (default: beta)
 #
 # Env: STELLAR_NETWORK (default testnet), STELLAR_RPC_URL,

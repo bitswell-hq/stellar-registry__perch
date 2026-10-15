@@ -230,9 +230,9 @@ constructor and advances by one on every successful `apply_doc` (a re-apply
 of the same document included) and every executed upgrade, and on nothing
 else. `apply_doc(doc_json, approval_valid_until, expected_revision)` refuses
 with `StaleRevision` when `expected_revision` is set and the account is at
-another revision. An ordinary signature binds the invocation and the
-selected rule ids (OZ's `sha256(signature_payload || xdr(context_rule_ids))`),
-not a revision. Between signing and inclusion, a selected rule that was
+another revision. An ordinary signature binds the invocation, the account,
+and the selected rule ids (the `addr_oz_v1` digest, spec §15), not a
+revision. Between signing and inclusion, a selected rule that was
 removed or replaced fails closed (`ContextRuleNotFound`), and a selected
 rule that was edited in place keeps its id and the transaction is evaluated
 under the rule's content at inclusion (spec §15, "Revision binding";
@@ -449,7 +449,13 @@ that key authorizes them.
 encrypted in 1Password, and the only live deployment is on testnet, so no
 mainnet value is governed by it before the audit. The deferred change hardens
 key custody and adds a delay; it does not alter any audited on-chain
-authorization path.
+authorization path. Residual risk: which code a pinned infra address runs
+depends on this key until that address is occupied. Accounts and the
+factory derive infra addresses as `deployer(registry, sha256(wasm))`, which
+does not depend on the code deployed there, so an upgraded registry could
+place other code at an address the next infra build pins.
+`verify-deployment.sh` must pass for each deployment before it is used
+([spec](recovery/spec.md) §2, trust boundary 3).
 
 **Exit criterion and follow-up review:** adopt the multisig + timelock before
 any mainnet deployment, and review the timelock contract, the multisig policy
