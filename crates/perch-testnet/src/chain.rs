@@ -367,7 +367,12 @@ impl Chain {
                 rule,
                 ..
             } => {
-                let digest = auth::oz_auth_digest(&payload, &[*rule])?;
+                use stellar_xdr::{ContractId, Hash};
+                let account_id = match &creds.address {
+                    ScAddress::Contract(ContractId(Hash(id))) => *id,
+                    _ => bail!("passkey auth entry's account is not a contract address"),
+                };
+                let digest = auth::perch_auth_digest(&account_id, &payload, &[*rule])?;
                 let signer = Signer::External(
                     self.address(webauthn),
                     Bytes::from_slice(&self.env, &key.key_data()),

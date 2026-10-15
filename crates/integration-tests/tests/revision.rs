@@ -632,7 +632,7 @@ fn capabilities_and_limits_are_constants_of_the_wasm() {
     );
     assert_eq!(caps.snapshot_version, perch_smart_account::SNAPSHOT_VERSION);
     assert_eq!(caps.doc_identity, Symbol::new(&w.env, "canon_v1"));
-    assert_eq!(caps.auth_digest, Symbol::new(&w.env, "oz_rule_ids"));
+    assert_eq!(caps.auth_digest, Symbol::new(&w.env, "addr_oz_v1"));
     assert_eq!(
         caps.apply_modes,
         Vec::from_array(&w.env, [Symbol::new(&w.env, "one_tx")])

@@ -51,7 +51,7 @@ const configuration = {
 };
 const capabilities = {
   apply_modes: ['one_tx'],
-  auth_digest: 'oz_rule_ids',
+  auth_digest: 'addr_oz_v1',
   doc_identity: 'canon_v1',
   interface_version: 1,
   snapshot_version: 1,

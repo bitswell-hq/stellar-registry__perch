@@ -170,7 +170,7 @@ export class SimAccount {
         this.read('capabilities', () => ({
           interfaceVersion: 1,
           docIdentity: 'canon_v1',
-          authDigest: 'oz_rule_ids',
+          authDigest: 'addr_oz_v1',
           applyModes: ['one_tx'],
           snapshotVersion: 1,
         })),
@@ -217,7 +217,7 @@ export class SimAccount {
       if (rule.contract !== invoked) throw new ChainError('rule does not scope to the invoked contract');
       for (const s of rule.signers) {
         if (s.kind !== 'external') continue;
-        signatures.push({ signer: s, signature: signWith(s.key, signingDigest(signaturePayload, ids)) });
+        signatures.push({ signer: s, signature: signWith(s.key, signingDigest(this.account, signaturePayload, ids)) });
       }
     }
     const want = authPayloadXdr({ contextRuleIds: ids, signers: signatures });

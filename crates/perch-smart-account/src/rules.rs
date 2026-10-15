@@ -114,13 +114,32 @@ pub(crate) fn admin_rule(e: &Env, id: u32, signers: &Vec<Signer>) -> InstalledRu
     }
 }
 
+/// Whether a rule's lowered `valid_until` is already past at the current
+/// ledger, so OZ's `add_context_rule`/`update_context_rule_valid_until`
+/// would refuse it (`PastValidUntil`: `valid_until < sequence`). Such a rule
+/// is dead — it authorizes nothing — so it is dropped at install rather than
+/// handed to OZ, keeping the "a document that compiles also installs"
+/// invariant (`perch-doc-compiler`): a document the compiler accepts always
+/// installs, and a recovery target stays installable even when one of its
+/// bounded rules expired between publish and completion. The anti-brick
+/// check (`admin_survives`) refuses any document whose only admin rule is
+/// bounded, so this drop can never remove the account's sole admin rule.
+fn expired(e: &Env, valid_until: Option<u32>) -> bool {
+    valid_until.is_some_and(|v| v < e.ledger().sequence())
+}
+
 /// The rules `compiled` asks for, with each policy's install parameters
-/// (aligned with `rule.policies`). Ids are unset.
+/// (aligned with `rule.policies`). Ids are unset. A document rule whose
+/// `not-after-ledger` has already passed ([`expired`]) is dropped: it is dead
+/// and OZ would refuse to install it.
 pub(crate) fn desired(e: &Env, compiled: &CompiledDoc) -> (Vec<InstalledRule>, Vec<Vec<Val>>) {
     let mut rules = Vec::new(e);
     let mut params = Vec::new(e);
     for rule in compiled.rules.iter() {
         let (r, p) = document_rule(e, &rule);
+        if expired(e, r.valid_until) {
+            continue;
+        }
         rules.push_back(r);
         params.push_back(p);
     }
@@ -364,7 +383,7 @@ fn run(
             next.push_back(d.with_id(id));
             continue;
         };
-        if unchanged(e, &c, &d) {
+        if unchanged(&c, &d) {
             record(&d, Step::Keep, Cost::default(), None, Cost::default());
             next.push_back(d.with_id(c.id));
             continue;
@@ -643,11 +662,13 @@ impl Effects for Apply<'_> {
     }
 }
 
-/// Whether `c` and `d` install the same rule: the same slot, signers,
-/// policies with their parameters, and expiry.
-fn unchanged(e: &Env, c: &InstalledRule, d: &InstalledRule) -> bool {
-    missing(e, &c.signers, &d.signers).is_empty()
-        && missing(e, &d.signers, &c.signers).is_empty()
+/// Whether `c` and `d` install the same rule: the same slot, signers in the
+/// same order, policies with their parameters, and expiry. OZ's context rule
+/// keeps its signers in the order given, so a document that only reorders a
+/// rule's signers is a change: the signer swap gives OZ and the record the
+/// new order, as a full replace would.
+fn unchanged(c: &InstalledRule, d: &InstalledRule) -> bool {
+    c.signers == d.signers
         && c.policies.iter().all(|p| d.policies.contains(&p))
         && d.policies.iter().all(|p| c.policies.contains(&p))
         && c.valid_until == d.valid_until
@@ -662,7 +683,6 @@ fn edit(
     d: &InstalledRule,
     params: &Vec<Val>,
 ) -> bool {
-    let add_signers = missing(e, &d.signers, &c.signers);
     let remove_signers = missing(e, &c.signers, &d.signers);
     // A policy whose parameters change is removed and added back.
     let mut remove_policies: Vec<Address> = Vec::new(e);
@@ -688,7 +708,8 @@ fn edit(
     }
     let kept =
         (c.signers.len() - remove_signers.len()) + (c.policies.len() - remove_policies.len());
-    let signers_change = !add_signers.is_empty() || !remove_signers.is_empty();
+    // A reorder alone changes the signers too: OZ stores the order given.
+    let signers_change = c.signers != d.signers;
     if !d.signers.is_empty() {
         // The target signers are never empty, so after one atomic swap
         // (OZ's `reconcile_signers`, which checks the final set as a whole)
