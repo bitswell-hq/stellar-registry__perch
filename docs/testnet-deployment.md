@@ -56,28 +56,40 @@ repository's Actions variables `PERCH_AUTHOR_ADDRESS` and
 
 | Name | Kind | Where it lives | Read by |
 | --- | --- | --- | --- |
-| `CI_PUBLISH_SECRET_KEY` | secret | `testnet` environment, **and** the repository until the reusable `registry-publish` workflow accepts an environment | `deploy-stack` (from the environment); `constructorless-publish` (from the repository) |
+| `CI_PUBLISH_SECRET_KEY` | secret | `testnet` environment only (a repository-level copy predates this and is to be deleted) | `deploy-stack`; `constructorless-publish`, through `registry-publish`'s job, which runs in `testnet` |
 | `CI_PUBLISH_MAINNET_SECRET_KEY` | secret | `mainnet` environment only | nothing yet: reserved for a mainnet publish or deploy job |
-| `NPM_TOKEN` | secret | repository | `npm-publish` |
-| `PERCH_REGISTRY_CONTRACT_ID`, `PERCH_AUTHOR_ADDRESS`, `PERCH_DEPLOY_STACK` | variables | repository | `constructorless-publish` (`with:` inputs), `deploy-stack` (job `if:` and steps) |
+| npm | none | trusted publishing (OIDC): each package's npm settings trust `release.yml` in the `npm` environment | `npm-publish` |
+| `PERCH_REGISTRY_CONTRACT_ID`, `PERCH_AUTHOR_ADDRESS`, `PERCH_DEPLOY_STACK` | variables | repository | `constructorless-publish` (`with:` inputs), the `deploy-stack` jobs (job `if:` and steps) |
 
 `CI_PUBLISH_SECRET_KEY` is the seed of the account's `ci-publish` delegate, so
-whoever can read it can publish as `perch-author` until the rule expires.
-`deploy-stack` declares `environment: testnet` and reads the environment's
-copy. `constructorless-publish` calls a reusable workflow; a job that does that
-cannot declare `environment:`, so it still reads the repository secret. The
-repository copy can be deleted only after `registry-publish` gains a job-level
-environment input and `release.yml` passes `testnet` to it.
+whoever can read it can publish as `perch-author` until the rule expires. A
+repository-level secret is readable by a workflow on any branch, so the seed
+belongs only in the `testnet` environment, whose branch policy admits `main`
+alone. `deploy-stack` declares `environment: testnet`.
+`constructorless-publish` calls the reusable `registry-publish`, which runs
+its signing job in the environment `release.yml` passes it (`testnet`).
+Whether that job read the environment's copy or the repository's was never
+established while both existed; deleting the repository copy settles it, and
+[`deploy/README.md`](deploy/README.md#release-path-settings) has the check
+to run afterward.
+
+Only three jobs can reach a release credential, and none of them builds: the
+`deploy-stack` job publishes a stack an earlier job compiled, the
+`registry-publish` job publishes an attested release asset, and `npm-publish`
+publishes a tarball an earlier job packed. `scripts/test-release-scripts.py`
+fails if a job holding the seed compiles anything or passes it in argv.
 
 The variables stay at repository level: a job's `if:` is evaluated before its
 environment is entered, and a reusable-workflow caller has no environment, so
 neither would see an environment variable.
 
-The `testnet` environment has no protection rules, which is acceptable because
-the delegate is expiry- and fee-bounded. The `mainnet` environment requires a
-reviewer and allows only `main`. It holds a separate delegate key on its own
-context rule of the mainnet author account; the testnet key is never used on
-mainnet.
+Once the [release-path settings](deploy/README.md#release-path-settings) are
+applied, the `testnet` and `mainnet` environments each allow only `main` and
+require a reviewer, and the `npm` environment allows only `main`. The
+delegate's expiry and fee bounds limit what a leaked testnet key can do; the
+reviewer is what stops a dispatch republish from running unattended. The
+`mainnet` environment holds a separate delegate key on its own context rule of
+the mainnet author account; the testnet key is never used on mainnet.
 
 **Open: renewal owner for the `ci-publish` rule.** The rule's `valid_until`
 is ledger 6999999. After that ledger every CI publish fails authorization until

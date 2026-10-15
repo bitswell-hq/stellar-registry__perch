@@ -2,8 +2,9 @@
 """Tests for the release and build-provenance scripts: what a contract's
 release scope covers (scripts/release-deps.py, used by release.yml's
 release-pr job), that release.yml publishes every npm package under
-packages/ with a manifest that installs from the registry, what a stack
-build records as dirty (scripts/source-dirty.sh, used by
+packages/ with a manifest that installs from the registry, that no
+release job holding a signing credential builds or puts it in argv, what a
+stack build records as dirty (scripts/source-dirty.sh, used by
 scripts/build-stack.sh), and the committed build-time pins' drift check
 (scripts/check-pins.sh).
 
@@ -424,6 +425,65 @@ class NpmScope(unittest.TestCase):
         repo.write("deployments/testnet.json", '{"a": 1}')
         repo.commit("feat: redeploy")
         self.assertEqual(run(cliff, repo.dir).stdout.strip(), "perch-artifacts-v0.2.0")
+
+
+def release_jobs():
+    """release.yml's jobs, as {name: the job's YAML text}."""
+    body = release_yml().split("\njobs:\n", 1)[1]
+    parts = re.split(r"^  ([A-Za-z0-9_-]+):\n", body, flags=re.M)
+    return dict(zip(parts[1::2], parts[2::2]))
+
+
+SEED = "secrets.CI_PUBLISH_SECRET_KEY"
+# What compiles or runs a dependency's code: a job holding a signing
+# credential must do none of it.
+BUILDS = ("cargo ", "rust-toolchain", "npm ci", "npm install", "npm test", "npm run",
+          "--build-only", 'scaffold: "true"', "verify-deployment.sh", "bindings-contracts.sh")
+
+
+class ReleaseKeys(unittest.TestCase):
+    """Where release.yml's signing credentials can be read."""
+
+    def test_no_job_reads_an_npm_token(self):
+        self.assertNotIn("NPM_TOKEN", release_yml())
+        self.assertNotIn("NODE_AUTH_TOKEN", release_yml())
+
+    def test_every_job_holding_the_seed_is_in_an_environment(self):
+        holders = {n: j for n, j in release_jobs().items() if SEED in j}
+        self.assertTrue(holders)
+        for name, job in holders.items():
+            with self.subTest(job=name):
+                # A job's own `environment:`, or the reusable publish's input.
+                self.assertRegex(job, r"(?m)^ {4,6}environment: \S")
+
+    def test_no_job_holding_the_seed_builds(self):
+        for name, job in release_jobs().items():
+            if SEED not in job:
+                continue
+            for marker in BUILDS:
+                with self.subTest(job=name, marker=marker):
+                    self.assertNotIn(marker, job)
+
+    def test_the_seed_never_reaches_argv(self):
+        for name, job in release_jobs().items():
+            for line in job.splitlines():
+                if SEED in line:
+                    with self.subTest(job=name, line=line.strip()):
+                        # Only as a step env value or a reusable-workflow secret.
+                        self.assertRegex(line.strip(), r"^(STELLAR_ACCOUNT|STELLAR_SIGN_WITH_KEY|signing_key): \$\{\{ " + re.escape(SEED) + r" \}\}$")
+
+    def test_npm_publish_only_publishes_a_packed_tarball(self):
+        jobs = release_jobs()
+        minting = {n: j for n, j in jobs.items() if "id-token: write" in j and "npm publish" in j}
+        self.assertEqual(list(minting), ["npm-publish"])
+        job = minting["npm-publish"]
+        self.assertRegex(job, r"(?m)^    environment: npm$")
+        self.assertIn("--ignore-scripts", job)
+        self.assertNotIn("actions/checkout", job)
+        for marker in BUILDS:
+            with self.subTest(marker=marker):
+                self.assertNotIn(marker, job)
+        self.assertNotIn("id-token", jobs["npm-pack"])
 
 
 class SourceDirty(unittest.TestCase):
