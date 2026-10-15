@@ -703,7 +703,8 @@ class StellarRpc(unittest.TestCase):
         # SDF on 2026-10-15: calls failing 502 / InternalError while
         # getLatestLedger still answered.
         for msg in ("❌ error: Request rejected `502`",
-                    'ErrorObject { code: InternalError, message: "could not query captive core", data: None }'):
+                    'ErrorObject { code: InternalError, message: "could not query captive core", data: None }',
+                    "❌ error: client error (SendRequest)"):
             primary, fallback, horizon = self.stub(), self.stub(), self.stub()
             open(self.log, "w").close()
             out = self.run_helper("rpc_stellar contract info hash --id C1", primary, fallbacks=[fallback],

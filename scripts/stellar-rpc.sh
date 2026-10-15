@@ -235,7 +235,7 @@ rpc_failover() {
 # What the stellar CLI prints when the endpoint, not the call, failed: an
 # HTTP 5xx, a JSON-RPC InternalError, or no response at all.
 _rpc_server_side() { # stderr-file
-    grep -Eqi 'Request rejected .5[0-9][0-9].|code: InternalError|error sending request|timed out|connection (refused|reset|closed)|dns error' "$1"
+    grep -Eqi 'Request rejected .5[0-9][0-9].|code: InternalError|error sending request|client error .(SendRequest|Connect).|error trying to connect|timed out|connection (refused|reset|closed)|dns error' "$1"
 }
 
 # `stellar <words> --rpc-url <chosen> --network-passphrase <p> <options...>`,
