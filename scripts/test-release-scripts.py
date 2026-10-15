@@ -4,8 +4,9 @@ release scope covers (scripts/release-deps.py, used by release.yml's
 release-pr job), that release.yml publishes every npm package under
 packages/ with a manifest that installs from the registry, what a stack
 build records as dirty (scripts/source-dirty.sh, used by
-scripts/build-stack.sh), and the committed build-time pins' drift check
-(scripts/check-pins.sh).
+scripts/build-stack.sh), the committed build-time pins' drift check
+(scripts/check-pins.sh), and the RPC endpoint choice the chain-reading
+scripts share (scripts/stellar-rpc.sh), against stub endpoints.
 
   python3 scripts/test-release-scripts.py
 
@@ -21,12 +22,15 @@ import shutil
 import subprocess
 import tempfile
 import textwrap
+import threading
 import unittest
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RELEASE_DEPS = os.path.join(REPO, "scripts", "release-deps.py")
 SOURCE_DIRTY = os.path.join(REPO, "scripts", "source-dirty.sh")
 CHECK_PINS = os.path.join(REPO, "scripts", "check-pins.sh")
+STELLAR_RPC = os.path.join(REPO, "scripts", "stellar-rpc.sh")
 RELEASE_YML = os.path.join(REPO, ".github", "workflows", "release.yml")
 GIT_CLIFF = shutil.which("git-cliff")
 
@@ -531,6 +535,209 @@ class CheckPins(unittest.TestCase):
         for d in ("a", "b"):
             shutil.rmtree(os.path.join(self.repo.dir, "crates", d))
         self.assertNotEqual(self.check().returncode, 0)
+
+
+TESTNET = "Test SDF Network ; September 2015"
+PUBNET = "Public Global Stellar Network ; September 2015"
+
+
+class Stub:
+    """A local Soroban RPC (POST getNetwork/getLatestLedger) that is also a
+    Horizon root (GET /). GET /down makes it answer 503 from then on."""
+
+    def __init__(self, ledger=1000, passphrase=TESTNET, status=200):
+        self.ledger, self.passphrase, self.status = ledger, passphrase, status
+        self.calls = 0
+        stub = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def answer(self, status, body):
+                data = json.dumps(body).encode()
+                self.send_response(status)
+                self.send_header("content-type", "application/json")
+                self.send_header("content-length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+            def do_GET(self):
+                if self.path == "/down":
+                    stub.status = 503
+                    return self.answer(200, {})
+                if stub.status != 200:
+                    return self.answer(stub.status, {})
+                self.answer(200, {"history_latest_ledger": stub.ledger, "network_passphrase": stub.passphrase})
+
+            def do_POST(self):
+                stub.calls += 1
+                req = json.loads(self.rfile.read(int(self.headers["content-length"])))
+                if stub.status != 200:
+                    return self.answer(stub.status, {})
+                result = {
+                    "getNetwork": {"passphrase": stub.passphrase, "protocolVersion": 29},
+                    "getLatestLedger": {"sequence": stub.ledger, "protocolVersion": 29},
+                }[req["method"]]
+                self.answer(200, {"jsonrpc": "2.0", "id": req["id"], "result": result})
+
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.url = f"http://127.0.0.1:{self.server.server_address[1]}"
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+
+    def close(self):
+        self.server.shutdown()
+        self.server.server_close()
+
+
+class StellarRpc(unittest.TestCase):
+    """scripts/stellar-rpc.sh: the override wins, a down primary falls back
+    only to a fallback on the right network and current, and a call failing
+    against a healthy endpoint never falls back."""
+
+    def setUp(self):
+        self.stubs = []
+        self.dir = tempfile.mkdtemp()
+        # A `stellar` that records the endpoint it was sent to, and fails
+        # against any endpoint listed in $FAIL_ON (or every one: FAIL_ON=all).
+        self.log = os.path.join(self.dir, "stellar.log")
+        stellar = os.path.join(self.dir, "stellar")
+        with open(stellar, "w") as f:
+            f.write(textwrap.dedent("""\
+                #!/usr/bin/env bash
+                while [ $# -gt 0 ]; do [ "$1" = --rpc-url ] && url="$2"; shift; done
+                echo "$url" >>"$STELLAR_LOG"
+                case " $FAIL_ON " in *" all "*|*" $url "*) echo "${FAIL_MSG:-error: HostError: Error(Contract, #12)}" >&2; exit 1 ;; esac
+                echo ok
+                """))
+        os.chmod(stellar, 0o755)
+
+    def tearDown(self):
+        for s in self.stubs:
+            s.close()
+        shutil.rmtree(self.dir)
+
+    def stub(self, **kw):
+        s = Stub(**kw)
+        self.stubs.append(s)
+        return s
+
+    def run_helper(self, script, primary, passphrase=TESTNET, fallbacks=(), horizon=None, **env):
+        e = {k: v for k, v in os.environ.items() if k not in ("RPC_URL", "STELLAR_RPC_URL")}
+        e.update(
+            PATH=f"{self.dir}:{e['PATH']}",
+            STELLAR_LOG=self.log,
+            FAIL_ON="",
+            PERCH_RPC_FALLBACKS=" ".join(f.url for f in fallbacks),
+            PERCH_HORIZON_URL=horizon.url if horizon else "",
+            PERCH_RPC_PROBE_ATTEMPTS="1",
+            PERCH_RPC_TIMEOUT="5",
+        )
+        e.update(env)
+        body = f'set -euo pipefail\n. {shlex.quote(STELLAR_RPC)}\nrpc_select {shlex.quote(primary.url)} {shlex.quote(passphrase)}\n{script}'
+        return subprocess.run(["bash", "-c", body], env=e, capture_output=True, text=True)
+
+    def served(self):
+        with open(self.log) as f:
+            return f.read().split()
+
+    def test_a_healthy_primary_is_used(self):
+        primary, fallback = self.stub(), self.stub()
+        out = self.run_helper("rpc_url", primary, fallbacks=[fallback])
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual(out.stdout, primary.url)
+        self.assertEqual(fallback.calls, 0)
+
+    def test_a_down_primary_falls_back(self):
+        primary, fallback, horizon = self.stub(status=503), self.stub(ledger=1000), self.stub(ledger=1003)
+        out = self.run_helper("rpc_stellar contract info hash --id C1", primary, fallbacks=[fallback], horizon=horizon)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual(self.served(), [fallback.url])
+        self.assertIn(f"contract info hash C1 <- {fallback.url}", out.stderr)
+
+    def test_a_stale_fallback_is_refused(self):
+        primary, horizon = self.stub(status=503), self.stub(ledger=5_200_000)
+        stale, fresh = self.stub(ledger=2_070_000), self.stub(ledger=5_199_995)
+        out = self.run_helper("rpc_url", primary, fallbacks=[stale, fresh], horizon=horizon)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual(out.stdout, fresh.url)
+        self.assertIn(f"refusing fallback {stale.url}: stale", out.stderr)
+        out = self.run_helper("rpc_url", primary, fallbacks=[stale], horizon=horizon)
+        self.assertNotEqual(out.returncode, 0)
+
+    def test_a_fallback_on_another_network_is_refused(self):
+        primary, horizon = self.stub(status=503), self.stub(ledger=1000)
+        other = self.stub(ledger=1000, passphrase=PUBNET)
+        out = self.run_helper("rpc_url", primary, fallbacks=[other], horizon=horizon)
+        self.assertNotEqual(out.returncode, 0)
+        self.assertIn("wrong network", out.stderr)
+
+    def test_a_fallback_nothing_vouches_for_is_refused(self):
+        primary, fallback = self.stub(status=503), self.stub()
+        out = self.run_helper("rpc_url", primary, fallbacks=[fallback])
+        self.assertNotEqual(out.returncode, 0)
+        self.assertIn("no other source answered", out.stderr)
+
+    def test_the_override_wins(self):
+        primary, fallback, override = self.stub(status=503), self.stub(), self.stub(status=503)
+        for var in ("RPC_URL", "STELLAR_RPC_URL"):
+            out = self.run_helper("rpc_stellar contract fetch --wasm-hash ab", primary, fallbacks=[fallback],
+                                  **{var: override.url, "FAIL_ON": override.url})
+            self.assertNotEqual(out.returncode, 0)
+        self.assertEqual(self.served(), [override.url, override.url])
+        self.assertEqual(primary.calls + fallback.calls + override.calls, 0)
+
+    def test_a_primary_going_down_mid_run_falls_back_for_the_rest_of_it(self):
+        primary, fallback, horizon = self.stub(), self.stub(), self.stub()
+        script = f"""
+            curl -fsS {primary.url}/down >/dev/null
+            got="$(rpc_stellar contract info hash --id C1)"
+            rpc_url
+            """
+        out = self.run_helper(script, primary, fallbacks=[fallback], horizon=horizon, FAIL_ON=primary.url)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual(out.stdout, fallback.url)
+        self.assertEqual(self.served(), [primary.url, fallback.url])
+
+    def test_a_server_side_failure_falls_back_even_when_the_endpoint_probes_healthy(self):
+        # SDF on 2026-10-15: calls failing 502 / InternalError while
+        # getLatestLedger still answered.
+        for msg in ("❌ error: Request rejected `502`",
+                    'ErrorObject { code: InternalError, message: "could not query captive core", data: None }',
+                    "❌ error: client error (SendRequest)"):
+            primary, fallback, horizon = self.stub(), self.stub(), self.stub()
+            open(self.log, "w").close()
+            out = self.run_helper("rpc_stellar contract info hash --id C1", primary, fallbacks=[fallback],
+                                  horizon=horizon, FAIL_ON=primary.url, FAIL_MSG=msg, PERCH_RPC_CALL_ATTEMPTS="2")
+            self.assertEqual(out.returncode, 0, out.stderr)
+            self.assertEqual(self.served(), [primary.url, primary.url, fallback.url], msg)
+
+    def test_a_failure_against_a_healthy_endpoint_never_falls_back(self):
+        primary, fallback, horizon = self.stub(), self.stub(), self.stub()
+        out = self.run_helper("rpc_stellar contract invoke --id C1 -- f", primary, fallbacks=[fallback],
+                              horizon=horizon, FAIL_ON="all")
+        self.assertNotEqual(out.returncode, 0)
+        self.assertEqual(self.served(), [primary.url])
+        self.assertEqual(fallback.calls, 0)
+
+    def test_a_misconfigured_primary_is_reported_not_routed_around(self):
+        primary, fallback, horizon = self.stub(passphrase=PUBNET), self.stub(), self.stub()
+        out = self.run_helper("rpc_url", primary, fallbacks=[fallback], horizon=horizon)
+        self.assertNotEqual(out.returncode, 0)
+        self.assertIn("not falling back", out.stderr)
+        self.assertEqual(fallback.calls, 0)
+
+    def test_mainnet_has_no_implicit_fallback(self):
+        primary = self.stub(status=503, passphrase=PUBNET)
+        out = self.run_helper("rpc_url", primary, passphrase=PUBNET)
+        e = dict(os.environ)
+        e.pop("PERCH_RPC_FALLBACKS", None)
+        default = subprocess.run(
+            ["bash", "-c", f". {shlex.quote(STELLAR_RPC)}; rpc_default_fallbacks {shlex.quote(PUBNET)}"],
+            env=e, capture_output=True, text=True, check=True)
+        self.assertEqual(default.stdout, "")
+        self.assertNotEqual(out.returncode, 0)
+        self.assertIn("no usable fallback", out.stderr)
 
 
 if __name__ == "__main__":

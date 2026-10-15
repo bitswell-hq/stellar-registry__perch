@@ -20,6 +20,10 @@
 #   --exercise  the perch-testnet report whose accounts to check (default: the
 #               manifest's sibling *-exercise.json, if present). A report from
 #               another stack commit is skipped, with a notice.
+#
+# Reads go through the manifest's rpc_url, or RPC_URL/STELLAR_RPC_URL when
+# set, with a guarded fallback while that endpoint is down
+# (scripts/stellar-rpc.sh documents the variables).
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -29,7 +33,7 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --manifest) manifest="$2"; shift 2 ;;
         --exercise) exercise="$2"; shift 2 ;;
-        -h|--help) sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "unknown option: $1" >&2; exit 1 ;;
     esac
 done
@@ -37,7 +41,8 @@ done
 [ -n "$exercise" ] || exercise="${manifest%.json}-exercise.json"
 
 m() { jq -r "$1" "$manifest"; }
-net=(--rpc-url "$(m .rpc_url)" --network-passphrase "$(m .network_passphrase)")
+. "$repo_root/scripts/stellar-rpc.sh"
+rpc_select "$(m .rpc_url)" "$(m .network_passphrase)" || { echo "error: no usable RPC endpoint" >&2; exit 1; }
 reader="${PERCH_READER:-perch-fetch-reader}"
 stellar keys address "$reader" >/dev/null 2>&1 || stellar keys generate "$reader" >/dev/null 2>&1
 (cd "$repo_root" && cargo build -q -p perch-derive-id)
@@ -54,8 +59,8 @@ read_chain() { # command...
     fi
     rm -f "$err"
 }
-view() { read_chain stellar contract invoke "${net[@]}" --source-account "$reader" --send=no --id "$1" -- "${@:2}" | tr -d '"'; }
-code_hash() { read_chain stellar contract info hash "${net[@]}" --id "$1"; }
+view() { read_chain rpc_stellar contract invoke --source-account "$reader" --send=no --id "$1" -- "${@:2}" | tr -d '"'; }
+code_hash() { read_chain rpc_stellar contract info hash --id "$1"; }
 
 failures=0
 unreadable=0
@@ -87,7 +92,7 @@ for name in $(jq -r '.contracts | keys[]' "$manifest"); do
             "$(view "$registry" fetch_hash --wasm_name "$name" --version "\"$(c .version)\"")"
     else
         tmp="$(mktemp)"
-        fetched="$(read_chain stellar contract fetch "${net[@]}" --wasm-hash "$hash" -o "$tmp")"
+        fetched="$(read_chain rpc_stellar contract fetch --wasm-hash "$hash" -o "$tmp")"
         if [[ "$fetched" == unavailable:* ]]; then
             check "$name installed" "$hash" "$fetched"
         else
@@ -120,7 +125,7 @@ if [ -f "$exercise" ]; then
 fi
 for account in $accounts; do
     check "account $account code" "$(m '.contracts["perch-account"].sha256')" "$(code_hash "$account")"
-    infra="$(read_chain stellar contract invoke "${net[@]}" --source-account "$reader" --send=no --id "$account" -- infra)"
+    infra="$(read_chain rpc_stellar contract invoke --source-account "$reader" --send=no --id "$account" -- infra)"
     field() { if [[ "$infra" == unavailable:* ]]; then printf '%s' "$infra"; else jq -r ".$1" <<<"$infra"; fi; }
     check "account $account compiler" "$(addr_of perch-doc-compiler)" "$(field doc_compiler)"
     check "account $account interpreter" "$(addr_of perch-interpreter)" "$(field interpreter)"

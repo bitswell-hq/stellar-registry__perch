@@ -27,7 +27,11 @@
 #               <dir>/build.json, so tests/release_stack.rs runs against the
 #               deployed bytes
 #
-# Requires the Stellar CLI. After a redeploy, run
+# The chain is read through the manifest's rpc_url, or RPC_URL/STELLAR_RPC_URL
+# when set, with a guarded fallback while that endpoint is down
+# (scripts/stellar-rpc.sh, beside this script, documents the variables).
+#
+# Requires the Stellar CLI, curl, and jq. After a redeploy, run
 # `cargo test -p perch-integration-tests --test testnet_pins`.
 #
 # The npm package @stellar-registry/perch-artifacts ships this script as
@@ -56,7 +60,8 @@ command -v stellar >/dev/null || { echo "error: 'stellar' CLI not found." >&2; e
 command -v jq >/dev/null || { echo "error: jq not found" >&2; exit 1; }
 
 m() { jq -r "$1" "$manifest"; }
-net=(--rpc-url "$(m .rpc_url)" --network-passphrase "$(m .network_passphrase)")
+. "$repo_root/scripts/stellar-rpc.sh"
+rpc_select "$(m .rpc_url)" "$(m .network_passphrase)" || { echo "error: no usable RPC endpoint" >&2; exit 1; }
 registry="$(m .registry.id)"
 [[ "$registry" =~ ^C[A-Z2-7]{55}$ ]] || { echo "error: bad registry id '$registry'" >&2; exit 1; }
 
@@ -69,14 +74,20 @@ else
 fi
 
 # The RPC answers a fetch with an occasional 502, so a failed fetch is retried
-# with backoff (2/4/8/16s, STELLAR_FETCH_ATTEMPTS tries in all). Only the
-# network call is retried; a hash mismatch below still fails at once.
+# with backoff (2/4/8/16s, STELLAR_FETCH_ATTEMPTS tries in all). When every
+# try fails and the endpoint is down, the fetch moves to the next guarded
+# fallback and retries there. Only the network call is retried; a hash
+# mismatch below still fails at once.
 fetch_retry() { # contract-name out-file stellar-contract-fetch-args...
     local name="$1" out="$2" attempts="${STELLAR_FETCH_ATTEMPTS:-5}" try=1 delay=2 err
     shift 2
     err="$(mktemp)"
-    until stellar contract fetch "${net[@]}" "$@" --out-file "$out" 2>"$err"; do
+    until rpc_stellar_once contract fetch "$@" --out-file "$out" 2>"$err"; do
         rm -f "$out"
+        if [ "$try" -ge "$attempts" ] && rpc_failover; then
+            try=1 delay=2
+            continue
+        fi
         if [ "$try" -ge "$attempts" ]; then
             echo "error: $name: fetch failed after $try attempts: $(tr -s '\n' ' ' <"$err")" >&2
             rm -f "$err"

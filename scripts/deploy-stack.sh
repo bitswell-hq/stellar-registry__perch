@@ -69,16 +69,26 @@
 #               rustc), so they must be the fetched bytes. Needs --registry.
 #   --channel   recorded in the manifest (default: beta)
 #
-# Env: STELLAR_NETWORK (default testnet), STELLAR_RPC_URL,
-#      STELLAR_NETWORK_PASSPHRASE, PERCH_ROOT_REGISTRY, PERCH_REGISTRY_WASM_FROM
-#      (a contract running the registry wasm to reuse; default: the
-#      `constructorless` registry under unverified/perch, perch's canonical
-#      registry).
+# Env: STELLAR_NETWORK (default testnet), STELLAR_NETWORK_PASSPHRASE,
+#      PERCH_ROOT_REGISTRY, PERCH_REGISTRY_WASM_FROM (a contract running the
+#      registry wasm to reuse; default: the `constructorless` registry under
+#      unverified/perch, perch's canonical registry), and the RPC variables of
+#      scripts/stellar-rpc.sh: RPC_URL or STELLAR_RPC_URL (an override, also
+#      what the manifest records), PERCH_RPC_FALLBACKS, PERCH_RPC_MAX_LAG,
+#      PERCH_HORIZON_URL.
+#
+# RPC. Every call, reads and the signed writes alike, goes through one
+# endpoint chosen once, before anything is submitted: the override if set,
+# else SDF's testnet RPC, else (only while SDF's is down) the first fallback
+# that answers the expected network passphrase and a current ledger
+# (scripts/stellar-rpc.sh). A call that fails mid-run is not retried
+# elsewhere: the run stops, and since it is idempotent, a rerun picks an
+# endpoint afresh and writes only what is missing. The manifest records the
+# override or SDF's URL, never a fallback.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export STELLAR_NETWORK="${STELLAR_NETWORK:-testnet}"
-RPC_URL="${STELLAR_RPC_URL:-https://soroban-testnet.stellar.org}"
 PASSPHRASE="${STELLAR_NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}"
 ROOT="${PERCH_ROOT_REGISTRY:-CAAXJETKPYAATU4HVVQUTE2FFBULNFGZNEOC3MS635U5K3GZLAY2HI4M}"
 REGISTRY_WASM_FROM="${PERCH_REGISTRY_WASM_FROM:-CDX2DMYMMEYU6FGN3HPJ2GQSSL5EZHIAMEJD4SPF55FZE5LEUBPPPDA7}"
@@ -109,7 +119,15 @@ warn() { printf '\033[1;33m!!\033[0m %s\n' "$*" >&2; }
 die() { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 sha256() { if command -v sha256sum >/dev/null; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi; }
 
-net=(--network "$STELLAR_NETWORK")
+. "$repo_root/scripts/stellar-rpc.sh"
+primary_rpc="https://soroban-testnet.stellar.org"
+manifest_rpc="${RPC_URL:-${STELLAR_RPC_URL:-$primary_rpc}}"
+rpc_select "$primary_rpc" "$PASSPHRASE" || die "no usable RPC endpoint"
+# The first ledger an indexer needs to scan: nothing below was deployed here.
+# Read before the endpoint is fixed for the run, in case this read moved it.
+deployed_ledger="$(rpc_json getLatestLedger | jq -r .sequence)"
+[[ "$deployed_ledger" =~ ^[0-9]+$ ]] || die "no latest ledger from $(rpc_url)"
+net=(--rpc-url "$(rpc_url)" --network-passphrase "$PASSPHRASE")
 # Source (fee payer + tx signer): a --source identity, or STELLAR_ACCOUNT from
 # the environment (the CI model, so the key stays out of argv). A named
 # identity resolves to a G-address, used for the fresh-registry admin/manager
@@ -169,10 +187,6 @@ fetch_reused() { # package provided-dir
     [ "$(sha256 "$file")" = "$hash" ] || die "reuse: fetched $pkg is $(sha256 "$file"), registry says $hash"
     log "reuse $pkg $version ($hash)"
 }
-
-# The first ledger an indexer needs to scan: nothing below was deployed here.
-deployed_ledger="$(curl -fsS "$RPC_URL" -H 'content-type: application/json' \
-    -d '{"jsonrpc":"2.0","id":1,"method":"getLatestLedger"}' | jq -r .result.sequence)"
 
 # ---------------------------------------------------------------------------
 # 1. Registry
@@ -286,7 +300,7 @@ reg_manager="$(read_only "$registry" manager 2>/dev/null | tr -d '"' || true)"
 mkdir -p "$(dirname "$manifest")"
 circuit="$repo_root/circuits/manifest.json"
 jq -n \
-    --arg network "$STELLAR_NETWORK" --arg passphrase "$PASSPHRASE" --arg rpc "$RPC_URL" \
+    --arg network "$STELLAR_NETWORK" --arg passphrase "$PASSPHRASE" --arg rpc "$manifest_rpc" \
     --arg channel "$channel" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     --argjson deployed_ledger "$deployed_ledger" \
     --arg reg "$registry" --arg reg_wasm "$registry_wasm" \
