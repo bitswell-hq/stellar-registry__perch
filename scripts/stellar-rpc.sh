@@ -30,12 +30,15 @@
 # disable). Unset, testnet falls back to Gateway.fm's public endpoint and every
 # other network, mainnet included, has none.
 #
-# A chain call that fails mid-run (rpc_stellar, rpc_json) re-probes the
-# endpoint that served it. Only a down endpoint moves the run to the next
-# guarded fallback; a call that failed against a healthy endpoint (a contract
-# error, a missing entry) fails as it is. Checks on what was read, such as a
-# fetched wasm's hash, never trigger a fallback. Once moved, the rest of the
-# run stays on the new endpoint, including reads made in subshells.
+# A chain call that fails mid-run (rpc_stellar, rpc_json) moves the run to
+# the next guarded fallback only when the endpoint failed it: the call's own
+# error is server-side (an HTTP 5xx, a JSON-RPC InternalError, no response;
+# retried PERCH_RPC_CALL_ATTEMPTS times in all, default 3, before moving), or
+# a fresh probe finds the endpoint down. A call that failed against a healthy
+# endpoint (a contract error, a missing entry) fails as it is. Checks on what
+# was read, such as a fetched wasm's hash, never trigger a fallback. Once
+# moved, the rest of the run stays on the new endpoint, including reads made
+# in subshells.
 #
 # Every call logs the endpoint that served it to stderr ("rpc: ...").
 #
@@ -63,6 +66,7 @@ exec 9>&2
 _rpc_log() { printf 'rpc: %s\n' "$*" >&9; }
 
 _rpc_pass=""
+_rpc_server_error=false
 _rpc_override=""
 _rpc_candidates=""
 _rpc_state=""
@@ -207,45 +211,72 @@ rpc_select() { # primary-url passphrase
 
 rpc_url() { cat "$_rpc_state"; }
 
-# After a failed call: move on only if the endpoint that served it is down.
-# Returns 1 (stay, and fail the call) when it is healthy, overridden, or no
-# fallback passes the guards.
+# After a failed call: move on only if the endpoint failed it, by the call's
+# own server-side error or a probe finding it down. Returns 1 (stay, and fail
+# the call) when it is healthy, overridden, or no fallback passes the guards.
 rpc_failover() {
     local cur
     cur="$(rpc_url)"
     [ -z "$_rpc_override" ] || return 1
-    if _rpc_probe_retry "$cur"; then
+    if $_rpc_server_error; then
+        # A flapping endpoint can pass a probe right after failing the call.
+        _rpc_log "$cur failed the call server-side"
+    elif _rpc_probe_retry "$cur"; then
         return 1
-    fi
-    if [ "$_rpc_kind" != down ]; then
+    elif [ "$_rpc_kind" != down ]; then
         _rpc_log "$cur is unhealthy ($_rpc_why); not falling back"
         return 1
+    else
+        _rpc_log "$cur is down ($_rpc_why)"
     fi
-    _rpc_log "$cur is down ($_rpc_why)"
     _rpc_fall_back_from "$cur"
 }
 
+# What the stellar CLI prints when the endpoint, not the call, failed: an
+# HTTP 5xx, a JSON-RPC InternalError, or no response at all.
+_rpc_server_side() { # stderr-file
+    grep -Eqi 'Request rejected .5[0-9][0-9].|code: InternalError|error sending request|timed out|connection (refused|reset|closed)|dns error' "$1"
+}
+
 # `stellar <words> --rpc-url <chosen> --network-passphrase <p> <options...>`,
-# once, logging the endpoint that served it.
+# once, logging the endpoint that served it. On failure, sets
+# _rpc_server_error when the error was the endpoint's.
 rpc_stellar_once() { # stellar-subcommand-words... options...
-    local words=() url what="" prev="" a
+    local words=() url what="" prev="" a err rc=0
     while [ $# -gt 0 ] && [[ "$1" != -* ]]; do words+=("$1"); shift; done
     for a in "$@"; do
         case "$prev" in --id|--wasm-hash) what=" $a" ;; esac
         prev="$a"
     done
     url="$(rpc_url)"
-    stellar "${words[@]}" --rpc-url "$url" --network-passphrase "$_rpc_pass" "$@" || return
+    err="$(mktemp)"
+    _rpc_server_error=false
+    stellar "${words[@]}" --rpc-url "$url" --network-passphrase "$_rpc_pass" "$@" 2>"$err" || rc=$?
+    cat "$err" >&2
+    if [ "$rc" -ne 0 ]; then
+        ! _rpc_server_side "$err" || _rpc_server_error=true
+        rm -f "$err"
+        return "$rc"
+    fi
+    rm -f "$err"
     _rpc_log "${words[*]}$what <- $url"
 }
 
-# rpc_stellar_once, moving to a fallback (and repeating) when the endpoint is down.
+# rpc_stellar_once, retrying a server-side failure on the same endpoint, then
+# moving to a fallback (and repeating) when the endpoint failed the call.
 rpc_stellar() { # stellar-subcommand-words... options...
-    local rc
+    local rc try delay
     while :; do
-        rc=0
-        rpc_stellar_once "$@" || rc=$?
-        [ "$rc" -ne 0 ] || return 0
+        try=1 delay=1
+        while :; do
+            rc=0
+            rpc_stellar_once "$@" || rc=$?
+            [ "$rc" -ne 0 ] || return 0
+            $_rpc_server_error && [ "$try" -lt "${PERCH_RPC_CALL_ATTEMPTS:-3}" ] || break
+            _rpc_log "server-side failure on $(rpc_url), try $try; retrying in ${delay}s"
+            sleep "$delay"
+            try=$((try + 1)) delay=$((delay * 2))
+        done
         rpc_failover || return "$rc"
     done
 }
@@ -261,6 +292,9 @@ rpc_json() { # method
             jq -c '.result' <<<"$_rpc_body"
             return 0
         fi
+        _rpc_server_error=false
+        case "$_rpc_code" in 000|5*) _rpc_server_error=true ;; esac
+        [ "$(jq -r '.error.code // empty' <<<"$_rpc_body" 2>/dev/null)" != -32603 ] || _rpc_server_error=true
         rpc_failover || { _rpc_log "error: $1 failed against $url (HTTP $_rpc_code)"; return 1; }
     done
 }

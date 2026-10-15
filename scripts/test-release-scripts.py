@@ -607,7 +607,7 @@ class StellarRpc(unittest.TestCase):
                 #!/usr/bin/env bash
                 while [ $# -gt 0 ]; do [ "$1" = --rpc-url ] && url="$2"; shift; done
                 echo "$url" >>"$STELLAR_LOG"
-                case " $FAIL_ON " in *" all "*|*" $url "*) echo "error: failed" >&2; exit 1 ;; esac
+                case " $FAIL_ON " in *" all "*|*" $url "*) echo "${FAIL_MSG:-error: HostError: Error(Contract, #12)}" >&2; exit 1 ;; esac
                 echo ok
                 """))
         os.chmod(stellar, 0o755)
@@ -698,6 +698,18 @@ class StellarRpc(unittest.TestCase):
         self.assertEqual(out.returncode, 0, out.stderr)
         self.assertEqual(out.stdout, fallback.url)
         self.assertEqual(self.served(), [primary.url, fallback.url])
+
+    def test_a_server_side_failure_falls_back_even_when_the_endpoint_probes_healthy(self):
+        # SDF on 2026-10-15: calls failing 502 / InternalError while
+        # getLatestLedger still answered.
+        for msg in ("❌ error: Request rejected `502`",
+                    'ErrorObject { code: InternalError, message: "could not query captive core", data: None }'):
+            primary, fallback, horizon = self.stub(), self.stub(), self.stub()
+            open(self.log, "w").close()
+            out = self.run_helper("rpc_stellar contract info hash --id C1", primary, fallbacks=[fallback],
+                                  horizon=horizon, FAIL_ON=primary.url, FAIL_MSG=msg, PERCH_RPC_CALL_ATTEMPTS="2")
+            self.assertEqual(out.returncode, 0, out.stderr)
+            self.assertEqual(self.served(), [primary.url, primary.url, fallback.url], msg)
 
     def test_a_failure_against_a_healthy_endpoint_never_falls_back(self):
         primary, fallback, horizon = self.stub(), self.stub(), self.stub()
