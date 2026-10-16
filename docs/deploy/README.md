@@ -73,7 +73,7 @@ every consumer reads.
 | Command | Does |
 | --- | --- |
 | `scripts/build-stack.sh --registry <id>` | Builds tier 0, stages its wasm and `<id>` as the account's pins, builds the account, stages it and the WebAuthn verifier as the factory's pins, builds the factory. `target/stack/build.json` records every hash and the pins each consumer was built against. Deployments build with `stellar scaffold build`; `--builder contract` uses core `stellar contract build`, the same code without scaffold's metadata. It overwrites the account's and factory's committed pins: run `fetch-infra-wasm.sh` (or `git checkout crates/*/wasm`) afterwards to pin the deployment again, unless this build is the new deployment. |
-| `scripts/deploy-stack.sh --source <identity>` | Deploys a new instance of the registry wasm the network's perch registries already run, runs `build-stack.sh` against it, then publishes tier 0 and the factory (upload with hash check, `publish_hash`, `deploy_stateless`, derived-address and code-hash checks), installs the account, writes the manifest, and runs `verify-deployment.sh`. Idempotent. `--registry` publishes into an existing registry instead. `--author <C…>` binds every name to a smart account and signs its authorization through the `theahaco/stellar-cli` fork (source/fee stays the delegate). `--reuse "<names>"` fetches those already-published tier-0 by hash and pins them instead of rebuilding — the canonical path (see [The canonical registry](#the-canonical-registry-and-publishing-the-stack-to-it)). |
+| `scripts/deploy-stack.sh --source <identity>` | Deploys a new instance of the registry wasm the network's perch registries already run, runs `build-stack.sh` against it, then publishes tier 0 and the factory (upload with hash check, `publish_hash`, `deploy_stateless`, derived-address and code-hash checks), installs the account, writes the manifest, and runs `verify-deployment.sh`. Idempotent. `--registry` publishes into an existing registry instead. `--author <C…>` binds every name to a smart account and signs its authorization through the `theahaco/stellar-cli` fork (source/fee stays the delegate). `--reuse "<names>"` fetches those already-published tier-0 by hash and pins them instead of rebuilding — the canonical path (see [The canonical registry](#the-canonical-registry-and-publishing-the-stack-to-it)). `--build-only` and `--prebuilt` split one run into a keyless build and a publish that compiles nothing, as the release jobs run it. |
 | `scripts/verify-deployment.sh` | Read-only, by hash and address only: the registry's code; each contract at its content address, running its recorded wasm, served by the registry for its name and version; the account installed; the manifest's recorded pins equal to the deployed hashes; and what consumers resolve on-chain, from the factory's `account_wasm_hash`/`webauthn_verifier`, the adapter's `circuit_id`/`tree_depth` against the pool's `depth`, to the code hash and `infra()` of every account the exercise report lists. A report from another stack commit is skipped with a notice. |
 | `scripts/fetch-infra-wasm.sh` | Fetches the account's and factory's pinned wasm from the manifest and rewrites their committed pins (`stateless.id`, `<name>.sha256`). Each wasm is fetched by its recorded address (the account by its hash) and refused unless its sha256 and content address match. `--stack <dir>` fetches every deployed artifact with a `build.json`. |
 | `scripts/check-pins.sh` | Offline: the committed pins equal the manifest's registry id and hashes. A new deployment commits its pins with its manifest. |
@@ -162,18 +162,27 @@ Canonical mode mirrors `release.yml`'s constructorless publishes exactly:
 the `theahaco/stellar-cli` fork, which discovers the account's context rule
 on-chain (`STELLAR_SIGN_WITH_KEY`). No new authority is introduced.
 
-### The `deploy-stack` job (`release.yml`)
+### The `deploy-stack` jobs (`release.yml`)
 
-On a release that bumps a recovery-stack contract, the gated `deploy-stack`
-job runs `deploy-stack.sh` against the canonical registry — SA-authored, in
-pin order — attests each built wasm, and opens a `deploy(<network>)` PR with
-the manifest, the regenerated bindings, and the
+On a release that bumps a recovery-stack contract, three gated jobs run
+`deploy-stack.sh` against the canonical registry — SA-authored, in pin
+order — attest each built wasm, and open a `deploy(<network>)` PR with the
+manifest, the regenerated bindings, and the
 `@stellar-registry/perch-artifacts` release that ships the manifest (below)
-for a human to merge (testnet is
-automatic inside the gated release run; merging the manifest PR is the second
-deliberate human act, flipping consumers and CI's deployed-bytes checks onto
-the new deployment). The job runs only when `vars.PERCH_DEPLOY_STACK` is
-`true` — see the bootstrap below.
+for a human to merge (merging the manifest PR is the deliberate human act
+that flips consumers and CI's deployed-bytes checks onto the new
+deployment). The jobs run only when `vars.PERCH_DEPLOY_STACK` is `true` —
+see the bootstrap below.
+
+| Job | Runs | Holds |
+| --- | --- | --- |
+| `deploy-stack-build` | `deploy-stack.sh --build-only`: fetches the reused tier-0, compiles the stack, computes each content address | no secret, no environment |
+| `deploy-stack` | `deploy-stack.sh --prebuilt`: uploads, publishes, deploys, writes the manifest; compiles and runs no Rust | the delegate seed (`testnet` environment), in the environment only, never argv |
+| `deploy-stack-record` | attests the built wasm, then `verify-deployment.sh`, `bindings-contracts.sh`, the perch-artifacts bump, and the PR | no secret |
+
+The split is by job, not by step, because a build script runs as the runner
+user with `sudo`: it could replace the `stellar` binary that a later step in
+the same job hands the seed to.
 
 **Why it reuses the published tier-0 rather than rebuilding them.** The
 account pins the compiler, interpreter, and spending-limit by the sha256 of
@@ -249,7 +258,7 @@ done
 
 Each name is then bound to the perch-author account, and every later version
 publishes with the delegate alone. Finally set `vars.PERCH_DEPLOY_STACK=true`
-so the `deploy-stack` job runs on the next release.
+so the `deploy-stack` jobs run on the next release.
 
 ### Notifying Nido (`nido-dispatch.yml`)
 
@@ -334,6 +343,183 @@ re-sends that network's manifest in the latest perch-artifacts release, with
 the same registry checks. If the publish itself failed, re-run the release
 run's failed jobs instead: `npm-publish` and `notify-nido` re-run together.
 
+## Release-path settings
+
+`release.yml` keeps every release credential in a GitHub environment and out
+of every job that builds, but four things it relies on live in GitHub and npm
+settings, not in the repository. Each needs a repository or package admin.
+Apply them in this order. Steps 1 and 2 must be done before the next npm
+release merges: `npm-publish` has no token to fall back on.
+
+### 1. npm trusted publishing, per package
+
+For each package, on npmjs.com open the package, then **Settings → Trusted
+publishing → GitHub Actions**, and enter:
+
+| Field | Value |
+| --- | --- |
+| Organization or user | `stellar-registry` |
+| Repository | `perch` |
+| Workflow filename | `release.yml` |
+| Environment name | `npm` |
+
+The environment name is what keeps a workflow on another branch from
+publishing: without it, any branch's copy of `release.yml` with `id-token:
+write` would be trusted. The six packages:
+
+| Directory | npm package |
+| --- | --- |
+| `packages/perch-js` | `@stellar-registry/perch` |
+| `packages/perch-interpreter-js` | `@stellar-registry/perch-interpreter` |
+| `packages/perch-zk` | `@stellar-registry/perch-zk` |
+| `packages/perch-relay` | `@stellar-registry/perch-relay` |
+| `packages/perch-contracts` | `@stellar-registry/perch-contracts` |
+| `packages/perch-artifacts` | `@stellar-registry/perch-artifacts` |
+
+Then, for each package, set **Settings → Publishing access** to **Require
+two-factor authentication and disallow tokens** (trusted publishing still
+works under it). Finally revoke the npm automation token that `NPM_TOKEN`
+held, on npmjs.com under **Access Tokens**, and delete the secret:
+
+```sh
+gh secret delete NPM_TOKEN -R stellar-registry/perch
+```
+
+### 2. The `npm` environment
+
+`npm-publish` runs in it. Create it with a `main`-only branch policy
+(a reviewer is optional; with one, every npm release waits for approval):
+
+```sh
+gh api -X PUT repos/stellar-registry/perch/environments/npm --input - <<'JSON'
+{"deployment_branch_policy": {"protected_branches": false, "custom_branch_policies": true}}
+JSON
+gh api -X POST repos/stellar-registry/perch/environments/npm/deployment-branch-policies \
+  -f name=main -f type=branch
+```
+
+### 3. Reviewers on `testnet`, and a `mainnet` environment
+
+A dispatch republish (`publish_tag`) runs `registry-publish`'s signing job in
+the `testnet` environment, so a required reviewer there is what keeps a
+dispatch from publishing unattended. The same environment serves the
+CI-gated publishes and `deploy-stack`, so after this every testnet release
+waits for one approval per signing job. Keep the existing `main`-only branch
+policy. `<reviewer-id>` is the numeric id of each reviewer
+(`gh api users/<login> --jq .id`); list one entry per reviewer:
+
+```sh
+gh api -X PUT repos/stellar-registry/perch/environments/testnet --input - <<'JSON'
+{"reviewers": [{"type": "User", "id": <reviewer-id>}],
+ "deployment_branch_policy": {"protected_branches": false, "custom_branch_policies": true}}
+JSON
+gh api repos/stellar-registry/perch/environments/testnet/deployment-branch-policies \
+  --jq '.branch_policies[].name'   # expect: main
+```
+
+Create `mainnet` now, before anything names it. `nido-dispatch.yml` binds a
+job to `environment: <network>`, and a job naming an environment that does
+not exist creates it with no protection:
+
+```sh
+gh api -X PUT repos/stellar-registry/perch/environments/mainnet --input - <<'JSON'
+{"reviewers": [{"type": "User", "id": <reviewer-id>}],
+ "deployment_branch_policy": {"protected_branches": false, "custom_branch_policies": true}}
+JSON
+gh api -X POST repos/stellar-registry/perch/environments/mainnet/deployment-branch-policies \
+  -f name=main -f type=branch
+```
+
+`CI_PUBLISH_MAINNET_SECRET_KEY` and the Nido app secrets go into it only when
+a mainnet publish or manifest exists.
+
+### 4. Delete the repository-level `CI_PUBLISH_SECRET_KEY`
+
+A repository secret is readable by a workflow on any branch; the `testnet`
+environment's copy is not. Confirm the environment holds the seed, then
+delete the repository copy:
+
+```sh
+gh secret list -R stellar-registry/perch --env testnet   # expect CI_PUBLISH_SECRET_KEY
+gh secret delete CI_PUBLISH_SECRET_KEY -R stellar-registry/perch
+```
+
+Then check that `registry-publish` reads the environment's copy. Re-publish a
+tag that is already on-chain; the publish step's preflight skips a same-hash
+version, so nothing is written:
+
+```sh
+tag=$(git tag -l 'perch-interpreter-v*' | sort -V | tail -1)
+gh workflow run release.yml -R stellar-registry/perch --ref main -f publish_tag="$tag"
+```
+
+Approve the `testnet` deployment. The `constructorless-publish` leg should log
+`version … already published with the same hash — skipping`. If it fails at
+**Check the signing key resolved** with `signing_key resolved to an empty
+string`, the reusable job did not see the environment's copy through the
+caller's mapping. In that case add the same seed to the `testnet` environment
+as a secret named `SIGNING_KEY`, which GitHub documents as taking precedence
+over the passed secret in a reusable workflow's environment-bound job, and run
+the check again. Never restore the repository copy.
+
+### 5. A ruleset for release tags
+
+Release tags (`<contract>-v<version>` and `<package>-v<version>`) all match
+`perch-*-v*`. `detect-releases` never re-tags a version, and a dispatch
+publishes whatever asset a tag names, so a release tag must not move, vanish,
+or be created by hand:
+
+```sh
+gh api -X POST repos/stellar-registry/perch/rulesets --input - <<'JSON'
+{
+  "name": "release tags",
+  "target": "tag",
+  "enforcement": "active",
+  "conditions": {"ref_name": {"include": ["refs/tags/perch-*-v*"], "exclude": []}},
+  "rules": [{"type": "creation"}, {"type": "update"}, {"type": "deletion"}, {"type": "non_fast_forward"}],
+  "bypass_actors": [{"actor_id": 15368, "actor_type": "Integration", "bypass_mode": "always"}]
+}
+JSON
+```
+
+| Rule | Stops |
+| --- | --- |
+| `creation` | a writer tagging a branch commit with a release name; `detect-releases` still creates tags through the GitHub Actions bypass (app id 15368, the `GITHUB_TOKEN` identity) |
+| `update`, `non_fast_forward` | moving an existing release tag to another commit |
+| `deletion` | deleting a release tag (a failed release is recovered with a new version bump, never a re-tag) |
+
+GitHub has refused the GitHub Actions app as a bypass actor in some
+repositories (HTTP 422, "Actor GitHub Actions integration must be part of the
+ruleset source or owner organization"). If it does here, create the ruleset
+without the `creation` rule and with an empty `bypass_actors`: moves and
+deletions stay blocked, and the `testnet` reviewer from step 3 remains the
+check on a dispatch publish. The bypass is also not limited to `main`: any
+workflow whose `GITHUB_TOKEN` has `contents: write` can create a release tag
+through it, so the reviewer stays necessary either way.
+
+## Follow-up: reusable-workflow integrity inputs
+
+The reusable `stellar-registry/actions` workflows that `release.yml` pins
+(`contract-release.yml` and `registry-publish.yml`, at `57bfdf4`) check less
+than `release.yml`'s own jobs do. They install the stellar-cli fork and
+scaffold with no checksum, though the job that installs the fork holds the
+seed. Their `gh attestation verify` binds the signer workflow but not the
+source ref or commit. A change to that repository adds inputs for these.
+Once it is merged to that repository's `main`:
+
+1. Re-pin both `uses:` lines in `release.yml` (marked `FOLLOW-UP`) to the
+   merged commit, full SHA with a dated comment, as now. Never pin a commit
+   that is not on its `main`.
+2. Pass the checksums `release.yml` already pins in
+   `.github/actions/setup-stellar-fork`: the fork's tarball
+   `580a2d469767028e575e1c57ccf55bc5a661c0ee4032fd52aaeabb9098943685` and
+   scaffold's `f24709de57e33155efd72547c9286b522d4360a379bde5af9eeb5519396f10cc`.
+3. Bind the attestation check to `refs/heads/main`, the tagged commit, and the
+   reusable workflow's own pinned commit, using the input names that change
+   defines.
+4. Keep the `testnet` reviewer: it covers the dispatch path even with the
+   binding in place.
+
 ## Simulating a recovery completion
 
 A completion is `apply_doc` of the attempt's target, authorized through the
@@ -373,10 +559,13 @@ changes. The hashes do not change unless the source does.
 | `@stellar-registry/perch-contracts` | bindings for every stack contract, from the deployed wasm, and the manifests |
 | `@stellar-registry/perch-artifacts` | the deployment manifests, Noir circuits and their manifest, test vectors, and document and program limits as files; `perch-fetch-infra-wasm --stack` and `perch-zk-toolchain` run the repository's scripts against them. Changing a shipped file re-releases it |
 
-All six are published to npm by `release.yml`'s `npm-publish` job: merging
-a bump of a package's manifest version (the release PR proposes one from its
-conventional commits) tags `<pkg>-v<version>` and publishes it with npm
-provenance. Rust crates are never published to crates.io; contract releases
+All six are published to npm by `release.yml`'s `npm-pack` and
+`npm-publish` jobs: merging a bump of a package's manifest version (the
+release PR proposes one from its conventional commits) tags
+`<pkg>-v<version>`, `npm-pack` tests and packs it with no credential, and
+`npm-publish` publishes that tarball by npm trusted publishing (OIDC, with
+provenance; no npm token exists, see
+[Release-path settings](#release-path-settings)). Rust crates are never published to crates.io; contract releases
 are on-chain wasm publishes (`release.yml`). Hosting the indexer or the
 relay, with storage, routes, and schedules, is the operator's concern. Nido's
 hosted services are deployments of these packages.

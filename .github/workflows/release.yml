@@ -35,10 +35,10 @@ name: Release
 # @stellar-registry/perch-interpreter, perch-zk → @stellar-registry/perch-zk,
 # perch-relay → @stellar-registry/perch-relay, perch-contracts →
 # @stellar-registry/perch-contracts, perch-artifacts →
-# @stellar-registry/perch-artifacts), and the npm-publish matrix job then
-# publishes each released package to npm (NPM_TOKEN secret). A
-# perch-artifacts release then runs notify-nido, which tells nidohq/nido about
-# each deployment manifest it ships (nido-dispatch.yml).
+# @stellar-registry/perch-artifacts), and the npm-pack/npm-publish matrix jobs
+# then publish each released package to npm by trusted publishing (OIDC, no
+# token). A perch-artifacts release then runs notify-nido, which tells
+# nidohq/nido about each deployment manifest it ships (nido-dispatch.yml).
 #
 # The recovery stack (verifiers, ZK pool and adapter, controller, account,
 # factory) is deployed in pin order by scripts/deploy-stack.sh, which writes
@@ -105,7 +105,11 @@ on:
   # existing, already-attested release asset for the tag (e.g. after a
   # transient RPC failure). It never rebuilds, so it doesn't matter how far
   # main has moved: integrity comes from `gh attestation verify` against the
-  # pinned reusable signer workflow, not from git position. If the BUILD half
+  # pinned reusable signer workflow, not from git position. That check does
+  # not yet bind the source ref or commit, so a dispatch publish also waits
+  # for the `testnet` environment's required reviewer, and the release-tag
+  # ruleset keeps a `perch-*-v*` tag from being moved or deleted
+  # (docs/deploy/README.md "Release-path settings"). If the BUILD half
   # failed instead, use the failed run's native "Re-run failed jobs" (same
   # sha), after deleting the GitHub release if it got as far as creating one
   # (`gh release delete <tag>` — keep the tag).
@@ -458,20 +462,26 @@ jobs:
   # publish that package to the npm registry — one matrix leg per released
   # package. Same release convention as the contracts — bump the version in a
   # PR to release; the release-pr job proposes that bump from conventional
-  # commits. Requires the NPM_TOKEN repo secret (an npm automation token that
-  # can publish the @stellar-registry scope). If the secret is absent the
-  # publish step fails and the job can be re-run after the secret is added —
-  # the tag and the CI-tested head sha are unchanged on a re-run, so it
-  # publishes exactly the tagged commit.
-  npm-publish:
+  # commits.
+  #
+  # Two jobs, so nothing that runs the package's dependencies or its own
+  # scripts can mint a publish credential. npm-pack installs, checks, tests,
+  # and packs with no `id-token` and no secret; npm-publish holds `id-token:
+  # write` and only publishes the packed tarball, with lifecycle scripts off.
+  # The publish authenticates by npm trusted publishing (OIDC): there is no
+  # npm token anywhere, and each package's trusted-publisher entry names this
+  # workflow file and the `npm` environment, so a job outside that environment
+  # cannot publish (docs/deploy/README.md "Release-path settings"). A failed
+  # publish can be re-run: the tag and the CI-tested head sha are unchanged on
+  # a re-run, so it publishes exactly the tagged commit.
+  npm-pack:
     needs: [ci-green, detect-releases]
     if: >-
       !cancelled() && needs.ci-green.outputs.go == 'true' &&
       needs.detect-releases.outputs.npm_released == 'true'
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      id-token: write # npm --provenance (sigstore attestation of the CI build)
+      contents: read # check out the tested commit
     strategy:
       fail-fast: false
       matrix:
@@ -484,19 +494,81 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           persist-credentials: false
-      # No dependency cache in a publish job (zizmor cache-poisoning: nothing a
-      # cache write could later inject into a signed publish).
+      # No dependency cache in a release job (zizmor cache-poisoning: nothing a
+      # cache write could later inject into a published package).
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
-          registry-url: https://registry.npmjs.org
       - run: npm ci
       - run: npm run check
       - run: npm test
-      # prepack builds dist/; publishConfig pins access=public for the scope.
-      - run: npm publish --provenance
+      # prepack builds dist/ into the tarball; publishConfig pins
+      # access=public for the scope. `npm publish` of a directory records the
+      # commit as the registry's gitHead, but a tarball publish takes the
+      # manifest as packed, so the commit goes into it here
+      # (scripts/nido-dispatch-plan.sh checks it against the release tag).
+      - name: Pack
+        run: |
+          set -euo pipefail
+          npm pkg set gitHead="$(git rev-parse HEAD)"
+          mkdir -p "$RUNNER_TEMP/pack"
+          npm pack --pack-destination "$RUNNER_TEMP/pack"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: npm-${{ matrix.release.package }}
+          path: ${{ runner.temp }}/pack/*.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  npm-publish:
+    needs: [ci-green, detect-releases, npm-pack]
+    if: >-
+      !cancelled() && needs.ci-green.outputs.go == 'true' &&
+      needs.detect-releases.outputs.npm_released == 'true' &&
+      needs.npm-pack.result == 'success'
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      id-token: write # npm trusted publishing (OIDC) and provenance
+    strategy:
+      fail-fast: false
+      matrix:
+        release: ${{ fromJSON(needs.detect-releases.outputs.npm_releases) }}
+    steps:
+      # Trusted publishing needs npm 11.5.1 or later; Node 24 bundles it. No
+      # registry-url: npm's default registry is the one the OIDC exchange
+      # targets, and no .npmrc token placeholder is wanted.
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: npm-${{ matrix.release.package }}
+          path: pack
+      - name: Publish the packed tarball
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PACKAGE: ${{ matrix.release.package }}
+          VERSION: ${{ matrix.release.version }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          npm_version=$(npm --version)
+          if [ "$(printf '%s\n%s\n' 11.5.1 "$npm_version" | sort -V | head -1)" != 11.5.1 ]; then
+            echo "::error::npm $npm_version cannot use trusted publishing (needs 11.5.1 or later)"
+            exit 1
+          fi
+          shopt -s nullglob
+          tarballs=(pack/*.tgz)
+          [ "${#tarballs[@]}" -eq 1 ] || { echo "::error::expected one tarball for $PACKAGE, found ${#tarballs[@]}"; exit 1; }
+          tgz="${tarballs[0]}"
+          # The tarball must be the version detect-releases tagged, packed
+          # from the commit it tagged.
+          manifest=$(tar -xzOf "$tgz" package/package.json)
+          packed=$(jq -r .version <<<"$manifest")
+          [ "$packed" = "$VERSION" ] || { echo "::error::$tgz is version $packed, the tag is $VERSION"; exit 1; }
+          head=$(jq -r '.gitHead // ""' <<<"$manifest")
+          [ "$head" = "$HEAD_SHA" ] || { echo "::error::$tgz was packed from '$head', the tag is on $HEAD_SHA"; exit 1; }
+          npm publish "$tgz" --provenance --ignore-scripts
 
   # Tell nidohq/nido about each deployment record this run's
   # @stellar-registry/perch-artifacts release ships (nido-dispatch.yml). It
@@ -619,6 +691,12 @@ jobs:
       id-token: write
       contents: write
       attestations: write
+    # FOLLOW-UP (stellar-registry/actions): once that repository's main gains
+    # inputs for checksumming the stellar-cli fork and scaffold and for binding
+    # `gh attestation verify` to the source ref, source commit, and signer
+    # commit, re-pin both reusable workflows to that merged commit and pass
+    # them (docs/deploy/README.md "Follow-up: reusable-workflow integrity
+    # inputs"). Never pin an unmerged commit.
     uses: stellar-registry/actions/.github/workflows/contract-release.yml@57bfdf4b96279a28961cb76a48ec4204300b5818 # main 2026-10-14
     with:
       package: ${{ matrix.package }}
@@ -651,6 +729,7 @@ jobs:
     permissions:
       contents: write
       id-token: write # gh attestation verify
+    # FOLLOW-UP: see constructorless-build; this pin moves with that one.
     uses: stellar-registry/actions/.github/workflows/registry-publish.yml@57bfdf4b96279a28961cb76a48ec4204300b5818 # main 2026-10-14
     with:
       # The constructorless subregistry (unverified/perch/constructorless) id and
@@ -662,15 +741,17 @@ jobs:
       release_tag: ${{ matrix.tag }}
       wasm_asset: ${{ matrix.package }}_v${{ matrix.version }}.wasm
       network: testnet
-      # The publish job runs in this environment, so the signing_key reference
-      # below resolves to its CI_PUBLISH_SECRET_KEY environment secret.
+      # registry-publish runs its signing job in this environment (main-only,
+      # with a required reviewer: docs/deploy/README.md "Release-path
+      # settings"), so a dispatch republish waits for that approval too.
       environment: testnet
     secrets:
-      # perch-ci: the account's ci-publish delegate (also the fee source).
-      # A job that calls a reusable workflow cannot take `environment:`, and the
-      # pinned registry-publish declares none, so this resolves the REPOSITORY
-      # secret, not the `testnet` environment's copy. It moves into the
-      # environment once registry-publish accepts an environment input.
+      # perch-ci: the account's ci-publish delegate (also the fee source). The
+      # reference is resolved for registry-publish's job, which runs in the
+      # `testnet` environment, so it reads that environment's copy once the
+      # repository-level copy is gone. If it resolves to nothing,
+      # registry-publish refuses an empty key before touching the network
+      # (docs/deploy/README.md "Release-path settings" has the check).
       signing_key: ${{ secrets.CI_PUBLISH_SECRET_KEY }}
       release_token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -736,11 +817,27 @@ jobs:
   # order, and open a deploy(<network>) PR with the manifest + regenerated
   # bindings a human merges.
   #
-  # Runs in the `testnet` GitHub Environment, so CI_PUBLISH_SECRET_KEY is read
-  # from that environment's secrets rather than the repository's. A mainnet
+  # Three jobs, so the CI publish seed never shares a runner with a build:
+  #
+  #   deploy-stack-build   `deploy-stack.sh --build-only`: fetch the reused
+  #                        tier-0, compile the stack (crates.io build scripts
+  #                        and proc macros run here), compute the content
+  #                        addresses. No environment, no secret.
+  #   deploy-stack         `deploy-stack.sh --prebuilt`: upload, publish, and
+  #                        write the manifest from that output. The only job
+  #                        holding the seed; it compiles and runs no Rust.
+  #   deploy-stack-record  attest the built wasm, verify the deployment,
+  #                        regenerate the bindings, bump perch-artifacts, open
+  #                        the PR. No secret.
+  #
+  # A step boundary would not be enough: a build script can write anywhere the
+  # runner user can (with sudo), including the `stellar` a later step runs.
+  #
+  # deploy-stack runs in the `testnet` GitHub Environment (main-only, required
+  # reviewer), so CI_PUBLISH_SECRET_KEY is the environment's secret. A mainnet
   # deploy belongs in its own job under the `mainnet` environment (required
   # reviewer, `main`-only branch policy) signing with its own delegate secret,
-  # CI_PUBLISH_MAINNET_SECRET_KEY, never this one. The job `if:` is evaluated
+  # CI_PUBLISH_MAINNET_SECRET_KEY, never this one. A job `if:` is evaluated
   # before the environment is entered, so vars.PERCH_DEPLOY_STACK must stay a
   # repository variable.
   #
@@ -748,11 +845,11 @@ jobs:
   # names are NOT yet in the canonical registry, and a managed registry refuses
   # a new name without the manager's one-time initial publish (#12
   # ManagerRequired). Until the manager bootstraps each name (docs/deploy/
-  # README.md "The testnet registry") and sets that variable, this job is
+  # README.md "The testnet registry") and sets that variable, these jobs are
   # skipped rather than failing every release — the same deliberate-decision
   # split the publish-plan ALLOW list uses for shipping a contract's source
   # before its first on-chain publish.
-  deploy-stack:
+  deploy-stack-build:
     needs: [ci-green, detect-releases, deploy-plan, constructorless-publish]
     if: >-
       !cancelled() && needs.ci-green.outputs.go == 'true' &&
@@ -761,12 +858,8 @@ jobs:
       (needs.constructorless-publish.result == 'success' ||
        needs.constructorless-publish.result == 'skipped')
     runs-on: ubuntu-latest
-    environment: testnet
     permissions:
-      contents: write # commit the manifest + bindings onto the deploy branch
-      pull-requests: write # open the deploy(<network>) PR
-      id-token: write # build-provenance attestation
-      attestations: write
+      contents: read # check out the tested commit
     env:
       STELLAR_NETWORK: testnet
       STELLAR_RPC_URL: https://soroban-testnet.stellar.org
@@ -779,43 +872,63 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           persist-credentials: false
-          fetch-depth: 0 # git-cliff needs full history + tags (perch-artifacts bump)
       - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
         with:
           toolchain: stable
           targets: wasm32v1-none
-      # No dependency cache: this job hands the CI publish seed to `stellar`, so
-      # nothing a poisoned cache could inject may reach that build (same stance
-      # as the constructorless publishes and setup-stellar).
-      - name: Install the smart-account-signing stellar-cli (theahaco fork) and scaffold, checksummed
-        # Version-pinned AND integrity-checked: this job later hands `stellar`
-        # the CI publish seed, so a swapped release asset could exfiltrate it.
+      # No dependency cache: these bytes are published and pinned on-chain, so
+      # nothing a poisoned cache could inject may reach the build.
+      - uses: ./.github/actions/setup-stellar-fork
+        with:
+          scaffold: "true"
+      - name: Build the stack against the canonical registry (no key)
+        env:
+          REGISTRY: ${{ vars.PERCH_REGISTRY_CONTRACT_ID }}
         run: |
           set -euo pipefail
-          curl -fsSL -o /tmp/stellar.tgz \
-            "https://github.com/theahaco/stellar-cli/releases/download/v28.0.0-aha.0/stellar-cli-28.0.0-aha.0-x86_64-unknown-linux-gnu.tar.gz"
-          echo "580a2d469767028e575e1c57ccf55bc5a661c0ee4032fd52aaeabb9098943685  /tmp/stellar.tgz" | sha256sum -c -
-          sudo tar -xzf /tmp/stellar.tgz -C /usr/local/bin stellar
-          curl -fsSL -o /tmp/scaffold.tgz \
-            "https://github.com/AhaLabs/scaffold-stellar/releases/download/stellar-scaffold-cli-v0.0.27/stellar-scaffold-cli-v0.0.27-x86_64-unknown-linux-gnu.tar.gz"
-          echo "f24709de57e33155efd72547c9286b522d4360a379bde5af9eeb5519396f10cc  /tmp/scaffold.tgz" | sha256sum -c -
-          sudo tar -xzf /tmp/scaffold.tgz -C /usr/local/bin stellar-scaffold
-          stellar --version
-          stellar scaffold --version
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
-      # Before the deploy, so a failed install costs nothing on-chain.
-      - name: Install git-cliff (bumps perch-artifacts below)
-        run: |
-          mkdir -p "$RUNNER_TEMP/gc"
-          curl -fsSL https://github.com/orhun/git-cliff/releases/download/v2.14.1/git-cliff-2.14.1-x86_64-unknown-linux-gnu.tar.gz -o "$RUNNER_TEMP/gc.tar.gz"
-          echo "bb40f68e752db1a32526c43e0108e8eff785f7c24c67024cffe1c316e034372975fd78c9af8e9a48148235aad15c9a103f1a5b490c282f1db09a7a793794b69f  $RUNNER_TEMP/gc.tar.gz" | sha512sum -c -
-          tar -xz -C "$RUNNER_TEMP/gc" --strip-components=1 -f "$RUNNER_TEMP/gc.tar.gz"
-      - name: Deploy the stack (smart-account-authored, reusing the published tier-0)
+          scripts/deploy-stack.sh --build-only --registry "$REGISTRY" --reuse "$REUSE"
+      # The stack (wasm, build.json, addresses.json) and the consumer pins
+      # build-stack.sh staged, which the deploy PR commits.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: deploy-stack-build
+          path: |
+            target/stack
+            crates/perch-smart-account/wasm
+            crates/perch-account-factory/wasm
+          if-no-files-found: error
+          retention-days: 7
+
+  deploy-stack:
+    needs: [ci-green, deploy-stack-build]
+    if: >-
+      !cancelled() && needs.ci-green.outputs.go == 'true' &&
+      needs.deploy-stack-build.result == 'success'
+    runs-on: ubuntu-latest
+    environment: testnet
+    permissions:
+      contents: read # check out the tested commit
+    env:
+      STELLAR_NETWORK: testnet
+      STELLAR_RPC_URL: https://soroban-testnet.stellar.org
+      STELLAR_NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
+      REUSE: "perch-doc-compiler perch-interpreter perch-spending-limit perch-ed25519-verifier"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup-stellar-fork
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: deploy-stack-build
+          path: .
+      - name: Publish the prebuilt stack (smart-account-authored, reusing the published tier-0)
         # Secrets go through the environment, never argv: STELLAR_ACCOUNT is the
         # source/fee delegate and STELLAR_SIGN_WITH_KEY signs the account's
         # publish_hash authorization (the fork discovers its context rule). The
         # author is the perch-author smart account; the registry is canonical.
+        # --prebuilt compiles nothing and runs only `stellar`, `jq`, and `curl`.
         env:
           STELLAR_ACCOUNT: ${{ secrets.CI_PUBLISH_SECRET_KEY }}
           STELLAR_SIGN_WITH_KEY: ${{ secrets.CI_PUBLISH_SECRET_KEY }}
@@ -823,7 +936,51 @@ jobs:
           AUTHOR: ${{ vars.PERCH_AUTHOR_ADDRESS }}
         run: |
           set -euo pipefail
-          scripts/deploy-stack.sh --registry "$REGISTRY" --author "$AUTHOR" --reuse "$REUSE"
+          scripts/deploy-stack.sh --prebuilt --registry "$REGISTRY" --author "$AUTHOR" --reuse "$REUSE"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: deploy-stack-manifest
+          path: deployments/testnet.json
+          if-no-files-found: error
+          retention-days: 7
+
+  deploy-stack-record:
+    needs: [ci-green, deploy-stack]
+    if: >-
+      !cancelled() && needs.ci-green.outputs.go == 'true' &&
+      needs.deploy-stack.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # commit the manifest + bindings onto the deploy branch
+      pull-requests: write # open the deploy(<network>) PR
+      id-token: write # build-provenance attestation
+      attestations: write
+    env:
+      STELLAR_NETWORK: testnet
+      REUSE: "perch-doc-compiler perch-interpreter perch-spending-limit perch-ed25519-verifier"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+          fetch-depth: 0 # git-cliff needs full history + tags (perch-artifacts bump)
+      # First, so a failed install fails before anything is attested. The
+      # deployment is already on-chain by now; this job's inputs are this
+      # run's artifacts, so a failure here is recovered by re-running it.
+      - name: Install git-cliff (bumps perch-artifacts below)
+        run: |
+          mkdir -p "$RUNNER_TEMP/gc"
+          curl -fsSL https://github.com/orhun/git-cliff/releases/download/v2.14.1/git-cliff-2.14.1-x86_64-unknown-linux-gnu.tar.gz -o "$RUNNER_TEMP/gc.tar.gz"
+          echo "bb40f68e752db1a32526c43e0108e8eff785f7c24c67024cffe1c316e034372975fd78c9af8e9a48148235aad15c9a103f1a5b490c282f1db09a7a793794b69f  $RUNNER_TEMP/gc.tar.gz" | sha512sum -c -
+          tar -xz -C "$RUNNER_TEMP/gc" --strip-components=1 -f "$RUNNER_TEMP/gc.tar.gz"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: deploy-stack-build
+          path: .
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: deploy-stack-manifest
+          path: deployments
       - name: Collect the freshly built wasm (not the reused tier-0) to attest
         id: built
         run: |
@@ -838,10 +995,17 @@ jobs:
             printf '%s' "$paths"
             echo "EOF"
           } >>"$GITHUB_OUTPUT"
+      # Attest before anything in this job compiles or runs repository code.
       - name: Attest build provenance for each deployed wasm
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
         with:
           subject-path: ${{ steps.built.outputs.paths }}
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
+        with:
+          toolchain: stable
+      - uses: ./.github/actions/setup-stellar-fork
+      - name: Verify the deployment against the chain
+        run: scripts/verify-deployment.sh --manifest deployments/testnet.json
       - name: Regenerate the deployment bindings (@stellar-registry/perch-contracts)
         run: scripts/bindings-contracts.sh
       # @stellar-registry/perch-artifacts ships deployments/, so the PR that
@@ -896,7 +1060,7 @@ jobs:
             packages/perch-artifacts/package-lock.json
             packages/perch-artifacts/CHANGELOG.md
           body: >
-            Automated by the `deploy-stack` job: the recovery stack deployed to
+            Automated by the `deploy-stack` jobs: the recovery stack deployed to
             the canonical `constructorless` registry, smart-account-authored, in
             pin order, from the tagged `main` commit
             ${{ github.event.workflow_run.head_sha }} (always in `main`'s

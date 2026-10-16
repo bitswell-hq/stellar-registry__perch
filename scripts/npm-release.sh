@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # The npm packages' release scope and version bump, shared by release.yml's
-# release-pr job (every package) and its deploy-stack job (perch-artifacts,
-# which ships the deployment manifests, so the deploy(<network>) PR carries a
-# release of the record it adds).
+# release-pr job (every package) and its deploy-stack-record job
+# (perch-artifacts, which ships the deployment manifests, so the
+# deploy(<network>) PR carries a release of the record it adds).
 #
 #   scripts/npm-release.sh paths <pkg>   the repository paths <pkg> ships
 #   scripts/npm-release.sh bump <pkg>    bump <pkg> from its conventional commits

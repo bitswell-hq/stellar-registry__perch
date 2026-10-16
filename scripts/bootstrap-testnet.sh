@@ -547,7 +547,7 @@ Repository variables:
   vars.PERCH_CI_RULE_ID           = $CI_RULE_ID
   vars.STELLAR_RPC_URL            = $RPC_URL
   vars.STELLAR_NETWORK_PASSPHRASE = $PASSPHRASE
-'testnet' environment secret (and repository secret, until registry-publish takes an environment):
+'testnet' environment secret only (never a repository secret: any branch's workflow can read those):
   secret CI_PUBLISH_SECRET_KEY    = <the S... seed whose G-account is $CI_G>
 
 Kept deliberately human-held (do NOT rotate):

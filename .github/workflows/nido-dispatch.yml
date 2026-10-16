@@ -8,7 +8,7 @@ name: Notify Nido
 #
 # Ordering: release.yml's `notify-nido` job calls this after its npm-publish,
 # with the perch-artifacts tag that run published. A deploy(<network>) PR
-# bumps perch-artifacts (release.yml's deploy-stack), so merging it publishes
+# bumps perch-artifacts (release.yml's deploy-stack-record), so merging it publishes
 # the package and only then dispatches. A manifest that lands without a bump
 # is announced by the next perch-artifacts release, never before. `plan`
 # checks the registry serves that version, built from the tagged commit,
