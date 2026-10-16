@@ -329,7 +329,6 @@ the generated paths in GitHub diffs.
 
 | Path | Produced by | Checked by |
 | --- | --- | --- |
-| `**/test_snapshots/**` | `cargo test` (test-host snapshots) | regenerated on every run |
 | `Cargo.lock`, `**/package-lock.json` | cargo, npm | `--locked` builds, `npm ci` |
 | `packages/perch-contracts/src/**` | `scripts/bindings-contracts.sh` from the deployed Wasm | `packages/perch-contracts/test` (`WASM_SHA256` equals the manifest's) |
 | `deployments/**` | `scripts/deploy-stack.sh`, `cargo run -p perch-testnet` | `scripts/verify-deployment.sh`, `testnet_pins` |

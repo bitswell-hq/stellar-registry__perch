@@ -167,16 +167,18 @@ on-chain (`STELLAR_SIGN_WITH_KEY`). No new authority is introduced.
 On a release that bumps a recovery-stack contract, three gated jobs run
 `deploy-stack.sh` against the canonical registry — SA-authored, in pin
 order — attest each built wasm, and open a `deploy(<network>)` PR with the
-manifest and regenerated bindings for a human to merge (merging the manifest
-PR is the deliberate human act that flips consumers and CI's deployed-bytes
-checks onto the new deployment). The jobs run only when
-`vars.PERCH_DEPLOY_STACK` is `true` — see the bootstrap below.
+manifest, the regenerated bindings, and the
+`@stellar-registry/perch-artifacts` release that ships the manifest (below)
+for a human to merge (merging the manifest PR is the deliberate human act
+that flips consumers and CI's deployed-bytes checks onto the new
+deployment). The jobs run only when `vars.PERCH_DEPLOY_STACK` is `true` —
+see the bootstrap below.
 
 | Job | Runs | Holds |
 | --- | --- | --- |
 | `deploy-stack-build` | `deploy-stack.sh --build-only`: fetches the reused tier-0, compiles the stack, computes each content address | no secret, no environment |
 | `deploy-stack` | `deploy-stack.sh --prebuilt`: uploads, publishes, deploys, writes the manifest; compiles and runs no Rust | the delegate seed (`testnet` environment), in the environment only, never argv |
-| `deploy-stack-record` | attests the built wasm, then `verify-deployment.sh`, `bindings-contracts.sh`, and the PR | no secret |
+| `deploy-stack-record` | attests the built wasm, then `verify-deployment.sh`, `bindings-contracts.sh`, the perch-artifacts bump, and the PR | no secret |
 
 The split is by job, not by step, because a build script runs as the runner
 user with `sudo`: it could replace the `stellar` binary that a later step in
@@ -260,12 +262,37 @@ so the `deploy-stack` jobs run on the next release.
 
 ### Notifying Nido (`nido-dispatch.yml`)
 
-When a change to `deployments/testnet.json` or `deployments/mainnet.json`
-lands on `main` (normally by merging a `deploy(<network>)` PR), the
-`Notify Nido` workflow sends a `repository_dispatch` to `nidohq/nido`, once
-per changed network. Nido's receiving workflow opens a repin PR; a Nido
-maintainer merges it, and Nido's factory redeploy follows that merge. Perch
-never deploys anything for Nido and never merges on its behalf.
+Nido consumes the deployment through `@stellar-registry/perch-artifacts`,
+which ships `deployments/<network>.json`. So Nido is told about a deployment
+only once a package version carrying its manifest is on npm:
+
+1. The `deploy-stack` job's `deploy(<network>)` PR also bumps
+   `@stellar-registry/perch-artifacts`: version, lockfile, and changelog,
+   computed by the release PR's own tooling (`scripts/npm-release.sh bump`,
+   git-cliff over the history with the deploy commit in it). Nothing is
+   hand-edited.
+2. Merging the PR changes the manifest and the package version together.
+   Once CI passes on `main`, `release.yml`'s `detect-releases` tags
+   `perch-artifacts-v<version>` and `npm-publish` publishes it with npm
+   provenance.
+3. Then `release.yml`'s `notify-nido` job calls the `Notify Nido` workflow
+   with that tag. It sends a `repository_dispatch` to `nidohq/nido` for each
+   network whose manifest differs from the previous perch-artifacts release's
+   (`scripts/nido-dispatch-plan.sh`).
+
+Before sending, the workflow checks the registry: the version must exist,
+be published from the tagged commit (`gitHead`), carry a provenance
+attestation, match its `integrity`, and ship each announced manifest with the
+committed bytes. It retries for up to ten minutes while a new version
+propagates, then fails without sending. A manifest that lands without a
+perch-artifacts bump (a hand-committed deployment after a testnet reset, or a
+deploy PR that merged after a release PR took the same version) is not
+announced on its own: the next release PR proposes the bump, and Nido is told
+when that release publishes.
+
+Nido's receiving workflow opens a repin PR; a Nido maintainer merges it, and
+Nido's factory redeploy follows that merge. Perch never deploys anything for
+Nido and never merges on its behalf.
 
 The event is `perch-deployed`. Its `client_payload` is the contract the
 receiver consumes:
@@ -275,18 +302,25 @@ receiver consumes:
 | `schema` | `1`. Bumped on any incompatible change; a receiver rejects a schema it does not know. |
 | `repository` | `stellar-registry/perch` |
 | `network` | `testnet` or `mainnet`; equals the manifest's own `network` field |
-| `perch_sha` | the 40-hex `main` commit the manifest was read at — the ref to repin to |
+| `perch_sha` | the 40-hex `main` commit the manifest was read at — the ref to repin to; the `perch-artifacts-v<version>` tag's commit |
 | `manifest_path` | `deployments/<network>.json` |
 | `manifest_sha256` | sha256 of the manifest file's bytes at `perch_sha` |
 | `source_commit` | the manifest's `source.commit`: the commit the stack was built from |
 | `run_url` | the Perch workflow run that sent it |
+| `artifacts_package` | `@stellar-registry/perch-artifacts` |
+| `artifacts_version` | the published version that ships this manifest, byte for byte |
+
+`artifacts_package` and `artifacts_version` were added without a schema bump:
+a schema-1 receiver that ignores them keeps working.
 
 The payload carries no addresses or hashes beyond the manifest's own digest:
 the manifest is the one record. A receiver fetches
 `https://raw.githubusercontent.com/<repository>/<perch_sha>/<manifest_path>`,
 checks its sha256 against `manifest_sha256`, and reads everything else from
 it, still resolving each contract by name and hash (`fetch-infra-wasm.sh`),
-never by bare name. The same `perch_sha` can arrive more than once (a manual
+never by bare name. A receiver consuming the package instead installs
+`artifacts_package@artifacts_version`, whose `deployments/<network>.json`
+has the same sha256. The same `perch_sha` can arrive more than once (a manual
 re-send), so a receiver keys its repin branch on `network` and updates an
 open PR rather than opening a second.
 
@@ -303,9 +337,11 @@ manifest exists) needs two secrets:
 - `PERCH_NIDO_SYNC_PRIVATE_KEY` — the app's PEM private key
 
 Without them the send step fails with an error naming the environment. To
-re-send the manifest currently on `main` — after adding the secrets, or after
-a receiver failure — run the workflow by hand (`workflow_dispatch`, choosing
-the network).
+re-send — after adding the secrets, or after a receiver failure — run the
+workflow by hand (`workflow_dispatch` from `main`, choosing the network). It
+re-sends that network's manifest in the latest perch-artifacts release, with
+the same registry checks. If the publish itself failed, re-run the release
+run's failed jobs instead: `npm-publish` and `notify-nido` re-run together.
 
 ## Release-path settings
 
