@@ -108,7 +108,7 @@ import { selectRules, assertRevision, signingDigest, buildAuthPayload } from '@s
 
 const selection = selectRules(snapshot, { name: 'pay', scope: { type: 'contract', address: token } });
 await assertRevision(reader, selection.revision);       // StaleRevision if it moved
-const digest = signingDigest(signaturePayload, selection.ruleIds);
+const digest = signingDigest(account, signaturePayload, selection.ruleIds);
 const signature = buildAuthPayload(selection, [{ signer, signature: await sign(digest) }]);
 ```
 
@@ -116,15 +116,30 @@ Rule ids are OZ context-rule ids. They survive an in-place edit and change
 when a rule is replaced (a new scope, a rename, a removal and re-addition,
 or `apply_doc`'s delta pricing a replacement below an edit), and OZ never
 reuses one, so select by name and scope at a revision and never
-keep ids across revisions. `signingDigest` is what every signer signs: OZ's
-`sha256(signature_payload || xdr(rule ids))`, where `signature_payload` is
-the account auth entry's Soroban payload. `buildAuthPayload` is the `ScVal`
-XDR of OZ's `AuthPayload` for that entry's `signature`.
+keep ids across revisions. `signingDigest` is what every `External` signer
+signs, the `addr_oz_v1` digest the account's `capabilities().auth_digest`
+names:
+
+```text
+bound  = sha256("perch/account/auth-addr-v1" || account_id || signature_payload)
+digest = sha256(bound || xdr(rule ids))
+```
+
+`signature_payload` is the account auth entry's Soroban payload and
+`account_id` is the account's 32-byte contract id. Soroban's payload does not
+bind the account address; the account's `check_auth` folds it in before OZ
+adds the rule ids, so a signature cannot be replayed on another account that
+shares the key and rule ids. The vectors in `testdata/auth/auth-vectors.json`
+pin this function to the account's own `check_auth` (Rust
+`the_vectors_are_the_accounts_own_encodings`, read back by
+`test/auth.test.ts`). A `Signer::Delegated` signer signs no digest: it
+authenticates through its own CAP-0071 auth. `buildAuthPayload` is the `ScVal` XDR of OZ's `AuthPayload`
+for that entry's `signature`.
 
 **Only `apply_doc` is bound to a revision.** The pre-sign check guarantees
 the selection was current when it was signed, not when it executes. An
-ordinary signature binds the invocation and the selected rule ids (OZ's
-digest), not a configuration revision, so between signing and inclusion:
+ordinary signature binds the invocation, the account, and the selected rule
+ids (`addr_oz_v1`), not a configuration revision, so between signing and inclusion:
 
 - a selected rule that was removed or replaced fails closed on chain: the
   account's authentication fails with `ContextRuleNotFound`, which

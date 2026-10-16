@@ -4,7 +4,10 @@ Proof helpers for Perch ZK recovery, in the browser or Node. The package
 computes commitments, rebuilds a pool tree from its leaves to get a witness
 path, and proves with bb.js against the release circuit. Proofs are
 zero-knowledge (`UltraKeccakZKFlavor`): they reveal nothing about the secret
-or the leaf's position beyond the public root, nullifier, and statement hash.
+beyond the public root, nullifier, and statement hash. They do not hide
+which leaf is proved: the statement names the account, and the account's
+leaf, its enrollment id, and its position are public (the applied document,
+the pool's `enrollment` view, and its `LeafInserted` event; spec §14.3).
 They are randomized, so two proofs of one statement differ, and the on-chain
 adapter verifies them (see [`docs/zk/`](../../docs/zk/README.md)). `verify`
 checks a proof locally with bb.js before you submit it.

@@ -27,13 +27,14 @@
 #               the release-stack suite on a PR's own source)
 #   --provided-tier0  a directory of already-published tier-0 wasm (named
 #               perch_<name>.wasm) to REUSE verbatim instead of building. A
-#               consumer pins the sha256 of the exact bytes on-chain, which a
-#               rebuild under a different toolchain would not reproduce
-#               (scaffold vs scaffold+optimize, unpinned rustc); so a deploy
-#               into a registry that already holds those names (the canonical
-#               constructorless registry) hands this script the fetched bytes
-#               for them, and the account/factory pin those. Tier-0 names with
-#               no file here are built as usual.
+#               consumer pins the sha256 of the exact bytes on-chain. The
+#               attested release build that published them adds a
+#               `source_repo` meta entry this script does not, and pins its
+#               rustc, so this script's build of the same source has another
+#               hash. A deploy into a registry that already holds those names
+#               (the canonical constructorless registry) therefore hands this
+#               script the fetched bytes for them, and the account/factory pin
+#               those. Tier-0 names with no file here are built as usual.
 #
 # build.json records each artifact's package, version, sha256, size, tier, and
 # the pins it was built against, plus the commit, builder, and toolchain.

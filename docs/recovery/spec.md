@@ -94,7 +94,9 @@ account built without recovery support cannot enroll in place.
 | Guardians | Their own Stellar addresses (`G...` or `C...`) | Approving exactly the statements they sign. Guardians must check out of band that the replacement credentials they approve belong to the person recovering. The chain cannot check that. |
 | ZK secret holder | The secret behind the enrolled commitment | Same as a guardian quorum, for the ZK factor. |
 | Anyone | Nothing | Opening attempts, submitting evidence others produced, completing an attempt whose evidence and timelock are satisfied, publishing a baseline whose hash is enrolled, renewing storage. None of these needs authority. |
-| Controller, adapter (with its embedded verifier), pool, doc compiler | Code at a content-addressed address | Behaving as their published source says, forever. They have no admin and cannot be upgraded in place (§16). |
+| Controller, adapter (with its embedded verifier), pool, doc compiler | Code at a content-addressed address | Behaving as their published source says, forever. They have no admin and cannot be upgraded in place (§16). This holds for the canonical instances the deployment manifest records. The doc compiler is fixed by the account's Wasm; the controller, adapter, and pool are whatever the applied document names (trust boundary 1 below). |
+| Signature verifiers | Code at the address an `External` signer names | Deciding every signature of the signers that name them (trust boundaries 1 and 4 below). |
+| Registry admin | The content-addressing registry's `admin` key | Placing the intended code at every infra address that is not yet occupied (trust boundary 3 below). |
 | Indexer, relayer | Off-chain copies of public data | Availability only. Nothing an indexer returns is trusted without on-chain checks: a stale or wrong witness produces a proof the pool refuses. |
 
 **Threat model by profile.**
@@ -135,6 +137,70 @@ account built without recovery support cannot enroll in place.
   statements for accounts that list this account as a guardian. The account
   cannot list itself (§15), so the rule never touches the account's own
   recovery.
+
+**Trust boundaries the chain does not check.** At this revision the
+contracts check the shape of these inputs, not who controls them. A wallet
+or reviewer must enforce each one off chain.
+
+1. **Every contract a document names is fully trusted.** The document names
+   `recovery.controller`, a ZK mode's `adapter` and `pool`, and each
+   `External` signer's `verifier`. Validation checks only that each is a
+   contract-address strkey (`perch-ir` `validate.rs`:
+   `InvalidRecoveryController`, `InvalidRecoveryAdapter`,
+   `InvalidRecoveryPool`, `InvalidVerifierAddress`). It never checks which
+   code runs there. The account installs the recovery rule with no signers
+   and the named controller as its only policy (`rules.rs`), and OZ defers a
+   zero-signer rule entirely to its policy's `enforce` (`cap-0071.md` C5,
+   `c5_zero_signer_policy_rule_defers_to_enforce_with_invoker_auth`). Outside
+   a `Protected` freeze, a named controller therefore authorizes, with no
+   signature, every context on the account itself, such as `execute`,
+   `apply_doc`, and `schedule_upgrade`. Only the canonical controller limits that to one
+   completion (§6.3 T5). In the same way, a named verifier decides every
+   signature of its signers, and a named adapter decides every ZK proof.
+   The owner's signature on the document is what admits these contracts.
+   A wallet must refuse to sign a document naming a controller, adapter,
+   pool, or verifier that is not in the deployment manifest
+   (`deployments/<network>.json`).
+2. **A rule's limits bind only that rule.** OZ authorizes each context under
+   the rule the auth entry selects (`AuthPayload.context_rule_ids`), and runs
+   only that rule's policies. A rule's interpreter program and its `cap`
+   therefore bound only what is authorized through that rule. If the signers
+   of a capped rule can also satisfy another rule whose scope covers the
+   same contract (one scoped to it, or a `Default` rule), they can select
+   that rule and spend past the cap. An `External` signer signs the selected
+   rule ids (§15), so the signer chooses. A delegated signer's approval does
+   not bind the rule ids, so the submitter chooses (`cap-0071.md` C4,
+   `c4_delegate_approval_does_not_bind_rule_selection`). The compiler does
+   not refuse such overlaps. `cap_denies_cumulative_spend_over_the_limit`
+   (`cap_matrix.rs`) pins the cap on the rule it is attached to. A document
+   that relies on a cap must give the capped signers no other rule that
+   reaches the same contract.
+3. **The registry admin key is the root of content addressing.** The
+   account and the factory reach infra at `deployer(registry,
+   sha256(wasm))`, fixed at build time (§16). That address depends on the
+   registry and the salt, not on the code deployed there. Infra contracts
+   have no upgrade path, so the code at an occupied address cannot change.
+   The registry itself is upgradable by its admin, a single key at this
+   revision (`DEFERRED.md`, "Contract-admin governance behind a multisig and
+   timelock"). An upgraded registry could deploy any code at an address no
+   contract occupies yet, such as the address the next infra build pins.
+   `scripts/verify-deployment.sh` checks that every pinned address runs its
+   recorded Wasm, and `consumers_pin_the_deployment_manifest`
+   (`testnet_pins.rs`) checks that the compiled pins equal the manifest.
+   `verify-deployment.sh` must pass for each deployment before it is used.
+4. **WebAuthn assertions are not bound to a relying party on chain.**
+   `perch-webauthn-verifier` is OZ's `webauthn::verify`. It checks the
+   `webauthn.get` type, that the challenge is the signed digest, the
+   user-present and user-verified flags, the backup flags' consistency, and
+   the P-256 signature (`a_passkey_assertion_over_the_payload_verifies`,
+   `an_assertion_over_another_payload_is_refused`,
+   `an_assertion_without_user_verification_is_refused`). Like OZ, it does not
+   check the origin in `clientDataJSON`, the `rpIdHash`, the signature
+   counter, extension outputs, or attestation. The browser and the
+   authenticator scope a passkey to the wallet's relying party; the chain
+   does not. Because the challenge is the `addr_oz_v1` digest, an assertion
+   still authorizes only the one invocation, account, and rule selection it
+   was made for.
 
 ## 3. Configuration
 
@@ -1224,7 +1290,7 @@ unspent (absent) ──completion of an attempt of X that used it──▶ Spent
 
 | Event | Rule |
 | --- | --- |
-| Canonicality | The adapter refuses a nullifier or root `≥ r`; otherwise `n` and `n + r` would verify as one credential while the controller stored them as two. |
+| Canonicality | The adapter refuses a nullifier or root `≥ r` (`ZkAdapterError::NonCanonicalField`) before the pool lookup and the proof check, so the controller records spent nullifiers only under canonical bytes and `n` and `n + r` can never be two records for one credential. The vendored verifier also refuses a non-canonical public input (`validate_public_inputs_canonical`), so the adapter's check is defense in depth: it keeps the refusal, and its typed error, independent of the verifier. Pinned by `malformed_and_mismatched_inputs_are_refused_before_verification` (`perch-zk-adapter`). |
 | Any ZK proof (initiation, cancellation, reconfiguration, upgrade) | Requires the nullifier unspent for this account (`NullifierSpent`). Never changes the record. |
 | Completion of attempt `A` of account `X` that used ZK evidence | Requires `A`'s recorded nullifier unspent; marks it `Spent{X}` in the same invocation. |
 | Anything else | No transition. Nothing un-spends a nullifier, and no operation releases one, so no operation can release another account's or attempt's claim. |
@@ -1345,7 +1411,7 @@ pending (`NoPendingUpgrade`).
 | The approval binds the exact Wasm hash, the epoch, and `config_hash` | A Protected approval cannot be carried to different code or a different configuration. |
 | Any recovery-generation change makes a queued request stale | This is the validation of queued approvals when configuration changes. It is account-owned, so it holds across controllers and across periods without recovery. Enrollment, reconfiguration, removal, controller switches, completion, and an executed upgrade all advance it, so a successful recovery invalidates every outstanding request. Completion also clears the slot explicitly. |
 | Blocked while an attempt is authorized | Upgrading must not race or neuter an in-flight recovery. |
-| The delay applies to every account | The delay is 120 960 ledgers, seven days at 5-second ledgers. Accounts without recovery get the same window to notice a stolen key. |
+| The delay applies to every account | The delay is 120 960 ledgers, seven days at 5-second ledgers. It delays only a code swap: a scheduled upgrade is visible (`UpgradeScheduled`, `pending_upgrade`) for that long before it can run. It is not a defense against a stolen owner key on an account without recovery, or under `Loss`: that key already has `execute` and `apply_doc` with no delay, and can `cancel_upgrade` too. Only `Protected` makes the upgrade itself need more than the owner key (the condition's approval). |
 
 The upgraded code inherits the account's storage, including the revoked
 set, the recovery generation, and the recovery wiring. Whether new code
@@ -1551,7 +1617,9 @@ and C7).
 `signature_payload` to the account's own 32-byte contract id —
 `sha256(AUTH_ADDR_DOMAIN || account_id || signature_payload)`, where
 `AUTH_ADDR_DOMAIN = "perch/account/auth-addr-v1"` — and OZ then layers the
-selected rule ids on top. The digest an `External` signer authenticates
+selected rule ids on top: an `External` signer signs
+`sha256(bound || context_rule_ids.to_xdr())`, where `bound` is that re-bound
+payload (`bind_payload`). The digest an `External` signer authenticates
 against is therefore unique to this account, and `capabilities().auth_digest`
 reports the scheme as `addr_oz_v1` so a client knows which digest to sign.
 This is necessary because Soroban's authorization preimage
@@ -1575,14 +1643,29 @@ them against the digest the on-chain `check_auth` actually hands a verifier.
   `install`, `uninstall`, `enforce`, and the pool's `rcv_insert`; the
   account's own `rcv_gate` is reserved too. Adding such an entry point
   without adding its name to `RESERVED_INVOKER_ONLY_FNS` breaks the spec.
+  Enforced by the account's `check_auth` (`is_reserved_invoker_only`) and
+  `execute`. Pinned by `reserved_names_match_exactly`
+  (`perch-recovery-interface`),
+  `a_controller_scoped_rule_reaches_no_reserved_controller_entry_point`
+  (`recovery.rs`), and
+  `reserved_names_hold_after_a_controller_scoped_rule_is_edited_in_place`
+  (`delta_security.rs`). No test enumerates each deployable's exported
+  functions against this list; the name list is checked, not its
+  completeness.
 - **I2.** Every other controller entry point that takes an address's
   authorization takes it as a guardian (`submit_guardian`,
   `approve_change`), bound to another account's statement digest. Signing
-  one never changes the signer's own recovery state.
+  one never changes the signer's own recovery state. Enforced by the
+  controller's `require_auth_for_args((digest,))` in those two entry points.
+  Pinned by `c7_guardian_authorizes_exactly_the_digest` and
+  `c7_guarded_guardian_approves_only_outside_reserved_hooks`
+  (`cap71_semantics.rs`).
 - **I3.** By I1 and I2, a signature path into the controller, whether
   through a rule scoped to it or a `Default` rule, can reach only guardian
   approvals. A rule scoped to the document's own controller is therefore
-  allowed, and the reserved-name guard alone protects the hooks.
+  allowed, and the reserved-name guard alone protects the hooks. Pinned by
+  `c6_rule_scoped_to_own_controller_signs_approvals_not_hooks`
+  (`cap71_semantics.rs`).
 
 **No re-entry (D16).** Soroban refuses any call into a contract already on
 the call stack (`cap-0071.md` C8). The rules that follow from it:
@@ -1643,8 +1726,10 @@ successful `apply_doc`, including a re-apply of the same document, and on
 every executed upgrade. Nothing else changes it. Only `apply_doc` can be
 bound to a revision, through `expected_revision`, which is checked right
 after authorization and before compiling. Ordinary authorization is not
-bound to a revision: a signature binds the invocation and the selected rule
-ids (OZ's `sha256(signature_payload || context_rule_ids.to_xdr())`).
+bound to a revision: an `External` signature binds the invocation, the
+account, and the selected rule ids (the `addr_oz_v1` digest above), and a
+delegated signer's CAP-0071 auth binds the invocation only (`cap-0071.md`
+C4).
 A transaction signed at revision r whose selected rule was removed or
 replaced before inclusion fails closed (`ContextRuleNotFound`); one whose
 selected rule was edited in place keeps the rule's id and executes under

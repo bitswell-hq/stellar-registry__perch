@@ -65,7 +65,7 @@ every consumer reads.
 | `registry` | the content-addressing registry: id, its own wasm hash, admin/manager, root |
 | `contracts.<name>` | `version`, `sha256`, `address` (absent for the account), `tier`, `bytes`, and `pins`: the sha256 of every contract it was built against |
 | `zk` | the circuit id (the adapter's VK hash) and tree depth |
-| `source`, `toolchain` | the commit the stack was built from, whether the tree was clean, and rustc / stellar-cli / scaffold versions |
+| `source`, `toolchain` | the commit the stack was built from, whether the tree was clean (`scripts/source-dirty.sh`), and the rustc, stellar-cli, and scaffold versions of the deploy job. The bytes depend on rustc and scaffold; `stellar` is the CLI that ran the deploy. Each wasm's own `cliver` metadata names the stellar-cli library scaffold links (27.0.0 for scaffold 0.0.27). |
 | `deployed_ledger` | where an indexer starts scanning the pool's events |
 
 ## Commands
@@ -108,11 +108,78 @@ rebuilt stack would break fails CI. The `packages` job runs
 | Consumers resolve them | factory `account_wasm_hash()` and `webauthn_verifier()`, each account's code hash and `infra()`, adapter `circuit_id()`, adapter and pool depth |
 | A fresh build pins the deployment | `fetch-infra-wasm.sh` checks every fetched byte; `testnet_pins` checks what was compiled |
 | The deployed bytes behave as specified | `release_stack.rs` on the fetched bytes; `perch-testnet` on the chain |
-| The source reproduces them | rebuilding the stack from the deployment commit, in another directory, with the recorded toolchain gives every hash the deployment built; in canonical mode, the reused tier-0 reproduce only through the attested release build (the current deployment's record: [`audit-scope.md`](../audit-scope.md#deployment-provenance)) |
+| The source reproduces them | [Reproducing a deployment](#reproducing-a-deployment): rebuilding the deployment commit with the recorded rustc and scaffold gives every hash in the manifest, the reused tier-0 included (the current deployment's record: [`audit-scope.md`](../audit-scope.md#deployment-provenance)) |
 
 A registry name lookup is never the evidence: names only select what to
 fetch, and every fetched byte is checked against a hash the manifest
 records.
+
+## Reproducing a deployment
+
+A deployment's bytes are a function of the build commit, rustc, scaffold,
+and the host platform. The four reused tier-0 also carry the
+`source_repo=github:stellar-registry/perch` metadata entry the attested
+release build adds. Build on **linux/amd64**, the platform the deploy and
+release jobs run on. On macOS arm64 the same toolchain gives the same bytes
+for six contracts, but other bytes for the doc compiler and the controller,
+and so for the account and the factory, which pin the doc compiler directly
+or through the account.
+
+The recipe below rebuilds the current testnet deployment. For another
+deployment, take `BUILD_COMMIT` from its manifest's `source.commit`, and
+`MANIFEST_COMMIT` from the `deploy(<network>)` commit that recorded the
+manifest (the build commit holds the previous one). Use a `git clone`, not a
+`git archive` export: `build-stack.sh` records the commit with
+`git rev-parse HEAD` and fails without a `.git` directory. The tool archives
+and their SHA-256 sums are the ones `release.yml`'s `deploy-stack` job
+installs.
+
+```sh
+mkdir -p repro
+cat > repro/build.sh <<'SH'
+set -euo pipefail
+BUILD_COMMIT=4e7ae8044b761c7e7ee8b82d3dd5d135f9905fd5
+MANIFEST_COMMIT=6f0f305cac75be5fa6c9678fa379e9b5a74eccf2
+apt-get update -qq
+apt-get install -y -qq --no-install-recommends \
+  ca-certificates curl git jq gcc libc6-dev libdbus-1-3 libudev1
+curl --proto '=https' -fsSL https://sh.rustup.rs \
+  | sh -s -- -y -q --profile minimal --default-toolchain none
+. "$HOME/.cargo/env"
+rustup toolchain install 1.99.0 --profile minimal --target wasm32v1-none
+# Outranks rust-toolchain.toml, which names the floating `stable` channel.
+export RUSTUP_TOOLCHAIN=1.99.0
+curl -fsSL -o /tmp/stellar.tgz https://github.com/theahaco/stellar-cli/releases/download/v28.0.0-aha.0/stellar-cli-28.0.0-aha.0-x86_64-unknown-linux-gnu.tar.gz
+echo "580a2d469767028e575e1c57ccf55bc5a661c0ee4032fd52aaeabb9098943685  /tmp/stellar.tgz" | sha256sum -c -
+tar -xzf /tmp/stellar.tgz -C /usr/local/bin stellar
+curl -fsSL -o /tmp/scaffold.tgz https://github.com/AhaLabs/scaffold-stellar/releases/download/stellar-scaffold-cli-v0.0.27/stellar-scaffold-cli-v0.0.27-x86_64-unknown-linux-gnu.tar.gz
+echo "f24709de57e33155efd72547c9286b522d4360a379bde5af9eeb5519396f10cc  /tmp/scaffold.tgz" | sha256sum -c -
+tar -xzf /tmp/scaffold.tgz -C /usr/local/bin stellar-scaffold
+git clone -q https://github.com/stellar-registry/perch /src
+cd /src
+git show "$MANIFEST_COMMIT:deployments/testnet.json" > /out/manifest.json
+git checkout -q "$BUILD_COMMIT"
+# The reused tier-0, as the attested release build makes them.
+for p in perch-doc-compiler perch-interpreter perch-spending-limit perch-ed25519-verifier; do
+  stellar scaffold build --package "$p" --out-dir /out/tier0 \
+    --meta source_repo=github:stellar-registry/perch
+done
+# The rest, in pin order, against those tier-0 bytes.
+scripts/build-stack.sh --registry "$(jq -r .registry.id /out/manifest.json)" \
+  --provided-tier0 /out/tier0 --out /out/stack
+jq -r --slurpfile m /out/manifest.json '.artifacts[]
+  | [.package, (if .sha256 == $m[0].contracts[.package].sha256 then "match" else "DIFFERS" end)]
+  | @tsv' /out/stack/build.json
+SH
+docker run --rm --platform linux/amd64 -v "$PWD/repro:/out" \
+  debian:bookworm@sha256:2c037a04925515fdd6ea85ea14a682d0e79931f5e9f5d07b6dbfc6ba12f9e858 \
+  bash /out/build.sh
+```
+
+`--provided-tier0` copies those four files instead of building them, as
+`deploy-stack.sh --reuse` does with the fetched bytes. The rebuild's
+`build.json` reports `source.dirty: true`, as the manifest does, for the
+reason [`audit-scope.md`](../audit-scope.md#deployment-provenance) records.
 
 ## The canonical registry, and publishing the stack to it
 
@@ -139,8 +206,10 @@ registry, reusing the four published tier-0 contracts.
 **The same version is different bytes in the two modes.** A rehearsal's
 interpreter, compiler, spending limit, and ed25519 verifier carry versions
 that `release.yml` also publishes canonically. `release.yml` builds them
-with stellar-registry/actions' attested release build, and `build-stack.sh`
-runs its own scaffold build, so the bytes differ. In an earlier rehearsal,
+with stellar-registry/actions' attested release build, which adds a
+`source_repo` metadata entry that `build-stack.sh`'s scaffold build does not,
+so the bytes differ (see [the `deploy-stack`
+job](#the-deploy-stack-job-releaseyml)). In an earlier rehearsal,
 interpreter 0.1.3 was `2254f17d…` against `e4d7fb8d…` canonically (observed
 2026-10-09). Resolve infra by the manifest's hash or address, never by
 `(name, version)` across registries.
@@ -174,22 +243,25 @@ the new deployment). The job runs only when `vars.PERCH_DEPLOY_STACK` is
 `true` — see the bootstrap below.
 
 **Why it reuses the published tier-0 rather than rebuilding them.** The
-account pins the compiler, interpreter, and spending-limit by the sha256 of
-the exact bytes on-chain, and those (with the ed25519 verifier) are the
-allow-listed tier-0 the constructorless jobs already published — built with
-`stellar scaffold build` **and** `stellar contract optimize` on the reusable
-build workflow's `rustup update` toolchain. `build-stack.sh` here builds with
-`stellar scaffold build` on the pinned toolchain and does not optimize, so for
-the same source it produces **different bytes**: `perch-doc-compiler` 0.3.2 is
-`f8bc1b…` canonically but `ccea12…` from `build-stack.sh`. An account built
-against the rebuild would pin a hash the registry never `deploy_stateless`'d.
-So canonical mode `--reuse`s those names — fetching each by the hash the
-registry serves and pinning exactly that — and publishes only the
-recovery-specific names (webauthn verifier, ZK pool/adapter, controller) and
-the factory. Pinning the shared `contract-release` toolchain to a concrete
-rustc + stellar-cli would make the rebuilds byte-identical and remove the need
-to reuse; that is a follow-up (design step 7), tracked outside this
-workstream.
+account pins the compiler, interpreter, and spending limit by the sha256 of
+the exact bytes on-chain. Those, with the ed25519 verifier, are the
+allow-listed tier-0 that `release.yml`'s attested release build already
+published (stellar-registry/actions `contract-release.yml`). That build runs
+`stellar scaffold build --meta source_repo=github:stellar-registry/perch`,
+which adds one metadata entry that `build-stack.sh` does not add, so
+`build-stack.sh` alone gives the same code under a different hash. Its
+`stellar contract optimize` step does not change the bytes: scaffold 0.0.27
+already optimizes. The two builds also agree only when they use the same
+rustc. The release build pins one (1.99.0 for the current tier-0), while
+`rust-toolchain.toml` names `stable`. An account built against a
+`build-stack.sh` rebuild would therefore pin a hash the registry never
+`deploy_stateless`'d. Canonical mode `--reuse`s those names instead: it
+fetches each by the hash the registry serves, pins exactly that, and
+publishes only the recovery-specific names (webauthn verifier, ZK
+pool/adapter, controller) and the factory. Reusing also leaves already
+published versions untouched. With the metadata entry added and rustc
+pinned, the tier-0 rebuild byte for byte ([Reproducing a
+deployment](#reproducing-a-deployment)).
 
 ### One-time manager bootstrap
 

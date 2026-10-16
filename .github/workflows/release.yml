@@ -681,9 +681,10 @@ jobs:
   #
   # The account pins the compiler/interpreter/spending-limit. Those (and the
   # ed25519 verifier) are the ALLOW-listed tier-0 the constructorless jobs above
-  # already published; a rebuild here would not reproduce their bytes (scaffold
-  # vs scaffold+optimize, unpinned rustc in the reusable build — see
-  # docs/deploy/README.md and design step 7), so the account would pin a hash
+  # already published; a rebuild here would not reproduce their bytes (the
+  # reusable build adds a `source_repo` meta entry build-stack.sh does not, and
+  # pins its rustc while rust-toolchain.toml says stable — see
+  # docs/deploy/README.md), so the account would pin a hash
   # the registry never deploy_stateless'd. The deploy therefore REUSES those
   # published bytes (fetched by hash) and publishes only the recovery-specific
   # names (webauthn verifier, ZK pool/adapter, controller) and the factory,

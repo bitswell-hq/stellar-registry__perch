@@ -10,6 +10,11 @@ are the on-chain wasm publishes and `perch-js` versions are the npm releases of
 
 - Versioned JSON Schema for PolicyDoc (#120)
 
+### 🛡️ Security
+
+- [**breaking**] `signingDigest(account, signaturePayload, ruleIds)` takes the account and returns the account-bound `addr_oz_v1` digest, `sha256(sha256("perch/account/auth-addr-v1" || account_id || signature_payload) || xdr(rule ids))`. The 0.3.x two-argument form signed OZ's digest without the account address, which accounts built from the current wasm refuse.
+- [**breaking**] `checkCapabilities`, and so `readSnapshot`, accept only accounts whose `capabilities().auth_digest` is `addr_oz_v1` and throw `UnsupportedCapability` for `oz_rule_ids`. perch-js 0.3.x throws for every account that reports `addr_oz_v1`.
+
 ## [0.3.2] - 2026-10-10
 
 ### 💼 Other
