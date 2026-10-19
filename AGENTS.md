@@ -43,11 +43,15 @@ places in `release.yml`, not just workspace membership: both `CONTRACTS=`
 lists (`detect-releases` and `release-pr` — kept as duplicated literals, not
 one shared value), a `paths_for()` case for its own intra-workspace scope,
 and — only once the contract is actually meant to auto-publish on-chain when
-tagged — the `publish-plan` job's `ALLOW` list and `DISPATCH_TAG` regex.
+tagged — the `publish-plan` job's `ALLOW` list and `DISPATCH_TAG` regex (and
+`mainnet-plan`'s `MAINNET_ALLOW`, which `scripts/test-release-scripts.py`
+keeps equal to `ALLOW`).
 `ALLOW` publishes into `unverified/perch/constructorless`, perch's one
-canonical registry: an account or factory bakes one registry id and derives
-every infra address from it, so all infra must share that registry. That
-registry is managed, so a name new to it needs the manager's one-time
+canonical testnet registry: an account or factory bakes one registry id and
+derives every infra address from it, so all infra must share that registry.
+Mainnet has its own, which the `mainnet-*` jobs publish to only by a manual
+dispatch (`docs/deploy/README.md`, "Mainnet"). The
+testnet registry is managed, so a name new to it needs the manager's one-time
 initial publish (`release.yml`'s header) before the merge that releases it;
 otherwise that publish leg fails with `#12 ManagerRequired`.
 Deliberately leaving a new contract out of `ALLOW` (while still tagging it

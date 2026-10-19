@@ -6,7 +6,11 @@ packages/ with a manifest that installs from the registry, an npm package's
 scope and version bump (scripts/npm-release.sh, used by release-pr and by
 deploy-stack's perch-artifacts bump), the Nido dispatch plan
 (scripts/nido-dispatch-plan.sh), that no release job holding a signing
-credential builds or puts it in argv, what a stack build records as dirty
+credential builds or puts it in argv, that the mainnet jobs run only by
+dispatch and read only the mainnet environment's settings, which released
+commits a mainnet dispatch may publish (scripts/mainnet-plan.sh), what a
+mainnet publish sends and that its plan sends nothing
+(scripts/publish-wasm.sh), what a stack build records as dirty
 (scripts/source-dirty.sh, used by scripts/build-stack.sh), and the committed
 build-time pins' drift check (scripts/check-pins.sh).
 
@@ -444,10 +448,16 @@ def release_jobs():
 
 
 SEED = "secrets.CI_PUBLISH_SECRET_KEY"
+MAINNET_SEED = "secrets.CI_PUBLISH_MAINNET_SECRET_KEY"
+SEEDS = (SEED, MAINNET_SEED)
 # What compiles or runs a dependency's code: a job holding a signing
 # credential must do none of it.
 BUILDS = ("cargo ", "rust-toolchain", "npm ci", "npm install", "npm test", "npm run",
           "--build-only", 'scaffold: "true"', "verify-deployment.sh", "bindings-contracts.sh")
+
+
+def holds_seed(job):
+    return any(seed in job for seed in SEEDS)
 
 
 class ReleaseKeys(unittest.TestCase):
@@ -458,7 +468,7 @@ class ReleaseKeys(unittest.TestCase):
         self.assertNotIn("NODE_AUTH_TOKEN", release_yml())
 
     def test_every_job_holding_the_seed_is_in_an_environment(self):
-        holders = {n: j for n, j in release_jobs().items() if SEED in j}
+        holders = {n: j for n, j in release_jobs().items() if holds_seed(j)}
         self.assertTrue(holders)
         for name, job in holders.items():
             with self.subTest(job=name):
@@ -467,7 +477,7 @@ class ReleaseKeys(unittest.TestCase):
 
     def test_no_job_holding_the_seed_builds(self):
         for name, job in release_jobs().items():
-            if SEED not in job:
+            if not holds_seed(job):
                 continue
             for marker in BUILDS:
                 with self.subTest(job=name, marker=marker):
@@ -476,10 +486,11 @@ class ReleaseKeys(unittest.TestCase):
     def test_the_seed_never_reaches_argv(self):
         for name, job in release_jobs().items():
             for line in job.splitlines():
-                if SEED in line:
-                    with self.subTest(job=name, line=line.strip()):
-                        # Only as a step env value or a reusable-workflow secret.
-                        self.assertRegex(line.strip(), r"^(STELLAR_ACCOUNT|STELLAR_SIGN_WITH_KEY|signing_key): \$\{\{ " + re.escape(SEED) + r" \}\}$")
+                for seed in SEEDS:
+                    if seed in line:
+                        with self.subTest(job=name, line=line.strip()):
+                            # Only as a step env value or a reusable-workflow secret.
+                            self.assertRegex(line.strip(), r"^(STELLAR_ACCOUNT|STELLAR_SIGN_WITH_KEY|signing_key): \$\{\{ " + re.escape(seed) + r" \}\}$")
 
     def test_npm_publish_only_publishes_a_packed_tarball(self):
         jobs = release_jobs()
@@ -862,6 +873,390 @@ class CheckPins(unittest.TestCase):
             shutil.rmtree(os.path.join(self.repo.dir, "crates", d))
         self.assertNotEqual(self.check().returncode, 0)
 
+
+
+MAINNET_PLAN = os.path.join(REPO, "scripts", "mainnet-plan.sh")
+PUBLISH_WASM = os.path.join(REPO, "scripts", "publish-wasm.sh")
+
+
+def mainnet_jobs():
+    return {n: j for n, j in release_jobs().items() if n.startswith("mainnet-")}
+
+
+def code(job):
+    """A job's YAML without its comment lines."""
+    return "\n".join(l for l in job.splitlines() if not l.lstrip().startswith("#"))
+
+
+def job_needs(job):
+    m = re.search(r"(?m)^    needs: (.*)$", job)
+    return re.findall(r"[A-Za-z0-9_-]+", m.group(1)) if m else []
+
+
+def job_if(job):
+    m = re.search(r"(?m)^    if: (?:>-\n((?:      .*\n)+)|(.*)\n)", job)
+    return (m.group(1) or m.group(2)) if m else ""
+
+
+def steps(job):
+    return re.split(r"(?m)^      - ", job)[1:]
+
+
+def env_words(job, name):
+    return re.findall(r'(?m)^ *' + name + r': "([^"]*)"$', job)
+
+
+class MainnetJobs(unittest.TestCase):
+    """release.yml's mainnet release: dispatched by hand, bound to the
+    mainnet environment, and apart from every testnet and npm job."""
+
+    def test_mainnet_jobs_exist(self):
+        self.assertEqual(set(mainnet_jobs()), {
+            "mainnet-plan", "mainnet-publish", "mainnet-publish-record", "mainnet-config",
+            "mainnet-deploy-stack-build", "mainnet-deploy-stack", "mainnet-deploy-stack-record"})
+
+    def test_mainnet_runs_only_by_dispatch(self):
+        jobs = release_jobs()
+        for name, job in mainnet_jobs().items():
+            with self.subTest(job=name):
+                self.assertIn("github.event_name == 'workflow_dispatch'", job_if(job))
+                self.assertTrue(all(n.startswith("mainnet-") for n in job_needs(job)), job_needs(job))
+        for name, job in jobs.items():
+            if not name.startswith("mainnet-"):
+                with self.subTest(job=name):
+                    self.assertFalse(any(n.startswith("mainnet-") for n in job_needs(job)))
+
+    def test_only_mainnet_jobs_touch_mainnet(self):
+        for name, job in release_jobs().items():
+            if name.startswith("mainnet-"):
+                continue
+            with self.subTest(job=name):
+                self.assertNotIn("mainnet", code(job).lower())
+
+    def test_mainnet_jobs_never_read_a_testnet_setting(self):
+        for name, job in mainnet_jobs().items():
+            with self.subTest(job=name):
+                body = code(job)
+                self.assertNotIn(SEED, body)
+                for testnet in ("environment: testnet", "network: testnet", "STELLAR_NETWORK: testnet",
+                                "soroban-testnet", "Test SDF Network"):
+                    self.assertNotIn(testnet, body)
+                for var in re.findall(r"vars\.([A-Za-z0-9_]+)", body):
+                    self.assertTrue(var.startswith("PERCH_MAINNET_"), var)
+
+    def test_every_mainnet_setting_is_read_in_the_mainnet_environment(self):
+        for name, job in mainnet_jobs().items():
+            if MAINNET_SEED in job or "vars." in code(job):
+                with self.subTest(job=name):
+                    self.assertRegex(job, r"(?m)^    environment: mainnet$")
+        for name, job in mainnet_jobs().items():
+            if re.search(r"(?m)^    environment: mainnet$", job):
+                with self.subTest(job=name):
+                    for marker in BUILDS:
+                        self.assertNotIn(marker, job)
+
+    def test_a_dry_run_is_the_default_and_never_signs(self):
+        self.assertRegex(release_yml(), r"(?m)^      mainnet_dry_run:\n(?:        .*\n)*?        default: true\n")
+        signing = 0
+        for name, job in mainnet_jobs().items():
+            for step in steps(job):
+                if "STELLAR_SIGN_WITH_KEY:" in step:
+                    signing += 1
+                    with self.subTest(job=name, step=step.splitlines()[0]):
+                        self.assertIn("if: ${{ !inputs.mainnet_dry_run }}", step)
+                elif MAINNET_SEED in step:
+                    with self.subTest(job=name, step=step.splitlines()[0]):
+                        self.assertIn("if: inputs.mainnet_dry_run", step)
+                        self.assertIn("--plan", step)
+        self.assertEqual(signing, 2)
+
+    def test_the_mainnet_lists_are_the_testnet_ones(self):
+        jobs = release_jobs()
+        allow = json.loads(re.search(r"ALLOW='(\[[^']*\])'", jobs["publish-plan"]).group(1))
+        self.assertEqual(env_words(jobs["mainnet-plan"], "MAINNET_ALLOW")[0].split(), allow)
+        deploy_set = re.search(r'DEPLOY_SET="([^"]*)"', jobs["deploy-plan"]).group(1).split()
+        self.assertEqual(env_words(jobs["mainnet-plan"], "MAINNET_STACK")[0].split(), deploy_set)
+        reuse = {r for job in jobs.values() for r in env_words(job, "REUSE")}
+        self.assertEqual(len(reuse), 1, reuse)
+
+
+@unittest.skipUnless(shutil.which("jq"), "jq not on PATH")
+class MainnetPlan(unittest.TestCase):
+    """scripts/mainnet-plan.sh: which released commits a mainnet dispatch
+    may publish."""
+
+    SETS = ["--allow", "perch-interpreter", "--stack-set", "perch-account", "--reuse", "perch-doc-compiler"]
+
+    def setUp(self):
+        self.repo = Repo()
+        for c in ("perch-interpreter", "perch-account", "perch-doc-compiler"):
+            self.version(c, "0.1.0")
+        self.repo.write("scripts/deploy-stack.sh", "        --prebuilt) prebuilt=true; shift ;;\n")
+        self.repo.commit("feat: first release")
+        self.released = self.head()
+        for c in ("perch-interpreter", "perch-account", "perch-doc-compiler"):
+            self.tag(f"{c}-v0.1.0")
+        self.deployed = self.deploy_testnet(self.released)
+
+    def tearDown(self):
+        self.repo.cleanup()
+
+    def version(self, crate, v):
+        self.repo.write(f"crates/{crate}/Cargo.toml", f'[package]\nname = "{crate}"\nversion = "{v}"\n')
+
+    def tag(self, tag):
+        run(["git", "tag", tag], self.repo.dir)
+
+    def head(self):
+        return run(["git", "rev-parse", "HEAD"], self.repo.dir).stdout.strip()
+
+    def deploy_testnet(self, commit):
+        self.repo.write("deployments/testnet.json", json.dumps({
+            "network": "testnet", "source": {"commit": commit, "dirty": False},
+            "toolchain": {"rustc": "rustc 1.99.0 (b940084d7 2026-09-28)"}}) + "\n")
+        self.repo.commit("deploy(testnet): recovery stack")
+        return self.head()
+
+    def plan(self, *args, check=True):
+        out = run([MAINNET_PLAN, "--main", "HEAD", *self.SETS, *args], self.repo.dir, check=False)
+        if check:
+            self.assertEqual(out.returncode, 0, out.stderr)
+            return json.loads(out.stdout)
+        self.assertNotEqual(out.returncode, 0, out.stdout)
+        return out.stderr
+
+    def test_a_released_tag_resolves_to_its_commit(self):
+        self.assertEqual(self.plan("--publish", "perch-interpreter-v0.1.0"), {
+            "publish": [{"package": "perch-interpreter", "tag": "perch-interpreter-v0.1.0",
+                         "version": "0.1.0", "commit": self.released}],
+            "stack": None})
+
+    def test_a_tag_off_main_is_refused(self):
+        run(["git", "checkout", "-q", "-b", "side"], self.repo.dir)
+        self.version("perch-interpreter", "0.2.0")
+        self.repo.commit("feat: unreleased")
+        self.tag("perch-interpreter-v0.2.0")
+        run(["git", "checkout", "-q", "-"], self.repo.dir)
+        self.assertIn("is not on main", self.plan("--publish", "perch-interpreter-v0.2.0", check=False))
+
+    def test_a_tag_not_naming_its_manifest_version_is_refused(self):
+        self.tag("perch-interpreter-v0.3.0")
+        self.assertIn("not 0.3.0", self.plan("--publish", "perch-interpreter-v0.3.0", check=False))
+
+    def test_a_contract_outside_the_set_is_refused(self):
+        self.assertIn("not one of", self.plan("--publish", "perch-account-v0.1.0", check=False))
+        self.assertIn("not one of", self.plan("--stack", "perch-interpreter-v0.1.0", check=False))
+        self.assertIn("release tag", self.plan("--publish", "perch-interpreter-v0.1", check=False))
+
+    def test_one_version_per_contract(self):
+        self.version("perch-interpreter", "0.1.1")
+        self.repo.commit("fix: second release")
+        self.tag("perch-interpreter-v0.1.1")
+        err = self.plan("--publish", "perch-interpreter-v0.1.0,perch-interpreter-v0.1.1", check=False)
+        self.assertIn("one version per run", err)
+
+    def test_the_stack_builds_with_its_testnet_deployments_toolchain(self):
+        self.assertEqual(self.plan("--stack", "perch-account-v0.1.0")["stack"], {
+            "tag": "perch-account-v0.1.0", "commit": self.released, "rustc": "1.99.0",
+            "testnet_manifest_commit": self.deployed})
+
+    def test_a_stack_never_deployed_to_testnet_is_refused(self):
+        self.version("perch-account", "0.2.0")
+        self.repo.commit("feat: new account")
+        self.tag("perch-account-v0.2.0")
+        self.assertIn("deploy that stack to testnet first", self.plan("--stack", "perch-account-v0.2.0", check=False))
+
+    def test_a_stack_with_an_unreleased_member_is_refused(self):
+        self.version("perch-account", "0.2.0")
+        self.version("perch-doc-compiler", "0.2.0")
+        self.repo.commit("feat: new account")
+        self.tag("perch-account-v0.2.0")
+        self.deploy_testnet(self.head())
+        self.assertIn("perch-doc-compiler 0.2.0", self.plan("--stack", "perch-account-v0.2.0", check=False))
+
+    def test_a_stack_from_before_the_build_split_is_refused(self):
+        self.version("perch-account", "0.2.0")
+        self.repo.write("scripts/deploy-stack.sh", "# one job\n")
+        self.repo.commit("feat: new account")
+        self.tag("perch-account-v0.2.0")
+        self.deploy_testnet(self.head())
+        self.assertIn("--build-only/--prebuilt", self.plan("--stack", "perch-account-v0.2.0", check=False))
+
+
+# A `stellar` that keeps a registry and a ledger in a JSON file and logs every
+# call, for scripts/publish-wasm.sh. Any call that would send a transaction
+# changes the state; --build-only, --send=no, and `tx` calls never do.
+FAKE_STELLAR = r"""#!/usr/bin/env python3
+import hashlib, json, os, sys
+args = sys.argv[1:]
+state_file, log_file = os.environ["FAKE_STATE"], os.environ["FAKE_LOG"]
+with open(state_file) as f:
+    state = json.load(f)
+with open(log_file, "a") as f:
+    f.write(json.dumps(args) + "\n")
+def opt(name):
+    return args[args.index(name) + 1]
+def save():
+    with open(state_file, "w") as f:
+        json.dump(state, f)
+ADDR = "C" + "A" * 55
+if args[:2] == ["tx", "simulate"]:
+    sys.stdin.read(); print("SIMULATED")
+elif args[:2] == ["tx", "decode"]:
+    sys.stdin.read(); print(json.dumps({"tx": {"tx": {"fee": 1234}}}))
+elif args[:2] == ["contract", "fetch"]:
+    if opt("--wasm-hash") not in state["installed"]:
+        sys.exit("Contract Code not found")
+    open(opt("--out-file"), "w").close()
+elif args[:3] == ["contract", "info", "hash"]:
+    if opt("--id") not in state["deployed"]:
+        sys.exit("no contract")
+    print(state["deployed"][opt("--id")])
+elif args[:2] == ["contract", "upload"]:
+    if "--build-only" in args:
+        print("UNSIGNED")
+    else:
+        h = hashlib.sha256(open(opt("--wasm"), "rb").read()).hexdigest()
+        state["installed"].append(h); save(); print(h)
+elif args[:2] == ["contract", "invoke"]:
+    fn, fargs = args[args.index("--") + 1], args[args.index("--") + 2:]
+    a = dict(zip(fargs[::2], fargs[1::2]))
+    key = a["--wasm_name"] + "@" + a["--version"].strip('"')
+    if "--build-only" in args:
+        print("UNSIGNED")
+    elif fn == "fetch_hash":
+        if key not in state["published"]:
+            sys.exit("HostError: Error(Contract, #2)")
+        print('"' + state["published"][key] + '"')
+    elif fn == "deploy_stateless":
+        if "--send=no" not in args:
+            state["deployed"][ADDR] = state["published"][key]; save()
+        print('"' + ADDR + '"')
+    elif fn == "publish_hash" and "--send=no" not in args:
+        state["published"][key] = a["--wasm_hash"]; save()
+    else:
+        sys.exit("unexpected invoke " + fn)
+else:
+    sys.exit("unexpected call " + " ".join(args))
+"""
+
+
+@unittest.skipUnless(shutil.which("jq"), "jq not on PATH")
+class PublishWasm(unittest.TestCase):
+    """scripts/publish-wasm.sh, against a fake `stellar`: what a mainnet
+    publish sends, in what order, and that a plan sends nothing."""
+
+    REGISTRY = "C" + "R" * 55
+    AUTHOR = "C" + "U" * 55
+    ADDR = "C" + "A" * 55
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        bin_dir = os.path.join(self.dir, "bin")
+        os.makedirs(bin_dir)
+        stellar = os.path.join(bin_dir, "stellar")
+        with open(stellar, "w") as f:
+            f.write(FAKE_STELLAR)
+        os.chmod(stellar, 0o755)
+        self.wasm = os.path.join(self.dir, "c.wasm")
+        with open(self.wasm, "wb") as f:
+            f.write(b"\0asm\1\0\0\0perch")
+        self.hash = hashlib.sha256(open(self.wasm, "rb").read()).hexdigest()
+        self.state_file = os.path.join(self.dir, "state.json")
+        self.log_file = os.path.join(self.dir, "log")
+        self.set_state()
+        self.env = {**os.environ, "PATH": bin_dir + os.pathsep + os.environ["PATH"],
+                    "FAKE_STATE": self.state_file, "FAKE_LOG": self.log_file, "STELLAR_ACCOUNT": "S-delegate"}
+
+    def tearDown(self):
+        shutil.rmtree(self.dir)
+
+    def set_state(self, published=None, installed=(), deployed=None):
+        with open(self.state_file, "w") as f:
+            json.dump({"published": published or {}, "installed": list(installed), "deployed": deployed or {}}, f)
+
+    def state(self):
+        with open(self.state_file) as f:
+            return json.load(f)
+
+    def calls(self):
+        if not os.path.exists(self.log_file):
+            return []
+        with open(self.log_file) as f:
+            return [json.loads(l) for l in f]
+
+    def sent(self):
+        """What the calls sent: upload, or the invoked function."""
+        out = []
+        for c in self.calls():
+            if "--build-only" in c or "--send=no" in c:
+                continue
+            if c[:2] == ["contract", "upload"]:
+                out.append("upload")
+            elif c[:2] == ["contract", "invoke"]:
+                out.append(c[c.index("--") + 1])
+        return out
+
+    def publish(self, *extra, check=True):
+        out = subprocess.run([PUBLISH_WASM, "--registry", self.REGISTRY, "--author", self.AUTHOR,
+                              "--name", "perch-x", "--version", "1.0.0", "--wasm", self.wasm, *extra],
+                             capture_output=True, text=True, env=self.env)
+        if check:
+            self.assertEqual(out.returncode, 0, out.stderr)
+            return json.loads(out.stdout)
+        self.assertNotEqual(out.returncode, 0, out.stdout)
+        return out.stderr
+
+    def test_a_plan_sends_nothing_and_prices_each_transaction(self):
+        before = self.state()
+        out = self.publish("--plan")
+        self.assertEqual(self.sent(), [])
+        self.assertEqual(self.state(), before)
+        self.assertEqual(out["status"], "would publish")
+        self.assertEqual(out["txs"], [{"op": "upload perch-x", "fee_stroops": 1234},
+                                      {"op": "publish_hash perch-x 1.0.0", "fee_stroops": 1234},
+                                      {"op": "deploy_stateless perch-x 1.0.0", "fee_stroops": None}])
+
+    def test_a_plan_of_a_deployed_version_has_nothing_to_send(self):
+        self.set_state({"perch-x@1.0.0": self.hash}, [self.hash], {self.ADDR: self.hash})
+        out = self.publish("--plan")
+        self.assertEqual((out["status"], out["txs"], out["address"]), ("already deployed", [], self.ADDR))
+
+    def test_a_run_uploads_publishes_then_deploys(self):
+        out = self.publish()
+        self.assertEqual(self.sent(), ["upload", "publish_hash", "deploy_stateless"])
+        self.assertEqual(self.state()["published"], {"perch-x@1.0.0": self.hash})
+        self.assertEqual((out["status"], out["address"]), ("published", self.ADDR))
+        publish = next(c for c in self.calls() if "publish_hash" in c)
+        self.assertIn(self.AUTHOR, publish)
+
+    def test_a_different_hash_under_the_version_is_refused_before_anything_is_sent(self):
+        self.set_state({"perch-x@1.0.0": "ab" * 32})
+        self.assertIn("already published with hash", self.publish(check=False))
+        self.assertEqual(self.sent(), [])
+
+    def test_a_published_version_is_deployed_not_republished(self):
+        self.set_state({"perch-x@1.0.0": self.hash}, [self.hash])
+        out = self.publish()
+        self.assertEqual(self.sent(), ["deploy_stateless"])
+        self.assertEqual(out["status"], "already published")
+
+    def test_install_only_uploads_and_publishes_nothing(self):
+        out = self.publish("--install-only")
+        self.assertEqual(self.sent(), ["upload"])
+        self.assertEqual(self.state()["published"], {})
+        self.assertEqual(out["status"], "installed")
+
+    def test_the_summary_totals_a_plan(self):
+        self.publish("--plan")
+        receipts = os.path.join(self.dir, "receipts.jsonl")
+        with open(receipts, "w") as f:
+            f.write(subprocess.run([PUBLISH_WASM, "--registry", self.REGISTRY, "--author", self.AUTHOR,
+                                    "--name", "perch-x", "--version", "1.0.0", "--wasm", self.wasm, "--plan"],
+                                   capture_output=True, text=True, env=self.env, check=True).stdout)
+        table = run([PUBLISH_WASM, "--summary", receipts], self.dir).stdout
+        self.assertIn("| perch-x | 1.0.0 |", table)
+        self.assertIn("Total simulated fee: 0.0002468 XLM", table)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
