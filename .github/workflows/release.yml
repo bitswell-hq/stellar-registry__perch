@@ -1404,27 +1404,40 @@ jobs:
         run: |
           set -euo pipefail
           stack/scripts/deploy-stack.sh --build-only --registry "$REGISTRY" --reuse "$REUSE"
-      # Tier 0 pins nothing, so a rebuild from the same commit is the same
-      # bytes on every network: each one must be the hash the testnet
-      # deployment recorded, attested by this workflow's own deploy-stack
-      # record for this commit on main. Anything else refuses.
-      - name: Check each rebuilt tier-0 is the bytes testnet's release attested
+      # Tier 0 pins nothing, so mainnet must run exactly the tier-0 bytes the
+      # testnet deployment from this commit recorded, every name of them:
+      # the reused ones as fetched from the mainnet registry, and the rebuilt
+      # ones, which must also carry this workflow's own deploy-stack record
+      # attestation for this commit on main. The account and the factory may
+      # differ only in the registry they pin, so every tier-0 hash they pin
+      # must be that deployment's too. Anything else refuses.
+      - name: Check every tier-0 is the bytes the testnet deployment recorded
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           build=stack/target/stack/build.json
           testnet=$(git show "$TESTNET_MANIFEST_COMMIT:deployments/testnet.json")
+          want() { jq -r --arg p "$1" '.contracts[$p].sha256 // empty' <<<"$testnet"; }
           for pkg in $(jq -r '.artifacts[] | select(.tier == 0) | .package' "$build"); do
-            case " $REUSE " in *" $pkg "*) continue ;; esac
             wasm="stack/target/stack/$(jq -r --arg p "$pkg" '.artifacts[] | select(.package == $p) | .wasm' "$build")"
             got=$(sha256sum "$wasm" | cut -d' ' -f1)
-            want=$(jq -r --arg p "$pkg" '.contracts[$p].sha256 // empty' <<<"$testnet")
-            [ "$got" = "$want" ] || { echo "::error::$pkg rebuilt as $got; the testnet deployment from $STACK_COMMIT recorded '$want'"; exit 1; }
-            gh attestation verify "$wasm" --repo "$GITHUB_REPOSITORY" \
-              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
-              --source-ref refs/heads/main --source-digest "$STACK_COMMIT"
-            echo "$pkg: $got"
+            [ "$got" = "$(want "$pkg")" ] || { echo "::error::$pkg is $got; the testnet deployment from $STACK_COMMIT recorded '$(want "$pkg")'"; exit 1; }
+            case " $REUSE " in
+              *" $pkg "*) echo "$pkg: $got (reused from the mainnet registry)" ;;
+              *)
+                gh attestation verify "$wasm" --repo "$GITHUB_REPOSITORY" \
+                  --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
+                  --source-ref refs/heads/main --source-digest "$STACK_COMMIT"
+                echo "$pkg: $got (rebuilt, attested)" ;;
+            esac
+          done
+          tier0=$(jq -c '[.artifacts[] | select(.tier == 0) | .package]' "$build")
+          for consumer in perch-account perch-account-factory; do
+            while read -r dep hash; do
+              [ "$hash" = "$(want "$dep")" ] || { echo "::error::$consumer pins $dep $hash; the testnet deployment recorded '$(want "$dep")'"; exit 1; }
+            done < <(jq -r --arg c "$consumer" --argjson t0 "$tier0" \
+              '.artifacts[] | select(.package == $c) | .pins | to_entries[] | select(.key as $k | $t0 | index($k)) | "\(.key) \(.value)"' "$build")
           done
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

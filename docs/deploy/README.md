@@ -377,7 +377,7 @@ gh workflow run release.yml -R stellar-registry/perch --ref main \
 | `mainnet-publish` | downloads each tag's release asset, requires its `contract-release` attestation for the tag's commit on `main` and its `binver`, then `scripts/publish-wasm.sh` (upload, `publish_hash`, `deploy_stateless`, code-hash check), or `--plan` | the mainnet delegate (`mainnet` environment) |
 | `mainnet-publish-record` | attaches `publish-receipt-mainnet.json` to each release | no secret |
 | `mainnet-config` | `scripts/mainnet-settings.sh`, then hands the registry and root to the build | the variables only (`mainnet` environment) |
-| `mainnet-deploy-stack-build` | `deploy-stack.sh --build-only` from the stack commit, with the `rustc` that testnet deployment recorded; each rebuilt tier-0 must be the hash it recorded and attested (`release.yml`, that commit, `main`) | nothing |
+| `mainnet-deploy-stack-build` | `deploy-stack.sh --build-only` from the stack commit, with the `rustc` that testnet deployment recorded. Every tier-0, reused or rebuilt, and every tier-0 hash the account and the factory pin, must be the hash that deployment recorded; a rebuilt one must also carry its attestation (`release.yml`, that commit, `main`). Otherwise it refuses | nothing |
 | `mainnet-deploy-stack` | `deploy-stack.sh --prebuilt` from the stack commit, or the dry run's plan of the same transactions | the mainnet delegate (`mainnet` environment) |
 | `mainnet-deploy-stack-record` | attests the account and the factory, runs `verify-deployment.sh`, bumps `@stellar-registry/perch-artifacts`, and opens the `deploy(mainnet)` PR | no secret |
 
