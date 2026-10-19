@@ -343,11 +343,14 @@ jobs:
             *) echo "$1";;
           esac; }
           CONTRACTS="perch-interpreter perch-doc-compiler perch-ed25519-verifier perch-spending-limit perch-account perch-stateless-registry perch-recovery perch-webauthn-verifier perch-zk-pool perch-zk-adapter perch-account-factory"
-          # The committed build-time pins (crates/*/wasm/) move only after a
-          # source change that already bumped the contract, in the
-          # deploy(<network>) commit recording that deployment: never a
-          # release of their own.
-          pins=(--exclude-path "crates/*/wasm/**")
+          # The committed build-time hash pins (crates/*/wasm/*.sha256) move
+          # only after a source change that already bumped the contract, in
+          # the deploy(<network>) commit recording that deployment: never a
+          # release of their own. The registry tables beside them
+          # (crates/*/wasm/registry.networks) are source no deployment
+          # rewrites, and a table edit changes the contract's bytes, so it is
+          # a release.
+          pins=(--exclude-path "crates/*/wasm/*.sha256" --exclude-path "crates/*/wasm/README.md")
           summary=""
           bumped=""
           for c in $CONTRACTS; do

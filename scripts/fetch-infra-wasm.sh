@@ -2,15 +2,19 @@
 # Populate the build-time pin directories from a deployment manifest
 # (deployments/<network>.json, written by scripts/deploy-stack.sh):
 #
-#   crates/perch-smart-account/wasm/    stateless.id, perch-doc-compiler,
-#                                       perch-interpreter, perch-spending-limit
-#   crates/perch-account-factory/wasm/  stateless.id, perch-account,
-#                                       perch-webauthn-verifier
+#   crates/perch-smart-account/wasm/    perch-doc-compiler, perch-interpreter,
+#                                       perch-spending-limit
+#   crates/perch-account-factory/wasm/  perch-account, perch-webauthn-verifier
 #
 # Each name gets <name>.wasm (git-ignored; only tests read the bytes) and
-# <name>.sha256 (committed, with stateless.id: all a build reads, so a plain
-# checkout builds without this script). scripts/check-pins.sh checks the
+# <name>.sha256 (committed, with registry.networks: all a build reads, so a
+# plain checkout builds without this script). scripts/check-pins.sh checks the
 # committed pins against the manifest offline.
+#
+# The registry is not a fetched pin: both crates commit one registry per
+# network (wasm/registry.networks), and the manifest's registry must be the
+# row for its network, or the account would not resolve the fetched infra.
+# This script refuses such a manifest and never rewrites the table.
 #
 # Each wasm is fetched from the chain by the exact address (or, for the
 # account, the exact wasm hash) the manifest records, and refused unless
@@ -112,10 +116,15 @@ fetch() { # contract-name out-file
 }
 
 pin() { # crate names...
-    local dir="$repo_root/crates/$1/wasm" name
+    local dir="$repo_root/crates/$1/wasm" name listed
     shift
-    mkdir -p "$dir"
-    printf '%s' "$registry" >"$dir/stateless.id"
+    listed="$(awk -v p="$(m .network_passphrase)" '/^[[:space:]]*(#|$)/ { next }
+        { id = $1; sub(/^[[:space:]]*[^[:space:]]+[[:space:]]+/, ""); sub(/[[:space:]]+$/, "")
+          if ($0 == p) print id }' "$dir/registry.networks")"
+    [ "$listed" = "$registry" ] || {
+        echo "error: ${dir#"$repo_root"/}/registry.networks lists '${listed:-no registry}' for $(m .network_passphrase), the manifest's registry is $registry" >&2
+        exit 1
+    }
     for name in "$@"; do
         fetch "$name" "$dir/$name.wasm"
         sha256 "$dir/$name.wasm" >"$dir/$name.sha256"

@@ -10,15 +10,25 @@
 #   tier 2  perch-account-factory                (pins the account wasm and the
 #                                                 WebAuthn verifier)
 #
-# A consumer's pins are the sha256 of the exact bytes built here plus the
-# registry the tier-0 contracts are (or will be) `deploy_stateless`'d from, so
-# every address is known before anything is deployed. scripts/deploy-stack.sh
+# A consumer's pins are the sha256 of the exact bytes built here. The registry
+# the tier-0 contracts are (or will be) `deploy_stateless`'d from is not a
+# per-build input: the account and the factory compile in a committed table of
+# one registry per network (crates/*/wasm/registry.networks) and pick the row
+# by the ledger's network id, so the same bytes serve every listed network.
+# Every address is known before anything is deployed. scripts/deploy-stack.sh
 # then publishes the same bytes in the same order.
 #
-# Usage: scripts/build-stack.sh --registry <C...> [--out <dir>] [--builder scaffold|contract]
+# Usage: scripts/build-stack.sh --registry <C...> [--network-passphrase <p>]
+#                               [--out <dir>] [--builder scaffold|contract]
 #                               [--provided-tier0 <dir>]
-#   --registry  the content-addressing registry id baked into the account and
-#               the factory as `stateless.id`
+#   --registry  the content-addressing registry the stack is built for. It must
+#               be the registry table's row for --network-passphrase, in both
+#               the account's and the factory's table: an account built here
+#               resolves its infra from that row, never from this flag. A
+#               rehearsal's fresh registry is a dev build: list it for the
+#               network in both tables first, and do not commit that.
+#   --network-passphrase  the network the stack is built for (default
+#               $STELLAR_NETWORK_PASSPHRASE, else testnet's)
 #   --out       where the wasm and build.json land (default target/stack)
 #   --builder   `scaffold` (default; what deployments use: `stellar scaffold
 #               build`, which adds name/version/source metadata) or
@@ -42,11 +52,13 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 out="$repo_root/target/stack"
 registry=""
+passphrase="${STELLAR_NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}"
 builder=scaffold
 provided=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --registry) registry="$2"; shift 2 ;;
+        --network-passphrase) passphrase="$2"; shift 2 ;;
         --out) out="$2"; shift 2 ;;
         --builder) builder="$2"; shift 2 ;;
         --provided-tier0) provided="$2"; shift 2 ;;
@@ -66,6 +78,22 @@ TIER0=(perch-doc-compiler perch-interpreter perch-spending-limit perch-ed25519-v
        perch-webauthn-verifier perch-zk-pool perch-zk-adapter perch-recovery)
 ACCOUNT_PINS=(perch-doc-compiler perch-interpreter perch-spending-limit)
 FACTORY_PINS=(perch-account perch-webauthn-verifier)
+
+# The registry a crate's table lists for $passphrase (empty if none): the first
+# field of the row whose remainder is the passphrase; blank and `#` lines skipped.
+table_registry() { # crate-dir
+    awk -v p="$passphrase" '/^[[:space:]]*(#|$)/ { next }
+        { id = $1; sub(/^[[:space:]]*[^[:space:]]+[[:space:]]+/, ""); sub(/[[:space:]]+$/, "")
+          if ($0 == p) print id }' "$repo_root/crates/$1/wasm/registry.networks"
+}
+for crate in perch-smart-account perch-account-factory; do
+    listed="$(table_registry "$crate")"
+    [ "$listed" = "$registry" ] || {
+        echo "error: crates/$crate/wasm/registry.networks lists '${listed:-no registry}' for '$passphrase', not $registry" >&2
+        echo "  (a dev build for another registry lists it for this network in both crates' tables first)" >&2
+        exit 1
+    }
+done
 
 sha256() { if command -v sha256sum >/dev/null; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi; }
 version_of() { grep -m1 '^version = "' "$repo_root/crates/$1/Cargo.toml" | sed 's/^version = "\(.*\)"/\1/' ; }
@@ -102,7 +130,6 @@ stage() { # crate-dir packages...
     local dir="$repo_root/crates/$1/wasm" p
     shift
     mkdir -p "$dir"
-    printf '%s' "$registry" >"$dir/stateless.id"
     staged='{}'
     for p in "$@"; do
         cp "$out/${p//-/_}.wasm" "$dir/$p.wasm"

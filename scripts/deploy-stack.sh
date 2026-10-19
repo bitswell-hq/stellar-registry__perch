@@ -8,6 +8,10 @@
 #      with admin = manager = --source. Skipped with --registry.
 #   2. Build. scripts/build-stack.sh --registry <id>: every consumer is pinned
 #      to the exact bytes this run publishes, before anything is published.
+#      The account and the factory resolve the registry from their committed
+#      per-network table (crates/*/wasm/registry.networks), so <id> must be
+#      its row for this network: a fresh instance is refused until it is
+#      listed there (a dev build; rerun with --registry <it>).
 #   3. Tier 0, then the factory (tier 2). Upload each wasm and check the
 #      ledger hash is its sha256; publish_hash it under its crate name and
 #      version (author = --author); deploy_stateless it; check the address is
@@ -250,7 +254,8 @@ else
         for pkg in $reuse; do fetch_reused "$pkg" "$provided_dir"; done
         provided_args=(--provided-tier0 "$provided_dir")
     fi
-    "$repo_root/scripts/build-stack.sh" --registry "$registry" --out "$stack" "${provided_args[@]}"
+    "$repo_root/scripts/build-stack.sh" --registry "$registry" --network-passphrase "$PASSPHRASE" \
+        --out "$stack" "${provided_args[@]}"
 fi
 [ "$(jq -r .registry "$build")" = "$registry" ] || die "build.json is for another registry"
 artifact() { jq -c --arg p "$1" '.artifacts[] | select(.package == $p)' "$build"; }

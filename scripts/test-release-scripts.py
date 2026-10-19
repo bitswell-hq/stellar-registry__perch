@@ -305,7 +305,6 @@ class ReleaseDeps(unittest.TestCase):
         # `pins` exclusion keeps it from releasing the contract again.
         shutil.copy(os.path.join(REPO, "cliff.toml"), os.path.join(self.repo.dir, ".git", "cliff.toml"))
         run(["git", "tag", "contract-v0.1.0"], self.repo.dir)
-        self.repo.write("crates/contract/wasm/stateless.id", "C2")
         self.repo.write("crates/contract/wasm/dep.sha256", "bb\n")
         self.repo.write("deployments/testnet.json", "{}\n")
         self.repo.commit("deploy(testnet): recovery stack")
@@ -314,6 +313,20 @@ class ReleaseDeps(unittest.TestCase):
         cliff = [GIT_CLIFF or "git-cliff", "--config", ".git/cliff.toml", "--tag-pattern", "contract-v.*", *scope]
         self.assertEqual(run([*cliff, "--bumped-version"], self.repo.dir).stdout.strip(), "contract-v0.1.1")
         self.assertEqual(run([*cliff, *pins, "--bumped-version"], self.repo.dir).stdout.strip(), "contract-v0.1.0")
+
+    @unittest.skipUnless(GIT_CLIFF or os.environ.get("PERCH_REQUIRE_GIT_CLIFF"), "git-cliff not on PATH")
+    def test_a_registry_table_edit_is_a_release(self):
+        # The per-network registry table sits beside the hash pins but is
+        # compiled in and rewritten by no deployment: editing a row changes
+        # the contract's bytes, so release.yml's `pins` exclusion leaves it in.
+        shutil.copy(os.path.join(REPO, "cliff.toml"), os.path.join(self.repo.dir, ".git", "cliff.toml"))
+        run(["git", "tag", "contract-v0.1.0"], self.repo.dir)
+        self.repo.write("crates/contract/wasm/registry.networks", "C2 Test SDF Network ; September 2015\n")
+        self.repo.commit("fix(contract): list the new registry")
+        scope = [a for d in self.repo.deps("scope", "contract") for a in ("--include-path", f"{d}/**")]
+        pins = shlex.split(re.search(r"^ *pins=\((.*)\)$", release_yml(), re.M).group(1))
+        cliff = [GIT_CLIFF or "git-cliff", "--config", ".git/cliff.toml", "--tag-pattern", "contract-v.*", *scope]
+        self.assertEqual(run([*cliff, *pins, "--bumped-version"], self.repo.dir).stdout.strip(), "contract-v0.1.1")
 
 
 def release_yml():
@@ -523,7 +536,7 @@ class NpmBump(unittest.TestCase):
             "packages": {"": {"name": "@stellar-registry/perch-artifacts", "version": "0.1.0"}},
         }, indent=2) + "\n")
         self.repo.write("deployments/testnet.json", '{"a": 1}\n')
-        self.repo.write("crates/perch-account/wasm/stateless.id", "C1")
+        self.repo.write("crates/perch-account/wasm/dep.sha256", "aa\n")
         self.repo.commit("feat(perch-artifacts): first release")
 
     def tearDown(self):
@@ -562,7 +575,7 @@ class NpmBump(unittest.TestCase):
 
     def test_a_pin_only_change_is_no_release(self):
         run(["git", "tag", "perch-artifacts-v0.1.0"], self.repo.dir)
-        self.repo.write("crates/perch-account/wasm/stateless.id", "C2")
+        self.repo.write("crates/perch-account/wasm/dep.sha256", "bb\n")
         self.repo.commit("deploy(testnet): recovery stack")
         self.assertEqual(self.bump(), "")
 
@@ -801,31 +814,40 @@ class SourceDirty(unittest.TestCase):
         self.repo.write("crates/a/wasm/pin.wasm", "bytes\n")
         self.assertEqual(self.dirty(), "false")
 
-    def test_the_committed_pins_are_not(self):
+    def test_the_committed_hash_pins_are_not(self):
         # build-stack.sh rewrites them for the build it records.
-        self.repo.write("crates/b/wasm/stateless.id", "C1")
         self.repo.write("crates/b/wasm/dep.sha256", "aa\n")
         self.repo.commit("pins")
-        self.repo.write("crates/b/wasm/stateless.id", "C2")
         self.repo.write("crates/b/wasm/dep.sha256", "bb\n")
         self.repo.write("crates/b/wasm/new.sha256", "cc\n")
         self.assertEqual(self.dirty(), "false")
         self.repo.write("crates/b/wasm/README.md", "edited\n")
         self.assertEqual(self.dirty(), "true")
 
+    def test_the_registry_table_is_source(self):
+        # Compiled in, and no build rewrites it.
+        self.repo.write("crates/b/wasm/registry.networks", "C1 Test SDF Network ; September 2015\n")
+        self.repo.commit("table")
+        self.repo.write("crates/b/wasm/registry.networks", "C2 Test SDF Network ; September 2015\n")
+        self.assertEqual(self.dirty(), "true")
+
 
 class CheckPins(unittest.TestCase):
+    TESTNET = "Test SDF Network ; September 2015"
+    MAINNET = "Public Global Stellar Network ; September 2015"
     MANIFEST = {
+        "network_passphrase": TESTNET,
         "registry": {"id": "CREG"},
         "contracts": {"dep": {"sha256": "aa"}, "acct": {"sha256": "bb"}},
     }
+    TABLE = f"CREG {TESTNET}\nCMAIN {MAINNET}\n"
 
     def setUp(self):
         self.repo = Repo()
         self.repo.write("deployments/testnet.json", json.dumps(self.MANIFEST))
-        self.repo.write("crates/a/wasm/stateless.id", "CREG")
+        self.repo.write("crates/a/wasm/registry.networks", self.TABLE)
         self.repo.write("crates/a/wasm/dep.sha256", "aa\n")
-        self.repo.write("crates/b/wasm/stateless.id", "CREG")
+        self.repo.write("crates/b/wasm/registry.networks", self.TABLE)
         self.repo.write("crates/b/wasm/acct.sha256", "bb\n")
         os.makedirs(os.path.join(self.repo.dir, "scripts"))
         shutil.copy(CHECK_PINS, os.path.join(self.repo.dir, "scripts"))
@@ -848,8 +870,22 @@ class CheckPins(unittest.TestCase):
         self.assertIn("crates/b/wasm/acct.sha256 is 'cc'", out.stderr)
 
     def test_a_drifted_registry_fails(self):
-        self.repo.write("crates/a/wasm/stateless.id", "COTHER")
-        self.assertNotEqual(self.check().returncode, 0)
+        self.repo.write("crates/a/wasm/registry.networks", f"COTHER {self.TESTNET}\nCMAIN {self.MAINNET}\n")
+        out = self.check()
+        self.assertNotEqual(out.returncode, 0)
+        self.assertIn(f"crates/a/wasm/registry.networks's row for '{self.TESTNET}' is 'COTHER'", out.stderr)
+
+    def test_a_table_without_the_manifests_network_fails(self):
+        self.repo.write("crates/b/wasm/registry.networks", f"CMAIN {self.MAINNET}\n")
+        out = self.check()
+        self.assertNotEqual(out.returncode, 0)
+        self.assertIn("is '<none>'", out.stderr)
+
+    def test_only_the_manifests_network_row_is_checked(self):
+        # Comments, blank lines, and other networks' rows are not compared.
+        self.repo.write("crates/a/wasm/registry.networks", f"# rows\n\nCANY {self.MAINNET}\n  CREG   {self.TESTNET}  \n")
+        out = self.check()
+        self.assertEqual(out.returncode, 0, out.stderr)
 
     def test_a_pin_the_manifest_lacks_fails(self):
         self.repo.write("crates/a/wasm/gone.sha256", "dd\n")
