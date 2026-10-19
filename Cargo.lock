@@ -1839,6 +1839,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "sha2",
+ "stellar-strkey 0.0.16",
  "syn 2.0.119",
 ]
 

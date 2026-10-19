@@ -47,11 +47,11 @@ enum Mode {
     Content {
         wasm_name: LitStr,
         hash: Option<[u8; 32]>,
-        /// When set (the name-only form), the deployer registry id is baked from
-        /// this file (`include_str!`, relative to the invoking crate) and
+        /// When set (the name-only form), the deployer registry comes from the
+        /// committed per-network table, selected by the current network id, and
         /// `address(env)` takes no `registry` arg. When `None` (keyed forms),
         /// `address(env, registry)` takes it explicitly.
-        registry_id_file: Option<String>,
+        networks: Option<Networks>,
         /// The local file the pin was read from (the name-only form's
         /// `.sha256`, or a `hash_file:`/`wasm_file:`), relative to the invoking
         /// crate. The expansion `include_bytes!`s it so cargo rebuilds the
@@ -64,6 +64,87 @@ enum Mode {
     /// `deploy` convention. This is how a *named* deploy (e.g. a subregistry
     /// under its parent) is resolved from the parent registry's id.
     Named { deploy_name: String },
+}
+
+/// The name-only form's registry table, read from [`NETWORKS_FILE`].
+struct Networks {
+    /// `(network id = sha256(passphrase), registry strkey)`, in file order.
+    rows: Vec<([u8; 32], String)>,
+}
+
+/// The table every name-only invocation reads, relative to the invoking crate.
+const NETWORKS_FILE: &str = "wasm/registry.networks";
+
+/// The network passphrases a table row may name. A row is selected by an exact
+/// match of `sha256(passphrase)` against the ledger's network id, so a
+/// mistyped passphrase would silently leave that network without a registry;
+/// naming only these turns the typo into a build error.
+const KNOWN_PASSPHRASES: [&str; 4] = [
+    "Public Global Stellar Network ; September 2015",
+    "Test SDF Network ; September 2015",
+    "Test SDF Future Network ; October 2022",
+    "Standalone Network ; February 2017",
+];
+
+/// Parse a registry table: one `<registry C-strkey> <network passphrase>` row
+/// per line. Blank lines and lines starting with `#` are skipped. Every
+/// strkey must be a valid, canonical contract strkey, every passphrase one of
+/// [`KNOWN_PASSPHRASES`], and no network or registry may appear twice.
+fn parse_networks(text: &str) -> Result<Vec<([u8; 32], String)>, String> {
+    use sha2::{Digest, Sha256};
+    let mut rows: Vec<([u8; 32], String)> = Vec::new();
+    for (i, line) in text.lines().enumerate() {
+        let n = i + 1;
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let (id, passphrase) = line
+            .split_once(char::is_whitespace)
+            .ok_or_else(|| format!("line {n}: expected `<C…> <network passphrase>`"))?;
+        let passphrase = passphrase.trim();
+        let contract = stellar_strkey::Contract::from_string(id)
+            .map_err(|_| format!("line {n}: {id:?} is not a contract strkey"))?;
+        if contract.to_string().as_str() != id {
+            return Err(format!("line {n}: {id:?} is not in canonical strkey form"));
+        }
+        if !KNOWN_PASSPHRASES.contains(&passphrase) {
+            return Err(format!(
+                "line {n}: {passphrase:?} is not a known network passphrase (one of {KNOWN_PASSPHRASES:?})"
+            ));
+        }
+        let network: [u8; 32] = Sha256::digest(passphrase.as_bytes()).into();
+        if rows.iter().any(|(net, _)| *net == network) {
+            return Err(format!("line {n}: {passphrase:?} is listed twice"));
+        }
+        if rows.iter().any(|(_, r)| r == id) {
+            return Err(format!("line {n}: {id} is listed for two networks"));
+        }
+        rows.push((network, id.to_string()));
+    }
+    if rows.is_empty() {
+        return Err("lists no network".to_string());
+    }
+    Ok(rows)
+}
+
+/// Read and validate the invoking crate's [`NETWORKS_FILE`] at build time. A
+/// missing or malformed table is a build error naming it.
+fn read_networks(span: proc_macro2::Span) -> syn::Result<Networks> {
+    let path = manifest_path(NETWORKS_FILE, span)?;
+    let text = std::fs::read_to_string(&path).map_err(|e| {
+        syn::Error::new(
+            span,
+            format!(
+                "registry table {NETWORKS_FILE:?} not found ({e}).\n\
+                 Write one `<registry C…> <network passphrase>` line per network to {path}.",
+                path = path.display(),
+            ),
+        )
+    })?;
+    let rows = parse_networks(&text)
+        .map_err(|why| syn::Error::new(span, format!("registry table {NETWORKS_FILE:?}: {why}")))?;
+    Ok(Networks { rows })
 }
 
 /// Parsed `registry_contract! { … }` invocation.
@@ -234,7 +315,7 @@ fn content_mode(
     Ok(Mode::Content {
         wasm_name,
         hash,
-        registry_id_file: None,
+        networks: None,
         pin_file,
     })
 }
@@ -245,7 +326,8 @@ fn content_mode(
 /// name is it with `_`→`-` — or a **string literal** (`"perch-doc-compiler"`,
 /// optional channel prefix and `@version`) — the module is the leaf with
 /// `-`→`_`. The pin is the hex sha256 in `wasm/<leaf>[_<version>].sha256`
-/// (relative to the crate), which must exist. Perch commits these files, so a
+/// and the deployer registry is chosen from `wasm/registry.networks` (both
+/// relative to the crate), which must exist. Perch commits these files, so a
 /// plain checkout (a cargo git dependency included) builds without fetching.
 fn parse_named(input: ParseStream) -> syn::Result<RegistrySpec> {
     // (registry/wasm name, version, module ident string, span)
@@ -290,9 +372,10 @@ fn parse_named(input: ParseStream) -> syn::Result<RegistrySpec> {
         mode: Mode::Content {
             wasm_name: LitStr::new(&name_part, span),
             hash: Some(hash),
-            // The name-only form bakes the deployer registry too (from the
-            // id file beside the hash), so `address(env)` needs no `registry` arg.
-            registry_id_file: Some("wasm/stateless.id".to_string()),
+            // The name-only form bakes the deployer registry too (one per
+            // network, from the table beside the hash), so `address(env)`
+            // needs no `registry` arg.
+            networks: Some(read_networks(span)?),
             pin_file: Some(file),
         },
         client: None,
@@ -457,7 +540,7 @@ fn expand(spec: &RegistrySpec) -> TokenStream2 {
     let Mode::Content {
         wasm_name,
         hash,
-        registry_id_file,
+        networks,
         pin_file,
     } = &spec.mode
     else {
@@ -495,24 +578,45 @@ fn expand(spec: &RegistrySpec) -> TokenStream2 {
                 ::soroban_sdk::BytesN::from_array(env, &WASM_HASH)
             }
         };
-        let derive_impl = if let Some(id_file) = registry_id_file {
-            // Name-only form: the deployer registry id is baked from the pinned
-            // id file at build time, so `address(env)` needs no `registry` arg.
+        let derive_impl = if let Some(Networks { rows }) = networks {
+            // Name-only form: every listed network's registry is baked from the
+            // committed table, and the current network id picks one, so the
+            // same bytes run on each listed network and `address(env)` needs
+            // no `registry` arg.
+            let n = rows.len();
+            let rows = rows.iter().map(|(network, registry)| {
+                let network = network.iter().map(|b| quote!(#b));
+                quote!(([ #(#network),* ], #registry))
+            });
             quote! {
-                /// Derive this contract's address — pure, offline. The deployer
-                /// registry is baked from the fetched id file at build time.
+                // A build input, never linked: see `Mode::Content::pin_file`.
+                const _: &[u8] = ::core::include_bytes!(::core::concat!(
+                    ::core::env!("CARGO_MANIFEST_DIR"),
+                    "/",
+                    #NETWORKS_FILE
+                ));
+
+                /// `(network id, registry strkey)` per listed network, the
+                /// network id being `sha256(network passphrase)`.
+                pub const NETWORKS: [([u8; 32], &str); #n] = [ #(#rows),* ];
+
+                /// The deployer registry for the current network, from
+                /// [`NETWORKS`]. Panics (fail closed) on an unlisted network.
+                pub fn registry(env: &::soroban_sdk::Env) -> ::soroban_sdk::Address {
+                    let network = env.ledger().network_id().to_array();
+                    for (listed, registry) in NETWORKS.iter() {
+                        if *listed == network {
+                            return ::soroban_sdk::Address::from_str(env, registry);
+                        }
+                    }
+                    ::core::panic!("no registry is listed for this network")
+                }
+
+                /// Derive this contract's address — pure, offline:
+                /// `deployer(registry(env), WASM_HASH)`.
                 pub fn address(env: &::soroban_sdk::Env) -> ::soroban_sdk::Address {
-                    let registry = ::soroban_sdk::Address::from_str(
-                        env,
-                        ::core::include_str!(::core::concat!(
-                            ::core::env!("CARGO_MANIFEST_DIR"),
-                            "/",
-                            #id_file
-                        ))
-                        .trim(),
-                    );
                     env.deployer()
-                        .with_address(registry, hash(env))
+                        .with_address(registry(env), hash(env))
                         .deployed_address()
                 }
             }
@@ -613,6 +717,63 @@ fn expand(spec: &RegistrySpec) -> TokenStream2 {
             #derive_impl
 
             #client_item
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::parse_networks;
+    use sha2::{Digest, Sha256};
+
+    const TESTNET: &str = "Test SDF Network ; September 2015";
+    const MAINNET: &str = "Public Global Stellar Network ; September 2015";
+    const A: &str = "CDX2DMYMMEYU6FGN3HPJ2GQSSL5EZHIAMEJD4SPF55FZE5LEUBPPPDA7";
+    const B: &str = "CC236AK2RX7MUO7BV7JYDDW5KHZ3X7YYJOJKCVDC543BQBNNSUCZB7NN";
+
+    fn id(passphrase: &str) -> [u8; 32] {
+        Sha256::digest(passphrase.as_bytes()).into()
+    }
+
+    #[test]
+    fn rows_key_each_registry_by_its_network_id() {
+        let text = format!("# comment\n\n{A} {TESTNET}\n  {B}   {MAINNET}  \n");
+        assert_eq!(
+            parse_networks(&text).unwrap(),
+            vec![(id(TESTNET), A.to_string()), (id(MAINNET), B.to_string())]
+        );
+    }
+
+    #[test]
+    fn a_bad_table_is_refused() {
+        let g = "GAMPJROHOAW662FINQ4XQOY2ULX5IEGYXCI4SMZYE75EHQBR6PSTJG3M";
+        let bad_checksum = format!("{}A", &A[..55]);
+        for (text, why) in [
+            (String::new(), "lists no network"),
+            ("# only a comment\n".to_string(), "lists no network"),
+            (A.to_string(), "expected"),
+            (format!("{g} {TESTNET}"), "not a contract strkey"),
+            (format!("{bad_checksum} {TESTNET}"), "not a contract strkey"),
+            (
+                format!("{} {TESTNET}", A.to_lowercase()),
+                "not a contract strkey",
+            ),
+            (
+                format!("{A} Test SDF Network ; September 2016"),
+                "not a known network passphrase",
+            ),
+            (
+                format!("{A} Test SDF Network  ; September 2015"),
+                "not a known network passphrase",
+            ),
+            (format!("{A} {TESTNET}\n{B} {TESTNET}"), "listed twice"),
+            (
+                format!("{A} {TESTNET}\n{A} {MAINNET}"),
+                "listed for two networks",
+            ),
+        ] {
+            let err = parse_networks(&text).unwrap_err();
+            assert!(err.contains(why), "{text:?}: {err}");
         }
     }
 }

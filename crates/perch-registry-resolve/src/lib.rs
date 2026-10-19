@@ -27,6 +27,32 @@
 //! (their network ids differ). Resolve under an env bound to the target
 //! network's id (`env.ledger().with_mut(|l| l.network_id = …)` in tests).
 //!
+//! # One build, every listed network
+//!
+//! A registry id is itself a contract id, so it differs per network too. The
+//! name-only form therefore compiles in a **table** of one registry per
+//! network, read at build time from `wasm/registry.networks` in the invoking
+//! crate:
+//!
+//! ```text
+//! CDX2DMYMMEYU6FGN3HPJ2GQSSL5EZHIAMEJD4SPF55FZE5LEUBPPPDA7 Test SDF Network ; September 2015
+//! CC236AK2RX7MUO7BV7JYDDW5KHZ3X7YYJOJKCVDC543BQBNNSUCZB7NN Public Global Stellar Network ; September 2015
+//! ```
+//!
+//! One `<registry C-strkey> <network passphrase>` row per line; blank lines and
+//! lines starting with `#` are skipped. At call time the generated `registry(env)`
+//! compares `env.ledger().network_id()` with `sha256(passphrase)` for each row
+//! and returns that row's registry, so the same wasm resolves each listed
+//! network's own infra. On an **unlisted network it panics**: the contract
+//! fails closed rather than resolving an address nobody vetted.
+//!
+//! The table is validated at build time: every strkey must be a canonical
+//! contract (`C…`) strkey, every passphrase one of the four Stellar networks'
+//! (mainnet, testnet, futurenet, standalone), and no network or registry may
+//! appear twice. A mistyped passphrase would otherwise silently leave its
+//! network without a registry. Changing any row changes the bytes on every
+//! network, as any rebuild with another registry would.
+//!
 //! # Usage
 //!
 //! ```ignore
@@ -35,16 +61,18 @@
 //! // Name-only mode — the ergonomic default, like `import_contract_client!`. A
 //! // bare ident matching the crate (or a "hyphenated-string", optional channel
 //! // prefix + `@version`) generates a same-named module. It bakes, at build time,
-//! // both the wasm hash (hex in `wasm/<name>.sha256`) and the deployer registry
-//! // id (`wasm/stateless.id`), so `address(env)` takes NO registry arg. Missing
-//! // files are build errors. Group in a module if the derived
-//! // name would collide with the like-named crate:
+//! // both the wasm hash (hex in `wasm/<name>.sha256`) and the per-network
+//! // registry table (`wasm/registry.networks`), so `address(env)` takes NO
+//! // registry arg. Missing files are build errors. Group in a module if the
+//! // derived name would collide with the like-named crate:
 //! mod infra {
 //!     registry_contract!(perch_doc_compiler); // wasm "perch-doc-compiler"
 //!     registry_contract!(perch_interpreter);
 //!     // registry_contract!("perch-doc-compiler@1.0.0"); // pin a specific version
 //! }
-//! // infra::perch_doc_compiler::address(env) -> Address   (registry baked in)
+//! // infra::perch_doc_compiler::address(env)  -> Address  (this network's registry)
+//! // infra::perch_doc_compiler::registry(env) -> Address  (panics if unlisted)
+//! // infra::perch_doc_compiler::NETWORKS: [([u8; 32], &str); N]  (network id, registry)
 //!
 //! // Pinned mode — compile-time hash literal, zero cross-contract calls, offline.
 //! // Hashes below are illustrative builds of the perch infra; `address(env,
@@ -103,9 +131,10 @@
 //! `<name>` is a bare ident (module = the ident, wasm name = it with `_`→`-`) or a
 //! string literal (module = leaf with `-`→`_`, optional channel prefix +
 //! `@version`). It pins the wasm hash read from `wasm/<leaf>.sha256` (64 hex
-//! chars) AND bakes the deployer registry id from `wasm/stateless.id`, both at
-//! build time — so
-//! `address(env)` takes no `registry` arg and no `client()` is generated. **Keyed**
+//! chars) AND bakes the per-network registry table from
+//! `wasm/registry.networks` ([above](#one-build-every-listed-network)), both at
+//! build time — so `address(env)` takes no `registry` arg, `registry(env)`
+//! and `NETWORKS` are generated, and no `client()` is. **Keyed**
 //! (`{ … }`), whose `address(env, registry)` takes the registry explicitly — the
 //! fields below:
 //!
