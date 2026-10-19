@@ -28,13 +28,18 @@ jobs:
           targets: wasm32v1-none
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      # Before any step can rewrite it: a Cargo.lock that disagrees with the
+      # manifests (a version bump without the lock refresh) is a failure, not
+      # something the build silently fixes in this checkout only.
+      - name: Cargo.lock matches the manifests
+        run: cargo metadata --locked --format-version 1 >/dev/null
       # z3 backs the perch-analyze SMT tests (they skip loudly when absent).
       - run: sudo apt-get update && sudo apt-get install -y z3
-      # The account and the factory pin their dependencies to the sha256 of
-      # the deployed wasm, read at build time from their git-ignored wasm/
-      # caches. Fetch them, hash- and address-checked, from
-      # deployments/testnet.json before anything compiles them; the deployed
-      # stack lands in target/stack for the release-stack suite below.
+      # The account and the factory build from their committed pins
+      # (crates/*/wasm/); some tests also load the pinned wasm bytes. Fetch
+      # them, hash- and address-checked, from deployments/testnet.json; the
+      # deployed stack lands in target/stack for the release-stack suite
+      # below.
       - uses: ./.github/actions/fetch-infra-wasm
         with:
           stack: target/stack
@@ -74,7 +79,7 @@ jobs:
           scripts/build-stack.sh --builder contract \
             --registry "$(jq -r .registry.id deployments/testnet.json)" --out target/source-stack
       - run: cargo fmt --all --check
-      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo clippy --locked --workspace --all-targets -- -D warnings
       - name: cargo test --workspace
         env:
           STATE: ${{ steps.deployment.outputs.state }}
@@ -82,13 +87,13 @@ jobs:
           case "$STATE" in
             # Fresh source build: its pins no longer match the (foreign)
             # manifest, so skip the manifest pin check.
-            foreign) cargo test --workspace -- --skip consumers_pin_the_deployment_manifest ;;
+            foreign) cargo test --locked --workspace -- --skip consumers_pin_the_deployment_manifest ;;
             # Deployed bytes are older than this source: skip the one
             # deployed-bytes behavioral test (it would run HEAD's expectations
             # against older bytes); the manifest pin check still holds.
-            stale) cargo test --workspace -- --skip a_new_passkey_account_applies_a_document_signed_by_its_passkey ;;
+            stale) cargo test --locked --workspace -- --skip a_new_passkey_account_applies_a_document_signed_by_its_passkey ;;
             # Deployed bytes match this source: every check is a hard gate.
-            current) cargo test --workspace ;;
+            current) cargo test --locked --workspace ;;
           esac
       # The manifest against the chain: every contract at its content address
       # running its recorded wasm, and what the factory, adapter, pool, and
@@ -147,6 +152,32 @@ jobs:
           eval "$(scripts/zk-toolchain.sh)"
           cargo test -p perch-integration-tests --test release_stack -- --ignored --test-threads 2 \
             --skip cap_sweep
+
+  # The account and the factory build from a plain checkout: their build-time
+  # pins (crates/*/wasm/stateless.id and *.sha256) are committed, so a cargo
+  # git dependency on perch builds with no fetch script and no network. The
+  # pins must equal deployments/testnet.json, and perch-smart-account,
+  # perch-account, and perch-account-factory, depended on by git rev, must
+  # build offline from cargo's clean checkout, to the same wasm as this
+  # checkout.
+  committed-pins:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Committed pins match deployments/testnet.json
+        run: scripts/check-pins.sh
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
+        with:
+          toolchain: stable
+          targets: wasm32v1-none
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: ./.github/actions/setup-stellar
+      - name: Build perch as a git dependency, without fetching
+        run: scripts/check-git-dep.sh --compare --out target/git-dep
 
   # Flux refinement verification of perch-program (nidohq/soroban-flux).
   # Runs under flux's pinned nightly; the deploy/test toolchain stays stable.
@@ -239,8 +270,10 @@ jobs:
         # surface, perch-interpreter-js the interpreter contract bindings,
         # perch-zk the ZK recovery proof helpers and pool indexer (proves with
         # bb.js in-test), perch-relay the guardian-approval relay,
-        # perch-contracts the stack bindings generated from the deployment.
-        package: [perch-js, perch-interpreter-js, perch-zk, perch-relay, perch-contracts]
+        # perch-contracts the stack bindings generated from the deployment,
+        # perch-artifacts the deployment manifests, circuits, vectors, and
+        # limits as files (checked byte for byte against their sources).
+        package: [perch-js, perch-interpreter-js, perch-zk, perch-relay, perch-contracts, perch-artifacts]
     defaults:
       run:
         working-directory: packages/${{ matrix.package }}
@@ -260,8 +293,9 @@ jobs:
 
   # The release workflow's version-bump scoping (scripts/release-deps.py:
   # what re-releases a contract besides its crate trees, and that every
-  # paths_for() list covers the crates its contract links) and the stack
-  # builder's dirty check (scripts/source-dirty.sh), with release.yml's
+  # paths_for() list covers the crates its contract links), that its npm
+  # lists name every package under packages/, and the stack builder's dirty
+  # check (scripts/source-dirty.sh), with release.yml's
   # pinned git-cliff.
   release-scripts:
     runs-on: ubuntu-latest
@@ -283,8 +317,9 @@ jobs:
           PERCH_REQUIRE_GIT_CLIFF: "1"
 
   # Every npm package as `npm publish` would ship it: packed, installed from
-  # the tarball into an empty project, every entry point imported. Nothing
-  # is published.
+  # the tarball into an empty project, every entry point imported, every
+  # command run, and perch-artifacts' files compared with their sources.
+  # Nothing is published.
   packages:
     runs-on: ubuntu-latest
     permissions:

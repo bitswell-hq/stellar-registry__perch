@@ -11,16 +11,17 @@ measured exercise is [`testnet-exercise.md`](testnet-exercise.md).
 
 Consumers pin their dependencies when they are **built**, not when they are
 deployed. The account derives the compiler, interpreter, and spending-limit
-addresses as `deployer(registry, sha256(wasm))` from bytes in its
-git-ignored `wasm/` cache (`perch_registry_resolve::registry_contract!`). The
-factory pins the account wasm hash and the WebAuthn verifier the same way.
+addresses as `deployer(registry, sha256(wasm))` from the registry id and
+hashes committed in its `wasm/` directory
+(`perch_registry_resolve::registry_contract!`). The factory pins the account
+wasm hash and the WebAuthn verifier the same way.
 Nothing can repoint a deployed account or factory (AGENTS.md, "Infra
 contracts are resolved from a build-time-pinned wasm hash"). So:
 
 1. a dependency must exist, as exact bytes, before anything that pins it is
    built; and
-2. "the account uses compiler X" is only true if the bytes in the cache when
-   the account was built are X's.
+2. "the account uses compiler X" is only true if the pinned hash when the
+   account was built is X's.
 
 A lookup by name can return stale bytes without failing, and a check that
 an address is self-consistent does not catch it. So pins are fetched by the
@@ -71,10 +72,12 @@ every consumer reads.
 
 | Command | Does |
 | --- | --- |
-| `scripts/build-stack.sh --registry <id>` | Builds tier 0, stages its wasm and `<id>` as the account's pins, builds the account, stages it and the WebAuthn verifier as the factory's pins, builds the factory. `target/stack/build.json` records every hash and the pins each consumer was built against. Deployments build with `stellar scaffold build`; `--builder contract` uses core `stellar contract build`, the same code without scaffold's metadata. It overwrites the account's and factory's pin caches: run `fetch-infra-wasm.sh` afterwards to pin the deployment again. |
+| `scripts/build-stack.sh --registry <id>` | Builds tier 0, stages its wasm and `<id>` as the account's pins, builds the account, stages it and the WebAuthn verifier as the factory's pins, builds the factory. `target/stack/build.json` records every hash and the pins each consumer was built against. Deployments build with `stellar scaffold build`; `--builder contract` uses core `stellar contract build`, the same code without scaffold's metadata. It overwrites the account's and factory's committed pins: run `fetch-infra-wasm.sh` (or `git checkout crates/*/wasm`) afterwards to pin the deployment again, unless this build is the new deployment. |
 | `scripts/deploy-stack.sh --source <identity>` | Deploys a new instance of the registry wasm the network's perch registries already run, runs `build-stack.sh` against it, then publishes tier 0 and the factory (upload with hash check, `publish_hash`, `deploy_stateless`, derived-address and code-hash checks), installs the account, writes the manifest, and runs `verify-deployment.sh`. Idempotent. `--registry` publishes into an existing registry instead. `--author <C…>` binds every name to a smart account and signs its authorization through the `theahaco/stellar-cli` fork (source/fee stays the delegate). `--reuse "<names>"` fetches those already-published tier-0 by hash and pins them instead of rebuilding — the canonical path (see [The canonical registry](#the-canonical-registry-and-publishing-the-stack-to-it)). |
 | `scripts/verify-deployment.sh` | Read-only, by hash and address only: the registry's code; each contract at its content address, running its recorded wasm, served by the registry for its name and version; the account installed; the manifest's recorded pins equal to the deployed hashes; and what consumers resolve on-chain, from the factory's `account_wasm_hash`/`webauthn_verifier`, the adapter's `circuit_id`/`tree_depth` against the pool's `depth`, to the code hash and `infra()` of every account the exercise report lists. A report from another stack commit is skipped with a notice. |
-| `scripts/fetch-infra-wasm.sh` | Fills the account and factory pin caches from the manifest. Each wasm is fetched by its recorded address (the account by its hash) and refused unless its sha256 and content address match. `--stack <dir>` fetches every deployed artifact with a `build.json`. |
+| `scripts/fetch-infra-wasm.sh` | Fetches the account's and factory's pinned wasm from the manifest and rewrites their committed pins (`stateless.id`, `<name>.sha256`). Each wasm is fetched by its recorded address (the account by its hash) and refused unless its sha256 and content address match. `--stack <dir>` fetches every deployed artifact with a `build.json`. |
+| `scripts/check-pins.sh` | Offline: the committed pins equal the manifest's registry id and hashes. A new deployment commits its pins with its manifest. |
+| `scripts/check-git-dep.sh --compare` | Builds the account, the factory, and `perch-smart-account` as cargo git dependencies from cargo's clean checkout, offline and without fetching, and requires the same wasm as this checkout. |
 | `cargo test -p perch-integration-tests --test testnet_pins` | The pins actually compiled into the account and the factory equal the manifest's. |
 | `cargo test -p perch-integration-tests --test release_stack -- --ignored` | Every recovery flow through the stack's wasm, with real proofs (`PERCH_STACK_DIR`, default `target/stack`). |
 | `cargo run -p perch-testnet` | The same flows on the deployed contracts (see [`testnet-exercise.md`](testnet-exercise.md)). |
@@ -105,7 +108,7 @@ rebuilt stack would break fails CI. The `packages` job runs
 | Consumers resolve them | factory `account_wasm_hash()` and `webauthn_verifier()`, each account's code hash and `infra()`, adapter `circuit_id()`, adapter and pool depth |
 | A fresh build pins the deployment | `fetch-infra-wasm.sh` checks every fetched byte; `testnet_pins` checks what was compiled |
 | The deployed bytes behave as specified | `release_stack.rs` on the fetched bytes; `perch-testnet` on the chain |
-| The source reproduces them | rebuilding the stack from the deployment commit, in another directory, with the recorded toolchain gives every recorded hash (the current deployment's record: [`audit-scope.md`](../audit-scope.md#deployment-provenance)) |
+| The source reproduces them | rebuilding the stack from the deployment commit, in another directory, with the recorded toolchain gives every hash the deployment built; in canonical mode, the reused tier-0 reproduce only through the attested release build (the current deployment's record: [`audit-scope.md`](../audit-scope.md#deployment-provenance)) |
 
 A registry name lookup is never the evidence: names only select what to
 fetch, and every fetched byte is checked against a hash the manifest
@@ -128,16 +131,19 @@ admin, manager, and author — self-contained, so it builds and publishes its
 own bytes and the account pins exactly those. The **canonical** mode
 (`--registry <canonical> --author <smart account> --reuse …`) is what CI runs.
 
-**The same version is different bytes in the two registries.** The current
-deployment ([`deployments/testnet.json`](../../deployments/testnet.json)) is a
-rehearsal in its own registry instance. Its interpreter, compiler, spending
-limit, and ed25519 verifier carry versions that `release.yml` also publishes
-canonically, but `release.yml` builds through
-stellar-registry/actions' attested release build and `build-stack.sh` runs its
-own scaffold build, so the bytes differ (interpreter 0.1.3 is `2254f17d…` in
-the deployment and `e4d7fb8d…` canonically, as observed on 2026-10-09).
-Resolve infra by the manifest's hash or address, never by `(name, version)`
-across registries.
+The current deployment
+([`deployments/testnet.json`](../../deployments/testnet.json)) is canonical:
+`release.yml`'s `deploy-stack` job published it into the `constructorless`
+registry, reusing the four published tier-0 contracts.
+
+**The same version is different bytes in the two modes.** A rehearsal's
+interpreter, compiler, spending limit, and ed25519 verifier carry versions
+that `release.yml` also publishes canonically. `release.yml` builds them
+with stellar-registry/actions' attested release build, and `build-stack.sh`
+runs its own scaffold build, so the bytes differ. In an earlier rehearsal,
+interpreter 0.1.3 was `2254f17d…` against `e4d7fb8d…` canonically (observed
+2026-10-09). Resolve infra by the manifest's hash or address, never by
+`(name, version)` across registries.
 
 ### Authority
 
@@ -329,12 +335,12 @@ changes. The hashes do not change unless the source does.
 | `@stellar-registry/perch-zk` | commitments, witnesses, bb.js proving; `/indexer`: the trust-free pool indexer, serving witnesses from `PoolWitnessIndex` (one chunk of leaves per witness; node stores and a snapshot to resume) |
 | `@stellar-registry/perch-relay` | the guardian-approval relay: admits an approval only once authenticated (enforcing simulation of the controller call, or a `G...` guardian's own signature with the call rebuilt from the posted statement), including CAP-0071 delegated entries; `/node` and the `perch-relay` command serve it from one process |
 | `@stellar-registry/perch-contracts` | bindings for every stack contract, from the deployed wasm, and the manifests |
+| `@stellar-registry/perch-artifacts` | the deployment manifests, Noir circuits and their manifest, test vectors, and document and program limits as files; `perch-fetch-infra-wasm --stack` and `perch-zk-toolchain` run the repository's scripts against them. Changing a shipped file re-releases it |
 
-The last three are built, tested, and pack-checked in CI, but are not in
-`release.yml`'s `NPM_PACKAGES`, so they are unpublished
-([`DEFERRED.md`](../DEFERRED.md#npm-publishing-of-perch-zk-and-the-contract-clients)).
-Listing one there publishes it on its next merge. Rust crates are never
-published to crates.io; contract releases are on-chain wasm publishes
-(`release.yml`). Hosting the indexer or the relay, with storage, routes, and
-schedules, is the operator's concern. Nido's hosted services are deployments
-of these packages.
+All six are published to npm by `release.yml`'s `npm-publish` job: merging
+a bump of a package's manifest version (the release PR proposes one from its
+conventional commits) tags `<pkg>-v<version>` and publishes it with npm
+provenance. Rust crates are never published to crates.io; contract releases
+are on-chain wasm publishes (`release.yml`). Hosting the indexer or the
+relay, with storage, routes, and schedules, is the operator's concern. Nido's
+hosted services are deployments of these packages.
