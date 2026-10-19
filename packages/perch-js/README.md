@@ -20,6 +20,12 @@ npm install @stellar-registry/perch
 ESM-only. Ships compiled JS + `.d.ts`; regular dependencies are `zod` and
 `@noble/hashes`.
 
+The consumer interface ("Using a Perch account" below) first shipped in
+0.3.2. The repository source can be ahead of the latest npm release, so a
+consumer that switches between the repository source and a published
+version must check they are the same code
+([`docs/DEFERRED.md`](../../docs/DEFERRED.md), "Packaging rule").
+
 ## Usage
 
 ```ts
@@ -62,7 +68,7 @@ const doc = parsePolicyDocJson(jsonText); // throws on any deviation — fail cl
 
 Everything a wallet needs to read, select, sign for, and change a Perch
 account, so it never computes a Perch hash, an authorization digest, or a
-rule id itself (#108).
+rule id itself.
 
 ### Reads at one revision
 
@@ -107,8 +113,9 @@ const signature = buildAuthPayload(selection, [{ signer, signature: await sign(d
 ```
 
 Rule ids are OZ context-rule ids. They survive an in-place edit and change
-when a rule is replaced (a new scope, a rename, a removal and re-addition),
-and OZ never reuses one, so select by name and scope at a revision and never
+when a rule is replaced (a new scope, a rename, a removal and re-addition,
+or `apply_doc`'s delta pricing a replacement below an edit), and OZ never
+reuses one, so select by name and scope at a revision and never
 keep ids across revisions. `signingDigest` is what every signer signs: OZ's
 `sha256(signature_payload || xdr(rule ids))`, where `signature_payload` is
 the account auth entry's Soroban payload. `buildAuthPayload` is the `ScVal`
@@ -126,8 +133,8 @@ digest), not a configuration revision, so between signing and inclusion:
   transaction executes under the edited rule**.
 
 Binding a revision into ordinary authorization would change the digest
-every signer signs; RFC
-[#109 §3b](https://github.com/stellar-registry/perch/issues/109) defers it.
+every signer signs; it is deferred
+([`docs/DEFERRED.md`](../../docs/DEFERRED.md#revision-bound-ordinary-signatures)).
 Signatures for ordinary transactions should therefore have a short expiration
 (`signatureExpirationLedger`). Document changes are covered: `apply_doc`'s
 `expected_revision` refuses one signed at a revision the account has left.
@@ -212,7 +219,8 @@ landed is skipped when an operation is retried or started again.
 `buildAuthPayload` are pinned against vectors the Rust suite writes from the
 contracts' own code (`testdata/`).
 
-Planned (tracked in the repo): `compile()` parity with the Rust compiler.
+perch-js does not compile documents. The account's pinned on-chain doc
+compiler is authoritative; `checkLimits` checks only its caps.
 
 ## License
 

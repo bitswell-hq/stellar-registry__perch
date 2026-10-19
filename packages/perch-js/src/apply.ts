@@ -188,7 +188,7 @@ export function applyDocument(
       // The pre-sign check: nothing is signed for a revision that has gone,
       // or for an account frozen since the snapshot.
       await assertSignable(reader, config.revision, clock);
-      const digest = signingDigest(prepared.signaturePayload, selection.ruleIds);
+      const digest = signingDigest(selection.account, prepared.signaturePayload, selection.ruleIds);
       const signatures = await callbacks.sign({
         step: step.id,
         description: step.description,

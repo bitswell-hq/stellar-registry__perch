@@ -60,9 +60,10 @@ before that's a deliberate decision — see `perch-recovery`'s introduction
 
 `perch-smart-account`'s `infra` module (`perch_registry_resolve::registry_contract!`)
 derives the doc-compiler/interpreter/spending-limit addresses as
-`deployer(stateless_registry_id, sha256(pinned_wasm_bytes))`, where the wasm
-bytes are fetched into the build tree (`scripts/fetch-infra-wasm.sh`) and
-baked into the *consuming* contract's own wasm at compile time — there is no
+`deployer(stateless_registry_id, pinned_wasm_hash)`, where the registry id and
+hashes are committed under `crates/*/wasm/` (refreshed by
+`scripts/fetch-infra-wasm.sh`) and baked into the *consuming* contract's own
+wasm at compile time — there is no
 constructor argument or storage slot naming these addresses, and no way to
 repoint them post-deploy. Two consequences that are easy to miss:
 
@@ -71,9 +72,8 @@ repoint them post-deploy. Two consequences that are easy to miss:
   build, which is a new address — no existing deployed `PerchAccount` will
   ever call it, no matter what's published later.** A schema change is never
   a live upgrade for deployed accounts; it's a new option only newly-built
-  accounts can use. See `docs/recovery/migration.md` for the worked-out
-  consequence (an account built before a schema change can never adopt it in
-  place — only a new account can).
+  accounts can use. A deployed account reaches a new compiler only through
+  its own delayed upgrade (`docs/recovery/spec.md` §12, §16).
 - A new deployable that other in-repo crates need to *cross-call the client
   of* without linking its full logic (parser, storage, `Policy` impl, ...)
   should split like `perch-doc-compiler` does: a `contract` feature
@@ -107,8 +107,8 @@ which runs the account's real `__check_auth` (as
 through `tests/support/mod.rs`). Relatedly: OZ's
 `remove_context_rule` calls a policy's `uninstall` via `try_uninstall` and
 discards the result even if it panics — a policy can never rely on
-`uninstall` as a security gate (see `docs/recovery/controller-governance.md`
-for how `perch-recovery` handles this). When chaining several
+`uninstall` as a security gate (see `docs/recovery/spec.md` §10 for how
+`perch-recovery` handles this). When chaining several
 `do_check_auth` calls that are expected to panic (via
 `catch_unwind`) inside one test, keep it to one or two per `Env` — this
 host's test call-stack bookkeeping was observed not to reliably survive a

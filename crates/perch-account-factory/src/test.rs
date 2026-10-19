@@ -191,10 +191,14 @@ fn a_new_passkey_account_applies_a_document_signed_by_its_passkey() {
     let w = world();
     let key = SoftPasskey::from_seed([3; 32]);
     let account = w.client().create_passkey(&w.salt(1), &w.key_data(&key));
+    // The document declares the CANONICAL 65-byte public key: the compiler
+    // refuses a non-canonical key (e.g. the passkey's `key_data`, which carries
+    // a credential-id suffix). The genesis admin signer the passkey authorizes
+    // with still carries the suffix; this first apply re-keys it to canonical.
     let doc = format!(
         r#"{{"version":1,"network":"{FIXTURE_NETWORK}","signers":[{{"id":"owner","verifier":"{}","key":"{}"}}],"rules":[{{"name":"admin","scope":{{"type":"self-admin"}},"principals":{{"type":"all","signers":["owner"]}}}}]}}"#,
         strkey(&w.verifier),
-        hex(&key.key_data()),
+        hex(&key.public_key()),
     );
     let doc = Bytes::from_slice(&w.env, doc.as_bytes());
     let invocation = SorobanAuthorizedInvocation {
