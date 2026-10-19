@@ -6,11 +6,12 @@ packages/ with a manifest that installs from the registry, an npm package's
 scope and version bump (scripts/npm-release.sh, used by release-pr and by
 deploy-stack's perch-artifacts bump), the Nido dispatch plan
 (scripts/nido-dispatch-plan.sh), that no release job holding a signing
-credential builds or puts it in argv, that the mainnet jobs run only by
-dispatch and read only the mainnet environment's settings, which released
+credential builds or puts it in argv, that release-mainnet.yml runs only by
+dispatch and reads only the mainnet environment's settings, which released
 commits a mainnet dispatch may publish (scripts/mainnet-plan.sh), what a
 mainnet publish sends and that its plan sends nothing
-(scripts/publish-wasm.sh), what a stack build records as dirty
+(scripts/publish-wasm.sh), the deploy-record perch-artifacts bump
+(scripts/deploy-record-bump.sh), what a stack build records as dirty
 (scripts/source-dirty.sh, used by scripts/build-stack.sh), and the committed
 build-time pins' drift check (scripts/check-pins.sh).
 
@@ -42,7 +43,9 @@ SOURCE_DIRTY = os.path.join(REPO, "scripts", "source-dirty.sh")
 CHECK_PINS = os.path.join(REPO, "scripts", "check-pins.sh")
 NPM_RELEASE = os.path.join(REPO, "scripts", "npm-release.sh")
 NIDO_PLAN = os.path.join(REPO, "scripts", "nido-dispatch-plan.sh")
+DEPLOY_RECORD_BUMP = os.path.join(REPO, "scripts", "deploy-record-bump.sh")
 RELEASE_YML = os.path.join(REPO, ".github", "workflows", "release.yml")
+RELEASE_MAINNET_YML = os.path.join(REPO, ".github", "workflows", "release-mainnet.yml")
 GIT_CLIFF = shutil.which("git-cliff")
 
 
@@ -440,11 +443,28 @@ class NpmScope(unittest.TestCase):
         self.assertEqual(run(cliff, repo.dir).stdout.strip(), "perch-artifacts-v0.2.0")
 
 
-def release_jobs():
-    """release.yml's jobs, as {name: the job's YAML text}."""
-    body = release_yml().split("\njobs:\n", 1)[1]
+def workflow_jobs(text):
+    """A workflow's jobs, as {name: the job's YAML text}."""
+    body = text.split("\njobs:\n", 1)[1]
     parts = re.split(r"^  ([A-Za-z0-9_-]+):\n", body, flags=re.M)
     return dict(zip(parts[1::2], parts[2::2]))
+
+
+def release_jobs():
+    """release.yml's jobs, as {name: the job's YAML text}."""
+    return workflow_jobs(release_yml())
+
+
+def release_mainnet_yml():
+    with open(RELEASE_MAINNET_YML) as f:
+        return f.read()
+
+
+def signing_jobs():
+    """Every job of both release workflows, keyed "<file>:<job>"."""
+    jobs = {f"release.yml:{n}": j for n, j in release_jobs().items()}
+    jobs.update({f"release-mainnet.yml:{n}": j for n, j in workflow_jobs(release_mainnet_yml()).items()})
+    return jobs
 
 
 SEED = "secrets.CI_PUBLISH_SECRET_KEY"
@@ -464,11 +484,12 @@ class ReleaseKeys(unittest.TestCase):
     """Where release.yml's signing credentials can be read."""
 
     def test_no_job_reads_an_npm_token(self):
-        self.assertNotIn("NPM_TOKEN", release_yml())
-        self.assertNotIn("NODE_AUTH_TOKEN", release_yml())
+        for text in (release_yml(), release_mainnet_yml()):
+            self.assertNotIn("NPM_TOKEN", text)
+            self.assertNotIn("NODE_AUTH_TOKEN", text)
 
     def test_every_job_holding_the_seed_is_in_an_environment(self):
-        holders = {n: j for n, j in release_jobs().items() if holds_seed(j)}
+        holders = {n: j for n, j in signing_jobs().items() if holds_seed(j)}
         self.assertTrue(holders)
         for name, job in holders.items():
             with self.subTest(job=name):
@@ -476,7 +497,7 @@ class ReleaseKeys(unittest.TestCase):
                 self.assertRegex(job, r"(?m)^ {4,6}environment: \S")
 
     def test_no_job_holding_the_seed_builds(self):
-        for name, job in release_jobs().items():
+        for name, job in signing_jobs().items():
             if not holds_seed(job):
                 continue
             for marker in BUILDS:
@@ -484,7 +505,7 @@ class ReleaseKeys(unittest.TestCase):
                     self.assertNotIn(marker, job)
 
     def test_the_seed_never_reaches_argv(self):
-        for name, job in release_jobs().items():
+        for name, job in signing_jobs().items():
             for line in job.splitlines():
                 for seed in SEEDS:
                     if seed in line:
@@ -515,6 +536,12 @@ NPM = shutil.which("npm")
 def deploy_pr_add_paths():
     """The paths release.yml's deploy-stack commits into its deploy PR."""
     block = re.search(r"^ *- name: Open the deploy\(testnet\) manifest PR\n(.*?)^ *body:", release_yml(), re.S | re.M).group(1)
+    return re.search(r"add-paths: \|\n((?: +\S+\n)+)", block).group(1).split()
+
+
+def mainnet_deploy_pr_add_paths():
+    """The paths release-mainnet.yml commits into its deploy(mainnet) PR."""
+    block = re.search(r"^ *- name: Open the deploy\(mainnet\) manifest PR\n(.*?)^ *body:", release_mainnet_yml(), re.S | re.M).group(1)
     return re.search(r"add-paths: \|\n((?: +\S+\n)+)", block).group(1).split()
 
 
@@ -570,6 +597,26 @@ class NpmBump(unittest.TestCase):
         # The bumped version is current: no further bump until a later change.
         self.repo.commit("chore: take the bump")
         self.assertEqual(self.bump(), "")
+
+    def test_a_mainnet_deploy_record_bumps_perch_artifacts(self):
+        # release-mainnet.yml's record step: the same bump, through
+        # scripts/deploy-record-bump.sh, leaving only uncommitted files the
+        # deploy(mainnet) PR commits.
+        run(["git", "tag", "perch-artifacts-v0.1.0"], self.repo.dir)
+        head = run(["git", "rev-parse", "HEAD"], self.repo.dir).stdout.strip()
+        bump = [DEPLOY_RECORD_BUMP, "deployments/mainnet.json", "deploy(mainnet): recovery stack @ " + "cd" * 20]
+        self.repo.write("deployments/mainnet.json", '{"network": "mainnet"}\n')
+        self.assertEqual(run(bump, self.repo.dir).stdout.strip(), "0.1.0 0.1.1")
+        self.assertEqual(run(["git", "rev-parse", "HEAD"], self.repo.dir).stdout.strip(), head)
+        self.assertEqual(self.version("package.json"), "0.1.1")
+        with open(os.path.join(self.repo.dir, "packages", "perch-artifacts", "CHANGELOG.md")) as f:
+            self.assertIn("*(mainnet)* Recovery stack @ " + "cd" * 20, f.read())
+        changed = run(["git", "status", "--porcelain", "--untracked-files=all"], self.repo.dir).stdout.split()[1::2]
+        for path in changed:
+            self.assertTrue(any(path == p or path.startswith(p + "/") for p in mainnet_deploy_pr_add_paths()), path)
+        # An unchanged record releases nothing.
+        self.repo.commit("deploy(mainnet): recovery stack")
+        self.assertEqual(run(bump, self.repo.dir).stdout.strip(), "")
 
     def test_a_pin_only_change_is_no_release(self):
         run(["git", "tag", "perch-artifacts-v0.1.0"], self.repo.dir)
@@ -880,7 +927,7 @@ PUBLISH_WASM = os.path.join(REPO, "scripts", "publish-wasm.sh")
 
 
 def mainnet_jobs():
-    return {n: j for n, j in release_jobs().items() if n.startswith("mainnet-")}
+    return workflow_jobs(release_mainnet_yml())
 
 
 def code(job):
@@ -907,8 +954,8 @@ def env_words(job, name):
 
 
 class MainnetJobs(unittest.TestCase):
-    """release.yml's mainnet release: dispatched by hand, bound to the
-    mainnet environment, and apart from every testnet and npm job."""
+    """release-mainnet.yml: dispatched by hand, bound to the mainnet
+    environment, and apart from release.yml's testnet and npm jobs."""
 
     def test_mainnet_jobs_exist(self):
         self.assertEqual(set(mainnet_jobs()), {
@@ -916,22 +963,17 @@ class MainnetJobs(unittest.TestCase):
             "mainnet-deploy-stack-build", "mainnet-deploy-stack", "mainnet-deploy-stack-record"})
 
     def test_mainnet_runs_only_by_dispatch(self):
-        jobs = release_jobs()
+        on = re.search(r"(?ms)^on:\n(.*?)^\S", release_mainnet_yml()).group(1)
+        self.assertEqual(re.findall(r"(?m)^  ([a-z_]+):", on), ["workflow_dispatch"])
         for name, job in mainnet_jobs().items():
             with self.subTest(job=name):
                 self.assertIn("github.event_name == 'workflow_dispatch'", job_if(job))
-                self.assertTrue(all(n.startswith("mainnet-") for n in job_needs(job)), job_needs(job))
-        for name, job in jobs.items():
-            if not name.startswith("mainnet-"):
-                with self.subTest(job=name):
-                    self.assertFalse(any(n.startswith("mainnet-") for n in job_needs(job)))
 
-    def test_only_mainnet_jobs_touch_mainnet(self):
+    def test_release_yml_never_touches_mainnet(self):
         for name, job in release_jobs().items():
-            if name.startswith("mainnet-"):
-                continue
             with self.subTest(job=name):
                 self.assertNotIn("mainnet", code(job).lower())
+        self.assertNotIn("mainnet", release_yml().split("\njobs:\n", 1)[0].split("\non:\n", 1)[1].lower())
 
     def test_mainnet_jobs_never_read_a_testnet_setting(self):
         for name, job in mainnet_jobs().items():
@@ -956,27 +998,27 @@ class MainnetJobs(unittest.TestCase):
                         self.assertNotIn(marker, job)
 
     def test_a_dry_run_is_the_default_and_never_signs(self):
-        self.assertRegex(release_yml(), r"(?m)^      mainnet_dry_run:\n(?:        .*\n)*?        default: true\n")
+        self.assertRegex(release_mainnet_yml(), r"(?m)^      dry_run:\n(?:        .*\n)*?        default: true\n")
         signing = 0
         for name, job in mainnet_jobs().items():
             for step in steps(job):
                 if "STELLAR_SIGN_WITH_KEY:" in step:
                     signing += 1
                     with self.subTest(job=name, step=step.splitlines()[0]):
-                        self.assertIn("if: ${{ !inputs.mainnet_dry_run }}", step)
+                        self.assertIn("if: ${{ !inputs.dry_run }}", step)
                 elif MAINNET_SEED in step:
                     with self.subTest(job=name, step=step.splitlines()[0]):
-                        self.assertIn("if: inputs.mainnet_dry_run", step)
+                        self.assertIn("if: inputs.dry_run", step)
                         self.assertIn("--plan", step)
         self.assertEqual(signing, 2)
 
     def test_the_mainnet_lists_are_the_testnet_ones(self):
-        jobs = release_jobs()
+        jobs, mainnet = release_jobs(), mainnet_jobs()
         allow = json.loads(re.search(r"ALLOW='(\[[^']*\])'", jobs["publish-plan"]).group(1))
-        self.assertEqual(env_words(jobs["mainnet-plan"], "MAINNET_ALLOW")[0].split(), allow)
+        self.assertEqual(env_words(mainnet["mainnet-plan"], "MAINNET_ALLOW")[0].split(), allow)
         deploy_set = re.search(r'DEPLOY_SET="([^"]*)"', jobs["deploy-plan"]).group(1).split()
-        self.assertEqual(env_words(jobs["mainnet-plan"], "MAINNET_STACK")[0].split(), deploy_set)
-        reuse = {r for job in jobs.values() for r in env_words(job, "REUSE")}
+        self.assertEqual(env_words(mainnet["mainnet-plan"], "MAINNET_STACK")[0].split(), deploy_set)
+        reuse = {r for job in [*jobs.values(), *mainnet.values()] for r in env_words(job, "REUSE")}
         self.assertEqual(len(reuse), 1, reuse)
 
 

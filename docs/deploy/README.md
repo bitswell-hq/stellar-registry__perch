@@ -347,28 +347,28 @@ run's failed jobs instead: `npm-publish` and `notify-nido` re-run together.
 
 Mainnet is published by hand. No release merge reaches it: the `testnet`
 publishes, the `deploy-stack` jobs, and npm run on a release merge as above,
-and `release.yml`'s `mainnet-*` jobs run only when someone dispatches the
-workflow from `main` with a mainnet input. Each one publishes a tag that is
+and the separate [`release-mainnet.yml`](../../.github/workflows/release-mainnet.yml)
+workflow runs only when someone dispatches it from `main`. Each one publishes a tag that is
 already released on `main`, as the bytes it was released as, after the
 `mainnet` environment's reviewer approves. A dispatch is a dry run unless
-`mainnet_dry_run` is cleared.
+`dry_run` is cleared.
 
 | Input | |
 | --- | --- |
-| `mainnet_publish_tags` | release tags of allow-listed contracts (`perch-interpreter`, `perch-doc-compiler`, `perch-ed25519-verifier`, `perch-spending-limit`), separated by spaces |
-| `mainnet_stack_tag` | the release tag of a recovery-stack contract; the stack is built from its commit |
-| `mainnet_dry_run` | default on: run every check, simulate each transaction a real run would send, and print it with its fee; submit nothing and open no PR |
+| `publish_tags` | release tags of allow-listed contracts (`perch-interpreter`, `perch-doc-compiler`, `perch-ed25519-verifier`, `perch-spending-limit`), separated by spaces |
+| `stack_tag` | the release tag of a recovery-stack contract; the stack is built from its commit |
+| `dry_run` | default on: run every check, simulate each transaction a real run would send, and print it with its fee; submit nothing and open no PR |
 
 ```sh
 # Dry run (the default), then the real publish:
-gh workflow run release.yml -R stellar-registry/perch --ref main \
-  -f mainnet_publish_tags="perch-interpreter-v0.1.4 perch-doc-compiler-v0.3.3"
-gh workflow run release.yml -R stellar-registry/perch --ref main \
-  -f mainnet_publish_tags="perch-interpreter-v0.1.4 perch-doc-compiler-v0.3.3" \
-  -f mainnet_dry_run=false
+gh workflow run release-mainnet.yml -R stellar-registry/perch --ref main \
+  -f publish_tags="perch-interpreter-v0.1.4 perch-doc-compiler-v0.3.3"
+gh workflow run release-mainnet.yml -R stellar-registry/perch --ref main \
+  -f publish_tags="perch-interpreter-v0.1.4 perch-doc-compiler-v0.3.3" \
+  -f dry_run=false
 # Then the stack, once its tier-0 are on mainnet:
-gh workflow run release.yml -R stellar-registry/perch --ref main \
-  -f mainnet_stack_tag=perch-account-factory-v0.1.3
+gh workflow run release-mainnet.yml -R stellar-registry/perch --ref main \
+  -f stack_tag=perch-account-factory-v0.1.3
 ```
 
 | Job | Does | Holds |

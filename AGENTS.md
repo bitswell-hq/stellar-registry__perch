@@ -44,12 +44,12 @@ lists (`detect-releases` and `release-pr` — kept as duplicated literals, not
 one shared value), a `paths_for()` case for its own intra-workspace scope,
 and — only once the contract is actually meant to auto-publish on-chain when
 tagged — the `publish-plan` job's `ALLOW` list and `DISPATCH_TAG` regex (and
-`mainnet-plan`'s `MAINNET_ALLOW`, which `scripts/test-release-scripts.py`
+`release-mainnet.yml`'s `MAINNET_ALLOW`, which `scripts/test-release-scripts.py`
 keeps equal to `ALLOW`).
 `ALLOW` publishes into `unverified/perch/constructorless`, perch's one
 canonical testnet registry: an account or factory bakes one registry id and
 derives every infra address from it, so all infra must share that registry.
-Mainnet has its own, which the `mainnet-*` jobs publish to only by a manual
+Mainnet has its own, which `release-mainnet.yml` publishes to only by a manual
 dispatch (`docs/deploy/README.md`, "Mainnet"). The
 testnet registry is managed, so a name new to it needs the manager's one-time
 initial publish (`release.yml`'s header) before the merge that releases it;
