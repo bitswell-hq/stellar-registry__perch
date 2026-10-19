@@ -1661,6 +1661,80 @@ fn the_stack_compiler_hashes_the_canonical_recovery_text() {
     support::config_hash::check(&env, &compiler);
 }
 
+/// One built account and factory, unchanged, under each network their
+/// registry table lists: each resolves that network's registry's content
+/// addresses for the stack's own tier-0 bytes, and an unlisted network
+/// resolves nothing. The registries are written out here, not read from the
+/// table (`registry_table.rs` derives them from the Stellar Registry root).
+#[test]
+#[ignore = "needs the built stack"]
+fn one_build_resolves_each_listed_network() {
+    use perch_smart_account::InfraPins;
+    const NETWORKS: [(&str, &str); 2] = [
+        (
+            "Test SDF Network ; September 2015",
+            "CDX2DMYMMEYU6FGN3HPJ2GQSSL5EZHIAMEJD4SPF55FZE5LEUBPPPDA7",
+        ),
+        (
+            "Public Global Stellar Network ; September 2015",
+            "CC236AK2RX7MUO7BV7JYDDW5KHZ3X7YYJOJKCVDC543BQBNNSUCZB7NN",
+        ),
+    ];
+    let stack = load_stack();
+    // build-stack.sh builds for one network's registry; the bytes are the
+    // same for every listed network.
+    assert!(NETWORKS.iter().any(|(_, r)| *r == stack.registry));
+    let env = Env::new_with_config(EnvTestConfig {
+        capture_snapshot_at_drop: false,
+    });
+    let bind = |passphrase: &str| {
+        let id = env
+            .crypto()
+            .sha256(&Bytes::from_slice(&env, passphrase.as_bytes()))
+            .to_array();
+        env.ledger().with_mut(|l| l.network_id = id);
+    };
+    let factory = env.register(stack.wasm["perch-account-factory"].as_slice(), ());
+    let factory = PerchAccountFactoryClient::new(&env, &factory);
+    env.deployer()
+        .upload_contract_wasm(stack.wasm["perch-account"].as_slice());
+    let admin = vec![&env, Signer::Delegated(env.register(Key, ()))];
+    let account = factory.create(&BytesN::from_array(&env, &[7; 32]), &admin);
+    let account = PerchAccountClient::new(&env, &account);
+
+    for (passphrase, registry) in NETWORKS {
+        bind(passphrase);
+        let registry = Address::from_str(&env, registry);
+        let content = |pkg: &str| {
+            let hash = env
+                .crypto()
+                .sha256(&Bytes::from_slice(&env, &stack.wasm[pkg]))
+                .to_bytes();
+            env.deployer()
+                .with_address(registry.clone(), hash)
+                .deployed_address()
+        };
+        assert_eq!(
+            account.infra(),
+            InfraPins {
+                doc_compiler: content("perch-doc-compiler"),
+                interpreter: content("perch-interpreter"),
+                spending_limit: content("perch-spending-limit"),
+            },
+            "{passphrase}"
+        );
+        assert_eq!(
+            factory.webauthn_verifier(),
+            content("perch-webauthn-verifier"),
+            "{passphrase}"
+        );
+    }
+
+    bind("Test SDF Future Network ; October 2022");
+    assert!(account.try_infra().is_err());
+    assert!(factory.try_webauthn_verifier().is_err());
+}
+
 /// `GuardianOnly` under `Loss`: no ZK enrollment, proof, or pool access
 /// anywhere on the path, and the owner can always veto.
 #[test]

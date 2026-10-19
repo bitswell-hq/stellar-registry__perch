@@ -1,8 +1,10 @@
 //! Guards the build-time pins every consumer **actually compiled in** against
 //! the deployment manifest (`deployments/testnet.json`):
 //!
-//! - the account's `stateless_registry()` is the manifest's registry, and its
-//!   `infra::*` modules (hashes = sha256 of the fetched
+//! - the account's and the factory's registry tables
+//!   (`crates/*/wasm/registry.networks`) are the same, and their row for the
+//!   manifest's network is the manifest's registry; the account's `infra::*`
+//!   modules (hashes = sha256 of the fetched
 //!   `crates/perch-smart-account/wasm/*.wasm`) derive the manifest's
 //!   compiler, interpreter, and spending-limit addresses;
 //! - the factory's pinned account wasm hash and WebAuthn verifier are the
@@ -56,7 +58,18 @@ fn consumers_pin_the_deployment_manifest() {
         );
     }
 
+    assert_eq!(
+        infra::perch_doc_compiler::NETWORKS,
+        pins::perch_webauthn_verifier::NETWORKS
+    );
+    assert!(
+        infra::perch_doc_compiler::NETWORKS
+            .iter()
+            .any(|(id, r)| *id == net && Address::from_str(&env, r) == registry),
+        "the registry table has no row for the manifest's network and registry"
+    );
     assert_eq!(stateless_registry(&env), registry);
+    assert_eq!(pins::perch_webauthn_verifier::registry(&env), registry);
     assert_eq!(
         infra::perch_doc_compiler::address(&env),
         address("perch-doc-compiler")
