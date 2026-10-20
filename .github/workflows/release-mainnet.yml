@@ -92,7 +92,7 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0 # every tag, and main's history of deployments/testnet.json
-      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
         with:
           toolchain: stable
       # The registry the account and the factory derive on mainnet from the
@@ -327,7 +327,7 @@ jobs:
           fetch-depth: 0 # the testnet manifest at TESTNET_MANIFEST_COMMIT
       # Only for perch-derive-id (registry and content addresses). No
       # dependency cache, as in release.yml's deploy-stack-build.
-      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
         with:
           toolchain: stable
       - uses: ./.github/actions/setup-stellar-fork
@@ -503,7 +503,7 @@ jobs:
         with:
           name: mainnet-deploy-stack-manifest
           path: deployments
-      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
         with:
           toolchain: stable
       - uses: ./.github/actions/setup-stellar-fork
