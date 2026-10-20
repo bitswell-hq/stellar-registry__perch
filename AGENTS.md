@@ -45,8 +45,8 @@ one shared value), a `paths_for()` case for its own intra-workspace scope,
 and — only once the contract is actually meant to auto-publish on-chain when
 tagged — the `publish-plan` job's `ALLOW` list and `DISPATCH_TAG` regex.
 `ALLOW` publishes into `unverified/perch/constructorless`, perch's one
-canonical registry: an account or factory bakes one registry id and derives
-every infra address from it, so all infra must share that registry. That
+canonical registry: an account or factory derives one registry per network
+and every infra address from it, so all infra must share that registry. That
 registry is managed, so a name new to it needs the manager's one-time
 initial publish (`release.yml`'s header) before the merge that releases it;
 otherwise that publish leg fails with `#12 ManagerRequired`.
@@ -60,10 +60,11 @@ before that's a deliberate decision — see `perch-recovery`'s introduction
 
 `perch-smart-account`'s `infra` module (`perch_registry_resolve::registry_contract!`)
 derives the doc-compiler/interpreter/spending-limit addresses as
-`deployer(stateless_registry_id, pinned_wasm_hash)`, where the registry id and
-hashes are committed under `crates/*/wasm/` (refreshed by
-`scripts/fetch-infra-wasm.sh`) and baked into the *consuming* contract's own
-wasm at compile time — there is no
+`deployer(stateless_registry_id, pinned_wasm_hash)`, where the registry's
+derivation (`wasm/registry.path`: a root deployer and salt, then named
+deploys, derived under the ledger's network id) and the hashes are committed
+under `crates/*/wasm/` (the hashes refreshed by `scripts/fetch-infra-wasm.sh`)
+and baked into the *consuming* contract's own wasm at compile time — there is no
 constructor argument or storage slot naming these addresses, and no way to
 repoint them post-deploy. Two consequences that are easy to miss:
 

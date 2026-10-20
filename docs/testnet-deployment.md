@@ -99,8 +99,8 @@ renew it yet.
 
 ## Constraints
 
-- **One registry per account.** An account bakes one registry id and
-  derives its compiler, interpreter, and spending-limit addresses from it
+- **One registry per account.** An account derives one registry per
+  network and derives its compiler, interpreter, and spending-limit addresses from it
   (`deployer(registry, sha256(wasm))`), so every infra contract an account
   built against canonical pins resolves must be published in
   `constructorless`.

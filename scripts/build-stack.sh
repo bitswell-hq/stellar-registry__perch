@@ -10,15 +10,25 @@
 #   tier 2  perch-account-factory                (pins the account wasm and the
 #                                                 WebAuthn verifier)
 #
-# A consumer's pins are the sha256 of the exact bytes built here plus the
-# registry the tier-0 contracts are (or will be) `deploy_stateless`'d from, so
-# every address is known before anything is deployed. scripts/deploy-stack.sh
-# then publishes the same bytes in the same order.
+# A consumer's pins are the sha256 of the exact bytes built here. The registry
+# the tier-0 contracts are (or will be) `deploy_stateless`'d from is not a
+# build input: the account and the factory compile in the path they derive it
+# from (crates/*/wasm/registry.path: a root deployer and salt, then named
+# deploys), and derive it under the ledger's network id, so the same bytes
+# serve every network. Every address is known before anything is deployed.
+# scripts/deploy-stack.sh then publishes the same bytes in the same order.
 #
-# Usage: scripts/build-stack.sh --registry <C...> [--out <dir>] [--builder scaffold|contract]
+# Usage: scripts/build-stack.sh [--registry <C...>] [--network-passphrase <p>]
+#                               [--out <dir>] [--builder scaffold|contract]
 #                               [--provided-tier0 <dir>]
-#   --registry  the content-addressing registry id baked into the account and
-#               the factory as `stateless.id`
+#   --network-passphrase  the network the stack is built for (default
+#               $STELLAR_NETWORK_PASSPHRASE, else testnet's). build.json
+#               records the registry the path derives there.
+#   --registry  optional: the registry the caller means to deploy into. It
+#               must be the one the path derives on that network, or the
+#               build is refused: an account built here would never resolve
+#               any other. A rehearsal against its own registry is a dev
+#               build with a registry.path naming it, never committed.
 #   --out       where the wasm and build.json land (default target/stack)
 #   --builder   `scaffold` (default; what deployments use: `stellar scaffold
 #               build`, which adds name/version/source metadata) or
@@ -42,11 +52,13 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 out="$repo_root/target/stack"
 registry=""
+passphrase="${STELLAR_NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}"
 builder=scaffold
 provided=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --registry) registry="$2"; shift 2 ;;
+        --network-passphrase) passphrase="$2"; shift 2 ;;
         --out) out="$2"; shift 2 ;;
         --builder) builder="$2"; shift 2 ;;
         --provided-tier0) provided="$2"; shift 2 ;;
@@ -55,7 +67,7 @@ while [ $# -gt 0 ]; do
         *) echo "unknown option: $1" >&2; exit 1 ;;
     esac
 done
-[[ "$registry" =~ ^C[A-Z2-7]{55}$ ]] || { echo "error: --registry <C...> is required" >&2; exit 1; }
+[ -z "$registry" ] || [[ "$registry" =~ ^C[A-Z2-7]{55}$ ]] || { echo "error: bad --registry '$registry'" >&2; exit 1; }
 case "$builder" in scaffold|contract) ;; *) echo "error: --builder is scaffold or contract" >&2; exit 1 ;; esac
 command -v stellar >/dev/null || { echo "error: stellar CLI not found" >&2; exit 1; }
 [ "$builder" = contract ] || stellar scaffold --help >/dev/null 2>&1 \
@@ -66,6 +78,18 @@ TIER0=(perch-doc-compiler perch-interpreter perch-spending-limit perch-ed25519-v
        perch-webauthn-verifier perch-zk-pool perch-zk-adapter perch-recovery)
 ACCOUNT_PINS=(perch-doc-compiler perch-interpreter perch-spending-limit)
 FACTORY_PINS=(perch-account perch-webauthn-verifier)
+
+# The registry the committed path derives on this network, by the same
+# compiled-in derivation the account runs. Both crates must commit one path.
+cmp -s "$repo_root/crates/perch-smart-account/wasm/registry.path" \
+    "$repo_root/crates/perch-account-factory/wasm/registry.path" \
+    || { echo "error: the account's and the factory's wasm/registry.path differ" >&2; exit 1; }
+derived="$(cd "$repo_root" && cargo run -q -p perch-derive-id -- registry "$passphrase")"
+if [ -n "$registry" ] && [ "$registry" != "$derived" ]; then
+    echo "error: --registry $registry, but crates/*/wasm/registry.path derives $derived on '$passphrase'" >&2
+    exit 1
+fi
+registry="$derived"
 
 sha256() { if command -v sha256sum >/dev/null; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi; }
 version_of() { grep -m1 '^version = "' "$repo_root/crates/$1/Cargo.toml" | sed 's/^version = "\(.*\)"/\1/' ; }
@@ -102,7 +126,6 @@ stage() { # crate-dir packages...
     local dir="$repo_root/crates/$1/wasm" p
     shift
     mkdir -p "$dir"
-    printf '%s' "$registry" >"$dir/stateless.id"
     staged='{}'
     for p in "$@"; do
         cp "$out/${p//-/_}.wasm" "$dir/$p.wasm"

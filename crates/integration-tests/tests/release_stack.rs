@@ -1661,6 +1661,77 @@ fn the_stack_compiler_hashes_the_canonical_recovery_text() {
     support::config_hash::check(&env, &compiler);
 }
 
+/// One built account and factory, unchanged, under several networks: each
+/// resolves `perch/constructorless` under that network's own Stellar Registry
+/// root, and the content addresses of the stack's own tier-0 bytes there. The
+/// registries are written out here, not derived (`registry_path.rs` derives
+/// them hop by hop).
+#[test]
+#[ignore = "needs the built stack"]
+fn one_build_resolves_each_networks_own_registry() {
+    use perch_smart_account::InfraPins;
+    const NETWORKS: [(&str, &str); 3] = [
+        (
+            "Test SDF Network ; September 2015",
+            "CDZGU4AIND6QRCGAN72I7DCS2EKRZ76JSKYY7KKJR4CG5IR2AMFIBZTM",
+        ),
+        (
+            "Public Global Stellar Network ; September 2015",
+            "CC236AK2RX7MUO7BV7JYDDW5KHZ3X7YYJOJKCVDC543BQBNNSUCZB7NN",
+        ),
+        (
+            "Test SDF Future Network ; October 2022",
+            "CBPWEPHLO2QDXWMWMHLOWCLRKQT24EFH7GYW6G3UOFY45RYOHS32A5JP",
+        ),
+    ];
+    let stack = load_stack();
+    // build-stack.sh builds for one network's registry; the bytes are the
+    // same on every network.
+    assert!(NETWORKS.iter().any(|(_, r)| *r == stack.registry));
+    let env = Env::new_with_config(EnvTestConfig {
+        capture_snapshot_at_drop: false,
+    });
+    let factory = env.register(stack.wasm["perch-account-factory"].as_slice(), ());
+    let factory = PerchAccountFactoryClient::new(&env, &factory);
+    env.deployer()
+        .upload_contract_wasm(stack.wasm["perch-account"].as_slice());
+    let admin = vec![&env, Signer::Delegated(env.register(Key, ()))];
+    let account = factory.create(&BytesN::from_array(&env, &[7; 32]), &admin);
+    let account = PerchAccountClient::new(&env, &account);
+
+    for (passphrase, registry) in NETWORKS {
+        let id = env
+            .crypto()
+            .sha256(&Bytes::from_slice(&env, passphrase.as_bytes()))
+            .to_array();
+        env.ledger().with_mut(|l| l.network_id = id);
+        let registry = Address::from_str(&env, registry);
+        let content = |pkg: &str| {
+            let hash = env
+                .crypto()
+                .sha256(&Bytes::from_slice(&env, &stack.wasm[pkg]))
+                .to_bytes();
+            env.deployer()
+                .with_address(registry.clone(), hash)
+                .deployed_address()
+        };
+        assert_eq!(
+            account.infra(),
+            InfraPins {
+                doc_compiler: content("perch-doc-compiler"),
+                interpreter: content("perch-interpreter"),
+                spending_limit: content("perch-spending-limit"),
+            },
+            "{passphrase}"
+        );
+        assert_eq!(
+            factory.webauthn_verifier(),
+            content("perch-webauthn-verifier"),
+            "{passphrase}"
+        );
+    }
+}
+
 /// `GuardianOnly` under `Loss`: no ZK enrollment, proof, or pool access
 /// anywhere on the path, and the owner can always veto.
 #[test]
