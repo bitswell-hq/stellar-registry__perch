@@ -16,17 +16,22 @@ name: Release
 #      publish-plan: perch-interpreter, perch-doc-compiler,
 #      perch-ed25519-verifier, perch-spending-limit) are each built+attested
 #      and published + `deploy_stateless`'d (content-addressed, salt =
-#      wasm_hash) into unverified/perch/constructorless via the reusable
+#      wasm_hash) into perch's testnet registry via the reusable
 #      stellar-registry/actions workflows (contract-release →
 #      registry-publish), authored by the perch-author-account smart account
 #      and signed by the theahaco/stellar-cli fork (on-chain rule discovery —
 #      no perch-deploy). No per-contract code — the set is data (see
-#      publish-plan). That registry is perch's ONE canonical registry: an
-#      account or factory bakes a single registry id and derives every infra
-#      address as deployer(registry, sha256(wasm)), so every contract one
-#      consumer resolves must live in the same registry. (The spending limit
-#      used to have its own chain into unverified/perch/stateless; that
-#      registry is retired and keeps only perch-spending-limit <= 0.1.1.)
+#      publish-plan). That registry is perch's ONE canonical registry on the
+#      network: an account or factory derives a single registry from the
+#      committed crates/*/wasm/registry.path and every infra address as
+#      deployer(registry, sha256(wasm)), so every contract one consumer
+#      resolves must live in the same registry. publish-plan computes it from
+#      the tested commit (scripts/registry-target.sh): the registry the path
+#      derives, or, while deployments/pending-registry.json declares a
+#      migration that has not switched, unverified/perch/constructorless,
+#      which the deployment still records. (The spending limit used to have
+#      its own chain into unverified/perch/stateless; that registry is
+#      retired and keeps only perch-spending-limit <= 0.1.1.)
 #
 # A third, off-chain leg — `npm-publish` — mirrors the same convention for
 # the TypeScript packages: detect-releases also tags `<pkg>-v<version>` when a
@@ -41,17 +46,19 @@ name: Release
 # nidohq/nido about each deployment manifest it ships (nido-dispatch.yml).
 #
 # The recovery stack (verifiers, ZK pool and adapter, controller, account,
-# factory) is deployed in pin order by scripts/deploy-stack.sh, which writes
-# the deployment manifest (deployments/<network>.json) every consumer's
-# build-time pins are fetched and verified from (scripts/fetch-infra-wasm.sh,
-# docs/deploy/README.md). Its recovery-specific contracts are NOT in the
-# publish-plan allow-list — the `deploy-stack` job below publishes them
-# (authored by the same smart account, signed by the same delegate) and reuses
-# the allow-listed tier-0 the constructorless jobs publish, because the account
-# and factory must pin the EXACT on-chain tier-0 bytes and a rebuild would not
-# reproduce them. That job is gated off (vars.PERCH_DEPLOY_STACK) until the
-# manager bootstraps each recovery-stack name, so merging ships their source
-# and version tracking without an on-chain publish before that is deliberate.
+# factory) is built in pin order by scripts/build-stack.sh and published by
+# scripts/deploy-stack.sh, which writes the deployment manifest
+# (deployments/<network>.json) every consumer's build-time pins are fetched
+# and verified from (scripts/fetch-infra-wasm.sh, docs/deploy/README.md). Its
+# recovery-specific contracts are NOT in the publish-plan allow-list — the
+# `deploy-stack` job below publishes them (authored by the same smart account,
+# signed by the same delegate) and reuses the allow-listed tier-0 the
+# constructorless jobs publish, because the account and factory must pin the
+# EXACT on-chain tier-0 bytes and a rebuild would not reproduce them. Those
+# jobs are gated off (vars.PERCH_DEPLOY_STACK) until the manager bootstraps
+# each recovery-stack name, so merging ships their source and version
+# tracking without an on-chain publish before that is deliberate, and they
+# skip while a testnet registry migration is pending (deploy-plan).
 #
 # Nothing here runs on a raw push: this workflow fires when the CI workflow
 # completes, and the `ci-green` job lets the rest proceed only when CI passed
@@ -121,7 +128,7 @@ on:
   workflow_dispatch:
     inputs:
       publish_tag:
-        description: "Existing tag of an ALLOW-listed contract to (re)publish to unverified/perch/constructorless, e.g. perch-spending-limit-v0.1.2"
+        description: "Existing tag of an ALLOW-listed contract to (re)publish to the testnet registry publish-plan computes, e.g. perch-spending-limit-v0.1.2"
         required: false
         type: string
 
@@ -598,8 +605,8 @@ jobs:
   # ── Constructorless contract publishes ────────────────────────────────────
   # The generic, contract-agnostic half: any released infra contract in the
   # ALLOW list (the reusable infra wasms authored by the perch-author-account
-  # smart account) is published to unverified/perch/constructorless, perch's
-  # one canonical registry (see the header). There is no per-contract workflow
+  # smart account) is published to perch's one canonical testnet registry,
+  # which publish-plan computes (see the header). There is no per-contract workflow
   # code — the set is data (the ALLOW list below, kept in step with the
   # detect-releases CONTRACTS list), and everything else (wasm path, registry
   # name, version) derives from the release tag. Adding a contract is a
@@ -612,6 +619,10 @@ jobs:
 
   # Which constructorless contracts did THIS run release (or was one passed by
   # hand)? Emit the publish matrix; empty ⇒ publish-constructorless skips.
+  # Also the registry they publish into, computed from the tested commit
+  # (scripts/registry-target.sh): the one crates/*/wasm/registry.path derives
+  # on testnet, or, while deployments/pending-registry.json declares a testnet
+  # migration that has not switched, the registry the deployment records.
   publish-plan:
     needs: [ci-green, detect-releases]
     if: >-
@@ -620,14 +631,28 @@ jobs:
         (needs.ci-green.outputs.go == 'true' && needs.detect-releases.outputs.releases_created == 'true')
       )
     runs-on: ubuntu-latest
-    permissions: {}
+    permissions:
+      contents: read # the registry path and the pending-migration record
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
       any: ${{ steps.plan.outputs.any }}
+      registry: ${{ steps.registry.outputs.registry }}
     env:
       RELEASES: ${{ needs.detect-releases.outputs.releases }}
       DISPATCH_TAG: ${{ inputs.publish_tag }}
     steps:
+      # The tested commit on a CI-gated run; a dispatch's own ref otherwise.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          persist-credentials: false
+      - name: Compute the testnet registry
+        id: registry
+        run: |
+          set -euo pipefail
+          scripts/registry-target.sh testnet "Test SDF Network ; September 2015" >"$RUNNER_TEMP/target"
+          cat "$RUNNER_TEMP/target" >>"$GITHUB_OUTPUT"
+          echo "publishing into $(sed -n 's/^registry=//p' "$RUNNER_TEMP/target")" >>"$GITHUB_STEP_SUMMARY"
       - name: Build the publish matrix
         id: plan
         run: |
@@ -676,7 +701,7 @@ jobs:
           fi
 
   # Build + attest each released constructorless contract, then publish it to
-  # unverified/perch/constructorless — both via the reusable stellar-registry/
+  # publish-plan's registry — both via the reusable stellar-registry/
   # actions workflows. The publish is authored by the perch-author-account smart
   # account and signed by the CAP-71 delegate CI key (perch-ci); the reusable
   # registry-publish installs the theahaco/stellar-cli fork, which signs
@@ -740,9 +765,9 @@ jobs:
     # FOLLOW-UP: see constructorless-build; this pin moves with that one.
     uses: stellar-registry/actions/.github/workflows/registry-publish.yml@57bfdf4b96279a28961cb76a48ec4204300b5818 # main 2026-10-14
     with:
-      # The constructorless subregistry (unverified/perch/constructorless) id and
-      # the perch-author-account smart account (C…). Repo/testnet vars.
-      registry: ${{ vars.PERCH_REGISTRY_CONTRACT_ID }}
+      # The registry publish-plan computed, and the perch-author-account
+      # smart account (C…, a repository variable).
+      registry: ${{ needs.publish-plan.outputs.registry }}
       author: ${{ vars.PERCH_AUTHOR_ADDRESS }}
       wasm_name: ${{ matrix.package }}
       version: ${{ matrix.version }}
@@ -767,8 +792,8 @@ jobs:
   # The recovery stack is a build-time pin chain (docs/deploy/README.md), so it
   # cannot be a contract-agnostic matrix like the constructorless publishes: the
   # account and factory must be built against the EXACT tier-0 bytes on-chain,
-  # in pin order, and published in that order. scripts/deploy-stack.sh does this;
-  # this job runs its canonical, smart-account-authored mode.
+  # in pin order, and published in that order. scripts/build-stack.sh builds
+  # it and scripts/deploy-stack.sh publishes it, smart-account-authored.
   #
   # The account pins the compiler/interpreter/spending-limit. Those (and the
   # ed25519 verifier) are the ALLOW-listed tier-0 the constructorless jobs above
@@ -783,20 +808,26 @@ jobs:
   # constructorless publishes.
 
   # Did THIS run release a recovery-stack contract (the ones deploy-stack
-  # deploys)? Empty ⇒ deploy-stack skips.
+  # deploys), and is there a registry to deploy it into? Empty ⇒ deploy-stack
+  # skips.
   deploy-plan:
     needs: [ci-green, detect-releases]
     if: >-
       !cancelled() && needs.ci-green.outputs.go == 'true' &&
       needs.detect-releases.outputs.releases_created == 'true'
     runs-on: ubuntu-latest
-    permissions: {}
+    permissions:
+      contents: read # the registry path and the pending-migration record
     outputs:
       any: ${{ steps.plan.outputs.any }}
     env:
       RELEASES: ${{ needs.detect-releases.outputs.releases }}
     steps:
-      - name: Any recovery-stack contract released?
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      - name: Any recovery-stack contract released, and a registry to deploy it into?
         id: plan
         run: |
           set -euo pipefail
@@ -814,32 +845,56 @@ jobs:
               any=true; break
             fi
           done
-          echo "any=$any" >>"$GITHUB_OUTPUT"
+          # The stack deploys only into the registry its account derives.
+          # While deployments/pending-registry.json declares a testnet
+          # migration that has not switched, the publishes still go to the
+          # registry the deployment records, so the stack waits for the
+          # migration instead of failing (scripts/registry-target.sh).
           if [ "$any" = true ]; then
-            echo "recovery-stack contract(s) released — deploy-stack will run" >>"$GITHUB_STEP_SUMMARY"
+            target=$(scripts/registry-target.sh testnet "Test SDF Network ; September 2015")
+            if [ "$(sed -n 's/^stack=//p' <<<"$target")" = true ]; then
+              echo "recovery-stack contract(s) released — deploy-stack will run" >>"$GITHUB_STEP_SUMMARY"
+            else
+              any=false
+              msg="recovery-stack contract(s) released, but the testnet registry migration to $(sed -n 's/^derived=//p' <<<"$target") is pending (deployments/pending-registry.json): deploy-stack skips until it switches"
+              echo "::notice::$msg"
+              echo "$msg" >>"$GITHUB_STEP_SUMMARY"
+            fi
           else
             echo "no recovery-stack contract released — deploy-stack skips" >>"$GITHUB_STEP_SUMMARY"
           fi
+          echo "any=$any" >>"$GITHUB_OUTPUT"
 
-  # Deploy the recovery stack to the canonical registry, SA-authored, in pin
-  # order, and open a deploy(<network>) PR with the manifest + regenerated
-  # bindings a human merges.
+  # Deploy the recovery stack to the registry this source's account derives on
+  # testnet, SA-authored, in pin order, and open a deploy(<network>) PR with
+  # the manifest + regenerated bindings a human merges.
   #
-  # Three jobs, so the CI publish seed never shares a runner with a build:
+  # Four jobs, so neither the CI publish seed nor the attestation signer ever
+  # shares a runner with a build:
   #
-  #   deploy-stack-build   `deploy-stack.sh --build-only`: fetch the reused
-  #                        tier-0, compile the stack (crates.io build scripts
-  #                        and proc macros run here), compute the content
-  #                        addresses. No environment, no secret.
-  #   deploy-stack         `deploy-stack.sh --prebuilt`: upload, publish, and
-  #                        write the manifest from that output. The only job
-  #                        holding the seed; it compiles and runs no Rust.
-  #   deploy-stack-record  attest the built wasm, verify the deployment,
-  #                        regenerate the bindings, bump perch-artifacts, open
-  #                        the PR. No secret.
+  #   deploy-stack-build   `build-stack.sh --reuse`: fetch the reused tier-0,
+  #                        compile the stack (crates.io build scripts and proc
+  #                        macros run here). No environment, no secret.
+  #   deploy-stack         `deploy-stack.sh`: compute the registry and every
+  #                        content address, upload, publish, and write the
+  #                        manifest. The only job holding the seed; it
+  #                        compiles nothing and runs no compiled code.
+  #   deploy-stack-attest  attest the freshly built wasm. The only job that
+  #                        can mint an attestation; it checks out nothing and
+  #                        runs no repository code.
+  #   deploy-stack-record  settle a completed registry migration, verify the
+  #                        deployment, regenerate the bindings and the hash
+  #                        pins from the manifest, bump perch-artifacts, open
+  #                        the PR. No secret, and nothing compiles.
   #
   # A step boundary would not be enough: a build script can write anywhere the
-  # runner user can (with sudo), including the `stellar` a later step runs.
+  # runner user can (with sudo), including the `stellar` a later step runs. For
+  # the same reason the build's artifact is never unpacked over the checkout:
+  # it carries only the stack's wasm and build.json, and a job downloads it into
+  # $RUNNER_TEMP and copies only those, so nothing the build wrote can stand in
+  # for a reviewed script. The build decides the bytes and nothing more: the
+  # publish computes every address itself, and the record pins from the
+  # manifest, each byte fetched from the chain and checked.
   #
   # deploy-stack runs in the `testnet` GitHub Environment (main-only, required
   # reviewer), so CI_PUBLISH_SECRET_KEY is the environment's secret. A mainnet
@@ -849,14 +904,14 @@ jobs:
   # before the environment is entered, so vars.PERCH_DEPLOY_STACK must stay a
   # repository variable.
   #
-  # Gated to run only when vars.PERCH_DEPLOY_STACK == 'true'. The recovery-stack
-  # names are NOT yet in the canonical registry, and a managed registry refuses
-  # a new name without the manager's one-time initial publish (#12
-  # ManagerRequired). Until the manager bootstraps each name (docs/deploy/
-  # README.md "The testnet registry") and sets that variable, these jobs are
-  # skipped rather than failing every release — the same deliberate-decision
-  # split the publish-plan ALLOW list uses for shipping a contract's source
-  # before its first on-chain publish.
+  # Gated to run only when vars.PERCH_DEPLOY_STACK == 'true'. A managed
+  # registry refuses a new name without the manager's one-time initial
+  # publish (#12 ManagerRequired), so until the manager bootstraps each
+  # recovery-stack name in the registry the stack deploys into
+  # (docs/deploy/README.md "One-time manager bootstrap") and sets that
+  # variable, these jobs are skipped rather than failing every release — the
+  # same deliberate-decision split the publish-plan ALLOW list uses for
+  # shipping a contract's source before its first on-chain publish.
   deploy-stack-build:
     needs: [ci-green, detect-releases, deploy-plan, constructorless-publish]
     if: >-
@@ -889,21 +944,16 @@ jobs:
       - uses: ./.github/actions/setup-stellar-fork
         with:
           scaffold: "true"
-      - name: Build the stack against the canonical registry (no key)
-        env:
-          REGISTRY: ${{ vars.PERCH_REGISTRY_CONTRACT_ID }}
-        run: |
-          set -euo pipefail
-          scripts/deploy-stack.sh --build-only --registry "$REGISTRY" --reuse "$REUSE"
-      # The stack (wasm, build.json, addresses.json) and the consumer pins
-      # build-stack.sh staged, which the deploy PR commits.
+      - name: Build the stack in pin order, reusing the published tier-0 (no key)
+        run: scripts/build-stack.sh --reuse "$REUSE"
+      # The stack's wasm and build.json, nothing else: the publish computes
+      # every address itself, and the record pins from the manifest.
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: deploy-stack-build
           path: |
-            target/stack
-            crates/perch-smart-account/wasm
-            crates/perch-account-factory/wasm
+            target/stack/*.wasm
+            target/stack/build.json
           if-no-files-found: error
           retention-days: 7
 
@@ -930,21 +980,46 @@ jobs:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: deploy-stack-build
-          path: .
-      - name: Publish the prebuilt stack (smart-account-authored, reusing the published tier-0)
+          path: ${{ runner.temp }}/stack-build
+      # The publish needs the stack's wasm and build.json, and nothing else
+      # from the build: the build ran third-party code, so anything else its
+      # artifact carries is ignored.
+      - name: Take only the built stack from the build's artifact
+        run: |
+          set -euo pipefail
+          from="$RUNNER_TEMP/stack-build"
+          mkdir -p target/stack
+          for f in "$from"/*.wasm "$from/build.json"; do
+            name=${f##*/}
+            case "$name" in
+              build.json) ;;
+              *) [[ $name =~ ^[a-z0-9_]+\.wasm$ ]] || { echo "::error::unexpected wasm name in the build artifact: $name"; exit 1; } ;;
+            esac
+            [ -f "$f" ] && [ ! -L "$f" ] || { echo "::error::the build artifact has no regular file $name"; exit 1; }
+            cp -- "$f" "target/stack/$name"
+          done
+          dirty=$(git status --porcelain --untracked-files=all -- . ':!target')
+          [ -z "$dirty" ] || { echo "::error::the checkout changed outside target/:"; echo "$dirty"; exit 1; }
+      - name: Publish the stack (smart-account-authored, reusing the published tier-0)
         # Secrets go through the environment, never argv: STELLAR_ACCOUNT is the
         # source/fee delegate and STELLAR_SIGN_WITH_KEY signs the account's
         # publish_hash authorization (the fork discovers its context rule). The
-        # author is the perch-author smart account; the registry is canonical.
-        # --prebuilt compiles nothing and runs only `stellar`, `jq`, and `curl`.
+        # author is the perch-author smart account. deploy-stack.sh computes
+        # the registry (the one registry.path derives on testnet) and every
+        # content address, and runs only `stellar`, `jq`, `curl`, and the
+        # standard-library scripts/derive-id.py.
         env:
           STELLAR_ACCOUNT: ${{ secrets.CI_PUBLISH_SECRET_KEY }}
           STELLAR_SIGN_WITH_KEY: ${{ secrets.CI_PUBLISH_SECRET_KEY }}
-          REGISTRY: ${{ vars.PERCH_REGISTRY_CONTRACT_ID }}
           AUTHOR: ${{ vars.PERCH_AUTHOR_ADDRESS }}
+        run: scripts/deploy-stack.sh --author "$AUTHOR" --reuse "$REUSE"
+      - name: Summarize
+        if: ${{ !cancelled() && hashFiles('target/stack/receipts.jsonl') != '' }}
         run: |
-          set -euo pipefail
-          scripts/deploy-stack.sh --prebuilt --registry "$REGISTRY" --author "$AUTHOR" --reuse "$REUSE"
+          {
+            echo "### Recovery stack, testnet"
+            scripts/publish-wasm.sh --summary target/stack/receipts.jsonl
+          } >>"$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: deploy-stack-manifest
@@ -952,28 +1027,69 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  deploy-stack-record:
+  # Attest the deployed wasm this run built (not the reused tier-0, which
+  # carry their own contract-release attestations). Mainnet requires these
+  # attestations of every stack wasm it publishes, so the job that can mint
+  # them reads only the build's artifact: it checks out nothing, compiles
+  # nothing, and runs no repository code.
+  deploy-stack-attest:
     needs: [ci-green, deploy-stack]
     if: >-
       !cancelled() && needs.ci-green.outputs.go == 'true' &&
       needs.deploy-stack.result == 'success'
     runs-on: ubuntu-latest
     permissions:
-      contents: write # commit the manifest + bindings onto the deploy branch
-      pull-requests: write # open the deploy(<network>) PR
       id-token: write # build-provenance attestation
       attestations: write
     env:
-      STELLAR_NETWORK: testnet
       REUSE: "perch-doc-compiler perch-interpreter perch-spending-limit perch-ed25519-verifier"
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: deploy-stack-build
+          path: ${{ runner.temp }}/stack-build
+      - name: Collect the freshly built wasm (not the reused tier-0) to attest
+        id: built
+        run: |
+          set -euo pipefail
+          stack="$RUNNER_TEMP/stack-build"
+          paths=""
+          for pkg in $(jq -r '.artifacts[].package' "$stack/build.json"); do
+            [[ $pkg =~ ^[a-z0-9-]+$ ]] || { echo "::error::unexpected package name in build.json: $pkg"; exit 1; }
+            case " $REUSE " in *" $pkg "*) continue ;; esac
+            wasm="$stack/${pkg//-/_}.wasm"
+            [ -f "$wasm" ] && [ ! -L "$wasm" ] || { echo "::error::the build artifact has no regular file for $pkg"; exit 1; }
+            paths="${paths}${wasm}"$'\n'
+          done
+          {
+            echo "paths<<EOF"
+            printf '%s' "$paths"
+            echo "EOF"
+          } >>"$GITHUB_OUTPUT"
+      - name: Attest build provenance for each deployed wasm
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: ${{ steps.built.outputs.paths }}
+
+  deploy-stack-record:
+    needs: [ci-green, deploy-stack, deploy-stack-attest]
+    if: >-
+      !cancelled() && needs.ci-green.outputs.go == 'true' &&
+      needs.deploy-stack.result == 'success' &&
+      needs.deploy-stack-attest.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # commit the manifest + bindings onto the deploy branch
+      pull-requests: write # open the deploy(<network>) PR
+    env:
+      STELLAR_NETWORK: testnet
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           persist-credentials: false
           fetch-depth: 0 # git-cliff needs full history + tags (perch-artifacts bump)
-      # First, so a failed install fails before anything is attested. The
-      # deployment is already on-chain by now; this job's inputs are this
+      # The deployment is already on-chain by now; this job's inputs are this
       # run's artifacts, so a failure here is recovered by re-running it.
       - name: Install git-cliff (bumps perch-artifacts below)
         run: |
@@ -983,73 +1099,40 @@ jobs:
           tar -xz -C "$RUNNER_TEMP/gc" --strip-components=1 -f "$RUNNER_TEMP/gc.tar.gz"
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: deploy-stack-build
-          path: .
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
           name: deploy-stack-manifest
-          path: deployments
-      - name: Collect the freshly built wasm (not the reused tier-0) to attest
-        id: built
+          path: ${{ runner.temp }}/stack-manifest
+      # The manifest the publish wrote, and nothing else from any artifact:
+      # the hash pins the PR commits are regenerated from it below.
+      - name: Take only the manifest from the artifact
         run: |
           set -euo pipefail
-          paths=""
-          for pkg in $(jq -r '.artifacts[].package' target/stack/build.json); do
-            case " $REUSE " in *" $pkg "*) continue ;; esac
-            paths="${paths}target/stack/${pkg//-/_}.wasm"$'\n'
-          done
-          {
-            echo "paths<<EOF"
-            printf '%s' "$paths"
-            echo "EOF"
-          } >>"$GITHUB_OUTPUT"
-      # Attest before anything in this job compiles or runs repository code.
-      - name: Attest build provenance for each deployed wasm
-        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
-        with:
-          subject-path: ${{ steps.built.outputs.paths }}
-      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
-        with:
-          toolchain: stable
+          f="$RUNNER_TEMP/stack-manifest/testnet.json"
+          [ -f "$f" ] && [ ! -L "$f" ] || { echo "::error::the artifact has no regular file testnet.json"; exit 1; }
+          cp -- "$f" deployments/testnet.json
       - uses: ./.github/actions/setup-stellar-fork
+      # A deployment into the registry this source derives completes any
+      # registry migration deployments/pending-registry.json declared for
+      # testnet: its entry is deleted in the same PR.
+      - name: Settle a completed registry migration
+        run: scripts/manifest-registry.sh --manifest deployments/testnet.json --settle
       - name: Verify the deployment against the chain
         run: scripts/verify-deployment.sh --manifest deployments/testnet.json
-      - name: Regenerate the deployment bindings (@stellar-registry/perch-contracts)
+      # Also rewrites the account's and factory's committed hash pins from the
+      # manifest (scripts/fetch-infra-wasm.sh: each wasm fetched by its
+      # recorded address and checked against its hash and content address).
+      - name: Regenerate the deployment bindings (@stellar-registry/perch-contracts) and pins
         run: scripts/bindings-contracts.sh
       # @stellar-registry/perch-artifacts ships deployments/, so the PR that
       # records a deployment also releases it: merging the PR tags and
       # publishes that version (detect-releases, npm-publish), then
-      # notify-nido tells Nido, naming it. The bump is release-pr's own
-      # (scripts/npm-release.sh), computed with the deploy commit in the
-      # history: commit the record locally, bump, then uncommit it all so the
-      # PR step below makes the one deploy(testnet) commit.
+      # notify-nido tells Nido, naming it.
       - name: Bump @stellar-registry/perch-artifacts for the new deployment record
         env:
           MESSAGE: "deploy(testnet): recovery stack @ ${{ github.event.workflow_run.head_sha }}"
-          MANIFEST: deployments/testnet.json
         run: |
           set -euo pipefail
           export PATH="$RUNNER_TEMP/gc:$PATH" # git-cliff, installed above
-          git add -- "$MANIFEST"
-          if git diff --cached --quiet -- "$MANIFEST"; then
-            git reset -q
-            echo "$MANIFEST is unchanged — no perch-artifacts release" >>"$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          git -c user.name=github-actions -c user.email=github-actions@users.noreply.github.com \
-            commit -q -m "$MESSAGE"
-          out=$(scripts/npm-release.sh bump perch-artifacts)
-          git reset -q --soft HEAD~1
-          git reset -q
-          # The deployment is already on-chain, so its record PR still opens;
-          # the next release PR then proposes the bump, and Nido hears of this
-          # record when that release publishes.
-          if [ -z "$out" ]; then
-            echo "::warning::$MANIFEST changed but scripts/npm-release.sh proposed no perch-artifacts bump; the release PR will"
-            exit 0
-          fi
-          read -r cur next <<<"$out"
-          echo "\`@stellar-registry/perch-artifacts\`: $cur -> $next" >>"$GITHUB_STEP_SUMMARY"
+          scripts/deploy-record-bump.sh deployments/testnet.json "$MESSAGE"
       - name: Open the deploy(testnet) manifest PR
         uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
         with:
@@ -1061,6 +1144,7 @@ jobs:
           commit-message: "deploy(testnet): recovery stack @ ${{ github.event.workflow_run.head_sha }}"
           add-paths: |
             deployments/testnet.json
+            deployments/pending-registry.json
             crates/perch-smart-account/wasm
             crates/perch-account-factory/wasm
             packages/perch-contracts/src
@@ -1069,14 +1153,16 @@ jobs:
             packages/perch-artifacts/CHANGELOG.md
           body: >
             Automated by the `deploy-stack` jobs: the recovery stack deployed to
-            the canonical `constructorless` registry, smart-account-authored, in
-            pin order, from the tagged `main` commit
+            the registry this source's account derives on testnet,
+            smart-account-authored, in pin order, from the tagged `main` commit
             ${{ github.event.workflow_run.head_sha }} (always in `main`'s
             history, so this record survives any merge method). Merging
             updates `deployments/testnet.json`, the account's and factory's
             committed build-time pins, and the regenerated
             `@stellar-registry/perch-contracts` bindings, which flips consumers —
-            and CI's deployed-bytes checks — onto this deployment. It also
-            bumps `@stellar-registry/perch-artifacts` (version and changelog,
-            from the release tooling), so the merge publishes a package
-            carrying this manifest before Nido is notified.
+            and CI's deployed-bytes checks — onto this deployment. If it
+            completes a registry migration, it also deletes the testnet entry
+            from `deployments/pending-registry.json`. It also bumps
+            `@stellar-registry/perch-artifacts` (version and changelog, from the
+            release tooling), so the merge publishes a package carrying this
+            manifest before Nido is notified.

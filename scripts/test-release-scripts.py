@@ -7,10 +7,13 @@ scope and version bump (scripts/npm-release.sh, used by release-pr and by
 deploy-stack's perch-artifacts bump), the Nido dispatch plan
 (scripts/nido-dispatch-plan.sh), that no release job holding a signing
 credential builds or puts it in argv, that release-mainnet.yml runs only by
-dispatch and reads only the mainnet environment's settings, which released
-commits a mainnet dispatch may publish (scripts/mainnet-plan.sh), what a
-mainnet publish sends and that its plan sends nothing
-(scripts/publish-wasm.sh), the deploy-record perch-artifacts bump
+dispatch, compiles nothing, and reads only the mainnet environment's
+settings, which released commits a mainnet dispatch may publish
+(scripts/mainnet-plan.sh), what a mainnet publish sends and that its plan
+sends nothing (scripts/publish-wasm.sh), what a stack deploy sends and
+records (scripts/deploy-stack.sh), the contract-id derivation the release
+scripts share (scripts/derive-id.py) and the registry each network publishes
+into (scripts/registry-target.sh), the deploy-record perch-artifacts bump
 (scripts/deploy-record-bump.sh), what a stack build records as dirty
 (scripts/source-dirty.sh, used by scripts/build-stack.sh), and the committed
 build-time pins' drift check (scripts/check-pins.sh, with
@@ -20,6 +23,11 @@ scripts/manifest-registry.sh).
 
 The git-cliff tests need `git-cliff` on PATH (CI installs the release job's
 pinned build); without it they are skipped unless PERCH_REQUIRE_GIT_CLIFF=1.
+The derivation's cross-check against the account's own runs when
+PERCH_RUST_DERIVE_ID names a build of crates/perch-derive-id:
+
+  cargo build -p perch-derive-id
+  PERCH_RUST_DERIVE_ID=target/debug/perch-derive-id python3 scripts/test-release-scripts.py DeriveId
 """
 
 import base64
@@ -46,6 +54,16 @@ MANIFEST_REGISTRY = os.path.join(REPO, "scripts", "manifest-registry.sh")
 NPM_RELEASE = os.path.join(REPO, "scripts", "npm-release.sh")
 NIDO_PLAN = os.path.join(REPO, "scripts", "nido-dispatch-plan.sh")
 DEPLOY_RECORD_BUMP = os.path.join(REPO, "scripts", "deploy-record-bump.sh")
+DERIVE_ID = os.path.join(REPO, "scripts", "derive-id.py")
+REGISTRY_TARGET = os.path.join(REPO, "scripts", "registry-target.sh")
+DEPLOY_STACK = os.path.join(REPO, "scripts", "deploy-stack.sh")
+PASSPHRASES = {
+    "testnet": "Test SDF Network ; September 2015",
+    "mainnet": "Public Global Stellar Network ; September 2015",
+    "futurenet": "Test SDF Future Network ; October 2022",
+}
+with open(os.path.join(REPO, "crates", "perch-smart-account", "wasm", "registry.path")) as _f:
+    REGISTRY_PATH_TEXT = _f.read()
 RELEASE_YML = os.path.join(REPO, ".github", "workflows", "release.yml")
 RELEASE_MAINNET_YML = os.path.join(REPO, ".github", "workflows", "release-mainnet.yml")
 GIT_CLIFF = shutil.which("git-cliff")
@@ -823,6 +841,20 @@ class NidoDispatchPlan(unittest.TestCase):
         self.publish("0.1.1")
         self.assertIn("is not a schema-1 testnet manifest", self.plan("release", "perch-artifacts-v0.1.1", check=False))
 
+    def test_a_network_with_a_pending_registry_migration_is_not_announced(self):
+        # Its manifest records a registry the tagged source no longer
+        # derives; the deploy record that completes the migration is announced.
+        self.repo.write("deployments/pending-registry.json", json.dumps({"testnet": {"recorded": "C" + "O" * 55}}))
+        self.repo.write("deployments/mainnet.json", manifest("mainnet", 1).decode())
+        self.redeploy(2, "0.1.1")
+        self.publish("0.1.1")
+        self.assertEqual([t["network"] for t in self.plan("release", "perch-artifacts-v0.1.1")], ["mainnet"])
+        self.assertEqual(self.plan("resend", "testnet"), [])
+        self.repo.write("deployments/pending-registry.json", "{}")
+        self.redeploy(3, "0.1.2")
+        self.publish("0.1.2")
+        self.assertEqual([t["network"] for t in self.plan("release", "perch-artifacts-v0.1.2")], ["testnet"])
+
     def test_only_a_perch_artifacts_tag(self):
         run(["git", "tag", "perch-contracts-v0.1.0"], self.repo.dir)
         self.assertIn("is not a perch-artifacts-v<semver> tag", self.plan("release", "perch-contracts-v0.1.0", check=False))
@@ -980,6 +1012,25 @@ class CheckPins(unittest.TestCase):
         self.assertNotEqual(out.returncode, 0)
         self.assertIn("delete the testnet entry from deployments/pending-registry.json", out.stderr)
 
+    def test_a_deploy_into_the_derived_registry_settles_the_migration(self):
+        # The deploy record's step: the manifest now records the derived
+        # registry, so --settle deletes the entry instead of failing.
+        self.pending("COLD", "CREG")
+        env = dict(os.environ, PERCH_DERIVE_ID=os.path.join(self.repo.dir, "derive-id"))
+        out = subprocess.run(["scripts/manifest-registry.sh", "--settle"], cwd=self.repo.dir, env=env,
+                             capture_output=True, text=True)
+        self.assertEqual((out.returncode, out.stdout), (0, "current CREG\n"), out.stderr)
+        with open(os.path.join(self.repo.dir, "deployments", "pending-registry.json")) as f:
+            self.assertEqual(json.load(f), {})
+        self.assertEqual(self.check().returncode, 0)
+
+    def test_settling_never_accepts_an_undeclared_mismatch(self):
+        self.derives("CNEW")
+        env = dict(os.environ, PERCH_DERIVE_ID=os.path.join(self.repo.dir, "derive-id"))
+        out = subprocess.run(["scripts/manifest-registry.sh", "--settle"], cwd=self.repo.dir, env=env,
+                             capture_output=True, text=True)
+        self.assertNotEqual(out.returncode, 0)
+
     def test_differing_registry_paths_fail(self):
         self.repo.write("crates/b/wasm/registry.path", self.PATH.replace("perch/", "other/"))
         out = self.check()
@@ -1036,8 +1087,8 @@ class MainnetJobs(unittest.TestCase):
 
     def test_mainnet_jobs_exist(self):
         self.assertEqual(set(mainnet_jobs()), {
-            "mainnet-plan", "mainnet-publish", "mainnet-publish-record", "mainnet-config",
-            "mainnet-deploy-stack-build", "mainnet-deploy-stack", "mainnet-deploy-stack-record"})
+            "mainnet-plan", "mainnet-publish", "mainnet-publish-record",
+            "mainnet-deploy-stack", "mainnet-deploy-stack-record"})
 
     def test_mainnet_runs_only_by_dispatch(self):
         on = re.search(r"(?ms)^on:\n(.*?)^\S", release_mainnet_yml()).group(1)
@@ -1091,14 +1142,25 @@ class MainnetJobs(unittest.TestCase):
 
     def test_the_mainnet_stack_is_never_rebuilt(self):
         # One account and factory build serves every network, so mainnet runs
-        # the testnet deployment's attested bytes and compiles no contract.
+        # the testnet deployment's attested bytes and compiles nothing at all:
+        # the registry and every address are derived in Python.
         text = release_mainnet_yml()
-        for marker in ("--build-only", "build-stack.sh", 'scaffold: "true"', "wasm32", "stellar contract build"):
+        for marker in ("--build-only", "build-stack.sh", 'scaffold: "true"', "wasm32", "stellar contract build",
+                       "cargo ", "rust-toolchain", "perch-derive-id"):
             with self.subTest(marker=marker):
                 self.assertNotIn(marker, code(text))
-        build = mainnet_jobs()["mainnet-deploy-stack-build"]
-        self.assertIn("scripts/fetch-infra-wasm.sh --manifest", build)
-        self.assertIn('--source-digest "$STACK_COMMIT"', build)
+        stack = mainnet_jobs()["mainnet-deploy-stack"]
+        self.assertIn("scripts/fetch-infra-wasm.sh --manifest", stack)
+        self.assertIn('--source-digest "$STACK_COMMIT"', stack)
+
+    def test_the_mainnet_key_jobs_take_no_artifact(self):
+        # The stack job fetches its bytes from testnet itself and checks them,
+        # so nothing another job wrote reaches the mainnet delegate.
+        for name, job in mainnet_jobs().items():
+            if MAINNET_SEED in job:
+                with self.subTest(job=name):
+                    self.assertNotIn("actions/download-artifact", job)
+        self.assertEqual(job_needs(mainnet_jobs()["mainnet-deploy-stack"]), ["mainnet-plan", "mainnet-publish"])
 
     def test_the_mainnet_lists_are_the_testnet_ones(self):
         jobs, mainnet = release_jobs(), mainnet_jobs()
@@ -1235,7 +1297,8 @@ MAINNET_SETTINGS = os.path.join(REPO, "scripts", "mainnet-settings.sh")
 
 class MainnetSettings(unittest.TestCase):
     """scripts/mainnet-settings.sh's offline checks: what it refuses before
-    it reads the chain."""
+    it reads the chain. The registry, its path, and its root are derived,
+    never configured; the author is the one setting."""
 
     def setUp(self):
         # A `stellar` that has an identity but no chain.
@@ -1247,28 +1310,35 @@ class MainnetSettings(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.bin)
 
-    def settings(self, **over):
-        derived = "C" + "D" * 55
+    def settings(self, script=MAINNET_SETTINGS, **over):
         env = {**os.environ, "STELLAR_RPC_URL": "http://127.0.0.1:9",
                "PATH": self.bin + os.pathsep + os.environ["PATH"],
-               "STELLAR_NETWORK_PASSPHRASE": "Public Global Stellar Network ; September 2015",
-               "REGISTRY": derived, "DERIVED_REGISTRY": derived, "ROOT": "C" + "R" * 55,
-               "AUTHOR": "C" + "U" * 55, "REGISTRY_PATH": "perch/constructorless", **over}
-        out = subprocess.run([MAINNET_SETTINGS], capture_output=True, text=True, env=env)
+               "STELLAR_NETWORK_PASSPHRASE": PASSPHRASES["mainnet"], "AUTHOR": "C" + "U" * 55, **over}
+        out = subprocess.run([script], capture_output=True, text=True, env=env)
         self.assertNotEqual(out.returncode, 0, out.stdout)
         return out.stderr
 
-    def test_an_unset_setting_is_refused(self):
-        self.assertIn("ROOT is empty", self.settings(ROOT=""))
+    def test_an_unset_author_is_refused(self):
+        self.assertIn("AUTHOR is empty", self.settings(AUTHOR=""))
 
     def test_a_testnet_passphrase_is_refused(self):
-        self.assertIn("not mainnet's", self.settings(STELLAR_NETWORK_PASSPHRASE="Test SDF Network ; September 2015"))
+        self.assertIn("not mainnet's", self.settings(STELLAR_NETWORK_PASSPHRASE=PASSPHRASES["testnet"]))
 
-    def test_a_registry_the_account_does_not_derive_is_refused(self):
-        self.assertIn("derives", self.settings(REGISTRY="C" + "X" * 55))
+    def test_the_registry_is_not_an_author(self):
+        registry = run(["python3", DERIVE_ID, "registry", PASSPHRASES["mainnet"]], REPO).stdout.strip()
+        self.assertIn("is the registry or its root", self.settings(AUTHOR=registry))
 
-    def test_a_path_other_than_the_committed_one_is_refused(self):
-        self.assertIn("commits path 'perch/constructorless'", self.settings(REGISTRY_PATH="unverified/perch/constructorless"))
+    def test_a_pending_mainnet_migration_is_refused(self):
+        repo = Repo()
+        self.addCleanup(repo.cleanup)
+        os.makedirs(os.path.join(repo.dir, "scripts"))
+        for script in (MAINNET_SETTINGS, DERIVE_ID):
+            shutil.copy(script, os.path.join(repo.dir, "scripts"))
+        for crate in ("perch-smart-account", "perch-account-factory"):
+            repo.write(f"crates/{crate}/wasm/registry.path", REGISTRY_PATH_TEXT)
+        repo.write("deployments/pending-registry.json", json.dumps({"mainnet": {"recorded": "C" + "O" * 55}}))
+        err = self.settings(script=os.path.join(repo.dir, "scripts", "mainnet-settings.sh"))
+        self.assertIn("declares a mainnet migration", err)
 
     def test_the_offline_checks_pass_before_the_chain_is_read(self):
         # The fake `stellar` reads no chain: getting that far means every
@@ -1277,10 +1347,12 @@ class MainnetSettings(unittest.TestCase):
 
 
 # A `stellar` that keeps a registry and a ledger in a JSON file and logs every
-# call, for scripts/publish-wasm.sh. Any call that would send a transaction
-# changes the state; --build-only, --send=no, and `tx` calls never do.
+# call, for scripts/publish-wasm.sh and scripts/deploy-stack.sh. Any call that
+# would send a transaction changes the state; --build-only, --send=no, and
+# `tx` calls never do. deploy_stateless answers ADDR, or with FAKE_DERIVE
+# (scripts/derive-id.py) the real content address.
 FAKE_STELLAR = r"""#!/usr/bin/env python3
-import hashlib, json, os, sys
+import hashlib, importlib.util, json, os, sys
 args = sys.argv[1:]
 state_file, log_file = os.environ["FAKE_STATE"], os.environ["FAKE_LOG"]
 with open(state_file) as f:
@@ -1292,8 +1364,17 @@ def opt(name):
 def save():
     with open(state_file, "w") as f:
         json.dump(state, f)
-ADDR = "C" + "A" * 55
-if args[:2] == ["tx", "simulate"]:
+def address(wasm_hash):
+    if "FAKE_DERIVE" not in os.environ:
+        return "C" + "A" * 55
+    sys.dont_write_bytecode = True
+    spec = importlib.util.spec_from_file_location("derive_id", os.environ["FAKE_DERIVE"])
+    derive_id = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(derive_id)
+    return derive_id.deployed(opt("--id"), bytes.fromhex(wasm_hash), os.environ["STELLAR_NETWORK_PASSPHRASE"])
+if args == ["--version"]:
+    print("stellar 28.0.0-aha.0")
+elif args[:2] == ["tx", "simulate"]:
     sys.stdin.read(); print("SIMULATED")
 elif args[:2] == ["tx", "decode"]:
     sys.stdin.read(); print(json.dumps({"tx": {"tx": {"fee": 1234}}}))
@@ -1314,17 +1395,20 @@ elif args[:2] == ["contract", "upload"]:
 elif args[:2] == ["contract", "invoke"]:
     fn, fargs = args[args.index("--") + 1], args[args.index("--") + 2:]
     a = dict(zip(fargs[::2], fargs[1::2]))
-    key = a["--wasm_name"] + "@" + a["--version"].strip('"')
-    if "--build-only" in args:
+    key = a.get("--wasm_name", "") + "@" + a.get("--version", "").strip('"')
+    if fn in ("admin", "manager") and "--send=no" in args:
+        print('"' + state[fn] + '"')
+    elif "--build-only" in args:
         print("UNSIGNED")
     elif fn == "fetch_hash":
         if key not in state["published"]:
             sys.exit("HostError: Error(Contract, #2)")
         print('"' + state["published"][key] + '"')
     elif fn == "deploy_stateless":
+        addr = address(state["published"][key])
         if "--send=no" not in args:
-            state["deployed"][ADDR] = state["published"][key]; save()
-        print('"' + ADDR + '"')
+            state["deployed"][addr] = state["published"][key]; save()
+        print('"' + addr + '"')
     elif fn == "publish_hash" and "--send=no" not in args:
         state["published"][key] = a["--wasm_hash"]; save()
     else:
@@ -1450,6 +1534,373 @@ class PublishWasm(unittest.TestCase):
         table = run([PUBLISH_WASM, "--summary", receipts], self.dir).stdout
         self.assertIn("| perch-x | 1.0.0 |", table)
         self.assertIn("Total simulated fee: 0.0002468 XLM", table)
+
+
+RUST_DERIVE_ID = os.environ.get("PERCH_RUST_DERIVE_ID")
+
+
+def manifests():
+    """Every deployment manifest under deployments/, as {network: manifest}."""
+    out = {}
+    for name in sorted(os.listdir(os.path.join(REPO, "deployments"))):
+        with open(os.path.join(REPO, "deployments", name)) as f:
+            doc = json.load(f)
+        if doc.get("schema") == 1 and "contracts" in doc:
+            out[doc["network"]] = doc
+    return out
+
+
+class DeriveId(unittest.TestCase):
+    """scripts/derive-id.py, the contract-id derivation every release script
+    shares: against what the deployments record, the chains the integration
+    tests derive hop by hop, the account's own registry.path parser, and,
+    when PERCH_RUST_DERIVE_ID names a build of crates/perch-derive-id, the
+    account's own derivation on every network."""
+
+    # The live roots and perch/constructorless under them
+    # (crates/integration-tests/tests/registry_path.rs).
+    CHAINS = {
+        "testnet": ("CAAXJETKPYAATU4HVVQUTE2FFBULNFGZNEOC3MS635U5K3GZLAY2HI4M",
+                    "CDZGU4AIND6QRCGAN72I7DCS2EKRZ76JSKYY7KKJR4CG5IR2AMFIBZTM"),
+        "mainnet": ("CDU4M3LDIOUJJ5F3YXKJ4EJEP5VPRPG6N2LJ5HOQIMN7MNGL3NS3EGUY",
+                    "CC236AK2RX7MUO7BV7JYDDW5KHZ3X7YYJOJKCVDC543BQBNNSUCZB7NN"),
+        "futurenet": (None, "CBPWEPHLO2QDXWMWMHLOWCLRKQT24EFH7GYW6G3UOFY45RYOHS32A5JP"),
+    }
+
+    def py(self, *args, check=True):
+        out = run(["python3", DERIVE_ID, *args], REPO, check=False)
+        if check:
+            self.assertEqual(out.returncode, 0, out.stderr)
+            return out.stdout.strip()
+        self.assertNotEqual(out.returncode, 0, out.stdout)
+        return out.stderr
+
+    def path_file(self, text):
+        fd, path = tempfile.mkstemp()
+        self.addCleanup(os.remove, path)
+        with os.fdopen(fd, "w") as f:
+            f.write(textwrap.dedent(text))
+        return path
+
+    def test_every_recorded_address_is_its_content_address(self):
+        n = 0
+        for network, m in manifests().items():
+            for name, c in m["contracts"].items():
+                if "address" in c:
+                    n += 1
+                    with self.subTest(network=network, contract=name):
+                        self.assertEqual(self.py("content", m["registry"]["id"], c["sha256"], m["network_passphrase"]),
+                                         c["address"])
+        self.assertGreater(n, 0)
+
+    def test_a_declared_migration_names_the_registry_the_path_derives(self):
+        with open(os.path.join(REPO, "deployments", "pending-registry.json")) as f:
+            pending = json.load(f)
+        for network, entry in pending.items():
+            with self.subTest(network=network):
+                self.assertEqual(self.py("registry", manifests()[network]["network_passphrase"]), entry["derived"])
+
+    def test_each_network_derives_its_own_chain(self):
+        for network, (root, registry) in self.CHAINS.items():
+            with self.subTest(network=network):
+                self.assertEqual(self.py("registry", PASSPHRASES[network]), registry)
+                if root:
+                    self.assertEqual(self.py("root", PASSPHRASES[network]), root)
+                    self.assertEqual(self.py("name", self.py("name", root, "perch", PASSPHRASES[network]),
+                                             "constructorless", PASSPHRASES[network]), registry)
+
+    def test_path_names_normalize_as_the_account_does(self):
+        # Lowercased, `_` read as `-`; `path /` names the root itself.
+        t = PASSPHRASES["testnet"]
+        root, _ = self.CHAINS["testnet"]
+        base = REGISTRY_PATH_TEXT.replace("path perch/constructorless", "path {}")
+        self.assertEqual(self.py("registry", t, self.path_file(base.format("/Perch/Constructor_Less/"))),
+                         self.py("name", self.py("name", root, "perch", t), "constructor-less", t))
+        self.assertEqual(self.py("registry", t, self.path_file(base.format("/"))), root)
+
+    def test_a_bad_registry_path_is_refused(self):
+        good = REGISTRY_PATH_TEXT
+        deployer = good.split()[1]
+        for why, text in {
+            "unknown key `root`": good + "root x\n",
+            "given twice": good + "path a\n",
+            "missing `path`": "\n".join(l for l in good.splitlines() if not l.startswith("path")),
+            "not a canonical": good.replace(deployer, deployer.lower()),
+            "not a canonical ": good.replace(deployer, deployer[:-1] + ("A" if deployer[-1] != "A" else "B")),
+            "is not a registry name": good.replace("perch/constructorless", "perch//constructorless"),
+            "is not a registry name ": good.replace("perch/constructorless", "perch/con.structorless"),
+        }.items():
+            with self.subTest(why=why):
+                self.assertIn(why.strip(), self.py("registry", PASSPHRASES["testnet"], self.path_file(text), check=False))
+        self.assertIn("32-byte hex", self.py("content", self.CHAINS["testnet"][1], "ab" * 31, "x", check=False))
+
+    @unittest.skipUnless(RUST_DERIVE_ID, "PERCH_RUST_DERIVE_ID does not name a perch-derive-id build")
+    def test_the_account_derives_the_same(self):
+        def rust(*args):
+            return run([RUST_DERIVE_ID, *args], REPO).stdout.strip()
+        deployer, salt = (l.split(None, 1)[1].strip() for l in REGISTRY_PATH_TEXT.splitlines()[:2])
+        for network, passphrase in PASSPHRASES.items():
+            with self.subTest(network=network):
+                self.assertEqual(self.py("registry", passphrase), rust("registry", passphrase))
+                root = rust("name", deployer, salt, passphrase)
+                self.assertEqual(self.py("root", passphrase), root)
+                for name in ("perch", "constructorless", "unverified"):
+                    self.assertEqual(self.py("name", root, name, passphrase), rust("name", root, name, passphrase))
+                self.assertEqual(self.py("content", root, "0x" + "5a" * 32, passphrase),
+                                 rust("content", root, "0x" + "5a" * 32, passphrase))
+        for network, m in manifests().items():
+            for name, c in m["contracts"].items():
+                if "address" in c:
+                    with self.subTest(network=network, contract=name):
+                        self.assertEqual(rust("content", m["registry"]["id"], c["sha256"], m["network_passphrase"]),
+                                         self.py("content", m["registry"]["id"], c["sha256"], m["network_passphrase"]))
+
+
+class RegistryTarget(unittest.TestCase):
+    """scripts/registry-target.sh: the registry a network's publishes go to,
+    and whether the stack deploys, from registry.path and
+    deployments/pending-registry.json."""
+
+    OLD = "C" + "O" * 55
+
+    def setUp(self):
+        self.repo = Repo()
+        os.makedirs(os.path.join(self.repo.dir, "scripts"))
+        for script in (DERIVE_ID, REGISTRY_TARGET):
+            shutil.copy(script, os.path.join(self.repo.dir, "scripts"))
+        for crate in ("perch-smart-account", "perch-account-factory"):
+            self.repo.write(f"crates/{crate}/wasm/registry.path", REGISTRY_PATH_TEXT)
+        self.derived = run(["python3", DERIVE_ID, "registry", PASSPHRASES["testnet"]], REPO).stdout.strip()
+
+    def tearDown(self):
+        self.repo.cleanup()
+
+    def pending(self, **entry):
+        self.repo.write("deployments/pending-registry.json", json.dumps({"testnet": entry}))
+
+    def target(self, check=True):
+        out = run(["scripts/registry-target.sh", "testnet", PASSPHRASES["testnet"]], self.repo.dir, check=False)
+        if check:
+            self.assertEqual(out.returncode, 0, out.stderr)
+            return dict(l.split("=", 1) for l in out.stdout.splitlines())
+        self.assertNotEqual(out.returncode, 0, out.stdout)
+        return out.stderr
+
+    def test_with_no_migration_the_derived_registry(self):
+        self.assertEqual(self.target(), {"registry": self.derived, "derived": self.derived, "stack": "true"})
+        self.repo.write("deployments/pending-registry.json", json.dumps({"mainnet": {"recorded": self.OLD}}))
+        self.assertEqual(self.target()["registry"], self.derived)
+
+    def test_a_pending_migration_publishes_to_the_recorded_registry_and_holds_the_stack(self):
+        self.pending(recorded=self.OLD, derived=self.derived, reason="r")
+        self.assertEqual(self.target(), {"registry": self.OLD, "derived": self.derived, "stack": "false"})
+        self.pending(recorded=self.OLD, derived=self.derived, publish_to="recorded")
+        self.assertEqual(self.target()["registry"], self.OLD)
+
+    def test_a_switched_migration_publishes_to_the_derived_registry(self):
+        self.pending(recorded=self.OLD, derived=self.derived, publish_to="derived")
+        self.assertEqual(self.target(), {"registry": self.derived, "derived": self.derived, "stack": "true"})
+
+    def test_a_declaration_that_does_not_fit_this_source_is_refused(self):
+        self.pending(recorded=self.OLD, derived="C" + "X" * 55)
+        self.assertIn("but registry.path derives", self.target(check=False))
+        self.pending(recorded="unverified/perch/constructorless", derived=self.derived)
+        self.assertIn("is not a contract id", self.target(check=False))
+        self.pending(recorded=self.OLD, derived=self.derived, publish_to="both")
+        self.assertIn("publish_to", self.target(check=False))
+        self.repo.write("deployments/pending-registry.json", "{")
+        self.target(check=False)
+
+    def test_differing_registry_paths_are_refused(self):
+        self.repo.write("crates/perch-account-factory/wasm/registry.path", REGISTRY_PATH_TEXT.replace("perch/", "other/"))
+        self.assertIn("registry.path differ", self.target(check=False))
+
+
+class ComputedRegistries(unittest.TestCase):
+    """Both release workflows compute every registry id from the
+    repository. What stays configured is authority: the author accounts, the
+    delegate seeds and their environments, and the stack-deploy gate."""
+
+    def test_only_authority_is_configured(self):
+        self.assertEqual(set(re.findall(r"vars\.([A-Za-z0-9_]+)", code(release_yml()))),
+                         {"PERCH_AUTHOR_ADDRESS", "PERCH_DEPLOY_STACK"})
+        self.assertEqual(set(re.findall(r"vars\.([A-Za-z0-9_]+)", code(release_mainnet_yml()))),
+                         {"PERCH_MAINNET_AUTHOR_ADDRESS"})
+
+    def test_testnet_publishes_go_where_registry_target_says(self):
+        jobs = release_jobs()
+        self.assertIn('scripts/registry-target.sh testnet "Test SDF Network ; September 2015"', jobs["publish-plan"])
+        self.assertRegex(jobs["constructorless-publish"],
+                         r"(?m)^      registry: \$\{\{ needs\.publish-plan\.outputs\.registry \}\}$")
+        # The stack skips, not fails, while a migration is pending.
+        self.assertIn('scripts/registry-target.sh testnet "Test SDF Network ; September 2015"', jobs["deploy-plan"])
+
+    def test_the_build_hands_on_only_the_stack_bytes(self):
+        # The key job computes every address itself, and the record job pins
+        # from the manifest: the build's artifact is its wasm and build.json.
+        jobs = release_jobs()
+        upload = re.search(r"(?m)^ +- uses: actions/upload-artifact@.*\n((?: {8,}\S.*\n)*)",
+                           jobs["deploy-stack-build"]).group(1)
+        self.assertEqual(re.search(r"path: \|\n((?: +\S+\n)+)", upload).group(1).split(),
+                         ["target/stack/*.wasm", "target/stack/build.json"])
+        self.assertNotIn("deploy-stack-build", jobs["deploy-stack-record"])
+        for text in (release_yml(), release_mainnet_yml()):
+            self.assertNotIn("addresses.json", text)
+            self.assertNotIn("perch-derive-id", code(text))
+
+    def test_a_completed_migration_is_recorded_with_its_deployment(self):
+        job = release_jobs()["deploy-stack-record"]
+        self.assertIn("scripts/manifest-registry.sh --manifest deployments/testnet.json --settle", job)
+        self.assertIn("deployments/pending-registry.json", deploy_pr_add_paths())
+        self.assertNotIn("rust-toolchain", job)
+
+
+@unittest.skipUnless(shutil.which("jq") and shutil.which("curl"), "jq or curl not on PATH")
+class DeployStack(unittest.TestCase):
+    """scripts/deploy-stack.sh against a fake `stellar`: what it publishes,
+    in what order, under which addresses, what its manifest records, and
+    that a plan sends nothing."""
+
+    AUTHOR = "C" + "U" * 55
+    ADMIN = "G" + "M" * 55
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.dir)
+        bin_dir = os.path.join(self.dir, "bin")
+        os.makedirs(bin_dir)
+        for name, text in (("stellar", FAKE_STELLAR),
+                           ("curl", '#!/bin/sh\necho \'{"result": {"sequence": 4242}}\'\n')):
+            with open(os.path.join(bin_dir, name), "w") as f:
+                f.write(text)
+            os.chmod(os.path.join(bin_dir, name), 0o755)
+        self.stack = os.path.join(self.dir, "stack")
+        os.makedirs(self.stack)
+        self.hash = {}
+        artifacts = []
+        for pkg, tier, pins in (("perch-doc-compiler", 0, []), ("perch-webauthn-verifier", 0, []),
+                                ("perch-account", 1, ["perch-doc-compiler"]),
+                                ("perch-account-factory", 2, ["perch-account", "perch-webauthn-verifier"])):
+            data = b"\0asm\1\0\0\0" + pkg.encode()
+            with open(os.path.join(self.stack, pkg.replace("-", "_") + ".wasm"), "wb") as f:
+                f.write(data)
+            self.hash[pkg] = hashlib.sha256(data).hexdigest()
+            artifacts.append({"package": pkg, "version": "0.1.0", "wasm": pkg.replace("-", "_") + ".wasm",
+                              "sha256": self.hash[pkg], "bytes": len(data), "tier": tier,
+                              "pins": {p: self.hash[p] for p in pins}})
+        with open(os.path.join(self.stack, "build.json"), "w") as f:
+            json.dump({"registry": "C" + "B" * 55, "source": {"commit": "ab" * 20, "dirty": False},
+                       "toolchain": {"builder": "scaffold"}, "artifacts": artifacts}, f)
+        t = PASSPHRASES["testnet"]
+        self.registry = run(["python3", DERIVE_ID, "registry", t], REPO).stdout.strip()
+        self.root = run(["python3", DERIVE_ID, "root", t], REPO).stdout.strip()
+        self.content = {p: run(["python3", DERIVE_ID, "content", self.registry, h, t], REPO).stdout.strip()
+                        for p, h in self.hash.items()}
+        self.state_file = os.path.join(self.dir, "state.json")
+        self.log_file = os.path.join(self.dir, "log")
+        self.manifest = os.path.join(self.dir, "testnet.json")
+        # The registry exists and already serves the reused compiler.
+        compiler = self.hash["perch-doc-compiler"]
+        self.set_state({"perch-doc-compiler@0.1.0": compiler}, [compiler],
+                       {self.registry: "e" * 64, self.content["perch-doc-compiler"]: compiler})
+        self.env = {**os.environ, "PATH": bin_dir + os.pathsep + os.environ["PATH"],
+                    "FAKE_STATE": self.state_file, "FAKE_LOG": self.log_file, "FAKE_DERIVE": DERIVE_ID,
+                    "STELLAR_ACCOUNT": "S-delegate", "STELLAR_NETWORK": "testnet",
+                    "STELLAR_RPC_URL": "http://127.0.0.1:9", "STELLAR_NETWORK_PASSPHRASE": t}
+        self.env.pop("STELLAR_SIGN_WITH_KEY", None)
+
+    def set_state(self, published, installed, deployed):
+        with open(self.state_file, "w") as f:
+            json.dump({"published": published, "installed": list(installed), "deployed": deployed,
+                       "admin": self.ADMIN, "manager": self.ADMIN}, f)
+
+    def state(self):
+        with open(self.state_file) as f:
+            return json.load(f)
+
+    def sent(self):
+        """Each transaction the calls sent, as "<op> <name>"."""
+        out = []
+        with open(self.log_file) as f:
+            for c in map(json.loads, f):
+                if "--build-only" in c or "--send=no" in c:
+                    continue
+                if c[:2] == ["contract", "upload"]:
+                    out.append("upload " + os.path.basename(c[c.index("--wasm") + 1]))
+                elif c[:2] == ["contract", "invoke"]:
+                    out.append(c[c.index("--") + 1] + " " + c[c.index("--wasm_name") + 1])
+        return out
+
+    def deploy(self, *extra, check=True):
+        out = subprocess.run([DEPLOY_STACK, "--author", self.AUTHOR, "--stack", self.stack, "--manifest", self.manifest,
+                              "--reuse", "perch-doc-compiler perch-interpreter", *extra],
+                             capture_output=True, text=True, env=self.env)
+        if check:
+            self.assertEqual(out.returncode, 0, out.stderr)
+        else:
+            self.assertNotEqual(out.returncode, 0, out.stderr)
+        return out.stderr
+
+    def receipts(self):
+        with open(os.path.join(self.stack, "receipts.jsonl")) as f:
+            return [json.loads(l) for l in f]
+
+    def test_a_deploy_publishes_in_pin_order_and_records_the_manifest(self):
+        self.deploy()
+        self.assertEqual(self.sent(), [
+            "upload perch_webauthn_verifier.wasm", "publish_hash perch-webauthn-verifier",
+            "deploy_stateless perch-webauthn-verifier", "upload perch_account.wasm",
+            "upload perch_account_factory.wasm", "publish_hash perch-account-factory",
+            "deploy_stateless perch-account-factory"])
+        with open(self.manifest) as f:
+            m = json.load(f)
+        self.assertEqual(m["registry"], {"id": self.registry, "wasm_hash": "e" * 64, "admin": self.ADMIN,
+                                         "manager": self.ADMIN, "root": self.root})
+        self.assertEqual((m["network"], m["deployed_ledger"], m["source"]["commit"]), ("testnet", 4242, "ab" * 20))
+        for pkg, c in m["contracts"].items():
+            with self.subTest(contract=pkg):
+                self.assertEqual(c["sha256"], self.hash[pkg])
+                self.assertEqual(c.get("address"), None if pkg == "perch-account" else self.content[pkg])
+                self.assertNotIn("package", c)
+        self.assertEqual(m["contracts"]["perch-account-factory"]["pins"]["perch-account"], self.hash["perch-account"])
+        self.assertEqual([r["status"] for r in self.receipts()], ["reused", "published", "installed", "published"])
+        # Idempotent: a second run sends nothing new.
+        before = len(self.sent())
+        self.deploy()
+        self.assertEqual(len(self.sent()), before)
+
+    def test_a_plan_sends_nothing_and_writes_no_manifest(self):
+        before = self.state()
+        self.deploy("--plan")
+        self.assertEqual(self.sent(), [])
+        self.assertEqual(self.state(), before)
+        self.assertFalse(os.path.exists(self.manifest))
+        self.assertEqual([r["status"] for r in self.receipts()], ["reused", "would publish", "would install", "would publish"])
+
+    def test_a_reused_name_the_registry_does_not_serve_is_refused_before_anything_is_sent(self):
+        self.set_state({}, [], {self.registry: "e" * 64})
+        self.assertIn("is not published on", self.deploy(check=False))
+        self.assertEqual(self.sent(), [])
+        # A plan reports it and goes on: a combined mainnet dry run publishes
+        # the reused tier-0 in the same dispatch.
+        self.deploy("--plan")
+        self.assertEqual(self.receipts()[0]["status"], "not published yet (reused)")
+
+    def test_a_reused_name_served_with_other_bytes_is_refused(self):
+        self.set_state({"perch-doc-compiler@0.1.0": "ab" * 32}, [], {self.registry: "e" * 64})
+        self.assertIn("the stack's is", self.deploy(check=False))
+        self.assertEqual(self.sent(), [])
+
+    def test_bytes_build_json_does_not_record_are_refused(self):
+        with open(os.path.join(self.stack, "perch_account.wasm"), "ab") as f:
+            f.write(b"!")
+        self.assertIn("is not the perch-account bytes build.json records", self.deploy(check=False))
+        self.assertEqual(self.sent(), [])
+
+    def test_the_registry_the_path_derives_must_exist(self):
+        self.set_state({}, [], {})
+        self.assertIn("is not deployed", self.deploy(check=False))
+        self.assertEqual(self.sent(), [])
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

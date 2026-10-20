@@ -38,7 +38,8 @@
 # The npm package @stellar-registry/perch-artifacts ships this script as
 # `perch-fetch-infra-wasm`, beside a copy of deployments/. There is no crate
 # tree to pin there, so it needs --stack, fills only that, and checks content
-# addresses with the package's own perch-derive-id.
+# addresses with the package's own perch-derive-id (a perch checkout uses
+# scripts/derive-id.py).
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -67,8 +68,7 @@ registry="$(m .registry.id)"
 
 sha256() { if command -v sha256sum >/dev/null; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi; }
 if $checkout; then
-    (cd "$repo_root" && cargo build -q -p perch-derive-id)
-    derive() { "$repo_root/target/debug/perch-derive-id" content "$registry" "$1" "$(m .network_passphrase)"; }
+    derive() { "$repo_root/scripts/derive-id.py" content "$registry" "$1" "$(m .network_passphrase)"; }
 else
     derive() { node "$repo_root/dist/cli/derive-id.js" content "$registry" "$1" "$(m .network_passphrase)"; }
 fi

@@ -1,364 +1,207 @@
 #!/usr/bin/env bash
-# Deploy the perch stack to a network in pin order and write its deployment
-# manifest (deployments/<network>.json), the one file every consumer's pins
-# are fetched and verified from.
+# Publish a built perch stack to a network in pin order and write its
+# deployment manifest (deployments/<network>.json), the one file every
+# consumer's pins are fetched and verified from. It builds nothing and runs
+# no compiled code. The stack is a directory of <name>.wasm files and their
+# build.json: scripts/build-stack.sh's output (testnet), or
+# scripts/fetch-infra-wasm.sh --stack's (mainnet, which runs the testnet
+# deployment's bytes).
 #
-#   1. Registry. Deploy a new instance of the perch-stateless-registry wasm the
-#      network's perch registries already run (fetched by hash, never rebuilt),
-#      with admin = manager = --source. Skipped with --registry.
-#   2. Build. scripts/build-stack.sh --registry <id>: every consumer is pinned
-#      to the exact bytes this run publishes, before anything is published.
-#      The account and the factory derive the registry from their committed
-#      crates/*/wasm/registry.path, so <id> must be the registry that path
-#      derives on this network: a fresh instance is refused unless a dev
-#      registry.path names it.
-#   3. Tier 0, then the factory (tier 2). Upload each wasm and check the
-#      ledger hash is its sha256; publish_hash it under its crate name and
-#      version (author = --author); deploy_stateless it; check the address is
-#      the offline content-address derivation and the deployed code hash is
-#      the built one.
-#   4. The account (tier 1). Upload only: it is not stateless, so it is not
-#      published to the registry; the factory deploys it by its pinned hash.
-#   5. Manifest. Then run scripts/verify-deployment.sh.
+#   1. Registry: the one crates/*/wasm/registry.path derives on this network
+#      (scripts/derive-id.py), the only registry this source's account and
+#      factory resolve. It must already exist.
+#   2. Tier 0, then the factory (tier 2): scripts/publish-wasm.sh each one
+#      (preflight, upload with a hash check, publish_hash under its crate name
+#      and version authored by --author, deploy_stateless, code-hash check),
+#      and its address must be the offline content address
+#      deployer(registry, sha256(wasm)). A --reuse name is not published: the
+#      registry must already serve exactly the stack's bytes for it, deployed
+#      at that content address.
+#   3. The account (tier 1): installed only (publish-wasm.sh --install-only);
+#      the factory deploys it by its pinned hash.
+#   4. The manifest. Run scripts/verify-deployment.sh on it afterwards.
 #
-# A run can be split in two so that the half holding a signing key never
-# compiles or runs any Rust: --build-only does step 2 (needs --registry; no key, chain
-# reads only) and computes every content address, and --prebuilt does steps
-# 3-5 from that output without building anything (it skips the closing
-# verify-deployment.sh, which builds a helper; run it afterward). release.yml's
-# deploy-stack jobs run the two halves on separate runners, so the job that
-# holds the CI delegate's seed only uploads, publishes, and writes the
-# manifest.
-#
-# Source and author are decoupled. --source signs the transaction and pays the
-# fees; --author is the address bound to every published name. With no
-# --author they are the same (--source's own G-address), which is the mode a
-# rehearsal against a fresh registry uses. For the canonical registry the
-# author is the perch-author smart account and the source is the CI delegate:
-#
-#   --author <C…>   a smart-account contract other than --source makes the
-#                   publish SMART-ACCOUNT-AUTHORED. The account's publish_hash
-#                   authorization is signed by the CAP-71 delegate key
-#                   (--source) through the theahaco/stellar-cli fork, which
-#                   discovers the account's context rule on-chain and signs
-#                   with STELLAR_SIGN_WITH_KEY. That fork must be the `stellar`
-#                   on PATH — upstream stellar cannot sign a contract-address
-#                   credential, and the publish_hash call fails without it.
+# --plan simulates every transaction steps 2 and 3 would send and prints each
+# with its fee, submits nothing, and writes no manifest. A reused name the
+# registry does not serve yet is reported, and the plan goes on.
 #
 # The registry has no author transfer, so the name→author binding is
-# permanent. A name new to a MANAGED registry (its manager set) needs that
-# manager's one-time initial publish before the delegate can publish it, or
-# publish_hash fails with registry #12 ManagerRequired — see
-# docs/deploy/README.md for the per-name bootstrap commands.
+# permanent. A smart-account author has its publish_hash authorization signed
+# by the CAP-71 delegate STELLAR_SIGN_WITH_KEY (default: STELLAR_ACCOUNT)
+# through the theahaco/stellar-cli fork, which discovers the account's context
+# rule on-chain; upstream stellar cannot sign that credential. A name new to a
+# MANAGED registry needs the manager's one-time initial publish first, or
+# publish_hash fails with registry #12 ManagerRequired (docs/deploy/README.md,
+# "One-time manager bootstrap").
 #
 # Idempotent: a version already published with the same hash is not
-# republished (names and hashes already on-chain are skipped), a different
-# hash under the same version is refused, and deploy_stateless of an existing
-# content address is a no-op. So a canonical deploy is safe to re-run; only the
-# names and versions not yet published write to the chain.
+# republished, a different hash under the same version is refused, and an
+# instance already deployed is left alone. A rehearsal publishes into its own
+# registry by building from a dev registry.path that derives it (never
+# committed; docs/deploy/README.md).
 #
-# Usage: scripts/deploy-stack.sh --source <identity> [--author <address>]
-#                                [--registry <C...>] [--reuse "<names>"]
-#                                [--manifest <path>] [--channel <name>]
-#                                [--build-only | --prebuilt]
-#   --source    funded stellar-cli identity: fee payer and tx signer, and with
-#               no --registry the fresh registry's admin/manager. When --author
-#               is a smart account, also the delegate key that signs its
-#               authorization. May be omitted when STELLAR_ACCOUNT is set in the
-#               environment (the CI model: the key stays out of argv, so it
-#               is never resolved to an address here and --author is
-#               required), with STELLAR_SIGN_WITH_KEY the delegate that signs
-#               the account's authorization. Not used with --build-only.
-#   --author    address bound to every published name (default: --source's G…)
-#   --registry  publish into this existing registry instead of a fresh instance
-#               (--source must be its manager, or the author must already be
-#               bound for every name published here)
-#   --reuse     space-separated tier-0 names ALREADY published on --registry to
-#               fetch (by hash) and reuse instead of rebuilding and
-#               republishing. The account and factory pin the exact on-chain
-#               bytes, and those names are left untouched (verified, not
-#               published). This is how a canonical deploy consumes the tier-0
-#               the release pipeline already published there — the account's
-#               compiler/interpreter/spending-limit pins would not reproduce
-#               under this toolchain (scaffold vs scaffold+optimize, unpinned
-#               rustc), so they must be the fetched bytes. Needs --registry.
+# Usage: scripts/deploy-stack.sh --author <address> [--stack <dir>]
+#                                [--reuse "<names>"] [--manifest <path>]
+#                                [--channel <name>] [--receipts <file>] [--plan]
+#   --author    bound to every published name: the perch-author smart
+#               account (C…), or a rehearsal's own key (G…)
+#   --stack     the stack to publish (default target/stack)
+#   --reuse     space-separated tier-0 names the registry already serves, as
+#               the release pipeline publishes them; verified, not published
+#   --manifest  default deployments/$STELLAR_NETWORK.json
 #   --channel   recorded in the manifest (default: beta)
-#   --build-only  fetch the --reuse names, build the stack into target/stack,
-#               write target/stack/addresses.json (each published name's
-#               content address), and stop. Needs --registry; reads the chain
-#               with a throwaway identity, so no --source or key.
-#   --prebuilt  publish the target/stack a --build-only run left, for the same
-#               --registry, without building or running any compiled code;
-#               skips the closing verify-deployment.sh.
-#
-# Env: STELLAR_NETWORK (default testnet), STELLAR_RPC_URL,
-#      STELLAR_NETWORK_PASSPHRASE, PERCH_ROOT_REGISTRY, PERCH_REGISTRY_WASM_FROM
-#      (a contract running the registry wasm to reuse; default: the
-#      `constructorless` registry under unverified/perch, perch's canonical
-#      registry).
+#   --receipts  where publish-wasm.sh's JSON lines go (default
+#               <stack>/receipts.jsonl); publish-wasm.sh --summary prints them
+#   --plan      simulate only (above)
+# Env: STELLAR_ACCOUNT (source and fee payer, an identity name or a key in the
+#      environment, never argv; with --plan only the simulation source),
+#      STELLAR_SIGN_WITH_KEY, STELLAR_NETWORK (default testnet),
+#      STELLAR_RPC_URL, STELLAR_NETWORK_PASSPHRASE (testnet's by default)
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-export STELLAR_NETWORK="${STELLAR_NETWORK:-testnet}"
-RPC_URL="${STELLAR_RPC_URL:-https://soroban-testnet.stellar.org}"
-PASSPHRASE="${STELLAR_NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}"
-ROOT="${PERCH_ROOT_REGISTRY:-CAAXJETKPYAATU4HVVQUTE2FFBULNFGZNEOC3MS635U5K3GZLAY2HI4M}"
-REGISTRY_WASM_FROM="${PERCH_REGISTRY_WASM_FROM:-CDX2DMYMMEYU6FGN3HPJ2GQSSL5EZHIAMEJD4SPF55FZE5LEUBPPPDA7}"
-
-source_key=""
-author=""
-registry=""
-reuse=""
-manifest="$repo_root/deployments/$STELLAR_NETWORK.json"
-channel="beta"
-build_only=false
-prebuilt=false
-while [ $# -gt 0 ]; do
-    case "$1" in
-        --source) source_key="$2"; shift 2 ;;
-        --author) author="$2"; shift 2 ;;
-        --registry) registry="$2"; shift 2 ;;
-        --reuse) reuse="$2"; shift 2 ;;
-        --manifest) manifest="$2"; shift 2 ;;
-        --channel) channel="$2"; shift 2 ;;
-        --build-only) build_only=true; shift ;;
-        --prebuilt) prebuilt=true; shift ;;
-        # Print the leading comment block (minus the shebang) as help.
-        -h|--help) awk 'NR>1 && /^#/{sub(/^# ?/,""); print; next} NR>1{exit}' "$0"; exit 0 ;;
-        *) echo "unknown option: $1" >&2; exit 1 ;;
-    esac
-done
-[ -z "$reuse" ] || [ -n "$registry" ] || { echo "error: --reuse needs --registry (a fresh instance has nothing published to reuse)" >&2; exit 1; }
-! { $build_only && $prebuilt; } || { echo "error: --build-only and --prebuilt are the two halves of one run; pass one" >&2; exit 1; }
-if $build_only || $prebuilt; then
-    [ -n "$registry" ] || { echo "error: --build-only and --prebuilt need --registry (the build pins it)" >&2; exit 1; }
-fi
-
 log() { printf '\033[1;34m==>\033[0m %s\n' "$*" >&2; }
 warn() { printf '\033[1;33m!!\033[0m %s\n' "$*" >&2; }
 die() { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 sha256() { if command -v sha256sum >/dev/null; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi; }
 
-net=(--network "$STELLAR_NETWORK")
-source_g=""
-stack="$repo_root/target/stack"
-build="$stack/build.json"
-addresses="$stack/addresses.json"
-
-if $build_only; then
-    # Chain reads only: a throwaway identity is the simulation source, and no
-    # key that can sign anything is present.
-    reader="${PERCH_READER:-perch-fetch-reader}"
-    stellar keys address "$reader" >/dev/null 2>&1 || stellar keys generate "$reader" >/dev/null 2>&1
-    src=(--source-account "$reader")
+export STELLAR_NETWORK="${STELLAR_NETWORK:-testnet}"
+if [ "$STELLAR_NETWORK" = testnet ]; then
+    RPC_URL="${STELLAR_RPC_URL:-https://soroban-testnet.stellar.org}"
+    PASSPHRASE="${STELLAR_NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}"
 else
-    # Source (fee payer + tx signer): a --source identity, or STELLAR_ACCOUNT
-    # from the environment (the CI model). A named identity resolves to a
-    # G-address, used for the fresh-registry admin/manager and as the default
-    # author. A key in the environment is never resolved: that would put it in
-    # a `stellar keys address` argv. Canonical mode reads admin/manager from
-    # the chain and is given an explicit --author.
-    if [ -n "$source_key" ]; then
-        src=(--source-account "$source_key")
-        source_ref="$source_key"
-        source_g="$(stellar keys address "$source_key" 2>/dev/null || true)"
-    elif [ -n "${STELLAR_ACCOUNT:-}" ]; then
-        src=()
-        source_ref="$STELLAR_ACCOUNT"
-    else
-        die "--source <identity> is required (or set STELLAR_ACCOUNT in the environment)"
-    fi
-
-    # Author defaults to the source's own key; a smart-account contract other
-    # than the source makes the publish smart-account-authored (see the
-    # header).
-    [ -n "$author" ] || author="$source_g"
-    [ -n "$author" ] || die "no author: pass --author, or a --source identity that resolves to a key"
-    if [ "$author" != "$source_g" ]; then
-        [[ "$author" =~ ^C[A-Z2-7]{55}$ ]] || die "--author must be a C… smart-account address (got '$author')"
-        # The fork signs the account's publish_hash authorization with the
-        # delegate (the source key, also the fee payer), by discovering the
-        # account's on-chain context rule. Keep an existing
-        # STELLAR_SIGN_WITH_KEY (CI sets it beside STELLAR_ACCOUNT); otherwise
-        # sign with the source. Set for the whole run — it is inert for the
-        # source-signed upload and deploy_stateless calls, which carry no
-        # contract-address credential.
-        export STELLAR_SIGN_WITH_KEY="${STELLAR_SIGN_WITH_KEY:-$source_ref}"
-        stellar --version 2>/dev/null | grep -q 'aha' \
-            || warn "author $author is a smart account, but the 'stellar' on PATH is not the theahaco/stellar-cli fork (…-aha.N): publish_hash cannot sign the account's authorization"
-        log "smart-account-authored: names authored by $author"
-    fi
+    RPC_URL="${STELLAR_RPC_URL:?set STELLAR_RPC_URL for $STELLAR_NETWORK}"
+    PASSPHRASE="${STELLAR_NETWORK_PASSPHRASE:?set STELLAR_NETWORK_PASSPHRASE for $STELLAR_NETWORK}"
 fi
 
-# The content-address helper is built only by a run that builds the stack;
-# --prebuilt reads the addresses a --build-only run computed instead.
-if ! $prebuilt; then
-    (cd "$repo_root" && cargo build -q -p perch-derive-id)
+author="" stack="$repo_root/target/stack" reuse="" manifest="" channel=beta receipts="" plan=false
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --author) author="$2"; shift 2 ;;
+        --stack) stack="$2"; shift 2 ;;
+        --reuse) reuse="$2"; shift 2 ;;
+        --manifest) manifest="$2"; shift 2 ;;
+        --channel) channel="$2"; shift 2 ;;
+        --receipts) receipts="$2"; shift 2 ;;
+        --plan) plan=true; shift ;;
+        # Print the leading comment block (minus the shebang) as help.
+        -h|--help) awk 'NR>1 && /^#/{sub(/^# ?/,""); print; next} NR>1{exit}' "$0"; exit 0 ;;
+        *) die "unknown option: $1" ;;
+    esac
+done
+manifest="${manifest:-$repo_root/deployments/$STELLAR_NETWORK.json}"
+receipts="${receipts:-$stack/receipts.jsonl}"
+build="$stack/build.json"
+
+[ -n "${STELLAR_ACCOUNT:-}" ] || die "STELLAR_ACCOUNT (the source and fee payer) is not set"
+[[ "$author" =~ ^[GC][A-Z2-7]{55}$ ]] || die "--author must be an account or contract address (got '$author')"
+[ -f "$build" ] || die "no $build: build the stack first (scripts/build-stack.sh or scripts/fetch-infra-wasm.sh --stack)"
+if [[ "$author" == C* ]] && ! $plan; then
+    # Inert for the source-signed upload and deploy_stateless calls, which
+    # carry no contract-address credential.
+    export STELLAR_SIGN_WITH_KEY="${STELLAR_SIGN_WITH_KEY:-$STELLAR_ACCOUNT}"
+    stellar --version 2>/dev/null | grep -q 'aha' \
+        || warn "author $author is a smart account, but the 'stellar' on PATH is not the theahaco/stellar-cli fork (…-aha.N): publish_hash cannot sign its authorization"
 fi
-derive() { "$repo_root/target/debug/perch-derive-id" "$@" "$PASSPHRASE"; }
 
-invoke() { stellar contract invoke "${net[@]}" "${src[@]}" --id "$1" -- "${@:2}"; }
-read_only() { stellar contract invoke "${net[@]}" "${src[@]}" --send=no --id "$1" -- "${@:2}"; }
-
-crate_version() { grep -m1 '^version = "' "$repo_root/crates/$1/Cargo.toml" | sed 's/^version = "\(.*\)"/\1/'; }
+# The stack: every artifact's file is the bytes build.json records.
+artifact() { jq -c --arg p "$1" '.artifacts[] | select(.package == $p)' "$build"; }
+wasm_of() { printf '%s/%s.wasm' "$stack" "${1//-/_}"; }
+for pkg in $(jq -r '.artifacts[].package' "$build"); do
+    [[ "$pkg" =~ ^[a-z0-9-]+$ ]] || die "build.json names a package '$pkg'"
+    [[ "$(artifact "$pkg" | jq -r .version)" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "build.json: $pkg has no semver version"
+    [ "$(sha256 "$(wasm_of "$pkg")")" = "$(artifact "$pkg" | jq -r .sha256)" ] \
+        || die "$(wasm_of "$pkg") is not the $pkg bytes build.json records"
+done
+for pkg in perch-account perch-account-factory; do
+    [ -n "$(artifact "$pkg")" ] || die "build.json has no $pkg"
+done
 in_reuse() { case " $reuse " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 
-# Fetch an already-published tier-0 wasm from the registry, by the hash it
-# serves for the crate's current version, into the --provided-tier0 dir so
-# build-stack.sh reuses those exact bytes. Fails if the name is not published
-# yet (its allow-list publish must land first).
-fetch_reused() { # package provided-dir
-    local pkg="$1" dir="$2" version hash file
-    version="$(crate_version "$pkg")"
-    hash="$(read_only "$registry" fetch_hash --wasm_name "$pkg" --version "\"$version\"" 2>/dev/null | tr -d '"')" \
-        || die "reuse: $pkg $version is not published on $registry — its allow-list publish must run first"
-    file="$dir/${pkg//-/_}.wasm"
-    stellar contract fetch "${net[@]}" --wasm-hash "$hash" --out-file "$file" >/dev/null 2>&1 \
-        || die "reuse: could not fetch $pkg wasm $hash from the chain"
-    [ "$(sha256 "$file")" = "$hash" ] || die "reuse: fetched $pkg is $(sha256 "$file"), registry says $hash"
-    log "reuse $pkg $version ($hash)"
-}
-
+# ---------------------------------------------------------------------------
+# 1. Registry
+# ---------------------------------------------------------------------------
+derive() { "$repo_root/scripts/derive-id.py" "$@"; }
+registry="$(derive registry "$PASSPHRASE")"
+root="$(derive root "$PASSPHRASE")"
+content() { derive content "$registry" "$1" "$PASSPHRASE"; }
+view() { stellar contract invoke --send=no --id "$1" -- "${@:2}"; }
+registry_wasm="$(stellar contract info hash --id "$registry" 2>/dev/null)" \
+    || die "registry $registry, which crates/*/wasm/registry.path derives on $STELLAR_NETWORK, is not deployed"
+# The registry's own admin and manager, never the delegate that signs here.
+reg_admin="$(view "$registry" admin | tr -d '"')" || die "cannot read $registry's admin"
+reg_manager="$(view "$registry" manager | tr -d '"')" || die "cannot read $registry's manager"
+log "registry $registry (wasm $registry_wasm)"
 # The first ledger an indexer needs to scan: nothing below was deployed here.
 deployed_ledger="$(curl -fsS "$RPC_URL" -H 'content-type: application/json' \
     -d '{"jsonrpc":"2.0","id":1,"method":"getLatestLedger"}' | jq -r .result.sequence)"
 
 # ---------------------------------------------------------------------------
-# 1. Registry
+# 2-3. Publish in pin order
 # ---------------------------------------------------------------------------
-if [ -z "$registry" ]; then
-    [ -n "$source_g" ] || die "a fresh registry needs a --source that resolves to a key (its admin/manager)"
-    registry_wasm="$(stellar contract info hash "${net[@]}" --id "$REGISTRY_WASM_FROM")"
-    log "registry: new instance of $registry_wasm (the code $REGISTRY_WASM_FROM runs)"
-    registry="$(stellar contract deploy "${net[@]}" "${src[@]}" --wasm-hash "$registry_wasm" -- \
-        --admin "$source_g" --manager "$source_g" --root "$ROOT")"
-fi
-[[ "$registry" =~ ^C[A-Z2-7]{55}$ ]] || die "bad registry id '$registry'"
-registry_wasm="$(stellar contract info hash "${net[@]}" --id "$registry")"
-log "registry $registry (wasm $registry_wasm)"
-
-# ---------------------------------------------------------------------------
-# 2. Build, pinned to this registry
-# ---------------------------------------------------------------------------
-# Reused tier-0 (--reuse) are fetched from the registry first, so build-stack
-# pins the exact published bytes instead of a non-reproducing rebuild.
-if $prebuilt; then
-    [ -f "$build" ] && [ -f "$addresses" ] \
-        || die "--prebuilt needs ${stack#"$repo_root"/}/build.json and addresses.json from a --build-only run"
-    log "prebuilt stack: ${stack#"$repo_root"/}"
-else
-    provided_args=()
-    if [ -n "$reuse" ]; then
-        provided_dir="$repo_root/target/provided-tier0"
-        rm -rf "$provided_dir" && mkdir -p "$provided_dir"
-        for pkg in $reuse; do fetch_reused "$pkg" "$provided_dir"; done
-        provided_args=(--provided-tier0 "$provided_dir")
-    fi
-    "$repo_root/scripts/build-stack.sh" --registry "$registry" --network-passphrase "$PASSPHRASE" \
-        --out "$stack" "${provided_args[@]}"
-fi
-[ "$(jq -r .registry "$build")" = "$registry" ] || die "build.json is for another registry"
-artifact() { jq -c --arg p "$1" '.artifacts[] | select(.package == $p)' "$build"; }
-
-# Every name this run publishes or reuses sits at the offline content address
-# deployer(registry, wasm_hash). Computed with the build, so publishing needs
-# no compiled helper.
-if ! $prebuilt; then
-    addrs='{}'
-    for pkg in $(jq -r '.artifacts[] | select(.tier == 0 or .package == "perch-account-factory") | .package' "$build"); do
-        addr="$(derive content "$registry" "$(artifact "$pkg" | jq -r .sha256)")"
-        addrs="$(jq -c --arg p "$pkg" --arg a "$addr" '. + {($p): $a}' <<<"$addrs")"
-    done
-    printf '%s\n' "$addrs" >"$addresses"
-fi
-content_address() { # package
-    local addr
-    addr="$(jq -r --arg p "$1" '.[$p] // empty' "$addresses")"
-    [[ "$addr" =~ ^C[A-Z2-7]{55}$ ]] || die "no content address for $1 in ${addresses#"$repo_root"/}"
-    printf '%s' "$addr"
+mkdir -p "$(dirname "$receipts")"
+: >"$receipts"
+deployed='{}'
+record() { # package address
+    deployed="$(jq -c --arg p "$1" --arg a "$2" --argjson art "$(artifact "$1")" \
+        '. + {($p): ($art + (if $a == "" then {} else {address: $a} end))}' <<<"$deployed")"
 }
 
-if $build_only; then
-    log "built ${stack#"$repo_root"/} for $registry; publish it with --prebuilt"
+plan_args=()
+! $plan || plan_args=(--plan)
+publish() { # package [--install-only]
+    local pkg="$1" out addr
+    out="$("$repo_root/scripts/publish-wasm.sh" ${plan_args[@]+"${plan_args[@]}"} "${@:2}" \
+        --registry "$registry" --author "$author" --name "$pkg" \
+        --version "$(artifact "$pkg" | jq -r .version)" --wasm "$(wasm_of "$pkg")")"
+    printf '%s\n' "$out" >>"$receipts"
+    addr="$(jq -r '.address // empty' <<<"$out")"
+    if [ -n "$addr" ]; then
+        [ "$addr" = "$(content "$(artifact "$pkg" | jq -r .sha256)")" ] \
+            || die "$pkg deployed at $addr, not at its content address under $registry"
+    elif [ "${2:-}" != --install-only ] && ! $plan; then
+        die "$pkg: publish-wasm.sh reported no address"
+    fi
+    record "$pkg" "$addr"
+}
+
+reused() { # package — the registry already serves it; verify only
+    local pkg="$1" version hash addr onchain live status=reused
+    version="$(artifact "$pkg" | jq -r .version)"
+    hash="$(artifact "$pkg" | jq -r .sha256)"
+    addr="$(content "$hash")"
+    log "$pkg $version ($hash): reused"
+    if onchain="$(view "$registry" fetch_hash --wasm_name "$pkg" --version "\"$version\"" 2>/dev/null)"; then
+        [ "${onchain//\"/}" = "$hash" ] || die "$pkg $version on $registry is ${onchain//\"/}, the stack's is $hash"
+        live="$(stellar contract info hash --id "$addr" 2>/dev/null)" \
+            || die "$pkg is published on $registry but not deployed at its content address $addr"
+        [ "$live" = "$hash" ] || die "$pkg at $addr runs $live, not $hash"
+    elif $plan; then
+        warn "$pkg $version is not published on $registry yet; a real run needs it first"
+        status="not published yet (reused)" addr=""
+    else
+        die "$pkg $version is not published on $registry: its own release publish must run first"
+    fi
+    jq -cn --arg n "$pkg" --arg v "$version" --arg h "$hash" --arg r "$registry" --arg s "$status" --arg a "$addr" \
+        '{name: $n, version: $v, sha256: $h, registry: $r, author: null, status: $s,
+          address: (if $a == "" then null else $a end), txs: []}' >>"$receipts"
+    record "$pkg" "$addr"
+}
+
+for pkg in $(jq -r '.artifacts[] | select(.tier == 0) | .package' "$build"); do
+    if in_reuse "$pkg"; then reused "$pkg"; else publish "$pkg"; fi
+done
+publish perch-account --install-only
+publish perch-account-factory
+
+if $plan; then
+    log "plan only: nothing was submitted, and no manifest is written"
     exit 0
 fi
 
 # ---------------------------------------------------------------------------
-# 3-4. Publish in pin order
+# 4. Manifest
 # ---------------------------------------------------------------------------
-deployed='{}'
-
-upload() { # file hash
-    local got
-    got="$(stellar contract upload "${net[@]}" "${src[@]}" --wasm "$1")"
-    [ "$got" = "$2" ] || die "uploaded $1 as $got, built as $2"
-}
-
-publish_stateless() { # package
-    local pkg="$1" a version hash file onchain addr expected live
-    a="$(artifact "$pkg")"
-    version="$(jq -r .version <<<"$a")"
-    hash="$(jq -r .sha256 <<<"$a")"
-    file="$stack/$(jq -r .wasm <<<"$a")"
-    log "$pkg $version ($hash)"
-    upload "$file" "$hash"
-    if onchain="$(read_only "$registry" fetch_hash --wasm_name "$pkg" --version "\"$version\"" 2>/dev/null)"; then
-        onchain="${onchain//\"/}"
-        [ "$onchain" = "$hash" ] || die "$pkg $version is already published with hash $onchain"
-        log "  already published"
-    else
-        invoke "$registry" publish_hash --wasm_name "$pkg" --author "$author" \
-            --wasm_hash "$hash" --version "$version" >/dev/null
-    fi
-    addr="$(invoke "$registry" deploy_stateless --wasm_name "$pkg" --version "\"$version\"")"
-    addr="${addr//\"/}"
-    expected="$(content_address "$pkg")"
-    [ "$addr" = "$expected" ] || die "$pkg deployed at $addr, content address is $expected"
-    live="$(stellar contract info hash "${net[@]}" --id "$addr")"
-    [ "$live" = "$hash" ] || die "$pkg at $addr runs $live, built $hash"
-    deployed="$(jq -c --arg p "$pkg" --arg a "$addr" --argjson art "$a" \
-        '. + {($p): ($art + {address: $a})}' <<<"$deployed")"
-}
-
-record_reused() { # package  — already published + deployed on $registry; verify only
-    local pkg="$1" a version hash addr onchain live
-    a="$(artifact "$pkg")"
-    version="$(jq -r .version <<<"$a")"
-    hash="$(jq -r .sha256 <<<"$a")"
-    log "$pkg $version ($hash): reused, already on $registry"
-    onchain="$(read_only "$registry" fetch_hash --wasm_name "$pkg" --version "\"$version\"" 2>/dev/null | tr -d '"')" \
-        || die "$pkg $version is not published on $registry"
-    [ "$onchain" = "$hash" ] || die "$pkg $version on $registry is $onchain, reused bytes are $hash"
-    addr="$(content_address "$pkg")"
-    live="$(stellar contract info hash "${net[@]}" --id "$addr" 2>/dev/null)" \
-        || die "$pkg content address $addr is not deployed on $registry (published without deploy_stateless?)"
-    [ "$live" = "$hash" ] || die "$pkg at $addr runs $live, reused $hash"
-    deployed="$(jq -c --arg p "$pkg" --arg a "$addr" --argjson art "$a" \
-        '. + {($p): ($art + {address: $a})}' <<<"$deployed")"
-}
-
-for pkg in $(jq -r '.artifacts[] | select(.tier == 0) | .package' "$build"); do
-    if in_reuse "$pkg"; then record_reused "$pkg"; else publish_stateless "$pkg"; fi
-done
-
-a="$(artifact perch-account)"
-log "perch-account $(jq -r .version <<<"$a") ($(jq -r .sha256 <<<"$a")): install only"
-upload "$stack/$(jq -r .wasm <<<"$a")" "$(jq -r .sha256 <<<"$a")"
-deployed="$(jq -c --argjson art "$a" '. + {"perch-account": $art}' <<<"$deployed")"
-
-publish_stateless perch-account-factory
-
-# ---------------------------------------------------------------------------
-# 5. Manifest
-# ---------------------------------------------------------------------------
-# admin/manager reflect the registry the names actually live under, read from
-# the chain: the fresh instance's (= --source) or the canonical registry's
-# (the human manager), never the delegate the canonical deploy signs with.
-reg_admin="$(read_only "$registry" admin 2>/dev/null | tr -d '"' || true)"
-reg_manager="$(read_only "$registry" manager 2>/dev/null | tr -d '"' || true)"
-[[ "$reg_admin" =~ ^[A-Z2-7]{56}$ ]] || reg_admin="$source_g"
-[[ "$reg_manager" =~ ^[A-Z2-7]{56}$ ]] || reg_manager="$source_g"
-
 mkdir -p "$(dirname "$manifest")"
 circuit="$repo_root/circuits/manifest.json"
 jq -n \
@@ -366,7 +209,7 @@ jq -n \
     --arg channel "$channel" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     --argjson deployed_ledger "$deployed_ledger" \
     --arg reg "$registry" --arg reg_wasm "$registry_wasm" \
-    --arg admin "$reg_admin" --arg manager "$reg_manager" --arg root "$ROOT" \
+    --arg admin "$reg_admin" --arg manager "$reg_manager" --arg root "$root" \
     --slurpfile build "$build" --argjson contracts "$deployed" \
     --arg circuit_id "$(jq -r '.circuits.perch_zk_recovery.vk_sha256 | ltrimstr("0x")' "$circuit")" \
     --argjson depth "$(jq -r '.circuits.perch_zk_recovery.depth' "$circuit")" \
@@ -384,9 +227,4 @@ jq -n \
       zk: {circuit_id: $circuit_id, tree_depth: $depth, circuit_manifest: "circuits/manifest.json"},
       contracts: ($contracts | with_entries(.value |= del(.package)))
     }' >"$manifest"
-log "wrote ${manifest#"$repo_root"/}"
-if $prebuilt; then
-    log "not verified here (--prebuilt runs no compiled code): run scripts/verify-deployment.sh --manifest ${manifest#"$repo_root"/}"
-else
-    "$repo_root/scripts/verify-deployment.sh" --manifest "$manifest"
-fi
+log "wrote ${manifest#"$repo_root"/}; check it with scripts/verify-deployment.sh --manifest ${manifest#"$repo_root"/}"
