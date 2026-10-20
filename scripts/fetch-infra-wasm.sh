@@ -2,15 +2,20 @@
 # Populate the build-time pin directories from a deployment manifest
 # (deployments/<network>.json, written by scripts/deploy-stack.sh):
 #
-#   crates/perch-smart-account/wasm/    stateless.id, perch-doc-compiler,
-#                                       perch-interpreter, perch-spending-limit
-#   crates/perch-account-factory/wasm/  stateless.id, perch-account,
-#                                       perch-webauthn-verifier
+#   crates/perch-smart-account/wasm/    perch-doc-compiler, perch-interpreter,
+#                                       perch-spending-limit
+#   crates/perch-account-factory/wasm/  perch-account, perch-webauthn-verifier
 #
 # Each name gets <name>.wasm (git-ignored; only tests read the bytes) and
-# <name>.sha256 (committed, with stateless.id: all a build reads, so a plain
+# <name>.sha256 (committed, with registry.path: all a build reads, so a plain
 # checkout builds without this script). scripts/check-pins.sh checks the
-# committed pins against the manifest offline.
+# committed pins against the manifest.
+#
+# The registry is not a fetched pin: both crates commit the path they derive
+# it from (wasm/registry.path), and the manifest's registry must be the one
+# that path derives on its network, or a migration
+# deployments/pending-registry.json declares (scripts/manifest-registry.sh).
+# This script refuses any other manifest and never rewrites the path.
 #
 # Each wasm is fetched from the chain by the exact address (or, for the
 # account, the exact wasm hash) the manifest records, and refused unless
@@ -125,8 +130,6 @@ fetch() { # contract-name out-file
 pin() { # crate names...
     local dir="$repo_root/crates/$1/wasm" name
     shift
-    mkdir -p "$dir"
-    printf '%s' "$registry" >"$dir/stateless.id"
     for name in "$@"; do
         fetch "$name" "$dir/$name.wasm"
         sha256 "$dir/$name.wasm" >"$dir/$name.sha256"
@@ -134,6 +137,10 @@ pin() { # crate names...
 }
 
 if $checkout; then
+    state="$("$repo_root/scripts/manifest-registry.sh" --manifest "$manifest")"
+    case "$state" in
+        pending\ *) echo "warning: pending registry migration (deployments/pending-registry.json): $state" >&2 ;;
+    esac
     echo "fetching pins from $(basename "$manifest") (registry $registry) ..." >&2
     pin perch-smart-account perch-doc-compiler perch-interpreter perch-spending-limit
     pin perch-account-factory perch-account perch-webauthn-verifier

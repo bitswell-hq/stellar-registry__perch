@@ -2,11 +2,21 @@
 """Tests for the release and build-provenance scripts: what a contract's
 release scope covers (scripts/release-deps.py, used by release.yml's
 release-pr job), that release.yml publishes every npm package under
-packages/ with a manifest that installs from the registry, what a stack
-build records as dirty (scripts/source-dirty.sh, used by
-scripts/build-stack.sh), the committed build-time pins' drift check
-(scripts/check-pins.sh), and the RPC endpoint choice the chain-reading
-scripts share (scripts/stellar-rpc.sh), against stub endpoints.
+packages/ with a manifest that installs from the registry, an npm package's
+scope and version bump (scripts/npm-release.sh, used by release-pr and by
+deploy-stack's perch-artifacts bump), the Nido dispatch plan
+(scripts/nido-dispatch-plan.sh), that no release job holding a signing
+credential builds or puts it in argv, that release-mainnet.yml runs only by
+dispatch and reads only the mainnet environment's settings, which released
+commits a mainnet dispatch may publish (scripts/mainnet-plan.sh), what a
+mainnet publish sends and that its plan sends nothing
+(scripts/publish-wasm.sh), the deploy-record perch-artifacts bump
+(scripts/deploy-record-bump.sh), what a stack build records as dirty
+(scripts/source-dirty.sh, used by scripts/build-stack.sh), the committed
+build-time pins' drift check (scripts/check-pins.sh, with
+scripts/manifest-registry.sh), and the RPC endpoint choice the
+chain-reading scripts share (scripts/stellar-rpc.sh), against stub
+endpoints.
 
   python3 scripts/test-release-scripts.py
 
@@ -14,12 +24,17 @@ The git-cliff tests need `git-cliff` on PATH (CI installs the release job's
 pinned build); without it they are skipped unless PERCH_REQUIRE_GIT_CLIFF=1.
 """
 
+import base64
+import hashlib
+import http.server
+import io
 import json
 import os
 import re
 import shlex
 import shutil
 import subprocess
+import tarfile
 import tempfile
 import textwrap
 import threading
@@ -30,8 +45,13 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RELEASE_DEPS = os.path.join(REPO, "scripts", "release-deps.py")
 SOURCE_DIRTY = os.path.join(REPO, "scripts", "source-dirty.sh")
 CHECK_PINS = os.path.join(REPO, "scripts", "check-pins.sh")
+MANIFEST_REGISTRY = os.path.join(REPO, "scripts", "manifest-registry.sh")
+NPM_RELEASE = os.path.join(REPO, "scripts", "npm-release.sh")
+NIDO_PLAN = os.path.join(REPO, "scripts", "nido-dispatch-plan.sh")
+DEPLOY_RECORD_BUMP = os.path.join(REPO, "scripts", "deploy-record-bump.sh")
 STELLAR_RPC = os.path.join(REPO, "scripts", "stellar-rpc.sh")
 RELEASE_YML = os.path.join(REPO, ".github", "workflows", "release.yml")
+RELEASE_MAINNET_YML = os.path.join(REPO, ".github", "workflows", "release-mainnet.yml")
 GIT_CLIFF = shutil.which("git-cliff")
 
 
@@ -298,7 +318,6 @@ class ReleaseDeps(unittest.TestCase):
         # `pins` exclusion keeps it from releasing the contract again.
         shutil.copy(os.path.join(REPO, "cliff.toml"), os.path.join(self.repo.dir, ".git", "cliff.toml"))
         run(["git", "tag", "contract-v0.1.0"], self.repo.dir)
-        self.repo.write("crates/contract/wasm/stateless.id", "C2")
         self.repo.write("crates/contract/wasm/dep.sha256", "bb\n")
         self.repo.write("deployments/testnet.json", "{}\n")
         self.repo.commit("deploy(testnet): recovery stack")
@@ -307,6 +326,20 @@ class ReleaseDeps(unittest.TestCase):
         cliff = [GIT_CLIFF or "git-cliff", "--config", ".git/cliff.toml", "--tag-pattern", "contract-v.*", *scope]
         self.assertEqual(run([*cliff, "--bumped-version"], self.repo.dir).stdout.strip(), "contract-v0.1.1")
         self.assertEqual(run([*cliff, *pins, "--bumped-version"], self.repo.dir).stdout.strip(), "contract-v0.1.0")
+
+    @unittest.skipUnless(GIT_CLIFF or os.environ.get("PERCH_REQUIRE_GIT_CLIFF"), "git-cliff not on PATH")
+    def test_a_registry_path_edit_is_a_release(self):
+        # The registry path sits beside the hash pins but is compiled in and
+        # rewritten by no deployment: editing it changes the contract's
+        # bytes, so release.yml's `pins` exclusion leaves it in.
+        shutil.copy(os.path.join(REPO, "cliff.toml"), os.path.join(self.repo.dir, ".git", "cliff.toml"))
+        run(["git", "tag", "contract-v0.1.0"], self.repo.dir)
+        self.repo.write("crates/contract/wasm/registry.path", "root-deployer G\nroot-salt s\npath a/b\n")
+        self.repo.commit("fix(contract): move the registry")
+        scope = [a for d in self.repo.deps("scope", "contract") for a in ("--include-path", f"{d}/**")]
+        pins = shlex.split(re.search(r"^ *pins=\((.*)\)$", release_yml(), re.M).group(1))
+        cliff = [GIT_CLIFF or "git-cliff", "--config", ".git/cliff.toml", "--tag-pattern", "contract-v.*", *scope]
+        self.assertEqual(run([*cliff, *pins, "--bumped-version"], self.repo.dir).stdout.strip(), "contract-v0.1.1")
 
 
 def release_yml():
@@ -359,10 +392,9 @@ def npm_lists():
 
 
 def npm_paths_for(pkg, cwd=REPO):
-    """release.yml's `npm_paths_for()` for `pkg`, as the git-cliff
-    --include-path arguments release-pr builds from it in `cwd`."""
-    fn = re.search(r"^ *(npm_paths_for\(\) \{ case .*?esac; \})", release_yml(), re.S | re.M).group(1)
-    paths = run(["bash", "-c", f'{fn}\nnpm_paths_for "$1"', "_", pkg], cwd).stdout.split()
+    """scripts/npm-release.sh's scope for `pkg`, as the git-cliff
+    --include-path arguments its `bump` builds from it in `cwd`."""
+    paths = run([NPM_RELEASE, "paths", pkg], cwd).stdout.split()
     return paths, [a for d in paths for a in ("--include-path", f"{d}/**" if os.path.isdir(os.path.join(cwd, d)) else d)]
 
 
@@ -430,6 +462,377 @@ class NpmScope(unittest.TestCase):
         self.assertEqual(run(cliff, repo.dir).stdout.strip(), "perch-artifacts-v0.2.0")
 
 
+def workflow_jobs(text):
+    """A workflow's jobs, as {name: the job's YAML text}."""
+    body = text.split("\njobs:\n", 1)[1]
+    parts = re.split(r"^  ([A-Za-z0-9_-]+):\n", body, flags=re.M)
+    return dict(zip(parts[1::2], parts[2::2]))
+
+
+def release_jobs():
+    """release.yml's jobs, as {name: the job's YAML text}."""
+    return workflow_jobs(release_yml())
+
+
+def release_mainnet_yml():
+    with open(RELEASE_MAINNET_YML) as f:
+        return f.read()
+
+
+def signing_jobs():
+    """Every job of both release workflows, keyed "<file>:<job>"."""
+    jobs = {f"release.yml:{n}": j for n, j in release_jobs().items()}
+    jobs.update({f"release-mainnet.yml:{n}": j for n, j in workflow_jobs(release_mainnet_yml()).items()})
+    return jobs
+
+
+SEED = "secrets.CI_PUBLISH_SECRET_KEY"
+MAINNET_SEED = "secrets.CI_PUBLISH_MAINNET_SECRET_KEY"
+SEEDS = (SEED, MAINNET_SEED)
+# What compiles or runs a dependency's code: a job holding a signing
+# credential must do none of it.
+BUILDS = ("cargo ", "rust-toolchain", "npm ci", "npm install", "npm test", "npm run",
+          "--build-only", 'scaffold: "true"', "verify-deployment.sh", "bindings-contracts.sh")
+
+
+def holds_seed(job):
+    return any(seed in job for seed in SEEDS)
+
+
+class ReleaseKeys(unittest.TestCase):
+    """Where release.yml's signing credentials can be read."""
+
+    def test_no_job_reads_an_npm_token(self):
+        for text in (release_yml(), release_mainnet_yml()):
+            self.assertNotIn("NPM_TOKEN", text)
+            self.assertNotIn("NODE_AUTH_TOKEN", text)
+
+    def test_every_job_holding_the_seed_is_in_an_environment(self):
+        holders = {n: j for n, j in signing_jobs().items() if holds_seed(j)}
+        self.assertTrue(holders)
+        for name, job in holders.items():
+            with self.subTest(job=name):
+                # A job's own `environment:`, or the reusable publish's input.
+                self.assertRegex(job, r"(?m)^ {4,6}environment: \S")
+
+    def test_no_job_holding_the_seed_builds(self):
+        for name, job in signing_jobs().items():
+            if not holds_seed(job):
+                continue
+            for marker in BUILDS:
+                with self.subTest(job=name, marker=marker):
+                    self.assertNotIn(marker, job)
+
+    def test_the_seed_never_reaches_argv(self):
+        for name, job in signing_jobs().items():
+            for line in job.splitlines():
+                for seed in SEEDS:
+                    if seed in line:
+                        with self.subTest(job=name, line=line.strip()):
+                            # Only as a step env value or a reusable-workflow secret.
+                            self.assertRegex(line.strip(), r"^(STELLAR_ACCOUNT|STELLAR_SIGN_WITH_KEY|signing_key): \$\{\{ " + re.escape(seed) + r" \}\}$")
+
+    def test_npm_publish_only_publishes_a_packed_tarball(self):
+        jobs = release_jobs()
+        minting = {n: j for n, j in jobs.items() if "id-token: write" in j and "npm publish" in j}
+        self.assertEqual(list(minting), ["npm-publish"])
+        job = minting["npm-publish"]
+        self.assertRegex(job, r"(?m)^    environment: npm$")
+        self.assertIn("--ignore-scripts", job)
+        self.assertNotIn("actions/checkout", job)
+        for marker in BUILDS:
+            with self.subTest(marker=marker):
+                self.assertNotIn(marker, job)
+        self.assertNotIn("id-token", jobs["npm-pack"])
+        # A tarball publish records no gitHead of its own, and the Nido
+        # dispatch plan requires one naming the release commit.
+        self.assertIn('npm pkg set gitHead="$(git rev-parse HEAD)"', jobs["npm-pack"])
+
+
+NPM = shutil.which("npm")
+
+
+def deploy_pr_add_paths():
+    """The paths release.yml's deploy-stack commits into its deploy PR."""
+    block = re.search(r"^ *- name: Open the deploy\(testnet\) manifest PR\n(.*?)^ *body:", release_yml(), re.S | re.M).group(1)
+    return re.search(r"add-paths: \|\n((?: +\S+\n)+)", block).group(1).split()
+
+
+def mainnet_deploy_pr_add_paths():
+    """The paths release-mainnet.yml commits into its deploy(mainnet) PR."""
+    block = re.search(r"^ *- name: Open the deploy\(mainnet\) manifest PR\n(.*?)^ *body:", release_mainnet_yml(), re.S | re.M).group(1)
+    return re.search(r"add-paths: \|\n((?: +\S+\n)+)", block).group(1).split()
+
+
+@unittest.skipUnless(GIT_CLIFF or os.environ.get("PERCH_REQUIRE_GIT_CLIFF"), "git-cliff not on PATH")
+@unittest.skipUnless(NPM or os.environ.get("PERCH_REQUIRE_GIT_CLIFF"), "npm not on PATH")
+class NpmBump(unittest.TestCase):
+    """scripts/npm-release.sh bump, as release-pr runs it for every package
+    and deploy-stack runs it for perch-artifacts over its deploy commit."""
+
+    def setUp(self):
+        self.repo = Repo()
+        shutil.copy(os.path.join(REPO, "cliff.toml"), os.path.join(self.repo.dir, "cliff.toml"))
+        self.repo.write("packages/perch-artifacts/package.json", json.dumps(
+            {"name": "@stellar-registry/perch-artifacts", "version": "0.1.0"}, indent=2) + "\n")
+        self.repo.write("packages/perch-artifacts/package-lock.json", json.dumps({
+            "name": "@stellar-registry/perch-artifacts", "version": "0.1.0", "lockfileVersion": 3,
+            "packages": {"": {"name": "@stellar-registry/perch-artifacts", "version": "0.1.0"}},
+        }, indent=2) + "\n")
+        self.repo.write("deployments/testnet.json", '{"a": 1}\n')
+        self.repo.write("crates/perch-account/wasm/dep.sha256", "aa\n")
+        self.repo.commit("feat(perch-artifacts): first release")
+
+    def tearDown(self):
+        self.repo.cleanup()
+
+    def bump(self):
+        return run([NPM_RELEASE, "bump", "perch-artifacts"], self.repo.dir).stdout.strip()
+
+    def version(self, name):
+        with open(os.path.join(self.repo.dir, "packages", "perch-artifacts", name)) as f:
+            return json.load(f)["version"]
+
+    def test_an_untagged_package_is_not_bumped(self):
+        self.assertEqual(self.bump(), "")
+
+    def test_a_deploy_commit_bumps_perch_artifacts(self):
+        # deploy-stack's step: commit the new record, bump, uncommit.
+        run(["git", "tag", "perch-artifacts-v0.1.0"], self.repo.dir)
+        self.assertEqual(self.bump(), "")
+        self.repo.write("deployments/testnet.json", '{"a": 2}\n')
+        self.repo.commit("deploy(testnet): recovery stack @ " + "ab" * 20)
+        self.assertEqual(self.bump(), "0.1.0 0.1.1")
+        self.assertEqual(self.version("package.json"), "0.1.1")
+        self.assertEqual(self.version("package-lock.json"), "0.1.1")
+        with open(os.path.join(self.repo.dir, "packages", "perch-artifacts", "CHANGELOG.md")) as f:
+            changelog = f.read()
+        self.assertIn("## [0.1.1]", changelog)
+        self.assertIn("*(testnet)* Recovery stack @ " + "ab" * 20, changelog)
+        # Every file the bump writes rides in the deploy PR's one commit.
+        changed = run(["git", "status", "--porcelain", "--untracked-files=all"], self.repo.dir).stdout.split()[1::2]
+        for path in changed:
+            self.assertTrue(any(path == p or path.startswith(p + "/") for p in deploy_pr_add_paths()), path)
+        # The bumped version is current: no further bump until a later change.
+        self.repo.commit("chore: take the bump")
+        self.assertEqual(self.bump(), "")
+
+    def test_a_mainnet_deploy_record_bumps_perch_artifacts(self):
+        # release-mainnet.yml's record step: the same bump, through
+        # scripts/deploy-record-bump.sh, leaving only uncommitted files the
+        # deploy(mainnet) PR commits.
+        run(["git", "tag", "perch-artifacts-v0.1.0"], self.repo.dir)
+        head = run(["git", "rev-parse", "HEAD"], self.repo.dir).stdout.strip()
+        bump = [DEPLOY_RECORD_BUMP, "deployments/mainnet.json", "deploy(mainnet): recovery stack @ " + "cd" * 20]
+        self.repo.write("deployments/mainnet.json", '{"network": "mainnet"}\n')
+        self.assertEqual(run(bump, self.repo.dir).stdout.strip(), "0.1.0 0.1.1")
+        self.assertEqual(run(["git", "rev-parse", "HEAD"], self.repo.dir).stdout.strip(), head)
+        self.assertEqual(self.version("package.json"), "0.1.1")
+        with open(os.path.join(self.repo.dir, "packages", "perch-artifacts", "CHANGELOG.md")) as f:
+            self.assertIn("*(mainnet)* Recovery stack @ " + "cd" * 20, f.read())
+        changed = run(["git", "status", "--porcelain", "--untracked-files=all"], self.repo.dir).stdout.split()[1::2]
+        for path in changed:
+            self.assertTrue(any(path == p or path.startswith(p + "/") for p in mainnet_deploy_pr_add_paths()), path)
+        # An unchanged record releases nothing.
+        self.repo.commit("deploy(mainnet): recovery stack")
+        self.assertEqual(run(bump, self.repo.dir).stdout.strip(), "")
+
+    def test_a_pin_only_change_is_no_release(self):
+        run(["git", "tag", "perch-artifacts-v0.1.0"], self.repo.dir)
+        self.repo.write("crates/perch-account/wasm/dep.sha256", "bb\n")
+        self.repo.commit("deploy(testnet): recovery stack")
+        self.assertEqual(self.bump(), "")
+
+    def test_a_version_already_tagged_is_not_proposed_again(self):
+        # detect-releases tagged the merged bump before release-pr ran.
+        run(["git", "tag", "perch-artifacts-v0.1.0"], self.repo.dir)
+        self.repo.write("deployments/testnet.json", '{"a": 2}\n')
+        self.repo.commit("deploy(testnet): recovery stack")
+        self.assertEqual(self.bump(), "0.1.0 0.1.1")
+        self.repo.commit("chore: take the bump")
+        run(["git", "tag", "perch-artifacts-v0.1.1"], self.repo.dir)
+        self.assertEqual(self.bump(), "")
+
+
+class Registry:
+    """A local npm registry serving perch-artifacts version documents and
+    tarballs, for scripts/nido-dispatch-plan.sh."""
+
+    def __init__(self):
+        self.files = {}
+        files = self.files
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                body = files.get(self.path)
+                self.send_response(200 if body is not None else 404)
+                self.end_headers()
+                if body is not None:
+                    self.wfile.write(body)
+
+            def log_message(self, *args):
+                pass
+
+        self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.url = f"http://127.0.0.1:{self.server.server_port}"
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+
+    def publish(self, version, git_head, files, provenance=True, integrity=None):
+        buf = io.BytesIO()
+        with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+            for path, data in files.items():
+                info = tarfile.TarInfo(f"package/{path}")
+                info.size = len(data)
+                tar.addfile(info, io.BytesIO(data))
+        tgz = buf.getvalue()
+        tarball = f"/@stellar-registry/perch-artifacts/-/perch-artifacts-{version}.tgz"
+        dist = {
+            "tarball": self.url + tarball,
+            "integrity": integrity or "sha512-" + base64.b64encode(hashlib.sha512(tgz).digest()).decode(),
+        }
+        if provenance:
+            dist["attestations"] = {"provenance": {"predicateType": "https://slsa.dev/provenance/v1"}}
+        self.files[tarball] = tgz
+        self.files[f"/@stellar-registry%2fperch-artifacts/{version}"] = json.dumps(
+            {"version": version, "gitHead": git_head, "dist": dist}).encode()
+
+    def close(self):
+        self.server.shutdown()
+        self.server.server_close()
+
+
+def manifest(network, n):
+    return (json.dumps({"schema": 1, "network": network, "n": n, "source": {"commit": "cd" * 20}}, indent=2) + "\n").encode()
+
+
+class NidoDispatchPlan(unittest.TestCase):
+    """scripts/nido-dispatch-plan.sh: which manifests a perch-artifacts
+    release announces to Nido, and the package it must find first."""
+
+    def setUp(self):
+        self.repo = Repo()
+        self.registry = Registry()
+        self.repo.write("deployments/testnet.json", manifest("testnet", 1).decode())
+        self.repo.commit("feat: first deployment")
+        self.tag("0.1.0")
+
+    def tearDown(self):
+        self.registry.close()
+        self.repo.cleanup()
+
+    def tag(self, version):
+        run(["git", "tag", f"perch-artifacts-v{version}"], self.repo.dir)
+        return self.head()
+
+    def head(self):
+        return run(["git", "rev-parse", "HEAD"], self.repo.dir).stdout.strip()
+
+    def publish(self, version, **over):
+        files = {}
+        for path in ("deployments/testnet.json", "deployments/mainnet.json"):
+            full = os.path.join(self.repo.dir, path)
+            if os.path.exists(full):
+                with open(full, "rb") as f:
+                    files[path] = f.read()
+        args = {"git_head": self.head(), "files": files, **over}
+        self.registry.publish(version, **args)
+
+    def plan(self, *args, check=True):
+        env = {**os.environ, "REPOSITORY": "stellar-registry/perch", "RUN_URL": "https://example.com/run/1",
+               "NPM_REGISTRY": self.registry.url, "REGISTRY_TRIES": "1"}
+        out = subprocess.run([NIDO_PLAN, *args], cwd=self.repo.dir, capture_output=True, text=True, env=env)
+        if check:
+            self.assertEqual(out.returncode, 0, out.stderr)
+            return json.loads(out.stdout)
+        self.assertNotEqual(out.returncode, 0, out.stdout)
+        return out.stderr
+
+    def redeploy(self, n, version):
+        self.repo.write("deployments/testnet.json", manifest("testnet", n).decode())
+        self.repo.commit("deploy(testnet): recovery stack")
+        return self.tag(version)
+
+    def test_a_release_with_a_new_manifest_dispatches_its_version(self):
+        sha = self.redeploy(2, "0.1.1")
+        self.publish("0.1.1")
+        [target] = self.plan("release", "perch-artifacts-v0.1.1")
+        self.assertEqual(target["network"], "testnet")
+        self.assertEqual(target["payload"], {
+            "schema": 1,
+            "repository": "stellar-registry/perch",
+            "network": "testnet",
+            "perch_sha": sha,
+            "manifest_path": "deployments/testnet.json",
+            "manifest_sha256": hashlib.sha256(manifest("testnet", 2)).hexdigest(),
+            "source_commit": "cd" * 20,
+            "run_url": "https://example.com/run/1",
+            "artifacts_package": "@stellar-registry/perch-artifacts",
+            "artifacts_version": "0.1.1",
+        })
+
+    def test_a_release_with_no_manifest_change_dispatches_nothing(self):
+        # Without asking the registry: nothing is announced.
+        self.repo.write("circuits/x.nr", "fn main() {}\n")
+        self.repo.commit("fix: a circuit")
+        self.tag("0.1.1")
+        self.assertEqual(self.plan("release", "perch-artifacts-v0.1.1"), [])
+
+    def test_the_first_release_dispatches_every_manifest(self):
+        self.publish("0.1.0")
+        self.assertEqual([t["network"] for t in self.plan("release", "perch-artifacts-v0.1.0")], ["testnet"])
+
+    def test_only_the_networks_whose_manifest_changed(self):
+        self.repo.write("deployments/mainnet.json", manifest("mainnet", 1).decode())
+        self.repo.commit("deploy(mainnet): recovery stack")
+        self.tag("0.2.0")
+        self.publish("0.2.0")
+        self.assertEqual([t["network"] for t in self.plan("release", "perch-artifacts-v0.2.0")], ["mainnet"])
+
+    def test_resend_names_the_latest_release(self):
+        self.redeploy(2, "0.1.1")
+        self.publish("0.1.1")
+        sha = self.redeploy(3, "0.1.2")
+        self.publish("0.1.2")
+        [target] = self.plan("resend", "testnet")
+        self.assertEqual((target["payload"]["artifacts_version"], target["payload"]["perch_sha"]), ("0.1.2", sha))
+
+    def test_an_unpublished_version_is_refused(self):
+        self.redeploy(2, "0.1.1")
+        self.assertIn("not on the registry", self.plan("release", "perch-artifacts-v0.1.1", check=False))
+
+    def test_a_package_from_another_commit_is_refused(self):
+        self.redeploy(2, "0.1.1")
+        self.publish("0.1.1", git_head="ef" * 20)
+        self.assertIn("was published from", self.plan("release", "perch-artifacts-v0.1.1", check=False))
+
+    def test_a_package_without_provenance_is_refused(self):
+        self.redeploy(2, "0.1.1")
+        self.publish("0.1.1", provenance=False)
+        self.assertIn("no provenance", self.plan("release", "perch-artifacts-v0.1.1", check=False))
+
+    def test_a_tarball_not_matching_its_integrity_is_refused(self):
+        self.redeploy(2, "0.1.1")
+        self.publish("0.1.1", integrity="sha512-AAAA")
+        self.assertIn("integrity", self.plan("release", "perch-artifacts-v0.1.1", check=False))
+
+    def test_a_package_shipping_other_manifest_bytes_is_refused(self):
+        self.redeploy(2, "0.1.1")
+        self.publish("0.1.1", files={"deployments/testnet.json": manifest("testnet", 1)})
+        self.assertIn("does not ship deployments/testnet.json", self.plan("release", "perch-artifacts-v0.1.1", check=False))
+
+    def test_a_file_that_is_not_the_networks_manifest_is_refused(self):
+        self.repo.write("deployments/testnet.json", manifest("mainnet", 2).decode())
+        self.repo.commit("deploy(testnet): wrong network")
+        self.tag("0.1.1")
+        self.publish("0.1.1")
+        self.assertIn("is not a schema-1 testnet manifest", self.plan("release", "perch-artifacts-v0.1.1", check=False))
+
+    def test_only_a_perch_artifacts_tag(self):
+        run(["git", "tag", "perch-contracts-v0.1.0"], self.repo.dir)
+        self.assertIn("is not a perch-artifacts-v<semver> tag", self.plan("release", "perch-contracts-v0.1.0", check=False))
+        self.assertIn("unknown network", self.plan("resend", "devnet", check=False))
+
+
 class SourceDirty(unittest.TestCase):
     INPUTS = [
         "crates/a/src/lib.rs",
@@ -475,45 +878,76 @@ class SourceDirty(unittest.TestCase):
         self.repo.write("crates/a/wasm/pin.wasm", "bytes\n")
         self.assertEqual(self.dirty(), "false")
 
-    def test_the_committed_pins_are_not(self):
+    def test_the_committed_hash_pins_are_not(self):
         # build-stack.sh rewrites them for the build it records.
-        self.repo.write("crates/b/wasm/stateless.id", "C1")
         self.repo.write("crates/b/wasm/dep.sha256", "aa\n")
         self.repo.commit("pins")
-        self.repo.write("crates/b/wasm/stateless.id", "C2")
         self.repo.write("crates/b/wasm/dep.sha256", "bb\n")
         self.repo.write("crates/b/wasm/new.sha256", "cc\n")
         self.assertEqual(self.dirty(), "false")
         self.repo.write("crates/b/wasm/README.md", "edited\n")
         self.assertEqual(self.dirty(), "true")
 
+    def test_the_registry_path_is_source(self):
+        # Compiled in, and no build rewrites it.
+        self.repo.write("crates/b/wasm/registry.path", "root-deployer G\nroot-salt s\npath a\n")
+        self.repo.commit("path")
+        self.repo.write("crates/b/wasm/registry.path", "root-deployer G\nroot-salt s\npath b\n")
+        self.assertEqual(self.dirty(), "true")
+
 
 class CheckPins(unittest.TestCase):
+    TESTNET = "Test SDF Network ; September 2015"
     MANIFEST = {
+        "network": "testnet",
+        "network_passphrase": TESTNET,
         "registry": {"id": "CREG"},
         "contracts": {"dep": {"sha256": "aa"}, "acct": {"sha256": "bb"}},
     }
+    PATH = "root-deployer GROOT\nroot-salt s\npath perch/constructorless\n"
 
     def setUp(self):
         self.repo = Repo()
         self.repo.write("deployments/testnet.json", json.dumps(self.MANIFEST))
-        self.repo.write("crates/a/wasm/stateless.id", "CREG")
+        self.repo.write("crates/a/wasm/registry.path", self.PATH)
         self.repo.write("crates/a/wasm/dep.sha256", "aa\n")
-        self.repo.write("crates/b/wasm/stateless.id", "CREG")
+        self.repo.write("crates/b/wasm/registry.path", self.PATH)
         self.repo.write("crates/b/wasm/acct.sha256", "bb\n")
         os.makedirs(os.path.join(self.repo.dir, "scripts"))
-        shutil.copy(CHECK_PINS, os.path.join(self.repo.dir, "scripts"))
+        for script in (CHECK_PINS, MANIFEST_REGISTRY):
+            shutil.copy(script, os.path.join(self.repo.dir, "scripts"))
+        # Stands in for `perch-derive-id registry <passphrase>`, the account's
+        # own derivation: prints the registry in `derived` for the testnet
+        # passphrase, a different one for any other.
+        self.repo.write("derive-id", textwrap.dedent(f"""\
+            #!/bin/sh
+            [ "$1" = registry ] || exit 2
+            if [ "$2" = "{self.TESTNET}" ]; then cat "$(dirname "$0")/derived"; else echo COTHERNET; fi
+            """))
+        os.chmod(os.path.join(self.repo.dir, "derive-id"), 0o755)
+        self.derives("CREG")
 
     def tearDown(self):
         self.repo.cleanup()
 
+    def derives(self, registry):
+        self.repo.write("derived", registry + "\n")
+
+    def pending(self, recorded, derived):
+        self.repo.write("deployments/pending-registry.json", json.dumps(
+            {"testnet": {"recorded": recorded, "derived": derived, "reason": "r"}}))
+
     def check(self):
-        return run(["scripts/check-pins.sh"], self.repo.dir, check=False)
+        env = dict(os.environ, PERCH_DERIVE_ID=os.path.join(self.repo.dir, "derive-id"))
+        env.pop("GITHUB_ACTIONS", None)
+        return subprocess.run(["scripts/check-pins.sh"], cwd=self.repo.dir, env=env,
+                              capture_output=True, text=True)
 
     def test_pins_matching_the_manifest_pass(self):
         out = self.check()
         self.assertEqual(out.returncode, 0, out.stderr)
-        self.assertIn("4 pins match testnet.json", out.stderr)
+        self.assertIn("3 pins match testnet.json", out.stderr)
+        self.assertNotIn("pending", out.stderr)
 
     def test_a_drifted_hash_fails(self):
         self.repo.write("crates/b/wasm/acct.sha256", "cc\n")
@@ -521,9 +955,40 @@ class CheckPins(unittest.TestCase):
         self.assertNotEqual(out.returncode, 0)
         self.assertIn("crates/b/wasm/acct.sha256 is 'cc'", out.stderr)
 
-    def test_a_drifted_registry_fails(self):
-        self.repo.write("crates/a/wasm/stateless.id", "COTHER")
+    def test_a_registry_the_path_does_not_derive_fails(self):
+        self.derives("CNEW")
+        out = self.check()
+        self.assertNotEqual(out.returncode, 0)
+        self.assertIn("records registry CREG, this source derives CNEW", out.stderr)
+
+    def test_a_declared_migration_passes_and_says_so(self):
+        self.derives("CNEW")
+        self.pending("CREG", "CNEW")
+        out = self.check()
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("pending registry migration: testnet.json records CREG, the registry path derives CNEW",
+                      out.stderr)
+        # The hashes are still checked.
+        self.repo.write("crates/b/wasm/acct.sha256", "cc\n")
         self.assertNotEqual(self.check().returncode, 0)
+
+    def test_a_declaration_for_another_pair_fails(self):
+        self.derives("CNEW")
+        for recorded, derived in (("COLD", "CNEW"), ("CREG", "COTHER")):
+            self.pending(recorded, derived)
+            self.assertNotEqual(self.check().returncode, 0, (recorded, derived))
+
+    def test_a_declaration_the_manifest_caught_up_with_fails(self):
+        self.pending("COLD", "CREG")
+        out = self.check()
+        self.assertNotEqual(out.returncode, 0)
+        self.assertIn("delete the testnet entry from deployments/pending-registry.json", out.stderr)
+
+    def test_differing_registry_paths_fail(self):
+        self.repo.write("crates/b/wasm/registry.path", self.PATH.replace("perch/", "other/"))
+        out = self.check()
+        self.assertNotEqual(out.returncode, 0)
+        self.assertIn("registry.path differs", out.stderr)
 
     def test_a_pin_the_manifest_lacks_fails(self):
         self.repo.write("crates/a/wasm/gone.sha256", "dd\n")
@@ -739,6 +1204,458 @@ class StellarRpc(unittest.TestCase):
         self.assertNotEqual(out.returncode, 0)
         self.assertIn("no usable fallback", out.stderr)
 
+
+MAINNET_PLAN = os.path.join(REPO, "scripts", "mainnet-plan.sh")
+PUBLISH_WASM = os.path.join(REPO, "scripts", "publish-wasm.sh")
+
+
+def mainnet_jobs():
+    return workflow_jobs(release_mainnet_yml())
+
+
+def code(job):
+    """A job's YAML without its comment lines."""
+    return "\n".join(l for l in job.splitlines() if not l.lstrip().startswith("#"))
+
+
+def job_needs(job):
+    m = re.search(r"(?m)^    needs: (.*)$", job)
+    return re.findall(r"[A-Za-z0-9_-]+", m.group(1)) if m else []
+
+
+def job_if(job):
+    m = re.search(r"(?m)^    if: (?:>-\n((?:      .*\n)+)|(.*)\n)", job)
+    return (m.group(1) or m.group(2)) if m else ""
+
+
+def steps(job):
+    return re.split(r"(?m)^      - ", job)[1:]
+
+
+def env_words(job, name):
+    return re.findall(r'(?m)^ *' + name + r': "([^"]*)"$', job)
+
+
+class MainnetJobs(unittest.TestCase):
+    """release-mainnet.yml: dispatched by hand, bound to the mainnet
+    environment, and apart from release.yml's testnet and npm jobs."""
+
+    def test_mainnet_jobs_exist(self):
+        self.assertEqual(set(mainnet_jobs()), {
+            "mainnet-plan", "mainnet-publish", "mainnet-publish-record", "mainnet-config",
+            "mainnet-deploy-stack-build", "mainnet-deploy-stack", "mainnet-deploy-stack-record"})
+
+    def test_mainnet_runs_only_by_dispatch(self):
+        on = re.search(r"(?ms)^on:\n(.*?)^\S", release_mainnet_yml()).group(1)
+        self.assertEqual(re.findall(r"(?m)^  ([a-z_]+):", on), ["workflow_dispatch"])
+        for name, job in mainnet_jobs().items():
+            with self.subTest(job=name):
+                self.assertIn("github.event_name == 'workflow_dispatch'", job_if(job))
+
+    def test_release_yml_never_touches_mainnet(self):
+        for name, job in release_jobs().items():
+            with self.subTest(job=name):
+                self.assertNotIn("mainnet", code(job).lower())
+        self.assertNotIn("mainnet", release_yml().split("\njobs:\n", 1)[0].split("\non:\n", 1)[1].lower())
+
+    def test_mainnet_jobs_never_read_a_testnet_setting(self):
+        for name, job in mainnet_jobs().items():
+            with self.subTest(job=name):
+                body = code(job)
+                self.assertNotIn(SEED, body)
+                for testnet in ("environment: testnet", "network: testnet", "STELLAR_NETWORK: testnet",
+                                "soroban-testnet", "Test SDF Network"):
+                    self.assertNotIn(testnet, body)
+                for var in re.findall(r"vars\.([A-Za-z0-9_]+)", body):
+                    self.assertTrue(var.startswith("PERCH_MAINNET_"), var)
+
+    def test_every_mainnet_setting_is_read_in_the_mainnet_environment(self):
+        for name, job in mainnet_jobs().items():
+            if MAINNET_SEED in job or "vars." in code(job):
+                with self.subTest(job=name):
+                    self.assertRegex(job, r"(?m)^    environment: mainnet$")
+        for name, job in mainnet_jobs().items():
+            if re.search(r"(?m)^    environment: mainnet$", job):
+                with self.subTest(job=name):
+                    for marker in BUILDS:
+                        self.assertNotIn(marker, job)
+
+    def test_a_dry_run_is_the_default_and_never_signs(self):
+        self.assertRegex(release_mainnet_yml(), r"(?m)^      dry_run:\n(?:        .*\n)*?        default: true\n")
+        signing = 0
+        for name, job in mainnet_jobs().items():
+            for step in steps(job):
+                if "STELLAR_SIGN_WITH_KEY:" in step:
+                    signing += 1
+                    with self.subTest(job=name, step=step.splitlines()[0]):
+                        self.assertIn("if: ${{ !inputs.dry_run }}", step)
+                elif MAINNET_SEED in step:
+                    with self.subTest(job=name, step=step.splitlines()[0]):
+                        self.assertIn("if: inputs.dry_run", step)
+                        self.assertIn("--plan", step)
+        self.assertEqual(signing, 2)
+
+    def test_the_mainnet_stack_is_never_rebuilt(self):
+        # One account and factory build serves every network, so mainnet runs
+        # the testnet deployment's attested bytes and compiles no contract.
+        text = release_mainnet_yml()
+        for marker in ("--build-only", "build-stack.sh", 'scaffold: "true"', "wasm32", "stellar contract build"):
+            with self.subTest(marker=marker):
+                self.assertNotIn(marker, code(text))
+        build = mainnet_jobs()["mainnet-deploy-stack-build"]
+        self.assertIn("scripts/fetch-infra-wasm.sh --manifest", build)
+        self.assertIn('--source-digest "$STACK_COMMIT"', build)
+
+    def test_the_mainnet_lists_are_the_testnet_ones(self):
+        jobs, mainnet = release_jobs(), mainnet_jobs()
+        allow = json.loads(re.search(r"ALLOW='(\[[^']*\])'", jobs["publish-plan"]).group(1))
+        self.assertEqual(env_words(mainnet["mainnet-plan"], "MAINNET_ALLOW")[0].split(), allow)
+        deploy_set = re.search(r'DEPLOY_SET="([^"]*)"', jobs["deploy-plan"]).group(1).split()
+        self.assertEqual(env_words(mainnet["mainnet-plan"], "MAINNET_STACK")[0].split(), deploy_set)
+        reuse = {r for job in [*jobs.values(), *mainnet.values()] for r in env_words(job, "REUSE")}
+        self.assertEqual(len(reuse), 1, reuse)
+
+
+@unittest.skipUnless(shutil.which("jq"), "jq not on PATH")
+class MainnetPlan(unittest.TestCase):
+    """scripts/mainnet-plan.sh: which released commits a mainnet dispatch
+    may publish."""
+
+    SETS = ["--allow", "perch-interpreter", "--stack-set", "perch-account", "--reuse", "perch-doc-compiler"]
+
+    def setUp(self):
+        self.repo = Repo()
+        for c in ("perch-interpreter", "perch-account", "perch-doc-compiler"):
+            self.version(c, "0.1.0")
+        self.registry_path("perch/constructorless")
+        self.repo.commit("feat: first release")
+        self.released = self.head()
+        for c in ("perch-interpreter", "perch-account", "perch-doc-compiler"):
+            self.tag(f"{c}-v0.1.0")
+        self.deployed = self.deploy_testnet(self.released)
+
+    def tearDown(self):
+        self.repo.cleanup()
+
+    def version(self, crate, v):
+        self.repo.write(f"crates/{crate}/Cargo.toml", f'[package]\nname = "{crate}"\nversion = "{v}"\n')
+
+    def registry_path(self, path, crates=("perch-smart-account", "perch-account-factory")):
+        for crate in crates:
+            self.repo.write(f"crates/{crate}/wasm/registry.path", f"root-deployer G{'A' * 55}\nroot-salt s\npath {path}\n")
+
+    def tag(self, tag):
+        run(["git", "tag", tag], self.repo.dir)
+
+    def head(self):
+        return run(["git", "rev-parse", "HEAD"], self.repo.dir).stdout.strip()
+
+    def deploy_testnet(self, commit):
+        self.repo.write("deployments/testnet.json", json.dumps({
+            "network": "testnet", "source": {"commit": commit, "dirty": False},
+            "toolchain": {"rustc": "rustc 1.99.0 (b940084d7 2026-09-28)"}}) + "\n")
+        self.repo.commit("deploy(testnet): recovery stack")
+        return self.head()
+
+    def plan(self, *args, check=True):
+        out = run([MAINNET_PLAN, "--main", "HEAD", *self.SETS, *args], self.repo.dir, check=False)
+        if check:
+            self.assertEqual(out.returncode, 0, out.stderr)
+            return json.loads(out.stdout)
+        self.assertNotEqual(out.returncode, 0, out.stdout)
+        return out.stderr
+
+    def test_a_released_tag_resolves_to_its_commit(self):
+        self.assertEqual(self.plan("--publish", "perch-interpreter-v0.1.0"), {
+            "publish": [{"package": "perch-interpreter", "tag": "perch-interpreter-v0.1.0",
+                         "version": "0.1.0", "commit": self.released}],
+            "stack": None})
+
+    def test_a_tag_off_main_is_refused(self):
+        run(["git", "checkout", "-q", "-b", "side"], self.repo.dir)
+        self.version("perch-interpreter", "0.2.0")
+        self.repo.commit("feat: unreleased")
+        self.tag("perch-interpreter-v0.2.0")
+        run(["git", "checkout", "-q", "-"], self.repo.dir)
+        self.assertIn("is not on main", self.plan("--publish", "perch-interpreter-v0.2.0", check=False))
+
+    def test_a_tag_not_naming_its_manifest_version_is_refused(self):
+        self.tag("perch-interpreter-v0.3.0")
+        self.assertIn("not 0.3.0", self.plan("--publish", "perch-interpreter-v0.3.0", check=False))
+
+    def test_a_contract_outside_the_set_is_refused(self):
+        self.assertIn("not one of", self.plan("--publish", "perch-account-v0.1.0", check=False))
+        self.assertIn("not one of", self.plan("--stack", "perch-interpreter-v0.1.0", check=False))
+        self.assertIn("release tag", self.plan("--publish", "perch-interpreter-v0.1", check=False))
+
+    def test_one_version_per_contract(self):
+        self.version("perch-interpreter", "0.1.1")
+        self.repo.commit("fix: second release")
+        self.tag("perch-interpreter-v0.1.1")
+        err = self.plan("--publish", "perch-interpreter-v0.1.0,perch-interpreter-v0.1.1", check=False)
+        self.assertIn("one version per run", err)
+
+    def test_the_stack_is_its_testnet_deployment(self):
+        self.assertEqual(self.plan("--stack", "perch-account-v0.1.0")["stack"], {
+            "tag": "perch-account-v0.1.0", "commit": self.released,
+            "testnet_manifest_commit": self.deployed})
+
+    def test_a_stack_never_deployed_to_testnet_is_refused(self):
+        self.version("perch-account", "0.2.0")
+        self.repo.commit("feat: new account")
+        self.tag("perch-account-v0.2.0")
+        self.assertIn("deploy that stack to testnet first", self.plan("--stack", "perch-account-v0.2.0", check=False))
+
+    def test_a_stack_with_an_unreleased_member_is_refused(self):
+        self.version("perch-account", "0.2.0")
+        self.version("perch-doc-compiler", "0.2.0")
+        self.repo.commit("feat: new account")
+        self.tag("perch-account-v0.2.0")
+        self.deploy_testnet(self.head())
+        self.assertIn("perch-doc-compiler 0.2.0", self.plan("--stack", "perch-account-v0.2.0", check=False))
+
+    def test_a_stack_from_before_one_build_for_every_network_is_refused(self):
+        self.version("perch-account", "0.2.0")
+        for crate in ("perch-smart-account", "perch-account-factory"):
+            os.remove(os.path.join(self.repo.dir, "crates", crate, "wasm", "registry.path"))
+        self.repo.commit("feat: new account")
+        self.tag("perch-account-v0.2.0")
+        self.deploy_testnet(self.head())
+        self.registry_path("perch/constructorless")
+        self.repo.commit("feat: derive the registry")
+        self.assertIn("pin one network's registry", self.plan("--stack", "perch-account-v0.2.0", check=False))
+
+    def test_a_stack_deriving_another_registry_than_main_is_refused(self):
+        self.version("perch-account", "0.2.0")
+        self.registry_path("unverified/perch/constructorless")
+        self.repo.commit("feat: new account")
+        self.tag("perch-account-v0.2.0")
+        self.deploy_testnet(self.head())
+        self.registry_path("perch/constructorless")
+        self.repo.commit("feat: move the registry")
+        self.assertIn("differs from main's", self.plan("--stack", "perch-account-v0.2.0", check=False))
+
+
+MAINNET_SETTINGS = os.path.join(REPO, "scripts", "mainnet-settings.sh")
+
+
+class MainnetSettings(unittest.TestCase):
+    """scripts/mainnet-settings.sh's offline checks: what it refuses before
+    it reads the chain."""
+
+    def setUp(self):
+        # A `stellar` that has an identity but no chain.
+        self.bin = tempfile.mkdtemp()
+        with open(os.path.join(self.bin, "stellar"), "w") as f:
+            f.write('#!/bin/sh\n[ "$1" = keys ]\n')
+        os.chmod(os.path.join(self.bin, "stellar"), 0o755)
+
+    def tearDown(self):
+        shutil.rmtree(self.bin)
+
+    def settings(self, **over):
+        derived = "C" + "D" * 55
+        env = {**os.environ, "STELLAR_RPC_URL": "http://127.0.0.1:9",
+               "PATH": self.bin + os.pathsep + os.environ["PATH"],
+               "STELLAR_NETWORK_PASSPHRASE": "Public Global Stellar Network ; September 2015",
+               "REGISTRY": derived, "DERIVED_REGISTRY": derived, "ROOT": "C" + "R" * 55,
+               "AUTHOR": "C" + "U" * 55, "REGISTRY_PATH": "perch/constructorless", **over}
+        out = subprocess.run([MAINNET_SETTINGS], capture_output=True, text=True, env=env)
+        self.assertNotEqual(out.returncode, 0, out.stdout)
+        return out.stderr
+
+    def test_an_unset_setting_is_refused(self):
+        self.assertIn("ROOT is empty", self.settings(ROOT=""))
+
+    def test_a_testnet_passphrase_is_refused(self):
+        self.assertIn("not mainnet's", self.settings(STELLAR_NETWORK_PASSPHRASE="Test SDF Network ; September 2015"))
+
+    def test_a_registry_the_account_does_not_derive_is_refused(self):
+        self.assertIn("derives", self.settings(REGISTRY="C" + "X" * 55))
+
+    def test_a_path_other_than_the_committed_one_is_refused(self):
+        self.assertIn("commits path 'perch/constructorless'", self.settings(REGISTRY_PATH="unverified/perch/constructorless"))
+
+    def test_the_offline_checks_pass_before_the_chain_is_read(self):
+        # The fake `stellar` reads no chain: getting that far means every
+        # offline check passed.
+        self.assertIn("is not a contract on mainnet", self.settings())
+
+
+# A `stellar` that keeps a registry and a ledger in a JSON file and logs every
+# call, for scripts/publish-wasm.sh. Any call that would send a transaction
+# changes the state; --build-only, --send=no, and `tx` calls never do.
+FAKE_STELLAR = r"""#!/usr/bin/env python3
+import hashlib, json, os, sys
+args = sys.argv[1:]
+state_file, log_file = os.environ["FAKE_STATE"], os.environ["FAKE_LOG"]
+with open(state_file) as f:
+    state = json.load(f)
+with open(log_file, "a") as f:
+    f.write(json.dumps(args) + "\n")
+def opt(name):
+    return args[args.index(name) + 1]
+def save():
+    with open(state_file, "w") as f:
+        json.dump(state, f)
+ADDR = "C" + "A" * 55
+if args[:2] == ["tx", "simulate"]:
+    sys.stdin.read(); print("SIMULATED")
+elif args[:2] == ["tx", "decode"]:
+    sys.stdin.read(); print(json.dumps({"tx": {"tx": {"fee": 1234}}}))
+elif args[:2] == ["contract", "fetch"]:
+    if opt("--wasm-hash") not in state["installed"]:
+        sys.exit("Contract Code not found")
+    open(opt("--out-file"), "w").close()
+elif args[:3] == ["contract", "info", "hash"]:
+    if opt("--id") not in state["deployed"]:
+        sys.exit("no contract")
+    print(state["deployed"][opt("--id")])
+elif args[:2] == ["contract", "upload"]:
+    if "--build-only" in args:
+        print("UNSIGNED")
+    else:
+        h = hashlib.sha256(open(opt("--wasm"), "rb").read()).hexdigest()
+        state["installed"].append(h); save(); print(h)
+elif args[:2] == ["contract", "invoke"]:
+    fn, fargs = args[args.index("--") + 1], args[args.index("--") + 2:]
+    a = dict(zip(fargs[::2], fargs[1::2]))
+    key = a["--wasm_name"] + "@" + a["--version"].strip('"')
+    if "--build-only" in args:
+        print("UNSIGNED")
+    elif fn == "fetch_hash":
+        if key not in state["published"]:
+            sys.exit("HostError: Error(Contract, #2)")
+        print('"' + state["published"][key] + '"')
+    elif fn == "deploy_stateless":
+        if "--send=no" not in args:
+            state["deployed"][ADDR] = state["published"][key]; save()
+        print('"' + ADDR + '"')
+    elif fn == "publish_hash" and "--send=no" not in args:
+        state["published"][key] = a["--wasm_hash"]; save()
+    else:
+        sys.exit("unexpected invoke " + fn)
+else:
+    sys.exit("unexpected call " + " ".join(args))
+"""
+
+
+@unittest.skipUnless(shutil.which("jq"), "jq not on PATH")
+class PublishWasm(unittest.TestCase):
+    """scripts/publish-wasm.sh, against a fake `stellar`: what a mainnet
+    publish sends, in what order, and that a plan sends nothing."""
+
+    REGISTRY = "C" + "R" * 55
+    AUTHOR = "C" + "U" * 55
+    ADDR = "C" + "A" * 55
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        bin_dir = os.path.join(self.dir, "bin")
+        os.makedirs(bin_dir)
+        stellar = os.path.join(bin_dir, "stellar")
+        with open(stellar, "w") as f:
+            f.write(FAKE_STELLAR)
+        os.chmod(stellar, 0o755)
+        self.wasm = os.path.join(self.dir, "c.wasm")
+        with open(self.wasm, "wb") as f:
+            f.write(b"\0asm\1\0\0\0perch")
+        self.hash = hashlib.sha256(open(self.wasm, "rb").read()).hexdigest()
+        self.state_file = os.path.join(self.dir, "state.json")
+        self.log_file = os.path.join(self.dir, "log")
+        self.set_state()
+        self.env = {**os.environ, "PATH": bin_dir + os.pathsep + os.environ["PATH"],
+                    "FAKE_STATE": self.state_file, "FAKE_LOG": self.log_file, "STELLAR_ACCOUNT": "S-delegate"}
+
+    def tearDown(self):
+        shutil.rmtree(self.dir)
+
+    def set_state(self, published=None, installed=(), deployed=None):
+        with open(self.state_file, "w") as f:
+            json.dump({"published": published or {}, "installed": list(installed), "deployed": deployed or {}}, f)
+
+    def state(self):
+        with open(self.state_file) as f:
+            return json.load(f)
+
+    def calls(self):
+        if not os.path.exists(self.log_file):
+            return []
+        with open(self.log_file) as f:
+            return [json.loads(l) for l in f]
+
+    def sent(self):
+        """What the calls sent: upload, or the invoked function."""
+        out = []
+        for c in self.calls():
+            if "--build-only" in c or "--send=no" in c:
+                continue
+            if c[:2] == ["contract", "upload"]:
+                out.append("upload")
+            elif c[:2] == ["contract", "invoke"]:
+                out.append(c[c.index("--") + 1])
+        return out
+
+    def publish(self, *extra, check=True):
+        out = subprocess.run([PUBLISH_WASM, "--registry", self.REGISTRY, "--author", self.AUTHOR,
+                              "--name", "perch-x", "--version", "1.0.0", "--wasm", self.wasm, *extra],
+                             capture_output=True, text=True, env=self.env)
+        if check:
+            self.assertEqual(out.returncode, 0, out.stderr)
+            return json.loads(out.stdout)
+        self.assertNotEqual(out.returncode, 0, out.stdout)
+        return out.stderr
+
+    def test_a_plan_sends_nothing_and_prices_each_transaction(self):
+        before = self.state()
+        out = self.publish("--plan")
+        self.assertEqual(self.sent(), [])
+        self.assertEqual(self.state(), before)
+        self.assertEqual(out["status"], "would publish")
+        self.assertEqual(out["txs"], [{"op": "upload perch-x", "fee_stroops": 1234},
+                                      {"op": "publish_hash perch-x 1.0.0", "fee_stroops": 1234},
+                                      {"op": "deploy_stateless perch-x 1.0.0", "fee_stroops": None}])
+
+    def test_a_plan_of_a_deployed_version_has_nothing_to_send(self):
+        self.set_state({"perch-x@1.0.0": self.hash}, [self.hash], {self.ADDR: self.hash})
+        out = self.publish("--plan")
+        self.assertEqual((out["status"], out["txs"], out["address"]), ("already deployed", [], self.ADDR))
+
+    def test_a_run_uploads_publishes_then_deploys(self):
+        out = self.publish()
+        self.assertEqual(self.sent(), ["upload", "publish_hash", "deploy_stateless"])
+        self.assertEqual(self.state()["published"], {"perch-x@1.0.0": self.hash})
+        self.assertEqual((out["status"], out["address"]), ("published", self.ADDR))
+        publish = next(c for c in self.calls() if "publish_hash" in c)
+        self.assertIn(self.AUTHOR, publish)
+
+    def test_a_different_hash_under_the_version_is_refused_before_anything_is_sent(self):
+        self.set_state({"perch-x@1.0.0": "ab" * 32})
+        self.assertIn("already published with hash", self.publish(check=False))
+        self.assertEqual(self.sent(), [])
+
+    def test_a_published_version_is_deployed_not_republished(self):
+        self.set_state({"perch-x@1.0.0": self.hash}, [self.hash])
+        out = self.publish()
+        self.assertEqual(self.sent(), ["deploy_stateless"])
+        self.assertEqual(out["status"], "already published")
+
+    def test_install_only_uploads_and_publishes_nothing(self):
+        out = self.publish("--install-only")
+        self.assertEqual(self.sent(), ["upload"])
+        self.assertEqual(self.state()["published"], {})
+        self.assertEqual(out["status"], "installed")
+
+    def test_the_summary_totals_a_plan(self):
+        self.publish("--plan")
+        receipts = os.path.join(self.dir, "receipts.jsonl")
+        with open(receipts, "w") as f:
+            f.write(subprocess.run([PUBLISH_WASM, "--registry", self.REGISTRY, "--author", self.AUTHOR,
+                                    "--name", "perch-x", "--version", "1.0.0", "--wasm", self.wasm, "--plan"],
+                                   capture_output=True, text=True, env=self.env, check=True).stdout)
+        table = run([PUBLISH_WASM, "--summary", receipts], self.dir).stdout
+        self.assertIn("| perch-x | 1.0.0 |", table)
+        self.assertIn("Total simulated fee: 0.0002468 XLM", table)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
