@@ -50,8 +50,8 @@ pub struct World {
     /// The unit host every contract shares.
     pub env: Env,
     /// The registry the account content-addresses its infra off
-    /// (`deployer(registry, hash)`, its `registry.networks` row for the
-    /// bound network). Native
+    /// (`deployer(registry, hash)`, the registry its `registry.path` derives
+    /// on the bound network). Native
     /// mode deploys no contract there — resolution is a pure offline
     /// derivation — but the field is populated for parity with
     /// [`crate::faithful`] mode, which puts the real registry here.

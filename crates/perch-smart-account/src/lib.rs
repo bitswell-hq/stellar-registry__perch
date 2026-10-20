@@ -54,9 +54,10 @@ pub use stellar_accounts;
 /// The registry the infra was `deploy_stateless`'d from — the content-addressed
 /// deployer the infra derive their address from: the deployment manifest's
 /// `registry.id` (`deployments/<network>.json`) for the current network. It is
-/// **not hardcoded in source**: the committed `wasm/registry.networks` table
-/// lists one registry per network, and the ledger's network id picks the row,
-/// so one build serves every listed network. Panics on an unlisted network.
+/// **not hardcoded in source**: the committed `wasm/registry.path` names the
+/// Stellar Registry root's deployer and salt and the named deploys below it,
+/// and every hop is derived under the ledger's network id, so one build
+/// resolves each network's own registry.
 pub fn stateless_registry(env: &Env) -> Address {
     infra::perch_doc_compiler::registry(env)
 }
@@ -64,8 +65,8 @@ pub fn stateless_registry(env: &Env) -> Address {
 /// Content-addressed resolvers for the shared infra, named like
 /// `import_contract_client!`. Each `infra::<name>::address(env)` derives
 /// `deployer(stateless_registry(env), sha256(wasm))` fully offline, with
-/// **both** the per-network registry table (`wasm/registry.networks`) and the
-/// wasm hash (`wasm/<name>.sha256`) baked at build time from the committed
+/// **both** the registry's derivation (`wasm/registry.path`) and the wasm
+/// hash (`wasm/<name>.sha256`) baked at build time from the committed
 /// pins (`wasm/README.md`; a missing file is a build error). Pinned ⇒ a
 /// registry republish can't change a deployed account's behavior (`installed ==
 /// reviewed`), and only the names live in source. Grouped in a module so the
@@ -75,9 +76,9 @@ pub mod infra {
     perch_registry_resolve::registry_contract!(perch_interpreter);
 
     // Published and `deploy_stateless`\'d into the same registry as the two
-    // above: one table row per network derives all three, so on each network
-    // they must share a registry (canonically perch's constructorless
-    // registry; a deployment's own instance otherwise, per its manifest).
+    // above: one registry path derives all three, so on each network they
+    // must share a registry (canonically perch/constructorless under that
+    // network's Stellar Registry root).
     perch_registry_resolve::registry_contract!(perch_spending_limit);
 }
 
