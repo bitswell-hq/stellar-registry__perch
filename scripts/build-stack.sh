@@ -12,23 +12,23 @@
 #
 # A consumer's pins are the sha256 of the exact bytes built here. The registry
 # the tier-0 contracts are (or will be) `deploy_stateless`'d from is not a
-# per-build input: the account and the factory compile in a committed table of
-# one registry per network (crates/*/wasm/registry.networks) and pick the row
-# by the ledger's network id, so the same bytes serve every listed network.
-# Every address is known before anything is deployed. scripts/deploy-stack.sh
-# then publishes the same bytes in the same order.
+# build input: the account and the factory compile in the path they derive it
+# from (crates/*/wasm/registry.path: a root deployer and salt, then named
+# deploys), and derive it under the ledger's network id, so the same bytes
+# serve every network. Every address is known before anything is deployed.
+# scripts/deploy-stack.sh then publishes the same bytes in the same order.
 #
-# Usage: scripts/build-stack.sh --registry <C...> [--network-passphrase <p>]
+# Usage: scripts/build-stack.sh [--registry <C...>] [--network-passphrase <p>]
 #                               [--out <dir>] [--builder scaffold|contract]
 #                               [--provided-tier0 <dir>]
-#   --registry  the content-addressing registry the stack is built for. It must
-#               be the registry table's row for --network-passphrase, in both
-#               the account's and the factory's table: an account built here
-#               resolves its infra from that row, never from this flag. A
-#               rehearsal's fresh registry is a dev build: list it for the
-#               network in both tables first, and do not commit that.
 #   --network-passphrase  the network the stack is built for (default
-#               $STELLAR_NETWORK_PASSPHRASE, else testnet's)
+#               $STELLAR_NETWORK_PASSPHRASE, else testnet's). build.json
+#               records the registry the path derives there.
+#   --registry  optional: the registry the caller means to deploy into. It
+#               must be the one the path derives on that network, or the
+#               build is refused: an account built here would never resolve
+#               any other. A rehearsal against its own registry is a dev
+#               build with a registry.path naming it, never committed.
 #   --out       where the wasm and build.json land (default target/stack)
 #   --builder   `scaffold` (default; what deployments use: `stellar scaffold
 #               build`, which adds name/version/source metadata) or
@@ -67,7 +67,7 @@ while [ $# -gt 0 ]; do
         *) echo "unknown option: $1" >&2; exit 1 ;;
     esac
 done
-[[ "$registry" =~ ^C[A-Z2-7]{55}$ ]] || { echo "error: --registry <C...> is required" >&2; exit 1; }
+[ -z "$registry" ] || [[ "$registry" =~ ^C[A-Z2-7]{55}$ ]] || { echo "error: bad --registry '$registry'" >&2; exit 1; }
 case "$builder" in scaffold|contract) ;; *) echo "error: --builder is scaffold or contract" >&2; exit 1 ;; esac
 command -v stellar >/dev/null || { echo "error: stellar CLI not found" >&2; exit 1; }
 [ "$builder" = contract ] || stellar scaffold --help >/dev/null 2>&1 \
@@ -79,21 +79,17 @@ TIER0=(perch-doc-compiler perch-interpreter perch-spending-limit perch-ed25519-v
 ACCOUNT_PINS=(perch-doc-compiler perch-interpreter perch-spending-limit)
 FACTORY_PINS=(perch-account perch-webauthn-verifier)
 
-# The registry a crate's table lists for $passphrase (empty if none): the first
-# field of the row whose remainder is the passphrase; blank and `#` lines skipped.
-table_registry() { # crate-dir
-    awk -v p="$passphrase" '/^[[:space:]]*(#|$)/ { next }
-        { id = $1; sub(/^[[:space:]]*[^[:space:]]+[[:space:]]+/, ""); sub(/[[:space:]]+$/, "")
-          if ($0 == p) print id }' "$repo_root/crates/$1/wasm/registry.networks"
-}
-for crate in perch-smart-account perch-account-factory; do
-    listed="$(table_registry "$crate")"
-    [ "$listed" = "$registry" ] || {
-        echo "error: crates/$crate/wasm/registry.networks lists '${listed:-no registry}' for '$passphrase', not $registry" >&2
-        echo "  (a dev build for another registry lists it for this network in both crates' tables first)" >&2
-        exit 1
-    }
-done
+# The registry the committed path derives on this network, by the same
+# compiled-in derivation the account runs. Both crates must commit one path.
+cmp -s "$repo_root/crates/perch-smart-account/wasm/registry.path" \
+    "$repo_root/crates/perch-account-factory/wasm/registry.path" \
+    || { echo "error: the account's and the factory's wasm/registry.path differ" >&2; exit 1; }
+derived="$(cd "$repo_root" && cargo run -q -p perch-derive-id -- registry "$passphrase")"
+if [ -n "$registry" ] && [ "$registry" != "$derived" ]; then
+    echo "error: --registry $registry, but crates/*/wasm/registry.path derives $derived on '$passphrase'" >&2
+    exit 1
+fi
+registry="$derived"
 
 sha256() { if command -v sha256sum >/dev/null; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi; }
 version_of() { grep -m1 '^version = "' "$repo_root/crates/$1/Cargo.toml" | sed 's/^version = "\(.*\)"/\1/' ; }

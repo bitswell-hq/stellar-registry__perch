@@ -8,8 +8,8 @@
 # not count, and neither do the committed build-time hash pins
 # (crates/*/wasm/*.sha256): build-stack.sh rewrites them for the build it
 # makes, and build.json records each artifact's pins itself. The registry
-# tables (crates/*/wasm/registry.networks) are source like any other: no
-# build rewrites them, so an edit to one counts.
+# path (crates/*/wasm/registry.path) is source like any other: no build
+# rewrites it, so an edit to it counts.
 #
 # Usage: scripts/source-dirty.sh [<repo>]   (default: this repository)
 set -euo pipefail

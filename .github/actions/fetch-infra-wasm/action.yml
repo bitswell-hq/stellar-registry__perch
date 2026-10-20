@@ -4,7 +4,8 @@ description: >
   crates/perch-account-factory/wasm/) from deployments/testnet.json: every wasm
   fetched by its recorded address or hash and refused unless its sha256 and
   content address match the manifest, and the manifest refused unless its
-  registry is the committed registry tables' row for its network. Builds read
+  registry is the one the committed registry path derives on its network, or a
+  migration deployments/pending-registry.json declares. Builds read
   only the committed pins; the tests that load the pinned bytes need this
   before cargo runs.
 inputs:

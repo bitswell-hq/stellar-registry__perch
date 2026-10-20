@@ -8,10 +8,10 @@
 #      with admin = manager = --source. Skipped with --registry.
 #   2. Build. scripts/build-stack.sh --registry <id>: every consumer is pinned
 #      to the exact bytes this run publishes, before anything is published.
-#      The account and the factory resolve the registry from their committed
-#      per-network table (crates/*/wasm/registry.networks), so <id> must be
-#      its row for this network: a fresh instance is refused until it is
-#      listed there (a dev build; rerun with --registry <it>).
+#      The account and the factory derive the registry from their committed
+#      crates/*/wasm/registry.path, so <id> must be the registry that path
+#      derives on this network: a fresh instance is refused unless a dev
+#      registry.path names it.
 #   3. Tier 0, then the factory (tier 2). Upload each wasm and check the
 #      ledger hash is its sha256; publish_hash it under its crate name and
 #      version (author = --author); deploy_stateless it; check the address is

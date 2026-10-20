@@ -346,10 +346,10 @@ jobs:
           # The committed build-time hash pins (crates/*/wasm/*.sha256) move
           # only after a source change that already bumped the contract, in
           # the deploy(<network>) commit recording that deployment: never a
-          # release of their own. The registry tables beside them
-          # (crates/*/wasm/registry.networks) are source no deployment
-          # rewrites, and a table edit changes the contract's bytes, so it is
-          # a release.
+          # release of their own. The registry path beside them
+          # (crates/*/wasm/registry.path) is source no deployment rewrites,
+          # and an edit to it changes the contract's bytes, so it is a
+          # release.
           pins=(--exclude-path "crates/*/wasm/*.sha256" --exclude-path "crates/*/wasm/README.md")
           summary=""
           bumped=""

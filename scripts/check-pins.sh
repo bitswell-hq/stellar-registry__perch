@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
-# Check the committed build-time pins against a deployment manifest, offline:
-# every crates/*/wasm/registry.networks must list the manifest's registry id
-# for the manifest's network, and every crates/*/wasm/<name>.sha256 must be
-# the manifest's sha256 for <name>. These files are all the account and the
-# factory read at build time, so a plain checkout (a cargo git dependency
-# included) builds exactly the pins the manifest records.
-# scripts/fetch-infra-wasm.sh rewrites the hashes from the chain; the
-# registry tables are source, edited by hand.
+# Check the committed build-time pins against a deployment manifest: the
+# registry every crates/*/wasm/registry.path derives on the manifest's
+# network must be the manifest's registry id (scripts/manifest-registry.sh,
+# which also accepts a migration deployments/pending-registry.json declares,
+# and says so), and every crates/*/wasm/<name>.sha256 must be the manifest's
+# sha256 for <name>. These files are all the account and the factory read at
+# build time, so a plain checkout (a cargo git dependency included) builds
+# exactly the pins the manifest records. scripts/fetch-infra-wasm.sh rewrites
+# the hashes from the chain; the registry path is source, edited by hand.
 #
 # Usage: scripts/check-pins.sh [--manifest <path>]
 #   --manifest  default deployments/${STELLAR_NETWORK:-testnet}.json
+# Env: PERCH_DERIVE_ID, as scripts/manifest-registry.sh
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -24,8 +26,6 @@ done
 [ -f "$manifest" ] || { echo "error: no manifest at $manifest" >&2; exit 1; }
 command -v jq >/dev/null || { echo "error: jq not found" >&2; exit 1; }
 
-registry="$(jq -r '.registry.id // empty' "$manifest")"
-passphrase="$(jq -r '.network_passphrase // empty' "$manifest")"
 drift=0 checked=0
 compare() { # what got want
     checked=$((checked + 1))
@@ -36,13 +36,14 @@ compare() { # what got want
 }
 
 shopt -s nullglob
-for table in "$repo_root"/crates/*/wasm/registry.networks; do
-    # The first field of the row whose remainder is the manifest's passphrase.
-    listed="$(awk -v p="$passphrase" '/^[[:space:]]*(#|$)/ { next }
-        { id = $1; sub(/^[[:space:]]*[^[:space:]]+[[:space:]]+/, ""); sub(/[[:space:]]+$/, "")
-          if ($0 == p) print id }' "$table")"
-    compare "${table#"$repo_root"/}'s row for '$passphrase'" "${listed:-<none>}" "$registry"
-done
+state="$("$repo_root/scripts/manifest-registry.sh" --manifest "$manifest")" || drift=1
+checked=$((checked + 1))
+case "$state" in
+    pending\ *)
+        read -r _ recorded derived <<<"$state"
+        msg="pending registry migration: $(basename "$manifest") records $recorded, the registry path derives $derived (deployments/pending-registry.json)"
+        if [ -n "${GITHUB_ACTIONS:-}" ]; then echo "::warning::$msg"; else echo "warning: $msg" >&2; fi ;;
+esac
 for pin in "$repo_root"/crates/*/wasm/*.sha256; do
     name="$(basename "$pin" .sha256)"
     compare "${pin#"$repo_root"/}" "$(tr -d '[:space:]' <"$pin")" \
