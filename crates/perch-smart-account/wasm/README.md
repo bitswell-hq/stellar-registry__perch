@@ -69,13 +69,16 @@ Refresh the hashes one of two ways:
   declared (`scripts/manifest-registry.sh`). CI fetches the wasm before
   running the tests that need it (`.github/actions/fetch-infra-wasm`).
 - `scripts/build-stack.sh`: from a fresh build, before a deployment
-  (`scripts/deploy-stack.sh` runs it). It records the registry the path
-  derives on the build's network (`--network-passphrase`) and refuses a
-  `--registry` naming another.
+  (`release.yml`'s `deploy-stack-build` runs it; `scripts/deploy-stack.sh`
+  publishes what it built). It records the registry the path derives on the
+  build's network (`--network-passphrase`) and refuses a `--registry` naming
+  another.
 
 A missing pin is a build error naming it, and changing one rebuilds the
 account. `scripts/check-pins.sh` checks the committed pins against
 `deployments/testnet.json` (CI runs it), and `cargo test -p
 perch-integration-tests --test testnet_pins` checks the compiled pins.
 `cargo run -p perch-derive-id -- registry "<passphrase>"` prints the registry
-this checkout derives on a network.
+this checkout derives on a network, and so does `scripts/derive-id.py
+registry "<passphrase>"` with no toolchain: the release scripts' derivation,
+which CI checks against the account's.

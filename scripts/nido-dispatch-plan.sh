@@ -11,6 +11,12 @@
 #   scripts/nido-dispatch-plan.sh resend <network>
 #       that network's manifest in the latest perch-artifacts release
 #
+# A network whose registry migration deployments/pending-registry.json
+# declares at that tag is skipped, with a notice: its manifest records a
+# registry the tagged source no longer derives, so a repin to that commit
+# would resolve other infra than the manifest names. The deploy record that
+# completes the migration deletes the entry, and its release announces it.
+#
 # Prints a JSON array of {network, payload} on stdout ([] when no manifest
 # changed) and a summary on stderr. Before planning any dispatch it requires
 # the registry to serve that version, published from the tagged commit, with
@@ -62,6 +68,17 @@ if [ "$1" = release ]; then
   done
 fi
 echo "$package@$version: $tag @ $sha" >&2
+pending=$(git show "$sha:deployments/pending-registry.json" 2>/dev/null || echo '{}')
+jq -e 'type == "object"' <<<"$pending" >/dev/null || die "deployments/pending-registry.json at $tag is not a JSON object"
+announce=""
+for net in $networks; do
+  if jq -e --arg n "$net" 'has($n)' <<<"$pending" >/dev/null; then
+    echo "$net: skipped, its registry migration is pending at $tag (deployments/pending-registry.json)" >&2
+  else
+    announce="$announce $net"
+  fi
+done
+networks=$announce
 if [ -z "${networks// /}" ]; then
   echo "no deployment manifest changed in this release — nothing to dispatch" >&2
   echo "[]"

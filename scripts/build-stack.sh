@@ -20,7 +20,7 @@
 #
 # Usage: scripts/build-stack.sh [--registry <C...>] [--network-passphrase <p>]
 #                               [--out <dir>] [--builder scaffold|contract]
-#                               [--provided-tier0 <dir>]
+#                               [--reuse "<names>"]
 #   --network-passphrase  the network the stack is built for (default
 #               $STELLAR_NETWORK_PASSPHRASE, else testnet's). build.json
 #               records the registry the path derives there.
@@ -35,15 +35,16 @@
 #               `contract` (core `stellar contract build`: the same code
 #               without that metadata, so other hashes; what CI uses to run
 #               the release-stack suite on a PR's own source)
-#   --provided-tier0  a directory of already-published tier-0 wasm (named
-#               perch_<name>.wasm) to REUSE verbatim instead of building. A
-#               consumer pins the sha256 of the exact bytes on-chain, which a
-#               rebuild under a different toolchain would not reproduce
+#   --reuse     space-separated tier-0 names already published to the
+#               registry, to REUSE verbatim instead of building: each is
+#               fetched by the hash the registry serves for its crate's
+#               current version, and refused unless its sha256 is that hash.
+#               A consumer pins the sha256 of the exact bytes on-chain, which
+#               a rebuild under a different toolchain would not reproduce
 #               (scaffold vs scaffold+optimize, unpinned rustc); so a deploy
-#               into a registry that already holds those names (the canonical
-#               constructorless registry) hands this script the fetched bytes
-#               for them, and the account/factory pin those. Tier-0 names with
-#               no file here are built as usual.
+#               into a registry that already holds those names (the infra the
+#               release pipeline published there) pins those bytes. Reads the
+#               chain at $STELLAR_RPC_URL with a throwaway identity, no key.
 #
 # build.json records each artifact's package, version, sha256, size, tier, and
 # the pins it was built against, plus the commit, builder, and toolchain.
@@ -54,14 +55,14 @@ out="$repo_root/target/stack"
 registry=""
 passphrase="${STELLAR_NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}"
 builder=scaffold
-provided=""
+reuse=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --registry) registry="$2"; shift 2 ;;
         --network-passphrase) passphrase="$2"; shift 2 ;;
         --out) out="$2"; shift 2 ;;
         --builder) builder="$2"; shift 2 ;;
-        --provided-tier0) provided="$2"; shift 2 ;;
+        --reuse) reuse="$2"; shift 2 ;;
         # Print the leading comment block (minus the shebang) as help.
         -h|--help) awk 'NR>1 && /^#/{sub(/^# ?/,""); print; next} NR>1{exit}' "$0"; exit 0 ;;
         *) echo "unknown option: $1" >&2; exit 1 ;;
@@ -79,12 +80,12 @@ TIER0=(perch-doc-compiler perch-interpreter perch-spending-limit perch-ed25519-v
 ACCOUNT_PINS=(perch-doc-compiler perch-interpreter perch-spending-limit)
 FACTORY_PINS=(perch-account perch-webauthn-verifier)
 
-# The registry the committed path derives on this network, by the same
-# compiled-in derivation the account runs. Both crates must commit one path.
+# The registry the committed path derives on this network, by the account's
+# own derivation (scripts/derive-id.py). Both crates must commit one path.
 cmp -s "$repo_root/crates/perch-smart-account/wasm/registry.path" \
     "$repo_root/crates/perch-account-factory/wasm/registry.path" \
     || { echo "error: the account's and the factory's wasm/registry.path differ" >&2; exit 1; }
-derived="$(cd "$repo_root" && cargo run -q -p perch-derive-id -- registry "$passphrase")"
+derived="$("$repo_root/scripts/derive-id.py" registry "$passphrase")"
 if [ -n "$registry" ] && [ "$registry" != "$derived" ]; then
     echo "error: --registry $registry, but crates/*/wasm/registry.path derives $derived on '$passphrase'" >&2
     exit 1
@@ -96,6 +97,32 @@ version_of() { grep -m1 '^version = "' "$repo_root/crates/$1/Cargo.toml" | sed '
 
 mkdir -p "$out"
 artifacts='[]'
+
+# Fetch each reused tier-0 from the registry, by the hash it serves for the
+# crate's current version. Fails if the name is not published there yet (its
+# allow-list publish must land first).
+provided=""
+if [ -n "$reuse" ]; then
+    [ -n "${STELLAR_RPC_URL:-}" ] || { echo "error: --reuse reads the registry: set STELLAR_RPC_URL" >&2; exit 1; }
+    net=(--rpc-url "$STELLAR_RPC_URL" --network-passphrase "$passphrase")
+    reader="${PERCH_READER:-perch-fetch-reader}"
+    stellar keys address "$reader" >/dev/null 2>&1 || stellar keys generate "$reader" >/dev/null 2>&1
+    provided="$(mktemp -d)"
+    trap 'rm -rf "$provided"' EXIT
+    for pkg in $reuse; do
+        case " ${TIER0[*]} " in *" $pkg "*) ;; *) echo "error: --reuse $pkg is not a tier-0 contract" >&2; exit 1 ;; esac
+        version="$(version_of "$pkg")"
+        hash="$(stellar contract invoke "${net[@]}" --source-account "$reader" --send=no --id "$registry" -- \
+            fetch_hash --wasm_name "$pkg" --version "\"$version\"" 2>/dev/null | tr -d '"')" \
+            || { echo "error: reuse: $pkg $version is not published on $registry; its allow-list publish must run first" >&2; exit 1; }
+        file="$provided/${pkg//-/_}.wasm"
+        stellar contract fetch "${net[@]}" --wasm-hash "$hash" --out-file "$file" >/dev/null 2>&1 \
+            || { echo "error: reuse: could not fetch $pkg wasm $hash" >&2; exit 1; }
+        [ "$(sha256 "$file")" = "$hash" ] \
+            || { echo "error: reuse: fetched $pkg is $(sha256 "$file"), the registry serves $hash" >&2; exit 1; }
+        echo "reuse $pkg $version ($hash)" >&2
+    done
+fi
 
 build() { # package tier pins-json
     local pkg="$1" tier="$2" pins="$3" file provided_file

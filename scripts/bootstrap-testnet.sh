@@ -543,7 +543,6 @@ fi
 log "Bootstrap complete. Record these in GitHub (docs/testnet-deployment.md, \"Secrets and environments\"):"
 cat <<EOF
 Repository variables:
-  vars.PERCH_REGISTRY_CONTRACT_ID = $PERCH_SUB
   vars.PERCH_AUTHOR_ADDRESS       = $SA
   vars.PERCH_CI_RULE_ID           = $CI_RULE_ID
   vars.STELLAR_RPC_URL            = $RPC_URL

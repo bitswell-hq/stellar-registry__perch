@@ -164,7 +164,8 @@ jobs:
   # pins (crates/*/wasm/registry.path and *.sha256) are committed, so a cargo
   # git dependency on perch builds with no fetch script and no network. The
   # pins must equal deployments/testnet.json (its registry the one the path
-  # derives, or a migration deployments/pending-registry.json declares), and
+  # derives, or a migration deployments/pending-registry.json declares), the
+  # release scripts' derivation must be the account's own, and
   # perch-smart-account,
   # perch-account, and perch-account-factory, depended on by git rev, must
   # build offline from cargo's clean checkout, to the same wasm as this
@@ -182,10 +183,18 @@ jobs:
           toolchain: stable
           targets: wasm32v1-none
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-      # After the toolchain: the registry check runs the account's own
-      # derivation (perch-derive-id registry).
       - name: Committed pins match deployments/testnet.json
         run: scripts/check-pins.sh
+      # The release scripts derive contract ids in Python
+      # (scripts/derive-id.py), with no toolchain; the account derives them
+      # in Rust (crates/perch-derive-id runs its compiled-in derivation). They
+      # must agree on every network and on every address a deployment
+      # records, or the release path would compute addresses the account
+      # never resolves.
+      - name: The release scripts derive what the account derives
+        run: |
+          cargo build --locked -q -p perch-derive-id
+          PERCH_RUST_DERIVE_ID=target/debug/perch-derive-id python3 scripts/test-release-scripts.py DeriveId
       - uses: ./.github/actions/setup-stellar
       - name: Build perch as a git dependency, without fetching
         run: scripts/check-git-dep.sh --compare --out target/git-dep

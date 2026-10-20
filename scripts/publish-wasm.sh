@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Publish one built wasm to a registry under its name and version, authored
-# by a smart account, and deploy its content-addressed instance. With --plan,
-# simulate every transaction a real run would send, print each one's fee, and
-# submit nothing.
+# by a smart account (or, in a rehearsal, the source's own key), and deploy
+# its content-addressed instance. With --plan, simulate every transaction a
+# real run would send, print each one's fee, and submit nothing.
 #
 #   1. Preflight: fetch_hash(name, version). The same hash already published
 #      skips the publish; a different hash refuses; registry #1
@@ -73,7 +73,7 @@ sha256() { if command -v sha256sum >/dev/null; then sha256sum "$1" | cut -d' ' -
 
 [ -n "${STELLAR_ACCOUNT:-}" ] || die "STELLAR_ACCOUNT (the source account) is not set"
 [[ "$registry" =~ ^C[A-Z2-7]{55}$ ]] || die "--registry '$registry' is not a contract address"
-[[ "$author" =~ ^C[A-Z2-7]{55}$ ]] || die "--author '$author' is not a smart-account address"
+[[ "$author" =~ ^[GC][A-Z2-7]{55}$ ]] || die "--author '$author' is not an account or contract address"
 [ -n "$name" ] && [ -n "$version" ] || die "--name and --version are required"
 [ -s "$wasm" ] || die "--wasm '$wasm' is missing or empty"
 

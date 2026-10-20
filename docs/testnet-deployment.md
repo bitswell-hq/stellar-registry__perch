@@ -18,8 +18,8 @@ The table was last verified read-only on 2026-09-08, with the probes
 against `https://soroban-testnet.stellar.org`). Testnet resets quarterly;
 after a reset, re-run the bootstrap and re-verify this table. Consumers
 should resolve these addresses by name through the registry, or use the
-repository's Actions variables `PERCH_AUTHOR_ADDRESS` and
-`PERCH_REGISTRY_CONTRACT_ID`, rather than hardcode them.
+repository's Actions variable `PERCH_AUTHOR_ADDRESS` and the registry
+`scripts/registry-target.sh` computes, rather than hardcode them.
 
 ## Contracts
 
@@ -27,7 +27,7 @@ repository's Actions variables `PERCH_AUTHOR_ADDRESS` and
 | --- | --- | --- |
 | `unverified/perch` registry (bootstrap phase 1) | `CASB2M4JQSGP3QHFBGK5U6DGJXJX34GX37C2JFBU73LKKDXXNNIZHCP7` | resolves from the root registry by name |
 | `stateless` registry (phase 1b) | `CC6ELNH6YVRRO4WIETIURY3PZLD7NHSDXHRMTJQUT7D733SYVQFYB26O` | name `stateless` under `unverified/perch`; **retired**: holds `perch-spending-limit` 0.1.1 and earlier, and nothing new is published here |
-| `constructorless` registry | `CDX2DMYMMEYU6FGN3HPJ2GQSSL5EZHIAMEJD4SPF55FZE5LEUBPPPDA7` | name `constructorless` under `unverified/perch`; `PERCH_REGISTRY_CONTRACT_ID`; **the canonical registry**: `release.yml` publishes and `deploy_stateless`es every released infra contract here (interpreter, doc compiler, ed25519 verifier, spending limit) |
+| `constructorless` registry | `CDX2DMYMMEYU6FGN3HPJ2GQSSL5EZHIAMEJD4SPF55FZE5LEUBPPPDA7` | name `constructorless` under `unverified/perch`; the `recorded` registry of `deployments/pending-registry.json`'s testnet migration; **the canonical registry** until that migration switches: `release.yml` publishes and `deploy_stateless`es every released infra contract here (interpreter, doc compiler, ed25519 verifier, spending limit) |
 | perch-ed25519-verifier (phase 2) | `CA4G72A6XEIYPORY7UKZB3WFRJYX564UAQB5I7ASZMEAEST7PRHT4PSF` | v0.1.0 name-salted instance |
 | perch-doc-compiler (phase 2) | `CA7I42XDFRDQZQ4QMGOGM2QYRECLZRPE5ILS6CFQNNIPVLHPA2DSEPHT` | v0.1.0 name-salted instance |
 | perch author account (phase 2) | `CDIFS3JDMVQBVANOSHEL6AUAKRYLFZFQQVX37QKQGJGQVQXQEHJCJ6PG` | a `perch-account`; `PERCH_AUTHOR_ADDRESS`; authors the canonical releases |
@@ -59,8 +59,12 @@ repository's Actions variables `PERCH_AUTHOR_ADDRESS` and
 | `CI_PUBLISH_SECRET_KEY` | secret | `testnet` environment only (a repository-level copy predates this and is to be deleted) | `deploy-stack`; `constructorless-publish`, through `registry-publish`'s job, which runs in `testnet` |
 | `CI_PUBLISH_MAINNET_SECRET_KEY` | secret | `mainnet` environment only | `release-mainnet.yml`'s `mainnet-publish` and `mainnet-deploy-stack`, run only by a manual dispatch ([`deploy/README.md`](deploy/README.md#mainnet)) |
 | npm | none | trusted publishing (OIDC): each package's npm settings trust `release.yml` in the `npm` environment | `npm-publish` |
-| `PERCH_REGISTRY_CONTRACT_ID`, `PERCH_AUTHOR_ADDRESS`, `PERCH_DEPLOY_STACK` | variables | repository | `constructorless-publish` (`with:` inputs), the `deploy-stack` jobs (job `if:` and steps) |
-| `PERCH_MAINNET_REGISTRY_CONTRACT_ID`, `PERCH_MAINNET_REGISTRY_PATH`, `PERCH_MAINNET_ROOT_REGISTRY`, `PERCH_MAINNET_AUTHOR_ADDRESS` | variables | `mainnet` environment only | `release-mainnet.yml`'s `mainnet-publish`, `mainnet-config`, `mainnet-deploy-stack` |
+| `PERCH_AUTHOR_ADDRESS`, `PERCH_DEPLOY_STACK` | variables | repository | `constructorless-publish` (`with:` input), the `deploy-stack` jobs (job `if:` and steps) |
+| `PERCH_MAINNET_AUTHOR_ADDRESS` | variable | `mainnet` environment only | `release-mainnet.yml`'s `mainnet-publish`, `mainnet-deploy-stack` |
+
+No registry id is a setting: every release job computes it from
+`crates/*/wasm/registry.path` and `deployments/pending-registry.json`
+([`deploy/README.md`](deploy/README.md#registry-migration)).
 
 `CI_PUBLISH_SECRET_KEY` is the seed of the account's `ci-publish` delegate, so
 whoever can read it can publish as `perch-author` until the rule expires. A
