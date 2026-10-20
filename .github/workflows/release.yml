@@ -361,8 +361,10 @@ jobs:
           # release of their own. The registry path beside them
           # (crates/*/wasm/registry.path) is source no deployment rewrites,
           # and an edit to it changes the contract's bytes, so it is a
-          # release.
-          pins=(--exclude-path "crates/*/wasm/*.sha256" --exclude-path "crates/*/wasm/README.md")
+          # release. The soroban-sdk test snapshots (test_snapshots/, now
+          # gitignored) are test output that never reaches a wasm, so
+          # deleting them is no release either.
+          pins=(--exclude-path "crates/*/wasm/*.sha256" --exclude-path "crates/*/wasm/README.md" --exclude-path "crates/**/test_snapshots/**")
           summary=""
           bumped=""
           for c in $CONTRACTS; do
