@@ -354,8 +354,10 @@ jobs:
           # release of their own. The registry path beside them
           # (crates/*/wasm/registry.path) is source no deployment rewrites,
           # and an edit to it changes the contract's bytes, so it is a
-          # release.
-          pins=(--exclude-path "crates/*/wasm/*.sha256" --exclude-path "crates/*/wasm/README.md")
+          # release. The soroban-sdk test snapshots (test_snapshots/, now
+          # gitignored) are test output that never reaches a wasm, so
+          # deleting them is no release either.
+          pins=(--exclude-path "crates/*/wasm/*.sha256" --exclude-path "crates/*/wasm/README.md" --exclude-path "crates/**/test_snapshots/**")
           summary=""
           bumped=""
           for c in $CONTRACTS; do
@@ -825,7 +827,8 @@ jobs:
   # order, and open a deploy(<network>) PR with the manifest + regenerated
   # bindings a human merges.
   #
-  # Three jobs, so the CI publish seed never shares a runner with a build:
+  # Four jobs, so neither the CI publish seed nor the attestation signer ever
+  # shares a runner with a build:
   #
   #   deploy-stack-build   `deploy-stack.sh --build-only`: fetch the reused
   #                        tier-0, compile the stack (crates.io build scripts
@@ -834,12 +837,17 @@ jobs:
   #   deploy-stack         `deploy-stack.sh --prebuilt`: upload, publish, and
   #                        write the manifest from that output. The only job
   #                        holding the seed; it compiles and runs no Rust.
-  #   deploy-stack-record  attest the built wasm, verify the deployment,
-  #                        regenerate the bindings, bump perch-artifacts, open
-  #                        the PR. No secret.
+  #   deploy-stack-attest  attest the freshly built wasm. The only job that
+  #                        can mint an attestation; it checks out nothing and
+  #                        runs no repository code.
+  #   deploy-stack-record  verify the deployment, regenerate the bindings,
+  #                        bump perch-artifacts, open the PR. No secret.
   #
   # A step boundary would not be enough: a build script can write anywhere the
-  # runner user can (with sudo), including the `stellar` a later step runs.
+  # runner user can (with sudo), including the `stellar` a later step runs. For
+  # the same reason the build's artifact is never unpacked over the checkout:
+  # a job downloads it into $RUNNER_TEMP and copies only the files it expects,
+  # so nothing the build wrote can stand in for a reviewed script.
   #
   # deploy-stack runs in the `testnet` GitHub Environment (main-only, required
   # reviewer), so CI_PUBLISH_SECRET_KEY is the environment's secret. A mainnet
@@ -930,7 +938,26 @@ jobs:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: deploy-stack-build
-          path: .
+          path: ${{ runner.temp }}/stack-build
+      # The publish needs the stack's wasm, build.json, and addresses.json,
+      # and nothing else from the build: the build ran third-party code, so
+      # anything else its artifact carries is ignored.
+      - name: Take only the built stack from the build's artifact
+        run: |
+          set -euo pipefail
+          from="$RUNNER_TEMP/stack-build/target/stack"
+          mkdir -p target/stack
+          for f in "$from"/*.wasm "$from/build.json" "$from/addresses.json"; do
+            name=${f##*/}
+            case "$name" in
+              build.json | addresses.json) ;;
+              *) [[ $name =~ ^[a-z0-9_]+\.wasm$ ]] || { echo "::error::unexpected wasm name in the build artifact: $name"; exit 1; } ;;
+            esac
+            [ -f "$f" ] && [ ! -L "$f" ] || { echo "::error::the build artifact has no regular file target/stack/$name"; exit 1; }
+            cp -- "$f" "target/stack/$name"
+          done
+          dirty=$(git status --porcelain --untracked-files=all -- . ':!target')
+          [ -z "$dirty" ] || { echo "::error::the checkout changed outside target/:"; echo "$dirty"; exit 1; }
       - name: Publish the prebuilt stack (smart-account-authored, reusing the published tier-0)
         # Secrets go through the environment, never argv: STELLAR_ACCOUNT is the
         # source/fee delegate and STELLAR_SIGN_WITH_KEY signs the account's
@@ -952,28 +979,69 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  deploy-stack-record:
+  # Attest the deployed wasm this run built (not the reused tier-0, which
+  # carry their own contract-release attestations). Mainnet requires these
+  # attestations of every stack wasm it publishes, so the job that can mint
+  # them reads only the build's artifact: it checks out nothing, compiles
+  # nothing, and runs no repository code.
+  deploy-stack-attest:
     needs: [ci-green, deploy-stack]
     if: >-
       !cancelled() && needs.ci-green.outputs.go == 'true' &&
       needs.deploy-stack.result == 'success'
     runs-on: ubuntu-latest
     permissions:
-      contents: write # commit the manifest + bindings onto the deploy branch
-      pull-requests: write # open the deploy(<network>) PR
       id-token: write # build-provenance attestation
       attestations: write
     env:
-      STELLAR_NETWORK: testnet
       REUSE: "perch-doc-compiler perch-interpreter perch-spending-limit perch-ed25519-verifier"
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: deploy-stack-build
+          path: ${{ runner.temp }}/stack-build
+      - name: Collect the freshly built wasm (not the reused tier-0) to attest
+        id: built
+        run: |
+          set -euo pipefail
+          stack="$RUNNER_TEMP/stack-build/target/stack"
+          paths=""
+          for pkg in $(jq -r '.artifacts[].package' "$stack/build.json"); do
+            [[ $pkg =~ ^[a-z0-9-]+$ ]] || { echo "::error::unexpected package name in build.json: $pkg"; exit 1; }
+            case " $REUSE " in *" $pkg "*) continue ;; esac
+            wasm="$stack/${pkg//-/_}.wasm"
+            [ -f "$wasm" ] && [ ! -L "$wasm" ] || { echo "::error::the build artifact has no regular file for $pkg"; exit 1; }
+            paths="${paths}${wasm}"$'\n'
+          done
+          {
+            echo "paths<<EOF"
+            printf '%s' "$paths"
+            echo "EOF"
+          } >>"$GITHUB_OUTPUT"
+      - name: Attest build provenance for each deployed wasm
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: ${{ steps.built.outputs.paths }}
+
+  deploy-stack-record:
+    needs: [ci-green, deploy-stack, deploy-stack-attest]
+    if: >-
+      !cancelled() && needs.ci-green.outputs.go == 'true' &&
+      needs.deploy-stack.result == 'success' &&
+      needs.deploy-stack-attest.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # commit the manifest + bindings onto the deploy branch
+      pull-requests: write # open the deploy(<network>) PR
+    env:
+      STELLAR_NETWORK: testnet
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           persist-credentials: false
           fetch-depth: 0 # git-cliff needs full history + tags (perch-artifacts bump)
-      # First, so a failed install fails before anything is attested. The
-      # deployment is already on-chain by now; this job's inputs are this
+      # The deployment is already on-chain by now; this job's inputs are this
       # run's artifacts, so a failure here is recovered by re-running it.
       - name: Install git-cliff (bumps perch-artifacts below)
         run: |
@@ -984,30 +1052,38 @@ jobs:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: deploy-stack-build
-          path: .
+          path: ${{ runner.temp }}/stack-build
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: deploy-stack-manifest
-          path: deployments
-      - name: Collect the freshly built wasm (not the reused tier-0) to attest
-        id: built
+          path: ${{ runner.temp }}/stack-manifest
+      # The PR records the manifest and the account's and factory's hash pins
+      # the build staged, and nothing else from either artifact: every pin
+      # the checkout tracks must come back as one hash, and the build may add
+      # no pin the checkout lacks.
+      - name: Take only the manifest and the staged hash pins from the artifacts
         run: |
           set -euo pipefail
-          paths=""
-          for pkg in $(jq -r '.artifacts[].package' target/stack/build.json); do
-            case " $REUSE " in *" $pkg "*) continue ;; esac
-            paths="${paths}target/stack/${pkg//-/_}.wasm"$'\n'
+          take() { # artifact-file checkout-file
+            [ -f "$1" ] && [ ! -L "$1" ] || { echo "::error::the artifacts have no regular file $2"; exit 1; }
+            cp -- "$1" "$2"
+          }
+          take "$RUNNER_TEMP/stack-manifest/testnet.json" deployments/testnet.json
+          for dir in crates/perch-smart-account/wasm crates/perch-account-factory/wasm; do
+            for f in "$RUNNER_TEMP/stack-build/$dir"/*.sha256; do
+              [ -e "$f" ] || continue
+              git ls-files --error-unmatch -- "$dir/${f##*/}" >/dev/null 2>&1 \
+                || { echo "::error::the build staged a pin the checkout does not track: $dir/${f##*/}"; exit 1; }
+            done
+            for pin in $(git ls-files -- "$dir/*.sha256"); do
+              take "$RUNNER_TEMP/stack-build/$pin" "$pin"
+              grep -qxE '[0-9a-f]{64}' "$pin" && [ "$(wc -l <"$pin")" -eq 1 ] \
+                || { echo "::error::$pin is not one sha256"; exit 1; }
+            done
           done
-          {
-            echo "paths<<EOF"
-            printf '%s' "$paths"
-            echo "EOF"
-          } >>"$GITHUB_OUTPUT"
-      # Attest before anything in this job compiles or runs repository code.
-      - name: Attest build provenance for each deployed wasm
-        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
-        with:
-          subject-path: ${{ steps.built.outputs.paths }}
+          dirty=$(git status --porcelain --untracked-files=all -- . ':!target' ':!deployments/testnet.json' \
+            ':!crates/perch-smart-account/wasm/*.sha256' ':!crates/perch-account-factory/wasm/*.sha256')
+          [ -z "$dirty" ] || { echo "::error::the checkout changed outside the files this job records:"; echo "$dirty"; exit 1; }
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
         with:
           toolchain: stable

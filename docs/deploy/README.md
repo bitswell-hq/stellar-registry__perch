@@ -184,7 +184,7 @@ on-chain (`STELLAR_SIGN_WITH_KEY`). No new authority is introduced.
 
 ### The `deploy-stack` jobs (`release.yml`)
 
-On a release that bumps a recovery-stack contract, three gated jobs run
+On a release that bumps a recovery-stack contract, four gated jobs run
 `deploy-stack.sh` against the canonical registry — SA-authored, in pin
 order — attest each built wasm, and open a `deploy(<network>)` PR with the
 manifest, the regenerated bindings, and the
@@ -198,11 +198,17 @@ see the bootstrap below.
 | --- | --- | --- |
 | `deploy-stack-build` | `deploy-stack.sh --build-only`: fetches the reused tier-0, compiles the stack, computes each content address | no secret, no environment |
 | `deploy-stack` | `deploy-stack.sh --prebuilt`: uploads, publishes, deploys, writes the manifest; compiles and runs no Rust | the delegate seed (`testnet` environment), in the environment only, never argv |
-| `deploy-stack-record` | attests the built wasm, then `verify-deployment.sh`, `bindings-contracts.sh`, the perch-artifacts bump, and the PR | no secret |
+| `deploy-stack-attest` | attests each freshly built wasm (not the reused tier-0); checks out nothing and runs no repository code | the attestation token (`id-token`, `attestations: write`), no secret |
+| `deploy-stack-record` | `verify-deployment.sh`, `bindings-contracts.sh`, the perch-artifacts bump, and the PR | no secret |
 
 The split is by job, not by step, because a build script runs as the runner
 user with `sudo`: it could replace the `stellar` binary that a later step in
-the same job hands the seed to.
+the same job hands the seed to, or request an attestation token for bytes of
+its choosing. For the same reason no job unpacks the build's artifact over its
+checkout: `deploy-stack` downloads it outside the checkout and copies in only
+the stack's wasm, `build.json`, and `addresses.json`, and `deploy-stack-record`
+only the manifest and the hash pins the checkout already tracks, so nothing the
+build wrote can replace a script those jobs run.
 
 **Why it reuses the published tier-0 rather than rebuilding them.** The
 account pins the compiler, interpreter, and spending-limit by the sha256 of
@@ -406,7 +412,7 @@ Mainnet runs exactly the testnet deployment's bytes, every contract of the
 stack. The account and the factory derive their registry from the committed
 `registry.path` under the ledger's network id, so one build serves both
 networks, and the tier-0 pin nothing. That is why a stack must reach testnet
-first: its attestations come from the testnet deployment's record job. A stack
+first: its attestations come from the testnet deployment's attest job. A stack
 tag from before `registry.path` (whose account compiled in one network's
 registry) is refused, and so is a testnet deployment that records another
 registry than the one `registry.path` derives there, as

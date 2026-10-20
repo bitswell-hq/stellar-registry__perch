@@ -324,6 +324,20 @@ class ReleaseDeps(unittest.TestCase):
         self.assertEqual(run([*cliff, *pins, "--bumped-version"], self.repo.dir).stdout.strip(), "contract-v0.1.0")
 
     @unittest.skipUnless(GIT_CLIFF or os.environ.get("PERCH_REQUIRE_GIT_CLIFF"), "git-cliff not on PATH")
+    def test_a_test_snapshot_change_is_no_release(self):
+        # soroban-sdk test snapshots are test output, never part of a wasm:
+        # deleting them under every crate must not re-release every contract.
+        shutil.copy(os.path.join(REPO, "cliff.toml"), os.path.join(self.repo.dir, ".git", "cliff.toml"))
+        run(["git", "tag", "contract-v0.1.0"], self.repo.dir)
+        self.repo.write("crates/contract/test_snapshots/test/a_test.1.json", "{}\n")
+        self.repo.commit("feat: ship a new feature elsewhere")
+        scope = [a for d in self.repo.deps("scope", "contract") for a in ("--include-path", f"{d}/**")]
+        pins = shlex.split(re.search(r"^ *pins=\((.*)\)$", release_yml(), re.M).group(1))
+        cliff = [GIT_CLIFF or "git-cliff", "--config", ".git/cliff.toml", "--tag-pattern", "contract-v.*", *scope]
+        self.assertEqual(run([*cliff, "--bumped-version"], self.repo.dir).stdout.strip(), "contract-v0.2.0")
+        self.assertEqual(run([*cliff, *pins, "--bumped-version"], self.repo.dir).stdout.strip(), "contract-v0.1.0")
+
+    @unittest.skipUnless(GIT_CLIFF or os.environ.get("PERCH_REQUIRE_GIT_CLIFF"), "git-cliff not on PATH")
     def test_a_registry_path_edit_is_a_release(self):
         # The registry path sits beside the hash pins but is compiled in and
         # rewritten by no deployment: editing it changes the contract's
@@ -527,6 +541,46 @@ class ReleaseKeys(unittest.TestCase):
                         with self.subTest(job=name, line=line.strip()):
                             # Only as a step env value or a reusable-workflow secret.
                             self.assertRegex(line.strip(), r"^(STELLAR_ACCOUNT|STELLAR_SIGN_WITH_KEY|signing_key): \$\{\{ " + re.escape(seed) + r" \}\}$")
+
+    def test_no_credentialed_job_unpacks_an_artifact_over_tracked_files(self):
+        # An artifact from a job that compiled can carry any path a build
+        # script wrote, so a job holding a secret or a write token downloads
+        # it outside the checkout and copies only the files it expects.
+        tracked = run(["git", "ls-files"], REPO).stdout.splitlines()
+        checked = 0
+        for name, job in signing_jobs().items():
+            if "secrets." not in job and not re.search(r"(?m)^ +(id-token|contents): write", job):
+                continue
+            # Without a checkout the workspace holds no tracked file.
+            if "actions/checkout" not in job:
+                continue
+            for step in re.findall(r"(?m)^ +- uses: actions/download-artifact@.*\n((?: {8,}\S.*\n)*)", job):
+                checked += 1
+                m = re.search(r"(?m)^ +path: (.*)$", step)
+                path = m.group(1).strip() if m else "."
+                with self.subTest(job=name, path=path):
+                    if path.startswith("${{ runner.temp }}"):
+                        continue
+                    path = os.path.normpath(path)
+                    self.assertFalse(path == "." or any(f == path or f.startswith(path + "/") for f in tracked))
+        self.assertGreaterEqual(checked, 3)
+
+    def test_no_job_minting_a_token_runs_repository_code(self):
+        # An OIDC token signs npm provenance and the stack's attestations,
+        # which mainnet trusts: the job that can request one runs nothing
+        # from the repository or its dependencies.
+        minting = {n: j for n, j in signing_jobs().items()
+                   if "id-token: write" in j and not re.search(r"(?m)^    uses: ", j)}
+        self.assertEqual(set(minting), {"release.yml:npm-publish", "release.yml:deploy-stack-attest"})
+        for name, job in minting.items():
+            for marker in ("actions/checkout", "uses: ./", "scripts/", *BUILDS):
+                with self.subTest(job=name, marker=marker):
+                    self.assertNotIn(marker, job)
+        jobs = release_jobs()
+        self.assertIn("actions/attest-build-provenance", jobs["deploy-stack-attest"])
+        self.assertNotIn("id-token", jobs["deploy-stack-record"])
+        self.assertNotIn("attestations", jobs["deploy-stack-record"])
+        self.assertIn("deploy-stack-attest", re.search(r"(?m)^    needs: (.*)$", jobs["deploy-stack-record"]).group(1))
 
     def test_npm_publish_only_publishes_a_packed_tarball(self):
         jobs = release_jobs()
