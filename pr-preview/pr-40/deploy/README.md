@@ -72,11 +72,11 @@ every consumer reads.
 
 | Command | Does |
 | --- | --- |
-| `scripts/build-stack.sh --registry <id>` | Builds tier 0, stages its wasm and `<id>` as the account's pins, builds the account, stages it and the WebAuthn verifier as the factory's pins, builds the factory. `target/stack/build.json` records every hash and the pins each consumer was built against. Deployments build with `stellar scaffold build`; `--builder contract` uses core `stellar contract build`, the same code without scaffold's metadata. It overwrites the account's and factory's committed pins: run `fetch-infra-wasm.sh` (or `git checkout crates/*/wasm`) afterwards to pin the deployment again, unless this build is the new deployment. |
+| `scripts/build-stack.sh` | Records the registry `crates/*/wasm/registry.path` derives on the build's network (`--network-passphrase`, default `$STELLAR_NETWORK_PASSPHRASE` or testnet's), and refuses a `--registry` naming another. Builds tier 0, stages its wasm as the account's pins, builds the account, stages it and the WebAuthn verifier as the factory's pins, builds the factory. `target/stack/build.json` records every hash and the pins each consumer was built against. Deployments build with `stellar scaffold build`; `--builder contract` uses core `stellar contract build`, the same code without scaffold's metadata. It overwrites the account's and factory's committed pins: run `fetch-infra-wasm.sh` (or `git checkout crates/*/wasm`) afterwards to pin the deployment again, unless this build is the new deployment. |
 | `scripts/deploy-stack.sh --source <identity>` | Deploys a new instance of the registry wasm the network's perch registries already run, runs `build-stack.sh` against it, then publishes tier 0 and the factory (upload with hash check, `publish_hash`, `deploy_stateless`, derived-address and code-hash checks), installs the account, writes the manifest, and runs `verify-deployment.sh`. Idempotent. `--registry` publishes into an existing registry instead. `--author <C…>` binds every name to a smart account and signs its authorization through the `theahaco/stellar-cli` fork (source/fee stays the delegate). `--reuse "<names>"` fetches those already-published tier-0 by hash and pins them instead of rebuilding — the canonical path (see [The canonical registry](#the-canonical-registry-and-publishing-the-stack-to-it)). `--build-only` and `--prebuilt` split one run into a keyless build and a publish that compiles nothing, as the release jobs run it. |
 | `scripts/verify-deployment.sh` | Read-only, by hash and address only: the registry's code; each contract at its content address, running its recorded wasm, served by the registry for its name and version; the account installed; the manifest's recorded pins equal to the deployed hashes; and what consumers resolve on-chain, from the factory's `account_wasm_hash`/`webauthn_verifier`, the adapter's `circuit_id`/`tree_depth` against the pool's `depth`, to the code hash and `infra()` of every account the exercise report lists. A report from another stack commit is skipped with a notice. |
-| `scripts/fetch-infra-wasm.sh` | Fetches the account's and factory's pinned wasm from the manifest and rewrites their committed pins (`stateless.id`, `<name>.sha256`). Each wasm is fetched by its recorded address (the account by its hash) and refused unless its sha256 and content address match. `--stack <dir>` fetches every deployed artifact with a `build.json`. |
-| `scripts/check-pins.sh` | Offline: the committed pins equal the manifest's registry id and hashes. A new deployment commits its pins with its manifest. |
+| `scripts/fetch-infra-wasm.sh` | Fetches the account's and factory's pinned wasm from the manifest and rewrites their committed hash pins (`<name>.sha256`), refusing a manifest whose registry is not the one `registry.path` derives on its network, unless `deployments/pending-registry.json` declares that migration. Each wasm is fetched by its recorded address (the account by its hash) and refused unless its sha256 and content address match. `--stack <dir>` fetches every deployed artifact with a `build.json`. |
+| `scripts/check-pins.sh` | The committed `registry.path` derives the manifest's registry id on its network (or a declared pending migration, reported as a warning), and the committed hashes equal the manifest's. A new deployment commits its pins with its manifest. |
 | `scripts/check-git-dep.sh --compare` | Builds the account, the factory, and `perch-smart-account` as cargo git dependencies from cargo's clean checkout, offline and without fetching, and requires the same wasm as this checkout. |
 | `cargo test -p perch-integration-tests --test testnet_pins` | The pins actually compiled into the account and the factory equal the manifest's. |
 | `cargo test -p perch-integration-tests --test release_stack -- --ignored` | Every recovery flow through the stack's wasm, with real proofs (`PERCH_STACK_DIR`, default `target/stack`). |
@@ -116,19 +116,39 @@ records.
 
 ## The canonical registry, and publishing the stack to it
 
-On testnet, perch has one canonical registry, `unverified/perch/constructorless`
-(`CDX2DMYM…PDA7`, `vars.PERCH_REGISTRY_CONTRACT_ID`;
-[`../testnet-deployment.md`](../testnet-deployment.md)). An account or factory
-bakes one registry id and derives every infra address from it as
-`deployer(registry, sha256(wasm))`, so everything one consumer resolves must
-live in that one registry. The `unverified/perch/stateless` registry is
+Perch has one canonical registry per network. An account or factory derives
+it, and every infra address from it as `deployer(registry, sha256(wasm))`,
+so everything one consumer resolves on a network must live in that one
+registry. The derivation is committed, not the id:
+`crates/*/wasm/registry.path` names the Stellar Registry root's deployer and
+salt and the named deploys `perch/constructorless` below it, every hop
+derived under the ledger's network id
+([`crates/perch-smart-account/wasm/README.md`](../../crates/perch-smart-account/wasm/README.md)),
+so one account build and one factory build serve every network. On testnet
+that is `CDZGU4AI…BZTM`, on mainnet `CC236AK2…B7NN`; neither exists yet.
+
+The current testnet deployment still lives in the earlier layout's
+registry, `unverified/perch/constructorless` (`CDX2DMYM…PDA7`,
+`vars.PERCH_REGISTRY_CONTRACT_ID`;
+[`../testnet-deployment.md`](../testnet-deployment.md)), which this source
+no longer derives. `deployments/pending-registry.json` declares that
+migration, so the pin checks accept and report it (`scripts/manifest-registry.sh`).
+Creating `perch/constructorless` under the testnet root and redeploying the
+stack there is the dry run of the mainnet layout. Until then
+`build-stack.sh` refuses `--registry CDX2DMYM…`, so the `deploy-stack` jobs
+fail closed rather than publish an account that would not resolve its infra.
+The `unverified/perch/stateless` registry is
 retired: it keeps `perch-spending-limit` 0.1.1 and earlier, and nothing new is
 published there.
 
 `deploy-stack.sh` has two modes. A **rehearsal** deploys to its own fresh
 instance of the same registry wasm (`4b2d9ea4…`), with a throwaway key as
 admin, manager, and author — self-contained, so it builds and publishes its
-own bytes and the account pins exactly those. The **canonical** mode
+own bytes and the account pins exactly those. Its fresh registry is not the
+one `registry.path` derives, so `build-stack.sh` refuses it unless a dev
+`registry.path` (never committed) derives it: deploy it at a derivable
+address (`stellar contract deploy --salt`) and name its deployer and salt
+with `path /`. The **canonical** mode
 (`--registry <canonical> --author <smart account> --reuse …`) is what CI runs.
 
 The current deployment
@@ -238,7 +258,7 @@ REG=CDX2DMYMMEYU6FGN3HPJ2GQSSL5EZHIAMEJD4SPF55FZE5LEUBPPPDA7    # constructorles
 AUTHOR=CDIFS3JDMVQBVANOSHEL6AUAKRYLFZFQQVX37QKQGJGQVQXQEHJCJ6PG  # perch-author SA
 MANAGER=perch-demo                                              # the manager key (GA327GGW…), human-held
 
-scripts/build-stack.sh --registry "$REG" --out target/stack
+scripts/build-stack.sh --out target/stack   # derives the registry from registry.path
 
 for name in perch-webauthn-verifier perch-recovery perch-zk-pool \
             perch-zk-adapter perch-account-factory; do
@@ -347,16 +367,17 @@ run's failed jobs instead: `npm-publish` and `notify-nido` re-run together.
 
 Mainnet is published by hand. No release merge reaches it: the `testnet`
 publishes, the `deploy-stack` jobs, and npm run on a release merge as above,
-and the separate [`release-mainnet.yml`](../../.github/workflows/release-mainnet.yml)
-workflow runs only when someone dispatches it from `main`. Each one publishes a tag that is
-already released on `main`, as the bytes it was released as, after the
-`mainnet` environment's reviewer approves. A dispatch is a dry run unless
+and the separate
+[`release-mainnet.yml`](../../.github/workflows/release-mainnet.yml) workflow
+runs only when someone dispatches it from `main`. It publishes tags already
+released on `main`, as the bytes they were released as, after the `mainnet`
+environment's reviewer approves. A dispatch is a dry run unless
 `dry_run` is cleared.
 
 | Input | |
 | --- | --- |
 | `publish_tags` | release tags of allow-listed contracts (`perch-interpreter`, `perch-doc-compiler`, `perch-ed25519-verifier`, `perch-spending-limit`), separated by spaces |
-| `stack_tag` | the release tag of a recovery-stack contract; the stack is built from its commit |
+| `stack_tag` | the release tag of a recovery-stack contract; mainnet gets the stack the testnet deployment from its commit runs |
 | `dry_run` | default on: run every check, simulate each transaction a real run would send, and print it with its fee; submit nothing and open no PR |
 
 ```sh
@@ -366,50 +387,54 @@ gh workflow run release-mainnet.yml -R stellar-registry/perch --ref main \
 gh workflow run release-mainnet.yml -R stellar-registry/perch --ref main \
   -f publish_tags="perch-interpreter-v0.1.4 perch-doc-compiler-v0.3.3" \
   -f dry_run=false
-# Then the stack, once its tier-0 are on mainnet:
+# Then the stack, once its tier-0 are on mainnet and testnet runs that stack:
 gh workflow run release-mainnet.yml -R stellar-registry/perch --ref main \
   -f stack_tag=perch-account-factory-v0.1.3
 ```
 
 | Job | Does | Holds |
 | --- | --- | --- |
-| `mainnet-plan` | `scripts/mainnet-plan.sh`: each tag exists, is on `main`, and names its crate's version at its commit; for the stack, every stack contract and reused tier-0 is released at that commit and `main` records a testnet deployment built from it | nothing |
+| `mainnet-plan` | derives the mainnet registry from `crates/*/wasm/registry.path` (`perch-derive-id registry`), then `scripts/mainnet-plan.sh`: each tag exists, is on `main`, and names its crate's version at its commit; for the stack, every stack contract and reused tier-0 is released at that commit, it commits `main`'s `registry.path`, and `main` records a testnet deployment built from it | nothing |
 | `mainnet-publish` | downloads each tag's release asset, requires its `contract-release` attestation for the tag's commit on `main` and its `binver`, then `scripts/publish-wasm.sh` (upload, `publish_hash`, `deploy_stateless`, code-hash check), or `--plan` | the mainnet delegate (`mainnet` environment) |
 | `mainnet-publish-record` | attaches `publish-receipt-mainnet.json` to each release | no secret |
-| `mainnet-config` | `scripts/mainnet-settings.sh`, then hands the registry and root to the build | the variables only (`mainnet` environment) |
-| `mainnet-deploy-stack-build` | `deploy-stack.sh --build-only` from the stack commit, with the `rustc` that testnet deployment recorded. Every tier-0, reused or rebuilt, and every tier-0 hash the account and the factory pin, must be the hash that deployment recorded; a rebuilt one must also carry its attestation (`release.yml`, that commit, `main`). Otherwise it refuses | nothing |
-| `mainnet-deploy-stack` | `deploy-stack.sh --prebuilt` from the stack commit, or the dry run's plan of the same transactions | the mainnet delegate (`mainnet` environment) |
-| `mainnet-deploy-stack-record` | attests the account and the factory, runs `verify-deployment.sh`, bumps `@stellar-registry/perch-artifacts`, and opens the `deploy(mainnet)` PR | no secret |
+| `mainnet-config` | `scripts/mainnet-settings.sh`, then hands the registry to the build | the variables only (`mainnet` environment) |
+| `mainnet-deploy-stack-build` | fetches every wasm the testnet deployment from the stack commit records, by hash (`fetch-infra-wasm.sh --stack`), after checking it records the registry `registry.path` derives on testnet; requires each one but the reused tier-0 to carry that deployment's attestation (`release.yml`, the stack commit, `main`); then addresses the stack under the mainnet registry. Nothing is rebuilt | nothing |
+| `mainnet-deploy-stack` | `deploy-stack.sh --prebuilt` on those bytes, or the dry run's plan of the same transactions | the mainnet delegate (`mainnet` environment) |
+| `mainnet-deploy-stack-record` | checks the manifest records the derived mainnet registry (`manifest-registry.sh`), runs `verify-deployment.sh`, bumps `@stellar-registry/perch-artifacts` (`deploy-record-bump.sh`), and opens the `deploy(mainnet)` PR | no secret |
 
-The stack's own tier-0 (the WebAuthn verifier, the ZK pool and adapter, the
-controller) pin nothing, so a rebuild from the same commit is the same bytes
-on every network. That is why a stack must reach testnet before mainnet:
-their attestations come from the testnet deployment's record job. The account and the factory pin the
-mainnet registry, so they are new bytes; their attestation names the
-dispatched `main` commit, and the manifest's `source.commit` names the stack
-commit they were built from. A stack tag whose `deploy-stack.sh` predates the
-`--build-only`/`--prebuilt` split is refused: release the stack again first.
+Mainnet runs exactly the testnet deployment's bytes, every contract of the
+stack. The account and the factory derive their registry from the committed
+`registry.path` under the ledger's network id, so one build serves both
+networks, and the tier-0 pin nothing. That is why a stack must reach testnet
+first: its attestations come from the testnet deployment's record job. A stack
+tag from before `registry.path` (whose account compiled in one network's
+registry) is refused, and so is a testnet deployment that records another
+registry than the one `registry.path` derives there, as
+`deployments/pending-registry.json`'s pending testnet migration does today:
+the first mainnet stack follows testnet's move to `perch/constructorless`.
 
 The `deploy(mainnet)` PR records `deployments/mainnet.json` and the
 `perch-artifacts` release that ships it; merging it notifies Nido with
 `network=mainnet` ([Notifying Nido](#notifying-nido-nido-dispatchyml)). The
-committed build-time pins (`crates/*/wasm`) and the
-`@stellar-registry/perch-contracts` bindings describe one deployment and stay
-on testnet's.
+committed hash pins (`crates/*/wasm/*.sha256`) are the same bytes on both
+networks, so the PR changes none. The `@stellar-registry/perch-contracts`
+bindings are generated from one manifest and stay on testnet's.
 
 ### Settings
 
 All in the `mainnet` environment. No mainnet job reads a testnet value, and
 none of these has a default: `scripts/mainnet-settings.sh` fails on an unset
-one, then checks on-chain that the three addresses are contracts and that
-the path resolves from the root, one name at a time through each registry's
-`fetch_contract_id`, to exactly the registry id.
+one. The registry id must be the one `crates/*/wasm/registry.path` derives
+on mainnet (`CC236AK2…B7NN`), and the path must be that file's `path`. On
+chain, the three addresses must be contracts, and the path must resolve from
+the root, one name at a time through each registry's `fetch_contract_id`, to
+exactly the registry id.
 
 | Name | Kind | |
 | --- | --- | --- |
 | `CI_PUBLISH_MAINNET_SECRET_KEY` | secret | the mainnet delegate's seed: fee source, and signer of `perch-author`'s authorization on its own context rule, which must allow `publish_hash`. Never the testnet key. |
-| `PERCH_MAINNET_REGISTRY_CONTRACT_ID` | variable | the registry mainnet publishes into (C…), the id the account and the factory pin |
-| `PERCH_MAINNET_REGISTRY_PATH` | variable | its path under the root: `perch/constructorless` (directly under the Stellar Registry root, not `unverified/`) |
+| `PERCH_MAINNET_REGISTRY_CONTRACT_ID` | variable | the registry mainnet publishes into (C…): the one the account and the factory derive on mainnet |
+| `PERCH_MAINNET_REGISTRY_PATH` | variable | its path under the root, as `registry.path` commits it: `perch/constructorless` (directly under the Stellar Registry root, not `unverified/`) |
 | `PERCH_MAINNET_ROOT_REGISTRY` | variable | the Stellar Registry root (C…), recorded as the manifest's `registry.root` |
 | `PERCH_MAINNET_AUTHOR_ADDRESS` | variable | the mainnet `perch-author` smart account (C…), bound to every name |
 
