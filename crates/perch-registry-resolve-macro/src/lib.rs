@@ -80,7 +80,7 @@ struct RegistryPath {
 /// The file every name-only invocation reads, relative to the invoking crate.
 const REGISTRY_FILE: &str = "wasm/registry.path";
 
-/// Parse a registry path file: `key value` lines, each key exactly once.
+/// A registry path file: `key value` lines, each key exactly once.
 ///
 /// ```text
 /// root-deployer <G… or C… strkey>   who deployed the root registry
@@ -91,73 +91,79 @@ const REGISTRY_FILE: &str = "wasm/registry.path";
 /// Blank lines and lines starting with `#` are skipped. A named deploy's salt
 /// is `sha256(normalized name)` and its deployer the registry above it, the
 /// base registry's `deploy` convention. `path /` names the root itself.
-fn parse_registry_path(text: &str) -> Result<RegistryPath, String> {
-    use sha2::{Digest, Sha256};
-    let (mut deployer, mut salt, mut segments) = (None, None, None);
-    for (i, line) in text.lines().enumerate() {
-        let n = i + 1;
-        let line = line.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        let (key, value) = line
-            .split_once(char::is_whitespace)
-            .map(|(k, v)| (k, v.trim()))
-            .ok_or_else(|| format!("line {n}: expected `<key> <value>`"))?;
-        let duplicate = || format!("line {n}: `{key}` given twice");
-        match key {
-            "root-deployer" => {
-                let canonical = match stellar_strkey::Strkey::from_string(value) {
-                    Ok(k @ stellar_strkey::Strkey::PublicKeyEd25519(_))
-                    | Ok(k @ stellar_strkey::Strkey::Contract(_)) => k.to_string(),
-                    _ => {
-                        return Err(format!(
-                            "line {n}: {value:?} is not an account or contract strkey"
-                        ))
-                    }
-                };
-                if canonical.as_str() != value {
-                    return Err(format!(
-                        "line {n}: {value:?} is not in canonical strkey form"
-                    ));
-                }
-                deployer
-                    .replace(value.to_string())
-                    .map_or(Ok(()), |_| Err(duplicate()))?;
+impl core::str::FromStr for RegistryPath {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, String> {
+        use sha2::{Digest, Sha256};
+        let (mut deployer, mut salt, mut segments) = (None, None, None);
+        for (i, line) in text.lines().enumerate() {
+            let n = i + 1;
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                continue;
             }
-            "root-salt" => {
-                let digest: [u8; 32] = Sha256::digest(value.as_bytes()).into();
-                salt.replace(digest).map_or(Ok(()), |_| Err(duplicate()))?;
-            }
-            "path" => {
-                let trimmed = value.trim_matches('/');
-                let mut parsed = Vec::new();
-                if !trimmed.is_empty() {
-                    for segment in trimmed.split('/') {
-                        let name = normalize_name(segment);
-                        if name.is_empty()
-                            || !name
-                                .bytes()
-                                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-')
-                        {
-                            return Err(format!("line {n}: {segment:?} is not a registry name"));
+            let (key, value) = line
+                .split_once(char::is_whitespace)
+                .map(|(k, v)| (k, v.trim()))
+                .ok_or_else(|| format!("line {n}: expected `<key> <value>`"))?;
+            let duplicate = || format!("line {n}: `{key}` given twice");
+            match key {
+                "root-deployer" => {
+                    let canonical = match stellar_strkey::Strkey::from_string(value) {
+                        Ok(k @ stellar_strkey::Strkey::PublicKeyEd25519(_))
+                        | Ok(k @ stellar_strkey::Strkey::Contract(_)) => k.to_string(),
+                        _ => {
+                            return Err(format!(
+                                "line {n}: {value:?} is not an account or contract strkey"
+                            ))
                         }
-                        let digest: [u8; 32] = Sha256::digest(name.as_bytes()).into();
-                        parsed.push((name, digest));
+                    };
+                    if canonical.as_str() != value {
+                        return Err(format!(
+                            "line {n}: {value:?} is not in canonical strkey form"
+                        ));
                     }
+                    deployer
+                        .replace(value.to_string())
+                        .map_or(Ok(()), |_| Err(duplicate()))?;
                 }
-                segments
-                    .replace(parsed)
-                    .map_or(Ok(()), |_| Err(duplicate()))?;
+                "root-salt" => {
+                    let digest: [u8; 32] = Sha256::digest(value.as_bytes()).into();
+                    salt.replace(digest).map_or(Ok(()), |_| Err(duplicate()))?;
+                }
+                "path" => {
+                    let trimmed = value.trim_matches('/');
+                    let mut parsed = Vec::new();
+                    if !trimmed.is_empty() {
+                        for segment in trimmed.split('/') {
+                            let name = normalize_name(segment);
+                            if name.is_empty()
+                                || !name.bytes().all(|c| {
+                                    c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-'
+                                })
+                            {
+                                return Err(format!(
+                                    "line {n}: {segment:?} is not a registry name"
+                                ));
+                            }
+                            let digest: [u8; 32] = Sha256::digest(name.as_bytes()).into();
+                            parsed.push((name, digest));
+                        }
+                    }
+                    segments
+                        .replace(parsed)
+                        .map_or(Ok(()), |_| Err(duplicate()))?;
+                }
+                other => return Err(format!("line {n}: unknown key `{other}`")),
             }
-            other => return Err(format!("line {n}: unknown key `{other}`")),
         }
+        Ok(RegistryPath {
+            root_deployer: deployer.ok_or("missing `root-deployer`")?,
+            root_salt: salt.ok_or("missing `root-salt`")?,
+            segments: segments.ok_or("missing `path`")?,
+        })
     }
-    Ok(RegistryPath {
-        root_deployer: deployer.ok_or("missing `root-deployer`")?,
-        root_salt: salt.ok_or("missing `root-salt`")?,
-        segments: segments.ok_or("missing `path`")?,
-    })
 }
 
 /// Read and validate the invoking crate's [`REGISTRY_FILE`] at build time. A
@@ -174,7 +180,7 @@ fn read_registry_path(span: proc_macro2::Span) -> syn::Result<RegistryPath> {
             ),
         )
     })?;
-    parse_registry_path(&text)
+    text.parse::<RegistryPath>()
         .map_err(|why| syn::Error::new(span, format!("registry path {REGISTRY_FILE:?}: {why}")))
 }
 
@@ -777,7 +783,7 @@ fn expand(spec: &RegistrySpec) -> TokenStream2 {
 
 #[cfg(test)]
 mod test {
-    use super::parse_registry_path;
+    use super::RegistryPath;
     use sha2::{Digest, Sha256};
 
     const ROOT: &str = "GAMPJROHOAW662FINQ4XQOY2ULX5IEGYXCI4SMZYE75EHQBR6PSTJG3M";
@@ -792,7 +798,7 @@ mod test {
         let text = format!(
             "# comment\n\nroot-deployer {ROOT}\n  root-salt   2026-04-24T13:41:00 \npath perch/Constructor_Less\n"
         );
-        let p = parse_registry_path(&text).unwrap();
+        let p = text.parse::<RegistryPath>().unwrap();
         assert_eq!(p.root_deployer, ROOT);
         assert_eq!(p.root_salt, sha("2026-04-24T13:41:00"));
         assert_eq!(
@@ -803,7 +809,11 @@ mod test {
             ]
         );
         let root_only = format!("root-deployer {CONTRACT}\nroot-salt x\npath /\n");
-        assert!(parse_registry_path(&root_only).unwrap().segments.is_empty());
+        assert!(root_only
+            .parse::<RegistryPath>()
+            .unwrap()
+            .segments
+            .is_empty());
     }
 
     #[test]
@@ -841,7 +851,7 @@ mod test {
                 "not a registry name",
             ),
         ] {
-            let err = parse_registry_path(&text).err().unwrap_or_default();
+            let err = text.parse::<RegistryPath>().err().unwrap_or_default();
             assert!(err.contains(why), "{text:?}: {err:?}");
         }
     }
