@@ -11,21 +11,23 @@ name: Release (mainnet)
 #                          (release.yml's contract-release build), checked
 #                          against its attestation for the tag's commit, then
 #                          uploaded, publish_hash'd, and deploy_stateless'd.
-#   mainnet-deploy-stack-* the recovery stack, rebuilt from the stack tag's
-#                          commit with the toolchain the testnet deployment
-#                          from that commit recorded. Every tier-0 must be the
-#                          hash that deployment recorded (the rebuilt ones also
-#                          its attestation), or the build refuses. The account
-#                          and the factory pin the mainnet registry, so they are
-#                          new bytes, built against those tier-0 and attested by
-#                          the record job.
+#   mainnet-deploy-stack-* the recovery stack, as the exact bytes the testnet
+#                          deployment from the stack tag's commit runs. Nothing
+#                          is rebuilt: the account and the factory derive their
+#                          registry from crates/*/wasm/registry.path under the
+#                          ledger's network id, so one build serves every
+#                          network. Each wasm is fetched by the hash that
+#                          deployment recorded and must carry its attestation,
+#                          or the build refuses.
 #
 # Every job that reads a mainnet setting or the mainnet delegate runs in the
 # `mainnet` environment (required reviewer, main-only) and reads only that
 # environment's CI_PUBLISH_MAINNET_SECRET_KEY and PERCH_MAINNET_* variables,
-# which have no defaults (scripts/mainnet-settings.sh checks them on-chain).
-# The build jobs get the settings as mainnet-config's outputs, so no job that
-# compiles is bound to the environment. The registry path is a setting: on
+# which have no defaults. scripts/mainnet-settings.sh checks them on-chain and
+# against the registry this source's account derives on mainnet, which
+# mainnet-plan computes without a key. The build job gets the settings as
+# mainnet-config's outputs, so no job that compiles is bound to the
+# environment. The registry path is a setting: on
 # mainnet perch's registries sit directly under the Stellar Registry root
 # (perch/constructorless), not under unverified/.
 #
@@ -76,7 +78,7 @@ jobs:
       stack_any: ${{ steps.plan.outputs.stack_any }}
       stack_tag: ${{ steps.plan.outputs.stack_tag }}
       stack_commit: ${{ steps.plan.outputs.stack_commit }}
-      stack_rustc: ${{ steps.plan.outputs.stack_rustc }}
+      registry: ${{ steps.derive.outputs.registry }}
       testnet_manifest_commit: ${{ steps.plan.outputs.testnet_manifest_commit }}
     env:
       # Kept in step with release.yml's publish-plan ALLOW, deploy-plan
@@ -90,6 +92,20 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0 # every tag, and main's history of deployments/testnet.json
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
+        with:
+          toolchain: stable
+      # The registry the account and the factory derive on mainnet from the
+      # committed crates/*/wasm/registry.path, by their own derivation. Every
+      # mainnet job publishes into exactly this registry.
+      - name: Derive the mainnet registry
+        id: derive
+        run: |
+          set -euo pipefail
+          registry=$(cargo run -q -p perch-derive-id -- registry "Public Global Stellar Network ; September 2015")
+          [[ "$registry" =~ ^C[A-Z2-7]{55}$ ]] || { echo "::error::perch-derive-id gave '$registry'"; exit 1; }
+          echo "registry=$registry" >>"$GITHUB_OUTPUT"
+          echo "mainnet registry (crates/*/wasm/registry.path): $registry" >>"$GITHUB_STEP_SUMMARY"
       - name: Resolve the tags to released commits on main
         id: plan
         env:
@@ -108,13 +124,12 @@ jobs:
             echo "stack_any=$(jq -r '.stack != null' <<<"$plan")"
             echo "stack_tag=$(jq -r '.stack.tag // ""' <<<"$plan")"
             echo "stack_commit=$(jq -r '.stack.commit // ""' <<<"$plan")"
-            echo "stack_rustc=$(jq -r '.stack.rustc // ""' <<<"$plan")"
             echo "testnet_manifest_commit=$(jq -r '.stack.testnet_manifest_commit // ""' <<<"$plan")"
           } >>"$GITHUB_OUTPUT"
           {
             echo "### Mainnet release plan ($([ "$DRY_RUN" = true ] && echo "dry run: nothing is submitted" || echo "PUBLISHES to mainnet"))"
             jq -r '.publish[] | "- publish `\(.tag)` (\(.commit))"' <<<"$plan"
-            jq -r 'if .stack then "- deploy the recovery stack from `\(.stack.tag)` (\(.stack.commit)), rustc \(.stack.rustc)" else empty end' <<<"$plan"
+            jq -r 'if .stack then "- deploy the recovery stack from `\(.stack.tag)` (\(.stack.commit)), as the testnet deployment recorded at \(.stack.testnet_manifest_commit)" else empty end' <<<"$plan"
           } >>"$GITHUB_STEP_SUMMARY"
 
   # Publish each tag's attested release asset to the mainnet registry,
@@ -141,6 +156,7 @@ jobs:
       REGISTRY_PATH: ${{ vars.PERCH_MAINNET_REGISTRY_PATH }}
       ROOT: ${{ vars.PERCH_MAINNET_ROOT_REGISTRY }}
       AUTHOR: ${{ vars.PERCH_MAINNET_AUTHOR_ADDRESS }}
+      DERIVED_REGISTRY: ${{ needs.mainnet-plan.outputs.registry }}
       PUBLISH: ${{ needs.mainnet-plan.outputs.publish }}
     steps:
       # main's tip, for the pinned stellar-cli fork and the scripts. Nothing
@@ -250,9 +266,9 @@ jobs:
             gh release upload "$tag" publish-receipt-mainnet.json --clobber --repo "$GITHUB_REPOSITORY"
           done < <(jq -c '.[]' <<<"$PUBLISH")
 
-  # The settings the stack build pins, read in the environment and checked
-  # on-chain, then handed to the build as outputs: the job that compiles is
-  # never bound to the environment. No secret.
+  # The settings, read in the environment and checked on-chain, then handed
+  # to the build as outputs: the job that compiles is never bound to the
+  # environment. No secret.
   mainnet-config:
     needs: mainnet-plan
     if: >-
@@ -272,6 +288,7 @@ jobs:
       REGISTRY_PATH: ${{ vars.PERCH_MAINNET_REGISTRY_PATH }}
       ROOT: ${{ vars.PERCH_MAINNET_ROOT_REGISTRY }}
       AUTHOR: ${{ vars.PERCH_MAINNET_AUTHOR_ADDRESS }}
+      DERIVED_REGISTRY: ${{ needs.mainnet-plan.outputs.registry }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -281,8 +298,9 @@ jobs:
         id: settings
         run: scripts/mainnet-settings.sh >>"$GITHUB_OUTPUT"
 
-  # Build the stack from the stack tag's commit (checked out under stack/;
-  # its own scripts build it), pinned to the mainnet registry, with no key.
+  # Collect the stack mainnet deploys: the exact wasm the testnet deployment
+  # from the stack commit runs, fetched by the hashes it recorded. Nothing is
+  # rebuilt, and no key is held.
   mainnet-deploy-stack-build:
     needs: [mainnet-plan, mainnet-config, mainnet-publish]
     if: >-
@@ -292,16 +310,13 @@ jobs:
       (needs.mainnet-publish.result == 'success' || needs.mainnet-publish.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
-      contents: read # check out the stack commit
+      contents: read # main's history: the testnet manifest
       attestations: read # gh attestation verify
     env:
-      STELLAR_NETWORK: mainnet
-      STELLAR_RPC_URL: https://mainnet.sorobanrpc.com
-      STELLAR_NETWORK_PASSPHRASE: "Public Global Stellar Network ; September 2015"
-      PERCH_ROOT_REGISTRY: ${{ needs.mainnet-config.outputs.root }}
+      MAINNET_PASSPHRASE: "Public Global Stellar Network ; September 2015"
       REGISTRY: ${{ needs.mainnet-config.outputs.registry }}
-      # The ALLOW-listed tier-0 to reuse from the mainnet registry (published
-      # by mainnet-publish, not rebuilt here).
+      # Published to the mainnet registry by mainnet-publish from their
+      # release assets; deploy-stack.sh checks it serves these hashes.
       REUSE: "perch-doc-compiler perch-interpreter perch-spending-limit perch-ed25519-verifier"
       STACK_COMMIT: ${{ needs.mainnet-plan.outputs.stack_commit }}
       TESTNET_MANIFEST_COMMIT: ${{ needs.mainnet-plan.outputs.testnet_manifest_commit }}
@@ -310,73 +325,74 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0 # the testnet manifest at TESTNET_MANIFEST_COMMIT
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.mainnet-plan.outputs.stack_commit }}
-          path: stack
-          persist-credentials: false
-      # The rustc the testnet deployment from this commit recorded, so the
-      # tier-0 rebuild can reproduce the bytes it attested. No dependency
-      # cache, as in deploy-stack-build.
+      # Only for perch-derive-id (registry and content addresses). No
+      # dependency cache, as in release.yml's deploy-stack-build.
       - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
         with:
-          toolchain: ${{ needs.mainnet-plan.outputs.stack_rustc }}
-          targets: wasm32v1-none
+          toolchain: stable
       - uses: ./.github/actions/setup-stellar-fork
-        with:
-          scaffold: "true"
-      - name: Build the stack against the mainnet registry (no key)
-        env:
-          # Over the checkout's rust-toolchain.toml (`stable`).
-          RUSTUP_TOOLCHAIN: ${{ needs.mainnet-plan.outputs.stack_rustc }}
+      # That deployment's account and factory must be this source's one
+      # build for every network: it records the registry the committed
+      # registry.path derives on its network. An earlier deployment's account
+      # compiled in its network's registry and never runs on mainnet.
+      - name: Fetch the testnet deployment's wasm by hash (no key, no build)
         run: |
           set -euo pipefail
-          stack/scripts/deploy-stack.sh --build-only --registry "$REGISTRY" --reuse "$REUSE"
-      # Tier 0 pins nothing, so mainnet must run exactly the tier-0 bytes the
-      # testnet deployment from this commit recorded, every name of them:
-      # the reused ones as fetched from the mainnet registry, and the rebuilt
-      # ones, which must also carry this workflow's own deploy-stack record
-      # attestation for this commit on main. The account and the factory may
-      # differ only in the registry they pin, so every tier-0 hash they pin
-      # must be that deployment's too. Anything else refuses.
-      - name: Check every tier-0 is the bytes the testnet deployment recorded
+          manifest="$RUNNER_TEMP/stack-manifest.json"
+          git show "$TESTNET_MANIFEST_COMMIT:deployments/testnet.json" >"$manifest"
+          cargo build -q -p perch-derive-id
+          recorded=$(jq -r .registry.id "$manifest")
+          derived=$(target/debug/perch-derive-id registry "$(jq -r .network_passphrase "$manifest")")
+          [ "$recorded" = "$derived" ] || {
+            echo "::error::the testnet deployment from $STACK_COMMIT records registry $recorded, but crates/*/wasm/registry.path derives $derived there: its account and factory predate one build for every network"
+            exit 1
+          }
+          scripts/fetch-infra-wasm.sh --manifest "$manifest" --stack target/stack
+      # Every wasm this run deploys, not just the tier-0: each must be the
+      # bytes that testnet deployment's record job attested for the stack
+      # commit on main. The reused tier-0 were checked against their own
+      # release attestation when mainnet-publish published them.
+      - name: Check each wasm carries the testnet release's attestation
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          build=stack/target/stack/build.json
-          testnet=$(git show "$TESTNET_MANIFEST_COMMIT:deployments/testnet.json")
-          want() { jq -r --arg p "$1" '.contracts[$p].sha256 // empty' <<<"$testnet"; }
-          for pkg in $(jq -r '.artifacts[] | select(.tier == 0) | .package' "$build"); do
-            wasm="stack/target/stack/$(jq -r --arg p "$pkg" '.artifacts[] | select(.package == $p) | .wasm' "$build")"
-            got=$(sha256sum "$wasm" | cut -d' ' -f1)
-            [ "$got" = "$(want "$pkg")" ] || { echo "::error::$pkg is $got; the testnet deployment from $STACK_COMMIT recorded '$(want "$pkg")'"; exit 1; }
-            case " $REUSE " in
-              *" $pkg "*) echo "$pkg: $got (reused from the mainnet registry)" ;;
-              *)
-                gh attestation verify "$wasm" --repo "$GITHUB_REPOSITORY" \
-                  --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
-                  --source-ref refs/heads/main --source-digest "$STACK_COMMIT"
-                echo "$pkg: $got (rebuilt, attested)" ;;
-            esac
+          for pkg in $(jq -r '.artifacts[].package' target/stack/build.json); do
+            case " $REUSE " in *" $pkg "*) continue ;; esac
+            wasm="target/stack/$(jq -r --arg p "$pkg" '.artifacts[] | select(.package == $p) | .wasm' target/stack/build.json)"
+            gh attestation verify "$wasm" --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
+              --source-ref refs/heads/main --source-digest "$STACK_COMMIT"
+            echo "$pkg: $(sha256sum "$wasm" | cut -d' ' -f1)"
           done
-          tier0=$(jq -c '[.artifacts[] | select(.tier == 0) | .package]' "$build")
-          for consumer in perch-account perch-account-factory; do
-            while read -r dep hash; do
-              [ "$hash" = "$(want "$dep")" ] || { echo "::error::$consumer pins $dep $hash; the testnet deployment recorded '$(want "$dep")'"; exit 1; }
-            done < <(jq -r --arg c "$consumer" --argjson t0 "$tier0" \
-              '.artifacts[] | select(.package == $c) | .pins | to_entries[] | select(.key as $k | $t0 | index($k)) | "\(.key) \(.value)"' "$build")
+      # The same bytes, addressed under the mainnet registry: build.json names
+      # it, and addresses.json holds each published name's content address
+      # there, which is all deploy-stack.sh --prebuilt reads.
+      - name: Address the stack under the mainnet registry
+        run: |
+          set -euo pipefail
+          derive=target/debug/perch-derive-id
+          [ "$("$derive" registry "$MAINNET_PASSPHRASE")" = "$REGISTRY" ] \
+            || { echo "::error::$REGISTRY is not the registry crates/*/wasm/registry.path derives on mainnet"; exit 1; }
+          jq --arg r "$REGISTRY" '.registry = $r' target/stack/build.json >"$RUNNER_TEMP/build.json"
+          mv "$RUNNER_TEMP/build.json" target/stack/build.json
+          addrs='{}'
+          for pkg in $(jq -r '.artifacts[] | select(.tier == 0 or .package == "perch-account-factory") | .package' target/stack/build.json); do
+            hash=$(jq -r --arg p "$pkg" '.artifacts[] | select(.package == $p) | .sha256' target/stack/build.json)
+            addrs=$(jq -c --arg p "$pkg" --arg a "$("$derive" content "$REGISTRY" "$hash" "$MAINNET_PASSPHRASE")" '. + {($p): $a}' <<<"$addrs")
           done
+          printf '%s\n' "$addrs" >target/stack/addresses.json
+          jq . target/stack/addresses.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: mainnet-deploy-stack-build
-          path: stack/target/stack
+          path: target/stack
           if-no-files-found: error
           retention-days: 7
 
-  # Publish the prebuilt stack to the mainnet registry in pin order, or with
-  # dry_run simulate every transaction that would send. The only
-  # stack job holding the mainnet delegate; it compiles and runs no Rust.
+  # Publish the stack to the mainnet registry in pin order, or with dry_run
+  # simulate every transaction that would send. The only stack job holding
+  # the mainnet delegate; it compiles and runs no Rust.
   mainnet-deploy-stack:
     needs: [mainnet-plan, mainnet-deploy-stack-build]
     if: >-
@@ -385,7 +401,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: mainnet
     permissions:
-      contents: read # check out the stack commit
+      contents: read # the scripts and the stellar-cli fork
     env:
       STELLAR_NETWORK: mainnet
       STELLAR_RPC_URL: https://mainnet.sorobanrpc.com
@@ -394,28 +410,24 @@ jobs:
       REGISTRY_PATH: ${{ vars.PERCH_MAINNET_REGISTRY_PATH }}
       ROOT: ${{ vars.PERCH_MAINNET_ROOT_REGISTRY }}
       AUTHOR: ${{ vars.PERCH_MAINNET_AUTHOR_ADDRESS }}
+      DERIVED_REGISTRY: ${{ needs.mainnet-plan.outputs.registry }}
       PERCH_ROOT_REGISTRY: ${{ vars.PERCH_MAINNET_ROOT_REGISTRY }}
       REUSE: "perch-doc-compiler perch-interpreter perch-spending-limit perch-ed25519-verifier"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.mainnet-plan.outputs.stack_commit }}
-          path: stack
-          persist-credentials: false
       - uses: ./.github/actions/setup-stellar-fork
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: mainnet-deploy-stack-build
-          path: stack/target/stack
-      - name: Check the mainnet settings (and that the build pins this registry)
+          path: target/stack
+      - name: Check the mainnet settings (and that the stack is addressed under this registry)
         run: |
           set -euo pipefail
           scripts/mainnet-settings.sh >/dev/null
-          [ "$(jq -r .registry stack/target/stack/build.json)" = "$REGISTRY" ] \
-            || { echo "::error::the stack was built for another registry"; exit 1; }
+          [ "$(jq -r .registry target/stack/build.json)" = "$REGISTRY" ] \
+            || { echo "::error::the stack was addressed under another registry"; exit 1; }
       # In deploy-stack.sh's order: tier 0 (the reused ones report as
       # already deployed, or refuse on another hash), the account (install
       # only), the factory. The delegate is only the simulation source.
@@ -425,25 +437,25 @@ jobs:
           STELLAR_ACCOUNT: ${{ secrets.CI_PUBLISH_MAINNET_SECRET_KEY }}
         run: |
           set -euo pipefail
-          build=stack/target/stack/build.json
+          build=target/stack/build.json
           plan() { # package [--install-only]
             local a
             a=$(jq -c --arg p "$1" '.artifacts[] | select(.package == $p)' "$build")
             scripts/publish-wasm.sh --plan "${@:2}" --registry "$REGISTRY" --author "$AUTHOR" --name "$1" \
-              --version "$(jq -r .version <<<"$a")" --wasm "stack/target/stack/$(jq -r .wasm <<<"$a")" >>receipts.jsonl
+              --version "$(jq -r .version <<<"$a")" --wasm "target/stack/$(jq -r .wasm <<<"$a")" >>receipts.jsonl
           }
           : >receipts.jsonl
           for pkg in $(jq -r '.artifacts[] | select(.tier == 0) | .package' "$build"); do plan "$pkg"; done
           plan perch-account --install-only
           plan perch-account-factory
-      - name: Publish the prebuilt stack (smart-account-authored, reusing the mainnet tier-0)
+      - name: Publish the stack (smart-account-authored, reusing the mainnet tier-0)
         if: ${{ !inputs.dry_run }}
         env:
           STELLAR_ACCOUNT: ${{ secrets.CI_PUBLISH_MAINNET_SECRET_KEY }}
           STELLAR_SIGN_WITH_KEY: ${{ secrets.CI_PUBLISH_MAINNET_SECRET_KEY }}
         run: |
           set -euo pipefail
-          stack/scripts/deploy-stack.sh --prebuilt --registry "$REGISTRY" --author "$AUTHOR" --reuse "$REUSE"
+          scripts/deploy-stack.sh --prebuilt --registry "$REGISTRY" --author "$AUTHOR" --reuse "$REUSE"
       - name: Summarize the dry run
         if: ${{ !cancelled() && inputs.dry_run && hashFiles('receipts.jsonl') != '' }}
         run: |
@@ -455,16 +467,16 @@ jobs:
         if: ${{ !inputs.dry_run }}
         with:
           name: mainnet-deploy-stack-manifest
-          path: stack/deployments/mainnet.json
+          path: deployments/mainnet.json
           if-no-files-found: error
           retention-days: 7
 
-  # Attest the registry-pinned wasm, verify the deployment, bump
-  # perch-artifacts, and open the deploy(mainnet) PR, as release.yml's
-  # deploy-stack-record does for testnet. No secret. The PR records deployments/mainnet.json
-  # only: the committed build-time pins (crates/*/wasm) and the
-  # @stellar-registry/perch-contracts bindings describe the testnet
-  # deployment and stay on it.
+  # Verify the deployment, bump perch-artifacts, and open the deploy(mainnet)
+  # PR, as release.yml's deploy-stack-record does for testnet. No secret, and
+  # nothing to attest: every wasm is a testnet-attested build. The PR records
+  # deployments/mainnet.json and the perch-artifacts release that ships it;
+  # the committed hash pins (crates/*/wasm) are the same bytes on both
+  # networks, so they need no change.
   mainnet-deploy-stack-record:
     needs: [mainnet-plan, mainnet-deploy-stack]
     if: >-
@@ -474,11 +486,8 @@ jobs:
     permissions:
       contents: write # commit the manifest onto the deploy branch
       pull-requests: write # open the deploy(mainnet) PR
-      id-token: write # build-provenance attestation
-      attestations: write
     env:
       STELLAR_NETWORK: mainnet
-      STACK_COMMIT: ${{ needs.mainnet-plan.outputs.stack_commit }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -492,36 +501,21 @@ jobs:
           tar -xz -C "$RUNNER_TEMP/gc" --strip-components=1 -f "$RUNNER_TEMP/gc.tar.gz"
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: mainnet-deploy-stack-build
-          path: target/stack
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
           name: mainnet-deploy-stack-manifest
           path: deployments
-      # The account and the factory pin the mainnet registry, so no earlier
-      # attestation covers them. The tier-0 carry the testnet release's
-      # (checked in mainnet-deploy-stack-build). A dispatch run's attestation
-      # names the dispatched main commit; the manifest's source.commit names
-      # the stack commit they were built from.
-      - name: Collect the registry-pinned wasm to attest
-        id: built
-        run: |
-          set -euo pipefail
-          {
-            echo "paths<<EOF"
-            jq -r '.artifacts[] | select(.tier > 0) | "target/stack/\(.wasm)"' target/stack/build.json
-            echo "EOF"
-          } >>"$GITHUB_OUTPUT"
-      - name: Attest build provenance for the account and the factory
-        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
-        with:
-          subject-path: ${{ steps.built.outputs.paths }}
       - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
         with:
           toolchain: stable
       - uses: ./.github/actions/setup-stellar-fork
+      # Also checks the manifest records the registry this source derives on
+      # mainnet (scripts/manifest-registry.sh): mainnet has no pending
+      # migration (deployments/pending-registry.json).
       - name: Verify the deployment against the chain
-        run: scripts/verify-deployment.sh --manifest deployments/mainnet.json
+        run: |
+          set -euo pipefail
+          scripts/manifest-registry.sh --manifest deployments/mainnet.json | grep -q '^current ' \
+            || { echo "::error::deployments/mainnet.json does not record the derived mainnet registry"; exit 1; }
+          scripts/verify-deployment.sh --manifest deployments/mainnet.json
       - name: Bump @stellar-registry/perch-artifacts for the new deployment record
         env:
           MESSAGE: "deploy(mainnet): recovery stack @ ${{ needs.mainnet-plan.outputs.stack_commit }}"

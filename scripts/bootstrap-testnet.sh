@@ -70,7 +70,8 @@ RULES_OUT="$REPO_ROOT/testdata/deploy/perch-testnet.rules.json"
 # (registry id + wasm hash): derivable offline, identical across networks,
 # permissionless, idempotent. (The STATELESS_* names refer to that
 # deploy_stateless route. The former `stateless` subregistry is retired: an
-# account bakes one registry id, so all its infra must share one registry.)
+# account derives one registry per network, so all its infra must share one
+# registry.)
 # GUARDED OFF by default — the live path needs BOTH:
 #   * #38 — upstream StatelessDeployable + a `stellar registry deploy-stateless`
 #           verb (override PERCH_DEPLOY_STATELESS_CMD if it ships differently);

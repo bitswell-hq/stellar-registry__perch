@@ -1,24 +1,24 @@
 #!/usr/bin/env bash
-# Resolve a mainnet dispatch of release.yml to the released commits it may
+# Resolve a dispatch of release-mainnet.yml to the released commits it may
 # publish, from git alone (no chain, no key). Prints one JSON object:
 #
 #   {"publish": [{"package", "tag", "version", "commit"}, ...],
-#    "stack": null | {"tag", "commit", "rustc", "testnet_manifest_commit"}}
+#    "stack": null | {"tag", "commit", "testnet_manifest_commit"}}
 #
 # Every tag must be `<contract>-v<semver>` for a contract in the given set,
 # exist, sit on main (an ancestor of --main), and name the version its
 # crate manifest has at that commit: the tag detect-releases created. Mainnet
 # never publishes a commit that was not released on main first.
 #
-# The stack tag picks the commit the recovery stack is built from. Every
-# stack contract and every reused tier-0 must be at a released version
-# there (its `<contract>-v<version>` tag exists on main), and main's history
-# must record a testnet deployment built from that same commit
-# (deployments/testnet.json with `source.commit` equal to it): the stack's
-# tier-0 bytes are checked against that deployment's attestations, and
-# `rustc` is the toolchain it recorded, so the mainnet rebuild can reproduce
-# them. A stack never deployed to testnet is refused, and so is a commit whose
-# scripts/deploy-stack.sh predates its --build-only/--prebuilt split.
+# The stack tag picks the commit whose stack mainnet deploys. Every stack
+# contract and every reused tier-0 must be at a released version there (its
+# `<contract>-v<version>` tag exists on main). Its account and factory must
+# derive their registry from the same crates/*/wasm/registry.path main
+# commits, so their bytes are the same on every network. And main's history
+# must record a testnet deployment built from that commit
+# (deployments/testnet.json with `source.commit` equal to it): mainnet runs
+# exactly that deployment's bytes, checked against its attestations, so a
+# stack never deployed to testnet is refused.
 #
 # Usage: scripts/mainnet-plan.sh --main <rev> --allow "<names>"
 #                                --stack-set "<names>" --reuse "<names>"
@@ -86,10 +86,15 @@ out_stack=null
 if [ -n "$stack" ]; then
     line="$(resolve "$stack" "$stack_set")"
     read -r _ _ commit <<<"$line"
-    # The stack is built and published by that commit's own deploy-stack.sh,
-    # in two halves on two runners.
-    git show "$commit:scripts/deploy-stack.sh" 2>/dev/null | grep -q -- '--prebuilt)' \
-        || die "$stack: scripts/deploy-stack.sh at $commit has no --build-only/--prebuilt split; release the stack again from a later commit"
+    # One account and factory build for every network: both crates commit
+    # main's registry.path at that commit.
+    want="$(git show "$main:crates/perch-smart-account/wasm/registry.path" 2>/dev/null)" \
+        || die "main has no crates/perch-smart-account/wasm/registry.path"
+    for crate in perch-smart-account perch-account-factory; do
+        got="$(git show "$commit:crates/$crate/wasm/registry.path" 2>/dev/null)" \
+            || die "$stack: crates/$crate at $commit has no wasm/registry.path, so its account and factory pin one network's registry; release the stack again from a later commit"
+        [ "$got" = "$want" ] || die "$stack: crates/$crate/wasm/registry.path at $commit differs from main's"
+    done
     for c in $stack_set $reuse; do
         ver="$(crate_version "$commit" "$c")"
         [ -n "$ver" ] || die "no crates/$c at the stack commit $commit"
@@ -105,10 +110,8 @@ if [ -n "$stack" ]; then
         fi
     done
     [ -n "$record" ] || die "main records no testnet deployment built from $commit ($stack): deploy that stack to testnet first"
-    rustc="$(git show "$record:deployments/testnet.json" | jq -r '.toolchain.rustc // empty' | awk '{print $2}')"
-    [[ "$rustc" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "the testnet deployment at $record records no rustc version"
-    out_stack="$(jq -cn --arg t "$stack" --arg c "$commit" --arg r "$rustc" --arg m "$record" \
-        '{tag: $t, commit: $c, rustc: $r, testnet_manifest_commit: $m}')"
+    out_stack="$(jq -cn --arg t "$stack" --arg c "$commit" --arg m "$record" \
+        '{tag: $t, commit: $c, testnet_manifest_commit: $m}')"
 fi
 
 jq -cn --argjson p "$out_publish" --argjson s "$out_stack" '{publish: $p, stack: $s}'

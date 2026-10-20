@@ -13,7 +13,8 @@ mainnet publish sends and that its plan sends nothing
 (scripts/publish-wasm.sh), the deploy-record perch-artifacts bump
 (scripts/deploy-record-bump.sh), what a stack build records as dirty
 (scripts/source-dirty.sh, used by scripts/build-stack.sh), and the committed
-build-time pins' drift check (scripts/check-pins.sh).
+build-time pins' drift check (scripts/check-pins.sh, with
+scripts/manifest-registry.sh).
 
   python3 scripts/test-release-scripts.py
 
@@ -41,6 +42,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RELEASE_DEPS = os.path.join(REPO, "scripts", "release-deps.py")
 SOURCE_DIRTY = os.path.join(REPO, "scripts", "source-dirty.sh")
 CHECK_PINS = os.path.join(REPO, "scripts", "check-pins.sh")
+MANIFEST_REGISTRY = os.path.join(REPO, "scripts", "manifest-registry.sh")
 NPM_RELEASE = os.path.join(REPO, "scripts", "npm-release.sh")
 NIDO_PLAN = os.path.join(REPO, "scripts", "nido-dispatch-plan.sh")
 DEPLOY_RECORD_BUMP = os.path.join(REPO, "scripts", "deploy-record-bump.sh")
@@ -312,7 +314,6 @@ class ReleaseDeps(unittest.TestCase):
         # `pins` exclusion keeps it from releasing the contract again.
         shutil.copy(os.path.join(REPO, "cliff.toml"), os.path.join(self.repo.dir, ".git", "cliff.toml"))
         run(["git", "tag", "contract-v0.1.0"], self.repo.dir)
-        self.repo.write("crates/contract/wasm/stateless.id", "C2")
         self.repo.write("crates/contract/wasm/dep.sha256", "bb\n")
         self.repo.write("deployments/testnet.json", "{}\n")
         self.repo.commit("deploy(testnet): recovery stack")
@@ -321,6 +322,20 @@ class ReleaseDeps(unittest.TestCase):
         cliff = [GIT_CLIFF or "git-cliff", "--config", ".git/cliff.toml", "--tag-pattern", "contract-v.*", *scope]
         self.assertEqual(run([*cliff, "--bumped-version"], self.repo.dir).stdout.strip(), "contract-v0.1.1")
         self.assertEqual(run([*cliff, *pins, "--bumped-version"], self.repo.dir).stdout.strip(), "contract-v0.1.0")
+
+    @unittest.skipUnless(GIT_CLIFF or os.environ.get("PERCH_REQUIRE_GIT_CLIFF"), "git-cliff not on PATH")
+    def test_a_registry_path_edit_is_a_release(self):
+        # The registry path sits beside the hash pins but is compiled in and
+        # rewritten by no deployment: editing it changes the contract's
+        # bytes, so release.yml's `pins` exclusion leaves it in.
+        shutil.copy(os.path.join(REPO, "cliff.toml"), os.path.join(self.repo.dir, ".git", "cliff.toml"))
+        run(["git", "tag", "contract-v0.1.0"], self.repo.dir)
+        self.repo.write("crates/contract/wasm/registry.path", "root-deployer G\nroot-salt s\npath a/b\n")
+        self.repo.commit("fix(contract): move the registry")
+        scope = [a for d in self.repo.deps("scope", "contract") for a in ("--include-path", f"{d}/**")]
+        pins = shlex.split(re.search(r"^ *pins=\((.*)\)$", release_yml(), re.M).group(1))
+        cliff = [GIT_CLIFF or "git-cliff", "--config", ".git/cliff.toml", "--tag-pattern", "contract-v.*", *scope]
+        self.assertEqual(run([*cliff, *pins, "--bumped-version"], self.repo.dir).stdout.strip(), "contract-v0.1.1")
 
 
 def release_yml():
@@ -561,7 +576,7 @@ class NpmBump(unittest.TestCase):
             "packages": {"": {"name": "@stellar-registry/perch-artifacts", "version": "0.1.0"}},
         }, indent=2) + "\n")
         self.repo.write("deployments/testnet.json", '{"a": 1}\n')
-        self.repo.write("crates/perch-account/wasm/stateless.id", "C1")
+        self.repo.write("crates/perch-account/wasm/dep.sha256", "aa\n")
         self.repo.commit("feat(perch-artifacts): first release")
 
     def tearDown(self):
@@ -620,7 +635,7 @@ class NpmBump(unittest.TestCase):
 
     def test_a_pin_only_change_is_no_release(self):
         run(["git", "tag", "perch-artifacts-v0.1.0"], self.repo.dir)
-        self.repo.write("crates/perch-account/wasm/stateless.id", "C2")
+        self.repo.write("crates/perch-account/wasm/dep.sha256", "bb\n")
         self.repo.commit("deploy(testnet): recovery stack")
         self.assertEqual(self.bump(), "")
 
@@ -859,45 +874,76 @@ class SourceDirty(unittest.TestCase):
         self.repo.write("crates/a/wasm/pin.wasm", "bytes\n")
         self.assertEqual(self.dirty(), "false")
 
-    def test_the_committed_pins_are_not(self):
+    def test_the_committed_hash_pins_are_not(self):
         # build-stack.sh rewrites them for the build it records.
-        self.repo.write("crates/b/wasm/stateless.id", "C1")
         self.repo.write("crates/b/wasm/dep.sha256", "aa\n")
         self.repo.commit("pins")
-        self.repo.write("crates/b/wasm/stateless.id", "C2")
         self.repo.write("crates/b/wasm/dep.sha256", "bb\n")
         self.repo.write("crates/b/wasm/new.sha256", "cc\n")
         self.assertEqual(self.dirty(), "false")
         self.repo.write("crates/b/wasm/README.md", "edited\n")
         self.assertEqual(self.dirty(), "true")
 
+    def test_the_registry_path_is_source(self):
+        # Compiled in, and no build rewrites it.
+        self.repo.write("crates/b/wasm/registry.path", "root-deployer G\nroot-salt s\npath a\n")
+        self.repo.commit("path")
+        self.repo.write("crates/b/wasm/registry.path", "root-deployer G\nroot-salt s\npath b\n")
+        self.assertEqual(self.dirty(), "true")
+
 
 class CheckPins(unittest.TestCase):
+    TESTNET = "Test SDF Network ; September 2015"
     MANIFEST = {
+        "network": "testnet",
+        "network_passphrase": TESTNET,
         "registry": {"id": "CREG"},
         "contracts": {"dep": {"sha256": "aa"}, "acct": {"sha256": "bb"}},
     }
+    PATH = "root-deployer GROOT\nroot-salt s\npath perch/constructorless\n"
 
     def setUp(self):
         self.repo = Repo()
         self.repo.write("deployments/testnet.json", json.dumps(self.MANIFEST))
-        self.repo.write("crates/a/wasm/stateless.id", "CREG")
+        self.repo.write("crates/a/wasm/registry.path", self.PATH)
         self.repo.write("crates/a/wasm/dep.sha256", "aa\n")
-        self.repo.write("crates/b/wasm/stateless.id", "CREG")
+        self.repo.write("crates/b/wasm/registry.path", self.PATH)
         self.repo.write("crates/b/wasm/acct.sha256", "bb\n")
         os.makedirs(os.path.join(self.repo.dir, "scripts"))
-        shutil.copy(CHECK_PINS, os.path.join(self.repo.dir, "scripts"))
+        for script in (CHECK_PINS, MANIFEST_REGISTRY):
+            shutil.copy(script, os.path.join(self.repo.dir, "scripts"))
+        # Stands in for `perch-derive-id registry <passphrase>`, the account's
+        # own derivation: prints the registry in `derived` for the testnet
+        # passphrase, a different one for any other.
+        self.repo.write("derive-id", textwrap.dedent(f"""\
+            #!/bin/sh
+            [ "$1" = registry ] || exit 2
+            if [ "$2" = "{self.TESTNET}" ]; then cat "$(dirname "$0")/derived"; else echo COTHERNET; fi
+            """))
+        os.chmod(os.path.join(self.repo.dir, "derive-id"), 0o755)
+        self.derives("CREG")
 
     def tearDown(self):
         self.repo.cleanup()
 
+    def derives(self, registry):
+        self.repo.write("derived", registry + "\n")
+
+    def pending(self, recorded, derived):
+        self.repo.write("deployments/pending-registry.json", json.dumps(
+            {"testnet": {"recorded": recorded, "derived": derived, "reason": "r"}}))
+
     def check(self):
-        return run(["scripts/check-pins.sh"], self.repo.dir, check=False)
+        env = dict(os.environ, PERCH_DERIVE_ID=os.path.join(self.repo.dir, "derive-id"))
+        env.pop("GITHUB_ACTIONS", None)
+        return subprocess.run(["scripts/check-pins.sh"], cwd=self.repo.dir, env=env,
+                              capture_output=True, text=True)
 
     def test_pins_matching_the_manifest_pass(self):
         out = self.check()
         self.assertEqual(out.returncode, 0, out.stderr)
-        self.assertIn("4 pins match testnet.json", out.stderr)
+        self.assertIn("3 pins match testnet.json", out.stderr)
+        self.assertNotIn("pending", out.stderr)
 
     def test_a_drifted_hash_fails(self):
         self.repo.write("crates/b/wasm/acct.sha256", "cc\n")
@@ -905,9 +951,40 @@ class CheckPins(unittest.TestCase):
         self.assertNotEqual(out.returncode, 0)
         self.assertIn("crates/b/wasm/acct.sha256 is 'cc'", out.stderr)
 
-    def test_a_drifted_registry_fails(self):
-        self.repo.write("crates/a/wasm/stateless.id", "COTHER")
+    def test_a_registry_the_path_does_not_derive_fails(self):
+        self.derives("CNEW")
+        out = self.check()
+        self.assertNotEqual(out.returncode, 0)
+        self.assertIn("records registry CREG, this source derives CNEW", out.stderr)
+
+    def test_a_declared_migration_passes_and_says_so(self):
+        self.derives("CNEW")
+        self.pending("CREG", "CNEW")
+        out = self.check()
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("pending registry migration: testnet.json records CREG, the registry path derives CNEW",
+                      out.stderr)
+        # The hashes are still checked.
+        self.repo.write("crates/b/wasm/acct.sha256", "cc\n")
         self.assertNotEqual(self.check().returncode, 0)
+
+    def test_a_declaration_for_another_pair_fails(self):
+        self.derives("CNEW")
+        for recorded, derived in (("COLD", "CNEW"), ("CREG", "COTHER")):
+            self.pending(recorded, derived)
+            self.assertNotEqual(self.check().returncode, 0, (recorded, derived))
+
+    def test_a_declaration_the_manifest_caught_up_with_fails(self):
+        self.pending("COLD", "CREG")
+        out = self.check()
+        self.assertNotEqual(out.returncode, 0)
+        self.assertIn("delete the testnet entry from deployments/pending-registry.json", out.stderr)
+
+    def test_differing_registry_paths_fail(self):
+        self.repo.write("crates/b/wasm/registry.path", self.PATH.replace("perch/", "other/"))
+        out = self.check()
+        self.assertNotEqual(out.returncode, 0)
+        self.assertIn("registry.path differs", out.stderr)
 
     def test_a_pin_the_manifest_lacks_fails(self):
         self.repo.write("crates/a/wasm/gone.sha256", "dd\n")
@@ -1012,6 +1089,17 @@ class MainnetJobs(unittest.TestCase):
                         self.assertIn("--plan", step)
         self.assertEqual(signing, 2)
 
+    def test_the_mainnet_stack_is_never_rebuilt(self):
+        # One account and factory build serves every network, so mainnet runs
+        # the testnet deployment's attested bytes and compiles no contract.
+        text = release_mainnet_yml()
+        for marker in ("--build-only", "build-stack.sh", 'scaffold: "true"', "wasm32", "stellar contract build"):
+            with self.subTest(marker=marker):
+                self.assertNotIn(marker, code(text))
+        build = mainnet_jobs()["mainnet-deploy-stack-build"]
+        self.assertIn("scripts/fetch-infra-wasm.sh --manifest", build)
+        self.assertIn('--source-digest "$STACK_COMMIT"', build)
+
     def test_the_mainnet_lists_are_the_testnet_ones(self):
         jobs, mainnet = release_jobs(), mainnet_jobs()
         allow = json.loads(re.search(r"ALLOW='(\[[^']*\])'", jobs["publish-plan"]).group(1))
@@ -1033,7 +1121,7 @@ class MainnetPlan(unittest.TestCase):
         self.repo = Repo()
         for c in ("perch-interpreter", "perch-account", "perch-doc-compiler"):
             self.version(c, "0.1.0")
-        self.repo.write("scripts/deploy-stack.sh", "        --prebuilt) prebuilt=true; shift ;;\n")
+        self.registry_path("perch/constructorless")
         self.repo.commit("feat: first release")
         self.released = self.head()
         for c in ("perch-interpreter", "perch-account", "perch-doc-compiler"):
@@ -1045,6 +1133,10 @@ class MainnetPlan(unittest.TestCase):
 
     def version(self, crate, v):
         self.repo.write(f"crates/{crate}/Cargo.toml", f'[package]\nname = "{crate}"\nversion = "{v}"\n')
+
+    def registry_path(self, path, crates=("perch-smart-account", "perch-account-factory")):
+        for crate in crates:
+            self.repo.write(f"crates/{crate}/wasm/registry.path", f"root-deployer G{'A' * 55}\nroot-salt s\npath {path}\n")
 
     def tag(self, tag):
         run(["git", "tag", tag], self.repo.dir)
@@ -1097,9 +1189,9 @@ class MainnetPlan(unittest.TestCase):
         err = self.plan("--publish", "perch-interpreter-v0.1.0,perch-interpreter-v0.1.1", check=False)
         self.assertIn("one version per run", err)
 
-    def test_the_stack_builds_with_its_testnet_deployments_toolchain(self):
+    def test_the_stack_is_its_testnet_deployment(self):
         self.assertEqual(self.plan("--stack", "perch-account-v0.1.0")["stack"], {
-            "tag": "perch-account-v0.1.0", "commit": self.released, "rustc": "1.99.0",
+            "tag": "perch-account-v0.1.0", "commit": self.released,
             "testnet_manifest_commit": self.deployed})
 
     def test_a_stack_never_deployed_to_testnet_is_refused(self):
@@ -1116,13 +1208,72 @@ class MainnetPlan(unittest.TestCase):
         self.deploy_testnet(self.head())
         self.assertIn("perch-doc-compiler 0.2.0", self.plan("--stack", "perch-account-v0.2.0", check=False))
 
-    def test_a_stack_from_before_the_build_split_is_refused(self):
+    def test_a_stack_from_before_one_build_for_every_network_is_refused(self):
         self.version("perch-account", "0.2.0")
-        self.repo.write("scripts/deploy-stack.sh", "# one job\n")
+        for crate in ("perch-smart-account", "perch-account-factory"):
+            os.remove(os.path.join(self.repo.dir, "crates", crate, "wasm", "registry.path"))
         self.repo.commit("feat: new account")
         self.tag("perch-account-v0.2.0")
         self.deploy_testnet(self.head())
-        self.assertIn("--build-only/--prebuilt", self.plan("--stack", "perch-account-v0.2.0", check=False))
+        self.registry_path("perch/constructorless")
+        self.repo.commit("feat: derive the registry")
+        self.assertIn("pin one network's registry", self.plan("--stack", "perch-account-v0.2.0", check=False))
+
+    def test_a_stack_deriving_another_registry_than_main_is_refused(self):
+        self.version("perch-account", "0.2.0")
+        self.registry_path("unverified/perch/constructorless")
+        self.repo.commit("feat: new account")
+        self.tag("perch-account-v0.2.0")
+        self.deploy_testnet(self.head())
+        self.registry_path("perch/constructorless")
+        self.repo.commit("feat: move the registry")
+        self.assertIn("differs from main's", self.plan("--stack", "perch-account-v0.2.0", check=False))
+
+
+MAINNET_SETTINGS = os.path.join(REPO, "scripts", "mainnet-settings.sh")
+
+
+class MainnetSettings(unittest.TestCase):
+    """scripts/mainnet-settings.sh's offline checks: what it refuses before
+    it reads the chain."""
+
+    def setUp(self):
+        # A `stellar` that has an identity but no chain.
+        self.bin = tempfile.mkdtemp()
+        with open(os.path.join(self.bin, "stellar"), "w") as f:
+            f.write('#!/bin/sh\n[ "$1" = keys ]\n')
+        os.chmod(os.path.join(self.bin, "stellar"), 0o755)
+
+    def tearDown(self):
+        shutil.rmtree(self.bin)
+
+    def settings(self, **over):
+        derived = "C" + "D" * 55
+        env = {**os.environ, "STELLAR_RPC_URL": "http://127.0.0.1:9",
+               "PATH": self.bin + os.pathsep + os.environ["PATH"],
+               "STELLAR_NETWORK_PASSPHRASE": "Public Global Stellar Network ; September 2015",
+               "REGISTRY": derived, "DERIVED_REGISTRY": derived, "ROOT": "C" + "R" * 55,
+               "AUTHOR": "C" + "U" * 55, "REGISTRY_PATH": "perch/constructorless", **over}
+        out = subprocess.run([MAINNET_SETTINGS], capture_output=True, text=True, env=env)
+        self.assertNotEqual(out.returncode, 0, out.stdout)
+        return out.stderr
+
+    def test_an_unset_setting_is_refused(self):
+        self.assertIn("ROOT is empty", self.settings(ROOT=""))
+
+    def test_a_testnet_passphrase_is_refused(self):
+        self.assertIn("not mainnet's", self.settings(STELLAR_NETWORK_PASSPHRASE="Test SDF Network ; September 2015"))
+
+    def test_a_registry_the_account_does_not_derive_is_refused(self):
+        self.assertIn("derives", self.settings(REGISTRY="C" + "X" * 55))
+
+    def test_a_path_other_than_the_committed_one_is_refused(self):
+        self.assertIn("commits path 'perch/constructorless'", self.settings(REGISTRY_PATH="unverified/perch/constructorless"))
+
+    def test_the_offline_checks_pass_before_the_chain_is_read(self):
+        # The fake `stellar` reads no chain: getting that far means every
+        # offline check passed.
+        self.assertIn("is not a contract on mainnet", self.settings())
 
 
 # A `stellar` that keeps a registry and a ledger in a JSON file and logs every

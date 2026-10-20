@@ -9,16 +9,20 @@
 #   ROOT           the Stellar Registry root contract (C…) the path starts at
 #   AUTHOR         the perch-author smart account (C…) bound to every name
 #
-# The network must be mainnet (STELLAR_NETWORK_PASSPHRASE), the three
-# addresses must be distinct contracts deployed there, and REGISTRY_PATH must
-# resolve from ROOT, one name at a time through each registry's
-# fetch_contract_id, to exactly REGISTRY. On success it prints
-# `registry=`, `registry_path=`, `root=`, and `author=` lines for
-# $GITHUB_OUTPUT.
+# The network must be mainnet (STELLAR_NETWORK_PASSPHRASE). REGISTRY must be
+# DERIVED_REGISTRY, the registry this checkout's account and factory derive on
+# mainnet from crates/*/wasm/registry.path (`perch-derive-id registry`, run by
+# a keyless job, since nothing that holds these settings compiles), and
+# REGISTRY_PATH must be that file's `path`. On-chain, the three addresses must
+# be distinct contracts deployed there, and REGISTRY_PATH must resolve from
+# ROOT, one name at a time through each registry's fetch_contract_id, to
+# exactly REGISTRY. On success it prints `registry=`, `registry_path=`,
+# `root=`, and `author=` lines for $GITHUB_OUTPUT.
 #
 # Usage: scripts/mainnet-settings.sh
-# Env:   REGISTRY, REGISTRY_PATH, ROOT, AUTHOR, STELLAR_RPC_URL,
-#        STELLAR_NETWORK_PASSPHRASE, PERCH_READER (simulation identity)
+# Env:   REGISTRY, REGISTRY_PATH, ROOT, AUTHOR, DERIVED_REGISTRY,
+#        STELLAR_RPC_URL, STELLAR_NETWORK_PASSPHRASE, PERCH_READER
+#        (simulation identity)
 set -euo pipefail
 
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
@@ -36,6 +40,17 @@ done
 [[ "$REGISTRY_PATH" =~ ^[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*$ ]] || die "REGISTRY_PATH '$REGISTRY_PATH' is not a registry path"
 [ "$REGISTRY" != "$ROOT" ] && [ "$REGISTRY" != "$AUTHOR" ] && [ "$ROOT" != "$AUTHOR" ] \
     || die "REGISTRY, ROOT, and AUTHOR must be three different contracts"
+
+# The registry the account and the factory resolve their infra from on
+# mainnet: publishing anywhere else would deploy infra they never call.
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+[[ "${DERIVED_REGISTRY:-}" =~ ^C[A-Z2-7]{55}$ ]] || die "DERIVED_REGISTRY '${DERIVED_REGISTRY:-}' is not a contract address"
+[ "$REGISTRY" = "$DERIVED_REGISTRY" ] \
+    || die "REGISTRY $REGISTRY, but crates/*/wasm/registry.path derives $DERIVED_REGISTRY on mainnet"
+path_file="$repo_root/crates/perch-smart-account/wasm/registry.path"
+committed="$(awk '$1 == "path" {print $2}' "$path_file")"
+[ "$REGISTRY_PATH" = "$committed" ] \
+    || die "REGISTRY_PATH $REGISTRY_PATH, but ${path_file#"$repo_root"/} commits path '$committed'"
 
 net=(--rpc-url "$STELLAR_RPC_URL" --network-passphrase "$STELLAR_NETWORK_PASSPHRASE")
 reader="${PERCH_READER:-perch-fetch-reader}"

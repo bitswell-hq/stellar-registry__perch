@@ -47,11 +47,11 @@ tagged — the `publish-plan` job's `ALLOW` list and `DISPATCH_TAG` regex (and
 `release-mainnet.yml`'s `MAINNET_ALLOW`, which `scripts/test-release-scripts.py`
 keeps equal to `ALLOW`).
 `ALLOW` publishes into `unverified/perch/constructorless`, perch's one
-canonical testnet registry: an account or factory bakes one registry id and
-derives every infra address from it, so all infra must share that registry.
-Mainnet has its own, which `release-mainnet.yml` publishes to only by a manual
-dispatch (`docs/deploy/README.md`, "Mainnet"). The
-testnet registry is managed, so a name new to it needs the manager's one-time
+canonical testnet registry: an account or factory derives one registry per
+network and every infra address from it, so all infra must share that
+registry. Mainnet's is published to only by `release-mainnet.yml`'s manual
+dispatch (`docs/deploy/README.md`, "Mainnet"). The testnet registry is
+managed, so a name new to it needs the manager's one-time
 initial publish (`release.yml`'s header) before the merge that releases it;
 otherwise that publish leg fails with `#12 ManagerRequired`.
 Deliberately leaving a new contract out of `ALLOW` (while still tagging it
@@ -64,10 +64,11 @@ before that's a deliberate decision — see `perch-recovery`'s introduction
 
 `perch-smart-account`'s `infra` module (`perch_registry_resolve::registry_contract!`)
 derives the doc-compiler/interpreter/spending-limit addresses as
-`deployer(stateless_registry_id, pinned_wasm_hash)`, where the registry id and
-hashes are committed under `crates/*/wasm/` (refreshed by
-`scripts/fetch-infra-wasm.sh`) and baked into the *consuming* contract's own
-wasm at compile time — there is no
+`deployer(stateless_registry_id, pinned_wasm_hash)`, where the registry's
+derivation (`wasm/registry.path`: a root deployer and salt, then named
+deploys, derived under the ledger's network id) and the hashes are committed
+under `crates/*/wasm/` (the hashes refreshed by `scripts/fetch-infra-wasm.sh`)
+and baked into the *consuming* contract's own wasm at compile time — there is no
 constructor argument or storage slot naming these addresses, and no way to
 repoint them post-deploy. Two consequences that are easy to miss:
 

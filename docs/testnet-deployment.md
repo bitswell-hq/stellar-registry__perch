@@ -75,8 +75,9 @@ established while both existed; deleting the repository copy settles it, and
 to run afterward.
 
 Only five jobs can reach a release credential, and none of them builds: the
-`deploy-stack` and `mainnet-deploy-stack` jobs publish a stack an earlier job
-compiled, the `registry-publish` and `mainnet-publish` jobs publish an
+`deploy-stack` job publishes a stack an earlier job compiled,
+`mainnet-deploy-stack` publishes the testnet deployment's bytes an earlier
+job fetched, the `registry-publish` and `mainnet-publish` jobs publish an
 attested release asset, and `npm-publish` publishes a tarball an earlier job
 packed. `scripts/test-release-scripts.py`
 fails if a job holding the seed compiles anything or passes it in argv.
@@ -104,8 +105,8 @@ renew it yet.
 
 ## Constraints
 
-- **One registry per account.** An account bakes one registry id and
-  derives its compiler, interpreter, and spending-limit addresses from it
+- **One registry per account.** An account derives one registry per
+  network and derives its compiler, interpreter, and spending-limit addresses from it
   (`deployer(registry, sha256(wasm))`), so every infra contract an account
   built against canonical pins resolves must be published in
   `constructorless`.
