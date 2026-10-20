@@ -65,6 +65,11 @@ name: Release
 # tip; that run tags and publishes it. The same holds for a commit main moved
 # past before its CI finished.
 #
+# Mainnet is not published from here. Every job in this file targets testnet
+# or npm and runs as described above; mainnet publishes only when someone
+# dispatches release-mainnet.yml by hand, from main, with tags this workflow
+# already released.
+#
 # All publish halves hang off `needs:` in the SAME run (gated on the
 # detect-releases `releases` output) instead of a tag/release trigger, so they
 # fire even though the tag was pushed with the default GITHUB_TOKEN — no GitHub

@@ -363,6 +363,94 @@ re-sends that network's manifest in the latest perch-artifacts release, with
 the same registry checks. If the publish itself failed, re-run the release
 run's failed jobs instead: `npm-publish` and `notify-nido` re-run together.
 
+## Mainnet
+
+Mainnet is published by hand. No release merge reaches it: the `testnet`
+publishes, the `deploy-stack` jobs, and npm run on a release merge as above,
+and the separate
+[`release-mainnet.yml`](../../.github/workflows/release-mainnet.yml) workflow
+runs only when someone dispatches it from `main`. It publishes tags already
+released on `main`, as the bytes they were released as, after the `mainnet`
+environment's reviewer approves. A dispatch is a dry run unless
+`dry_run` is cleared.
+
+| Input | |
+| --- | --- |
+| `publish_tags` | release tags of allow-listed contracts (`perch-interpreter`, `perch-doc-compiler`, `perch-ed25519-verifier`, `perch-spending-limit`), separated by spaces |
+| `stack_tag` | the release tag of a recovery-stack contract; mainnet gets the stack the testnet deployment from its commit runs |
+| `dry_run` | default on: run every check, simulate each transaction a real run would send, and print it with its fee; submit nothing and open no PR |
+
+```sh
+# Dry run (the default), then the real publish:
+gh workflow run release-mainnet.yml -R stellar-registry/perch --ref main \
+  -f publish_tags="perch-interpreter-v0.1.4 perch-doc-compiler-v0.3.3"
+gh workflow run release-mainnet.yml -R stellar-registry/perch --ref main \
+  -f publish_tags="perch-interpreter-v0.1.4 perch-doc-compiler-v0.3.3" \
+  -f dry_run=false
+# Then the stack, once its tier-0 are on mainnet and testnet runs that stack:
+gh workflow run release-mainnet.yml -R stellar-registry/perch --ref main \
+  -f stack_tag=perch-account-factory-v0.1.3
+```
+
+| Job | Does | Holds |
+| --- | --- | --- |
+| `mainnet-plan` | derives the mainnet registry from `crates/*/wasm/registry.path` (`perch-derive-id registry`), then `scripts/mainnet-plan.sh`: each tag exists, is on `main`, and names its crate's version at its commit; for the stack, every stack contract and reused tier-0 is released at that commit, it commits `main`'s `registry.path`, and `main` records a testnet deployment built from it | nothing |
+| `mainnet-publish` | downloads each tag's release asset, requires its `contract-release` attestation for the tag's commit on `main` and its `binver`, then `scripts/publish-wasm.sh` (upload, `publish_hash`, `deploy_stateless`, code-hash check), or `--plan` | the mainnet delegate (`mainnet` environment) |
+| `mainnet-publish-record` | attaches `publish-receipt-mainnet.json` to each release | no secret |
+| `mainnet-config` | `scripts/mainnet-settings.sh`, then hands the registry to the build | the variables only (`mainnet` environment) |
+| `mainnet-deploy-stack-build` | fetches every wasm the testnet deployment from the stack commit records, by hash (`fetch-infra-wasm.sh --stack`), after checking it records the registry `registry.path` derives on testnet; requires each one but the reused tier-0 to carry that deployment's attestation (`release.yml`, the stack commit, `main`); then addresses the stack under the mainnet registry. Nothing is rebuilt | nothing |
+| `mainnet-deploy-stack` | `deploy-stack.sh --prebuilt` on those bytes, or the dry run's plan of the same transactions | the mainnet delegate (`mainnet` environment) |
+| `mainnet-deploy-stack-record` | checks the manifest records the derived mainnet registry (`manifest-registry.sh`), runs `verify-deployment.sh`, bumps `@stellar-registry/perch-artifacts` (`deploy-record-bump.sh`), and opens the `deploy(mainnet)` PR | no secret |
+
+Mainnet runs exactly the testnet deployment's bytes, every contract of the
+stack. The account and the factory derive their registry from the committed
+`registry.path` under the ledger's network id, so one build serves both
+networks, and the tier-0 pin nothing. That is why a stack must reach testnet
+first: its attestations come from the testnet deployment's record job. A stack
+tag from before `registry.path` (whose account compiled in one network's
+registry) is refused, and so is a testnet deployment that records another
+registry than the one `registry.path` derives there, as
+`deployments/pending-registry.json`'s pending testnet migration does today:
+the first mainnet stack follows testnet's move to `perch/constructorless`.
+
+The `deploy(mainnet)` PR records `deployments/mainnet.json` and the
+`perch-artifacts` release that ships it; merging it notifies Nido with
+`network=mainnet` ([Notifying Nido](#notifying-nido-nido-dispatchyml)). The
+committed hash pins (`crates/*/wasm/*.sha256`) are the same bytes on both
+networks, so the PR changes none. The `@stellar-registry/perch-contracts`
+bindings are generated from one manifest and stay on testnet's.
+
+### Settings
+
+All in the `mainnet` environment. No mainnet job reads a testnet value, and
+none of these has a default: `scripts/mainnet-settings.sh` fails on an unset
+one. The registry id must be the one `crates/*/wasm/registry.path` derives
+on mainnet (`CC236AK2…B7NN`), and the path must be that file's `path`. On
+chain, the three addresses must be contracts, and the path must resolve from
+the root, one name at a time through each registry's `fetch_contract_id`, to
+exactly the registry id.
+
+| Name | Kind | |
+| --- | --- | --- |
+| `CI_PUBLISH_MAINNET_SECRET_KEY` | secret | the mainnet delegate's seed: fee source, and signer of `perch-author`'s authorization on its own context rule, which must allow `publish_hash`. Never the testnet key. |
+| `PERCH_MAINNET_REGISTRY_CONTRACT_ID` | variable | the registry mainnet publishes into (C…): the one the account and the factory derive on mainnet |
+| `PERCH_MAINNET_REGISTRY_PATH` | variable | its path under the root, as `registry.path` commits it: `perch/constructorless` (directly under the Stellar Registry root, not `unverified/`) |
+| `PERCH_MAINNET_ROOT_REGISTRY` | variable | the Stellar Registry root (C…), recorded as the manifest's `registry.root` |
+| `PERCH_MAINNET_AUTHOR_ADDRESS` | variable | the mainnet `perch-author` smart account (C…), bound to every name |
+
+### Before the first mainnet release
+
+None of this exists yet, so no mainnet job can publish today:
+
+1. The `perch` and `perch/constructorless` registries under the mainnet root
+   (a Stellar Registry proposal), and the variables above.
+2. The mainnet `perch-author` account, with a delegate rule for the mainnet
+   key.
+3. The manager's one-time initial publish of every name, as on testnet
+   ([One-time manager bootstrap](#one-time-manager-bootstrap)).
+4. The Nido app secrets in the `mainnet` environment
+   ([Notifying Nido](#notifying-nido-nido-dispatchyml)).
+
 ## Release-path settings
 
 `release.yml` keeps every release credential in a GitHub environment and out
@@ -450,8 +538,10 @@ gh api -X POST repos/stellar-registry/perch/environments/mainnet/deployment-bran
   -f name=main -f type=branch
 ```
 
-`CI_PUBLISH_MAINNET_SECRET_KEY` and the Nido app secrets go into it only when
-a mainnet publish or manifest exists.
+It holds `CI_PUBLISH_MAINNET_SECRET_KEY`. The `PERCH_MAINNET_*` variables
+the mainnet jobs read ([Mainnet](#mainnet)) go into it before the first
+mainnet release, and the Nido app secrets before the first mainnet manifest
+merges.
 
 ### 4. Delete the repository-level `CI_PUBLISH_SECRET_KEY`
 

@@ -57,9 +57,10 @@ repository's Actions variables `PERCH_AUTHOR_ADDRESS` and
 | Name | Kind | Where it lives | Read by |
 | --- | --- | --- | --- |
 | `CI_PUBLISH_SECRET_KEY` | secret | `testnet` environment only (a repository-level copy predates this and is to be deleted) | `deploy-stack`; `constructorless-publish`, through `registry-publish`'s job, which runs in `testnet` |
-| `CI_PUBLISH_MAINNET_SECRET_KEY` | secret | `mainnet` environment only | nothing yet: reserved for a mainnet publish or deploy job |
+| `CI_PUBLISH_MAINNET_SECRET_KEY` | secret | `mainnet` environment only | `release-mainnet.yml`'s `mainnet-publish` and `mainnet-deploy-stack`, run only by a manual dispatch ([`deploy/README.md`](deploy/README.md#mainnet)) |
 | npm | none | trusted publishing (OIDC): each package's npm settings trust `release.yml` in the `npm` environment | `npm-publish` |
 | `PERCH_REGISTRY_CONTRACT_ID`, `PERCH_AUTHOR_ADDRESS`, `PERCH_DEPLOY_STACK` | variables | repository | `constructorless-publish` (`with:` inputs), the `deploy-stack` jobs (job `if:` and steps) |
+| `PERCH_MAINNET_REGISTRY_CONTRACT_ID`, `PERCH_MAINNET_REGISTRY_PATH`, `PERCH_MAINNET_ROOT_REGISTRY`, `PERCH_MAINNET_AUTHOR_ADDRESS` | variables | `mainnet` environment only | `release-mainnet.yml`'s `mainnet-publish`, `mainnet-config`, `mainnet-deploy-stack` |
 
 `CI_PUBLISH_SECRET_KEY` is the seed of the account's `ci-publish` delegate, so
 whoever can read it can publish as `perch-author` until the rule expires. A
@@ -73,15 +74,20 @@ established while both existed; deleting the repository copy settles it, and
 [`deploy/README.md`](deploy/README.md#release-path-settings) has the check
 to run afterward.
 
-Only three jobs can reach a release credential, and none of them builds: the
-`deploy-stack` job publishes a stack an earlier job compiled, the
-`registry-publish` job publishes an attested release asset, and `npm-publish`
-publishes a tarball an earlier job packed. `scripts/test-release-scripts.py`
+Only five jobs can reach a release credential, and none of them builds: the
+`deploy-stack` job publishes a stack an earlier job compiled,
+`mainnet-deploy-stack` publishes the testnet deployment's bytes an earlier
+job fetched, the `registry-publish` and `mainnet-publish` jobs publish an
+attested release asset, and `npm-publish` publishes a tarball an earlier job
+packed. `scripts/test-release-scripts.py`
 fails if a job holding the seed compiles anything or passes it in argv.
 
-The variables stay at repository level: a job's `if:` is evaluated before its
-environment is entered, and a reusable-workflow caller has no environment, so
-neither would see an environment variable.
+The testnet variables stay at repository level: a job's `if:` is evaluated
+before its environment is entered, and a reusable-workflow caller has no
+environment, so neither would see an environment variable. The mainnet jobs
+(`release-mainnet.yml`) call no reusable workflow and gate on dispatch inputs
+alone, so their variables live in the `mainnet` environment, under names no
+testnet job reads.
 
 Once the [release-path settings](deploy/README.md#release-path-settings) are
 applied, the `testnet` and `mainnet` environments each allow only `main` and
