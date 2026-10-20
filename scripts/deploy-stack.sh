@@ -126,8 +126,8 @@ registry="$(derive registry "$PASSPHRASE")"
 root="$(derive root "$PASSPHRASE")"
 content() { derive content "$registry" "$1" "$PASSPHRASE"; }
 view() { stellar contract invoke --send=no --id "$1" -- "${@:2}"; }
-registry_wasm="$(stellar contract info hash --id "$registry" 2>/dev/null)" \
-    || die "registry $registry, which crates/*/wasm/registry.path derives on $STELLAR_NETWORK, is not deployed"
+registry_wasm="$(stellar contract info hash --id "$registry")" \
+    || die "cannot read registry $registry, which crates/*/wasm/registry.path derives on $STELLAR_NETWORK: not deployed there, or the RPC failed (above)"
 # The registry's own admin and manager, never the delegate that signs here.
 reg_admin="$(view "$registry" admin | tr -d '"')" || die "cannot read $registry's admin"
 reg_manager="$(view "$registry" manager | tr -d '"')" || die "cannot read $registry's manager"

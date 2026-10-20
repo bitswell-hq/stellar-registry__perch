@@ -1899,7 +1899,7 @@ class DeployStack(unittest.TestCase):
 
     def test_the_registry_the_path_derives_must_exist(self):
         self.set_state({}, [], {})
-        self.assertIn("is not deployed", self.deploy(check=False))
+        self.assertIn("not deployed there", self.deploy(check=False))
         self.assertEqual(self.sent(), [])
 
 if __name__ == "__main__":
