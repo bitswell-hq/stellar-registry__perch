@@ -19,8 +19,13 @@ compiled-in derivation (perch-registry-resolve-macro):
       the factory compile in)
   derive-id.py root <passphrase> [<registry.path>]
       that path's first hop, the Stellar Registry root
+  derive-id.py chain <passphrase> [<registry.path>]
+      every hop of that path, one per line: the root, then each named deploy
+  derive-id.py key <G...>
+      the 32-byte ed25519 key inside an account strkey, as hex: an
+      `External` ed25519 signer's key (prints hex, not a strkey)
 
-Each prints a C... strkey. scripts/test-release-scripts.py (DeriveId) checks
+The others print a C... strkey. scripts/test-release-scripts.py (DeriveId) checks
 every mode against crates/perch-derive-id and every address the deployment
 manifests record.
 """
@@ -142,12 +147,18 @@ def main(argv):
     if mode == "name" and len(args) == 3:
         parent, name, passphrase = args
         return deployed(parent, sha256(name.encode()), passphrase)
-    if mode in ("registry", "root") and len(args) in (1, 2):
+    if mode in ("registry", "root", "chain") and len(args) in (1, 2):
         at = chain(args[0], args[1] if len(args) == 2 else REGISTRY_PATH)
-        return at[-1] if mode == "registry" else at[0]
+        return {"registry": at[-1], "root": at[0], "chain": "\n".join(at)}[mode]
+    if mode == "key" and len(args) == 1:
+        version, key = decode(args[0])
+        if version != ACCOUNT:
+            raise ValueError(f"{args[0]!r} is not an account strkey")
+        return key.hex()
     sys.exit("usage: derive-id.py content <registry> <wasm-hash-hex> <passphrase>\n"
              "       derive-id.py name <parent> <name> <passphrase>\n"
-             "       derive-id.py registry|root <passphrase> [<registry.path>]")
+             "       derive-id.py registry|root|chain <passphrase> [<registry.path>]\n"
+             "       derive-id.py key <G...>")
 
 
 if __name__ == "__main__":
