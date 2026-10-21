@@ -21,7 +21,7 @@ jobs:
           fetch-depth: 0
       # Pinned to the v1 tag on master, whose history is never rewritten; the
       # `stable` branch is regenerated, which orphans any commit pinned on it.
-      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
         with:
           toolchain: stable
           targets: wasm32v1-none
@@ -76,7 +76,8 @@ jobs:
         if: steps.deployment.outputs.state == 'foreign'
         run: |
           scripts/build-stack.sh --builder contract \
-            --registry "$(jq -r .registry.id deployments/testnet.json)" --out target/source-stack
+            --network-passphrase "$(jq -r .network_passphrase deployments/testnet.json)" \
+            --out target/source-stack
       - run: cargo fmt --all --check
       - run: cargo clippy --locked --workspace --all-targets -- -D warnings
       - name: cargo test --workspace
@@ -87,10 +88,14 @@ jobs:
             # Fresh source build: its pins no longer match the (foreign)
             # manifest, so skip the manifest pin check.
             foreign) cargo test --locked --workspace -- --skip consumers_pin_the_deployment_manifest ;;
-            # Deployed bytes are older than this source: skip the one
-            # deployed-bytes behavioral test (it would run HEAD's expectations
-            # against older bytes); the manifest pin check still holds.
-            stale) cargo test --locked --workspace -- --skip a_new_passkey_account_applies_a_document_signed_by_its_passkey ;;
+            # Deployed bytes are older than this source: skip the factory
+            # tests that run the deployed account wasm against this source's
+            # infra (HEAD's expectations against older bytes; during a
+            # pending registry migration the deployed account also derives
+            # the old registry); the manifest pin check still holds.
+            stale) cargo test --locked --workspace -- \
+                     --skip a_new_passkey_account_applies_a_document_signed_by_its_passkey \
+                     --skip a_passkey_account_lands_at_its_predicted_address_with_the_passkey_as_admin ;;
             # Deployed bytes match this source: every check is a hard gate.
             current) cargo test --locked --workspace ;;
           esac
@@ -131,19 +136,22 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
         with:
           toolchain: stable
           targets: wasm32v1-none
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - uses: ./.github/actions/setup-stellar
       # Core `stellar contract build`: the deployed builds' code without
-      # scaffold's name/version metadata. The registry is the manifest's, so
-      # every address is where a deployment would put it.
+      # scaffold's name/version metadata. The registry is the one the
+      # committed registry path derives on testnet, so every address is where
+      # a deployment would put it. The suite also runs the one built account
+      # and factory under several networks.
       - name: Build the stack from source in pin order
         run: |
           scripts/build-stack.sh --builder contract \
-            --registry "$(jq -r .registry.id deployments/testnet.json)" --out target/source-stack
+            --network-passphrase "$(jq -r .network_passphrase deployments/testnet.json)" \
+            --out target/source-stack
       - name: Release stack with real proofs, on the fresh wasm
         env:
           PERCH_STACK_DIR: target/source-stack
@@ -153,9 +161,12 @@ jobs:
             --skip cap_sweep
 
   # The account and the factory build from a plain checkout: their build-time
-  # pins (crates/*/wasm/stateless.id and *.sha256) are committed, so a cargo
+  # pins (crates/*/wasm/registry.path and *.sha256) are committed, so a cargo
   # git dependency on perch builds with no fetch script and no network. The
-  # pins must equal deployments/testnet.json, and perch-smart-account,
+  # pins must equal deployments/testnet.json (its registry the one the path
+  # derives, or a migration deployments/pending-registry.json declares), the
+  # release scripts' derivation must be the account's own, and
+  # perch-smart-account,
   # perch-account, and perch-account-factory, depended on by git rev, must
   # build offline from cargo's clean checkout, to the same wasm as this
   # checkout.
@@ -167,13 +178,23 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Committed pins match deployments/testnet.json
-        run: scripts/check-pins.sh
-      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
         with:
           toolchain: stable
           targets: wasm32v1-none
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Committed pins match deployments/testnet.json
+        run: scripts/check-pins.sh
+      # The release scripts derive contract ids in Python
+      # (scripts/derive-id.py), with no toolchain; the account derives them
+      # in Rust (crates/perch-derive-id runs its compiled-in derivation). They
+      # must agree on every network and on every address a deployment
+      # records, or the release path would compute addresses the account
+      # never resolves.
+      - name: The release scripts derive what the account derives
+        run: |
+          cargo build --locked -q -p perch-derive-id
+          PERCH_RUST_DERIVE_ID=target/debug/perch-derive-id python3 scripts/test-release-scripts.py DeriveId
       - uses: ./.github/actions/setup-stellar
       - name: Build perch as a git dependency, without fetching
         run: scripts/check-git-dep.sh --compare --out target/git-dep

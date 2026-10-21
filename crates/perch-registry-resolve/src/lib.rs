@@ -27,6 +27,36 @@
 //! (their network ids differ). Resolve under an env bound to the target
 //! network's id (`env.ledger().with_mut(|l| l.network_id = …)` in tests).
 //!
+//! # One build, every network
+//!
+//! A registry id is itself a contract id, so it differs per network too. The
+//! name-only form therefore compiles in no registry id at all, only how to
+//! derive one, read at build time from `wasm/registry.path` in the invoking
+//! crate:
+//!
+//! ```text
+//! root-deployer GAMPJROHOAW662FINQ4XQOY2ULX5IEGYXCI4SMZYE75EHQBR6PSTJG3M
+//! root-salt 2026-04-24T13:41:00
+//! path perch/constructorless
+//! ```
+//!
+//! The root registry is `deployer(root-deployer, sha256(root-salt))` (the
+//! Stellar Registry CLI's deployer and its `.salt` text: the same root
+//! formula on every network), and each path segment is a named deploy below
+//! the registry above it, `deployer(parent, sha256(normalized name))`, the base
+//! registry's `deploy` convention. The name salts are computed at build time;
+//! at call time the generated `registry(env)` runs `1 + path.len()`
+//! `deployed_address` derivations under the current network id. Nothing
+//! compiled in names a network, so the same wasm resolves each network's own
+//! chain, on networks nobody listed too: there, if nobody created the chain,
+//! no contract is at the derived address and every call to it fails.
+//!
+//! Blank lines and lines starting with `#` are skipped; each key appears
+//! exactly once. The file is validated at build time: `root-deployer` must be
+//! a canonical account (`G…`) or contract (`C…`) strkey and every segment a
+//! registry name (`[a-z0-9-]` after lowercasing and `_`→`-`); `path /` names
+//! the root itself. Changing the file changes the bytes on every network.
+//!
 //! # Usage
 //!
 //! ```ignore
@@ -35,16 +65,18 @@
 //! // Name-only mode — the ergonomic default, like `import_contract_client!`. A
 //! // bare ident matching the crate (or a "hyphenated-string", optional channel
 //! // prefix + `@version`) generates a same-named module. It bakes, at build time,
-//! // both the wasm hash (hex in `wasm/<name>.sha256`) and the deployer registry
-//! // id (`wasm/stateless.id`), so `address(env)` takes NO registry arg. Missing
-//! // files are build errors. Group in a module if the derived
+//! // both the wasm hash (hex in `wasm/<name>.sha256`) and the registry's
+//! // derivation (`wasm/registry.path`), so `address(env)` takes NO registry
+//! // arg. Missing files are build errors. Group in a module if the derived
 //! // name would collide with the like-named crate:
 //! mod infra {
 //!     registry_contract!(perch_doc_compiler); // wasm "perch-doc-compiler"
 //!     registry_contract!(perch_interpreter);
 //!     // registry_contract!("perch-doc-compiler@1.0.0"); // pin a specific version
 //! }
-//! // infra::perch_doc_compiler::address(env) -> Address   (registry baked in)
+//! // infra::perch_doc_compiler::address(env)  -> Address  (under this network's registry)
+//! // infra::perch_doc_compiler::registry(env) -> Address  (root, then each named deploy)
+//! // infra::perch_doc_compiler::{ROOT_DEPLOYER, ROOT_SALT, REGISTRY_PATH}
 //!
 //! // Pinned mode — compile-time hash literal, zero cross-contract calls, offline.
 //! // Hashes below are illustrative builds of the perch infra; `address(env,
@@ -84,7 +116,7 @@
 //!     mod: constructorless,
 //!     deploy_name: "constructorless",
 //! }
-//! // constructorless::address(env, &perch_registry) → CDX2DMYM…PDA7 (on testnet)
+//! // constructorless::address(env, &unverified_perch) → CDX2DMYM…PDA7 (on testnet)
 //!
 //! // Content-addressed modes expand to a module exposing:
 //! //   pub fn address(env: &Env, registry: &Address) -> Address
@@ -103,9 +135,11 @@
 //! `<name>` is a bare ident (module = the ident, wasm name = it with `_`→`-`) or a
 //! string literal (module = leaf with `-`→`_`, optional channel prefix +
 //! `@version`). It pins the wasm hash read from `wasm/<leaf>.sha256` (64 hex
-//! chars) AND bakes the deployer registry id from `wasm/stateless.id`, both at
-//! build time — so
-//! `address(env)` takes no `registry` arg and no `client()` is generated. **Keyed**
+//! chars) AND bakes the registry's derivation from `wasm/registry.path`
+//! ([above](#one-build-every-network)), both at build time — so
+//! `address(env)` takes no `registry` arg, `registry(env)`, `ROOT_DEPLOYER`,
+//! `ROOT_SALT`, and `REGISTRY_PATH` are generated, and no `client()` is.
+//! **Keyed**
 //! (`{ … }`), whose `address(env, registry)` takes the registry explicitly — the
 //! fields below:
 //!

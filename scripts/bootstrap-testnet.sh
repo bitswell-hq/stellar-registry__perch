@@ -70,7 +70,8 @@ RULES_OUT="$REPO_ROOT/testdata/deploy/perch-testnet.rules.json"
 # (registry id + wasm hash): derivable offline, identical across networks,
 # permissionless, idempotent. (The STATELESS_* names refer to that
 # deploy_stateless route. The former `stateless` subregistry is retired: an
-# account bakes one registry id, so all its infra must share one registry.)
+# account derives one registry per network, so all its infra must share one
+# registry.)
 # GUARDED OFF by default — the live path needs BOTH:
 #   * #38 — upstream StatelessDeployable + a `stellar registry deploy-stateless`
 #           verb (override PERCH_DEPLOY_STATELESS_CMD if it ships differently);
@@ -542,12 +543,11 @@ fi
 log "Bootstrap complete. Record these in GitHub (docs/testnet-deployment.md, \"Secrets and environments\"):"
 cat <<EOF
 Repository variables:
-  vars.PERCH_REGISTRY_CONTRACT_ID = $PERCH_SUB
   vars.PERCH_AUTHOR_ADDRESS       = $SA
   vars.PERCH_CI_RULE_ID           = $CI_RULE_ID
   vars.STELLAR_RPC_URL            = $RPC_URL
   vars.STELLAR_NETWORK_PASSPHRASE = $PASSPHRASE
-'testnet' environment secret (and repository secret, until registry-publish takes an environment):
+'testnet' environment secret only (never a repository secret: any branch's workflow can read those):
   secret CI_PUBLISH_SECRET_KEY    = <the S... seed whose G-account is $CI_G>
 
 Kept deliberately human-held (do NOT rotate):
