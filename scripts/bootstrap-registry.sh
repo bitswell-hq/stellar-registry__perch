@@ -16,9 +16,9 @@
 #                     with the expected admin and manager
 #   create-registry   --name perch|nido: root.deploy("registry", ...) signed by the
 #                     root's manager; only where that manager is a plain key
-#   code              upload the perch-stateless-registry code if the network lacks it
-#   publish-stateless perch.publish_hash(perch-stateless-registry, <perch author>, ...)
-#   constructorless   perch.deploy(perch-stateless-registry, ..., "constructorless", ...)
+#   code              upload the perch-constructorless-registry code if the network lacks it
+#   publish-constructorless   perch.publish_hash(perch-constructorless-registry, <perch author>, ...)
+#   constructorless   perch.deploy(perch-constructorless-registry, ..., "constructorless", ...)
 #   seed              the four tier-0 an author's apply_doc needs (compiler,
 #                     interpreter, spending limit, ed25519 verifier): the first
 #                     publish of their released hashes, authored by the perch
@@ -28,8 +28,8 @@
 #                     that project's registry)
 #   names             --project perch|nido: bind each remaining name to that
 #                     project's author with a synthetic hash (stellar-registry/perch#142)
-#   all               preflight, code (stateless registry and account),
-#                     publish-stateless, constructorless, seed, create-author
+#   all               preflight, code (constructorless registry and account),
+#                     publish-constructorless, constructorless, seed, create-author
 #                     perch, names perch, create-author nido, names nido
 #
 # Options:
@@ -49,10 +49,13 @@
 #                      it the account is built from this checkout (`stellar
 #                      contract build --package perch-account`), which only
 #                      --allow-unattested perch-account permits
-#   --stateless-wasm F|TAG   the perch-stateless-registry wasm: a file, or a
-#                      release tag (perch-stateless-registry-vX.Y.Z); default
-#                      fetched from testnet by the deployment's hash. It must
-#                      hash to deployments/testnet.json's registry code
+#   --constructorless-wasm F|TAG   the perch-constructorless-registry wasm: a
+#                      file, or a release tag
+#                      (perch-constructorless-registry-vX.Y.Z) whose asset is
+#                      downloaded; published at the tag's version, or at this
+#                      checkout's for a file. Without it the registry is built
+#                      from this checkout, which only --allow-unattested
+#                      perch-constructorless-registry permits
 #   --allow-unattested NAME   use NAME's wasm although no attestation verifies
 #                      it (repeatable; refused with --network mainnet)
 #   --nido-names "a b" names bound to the nido author (default "nido-factory nido-name-registry")
@@ -65,7 +68,7 @@
 # stellar-registry/actions' contract-release.yml from stellar-registry/perch's
 # refs/heads/main (docs/deploy/README.md, "Bootstrapping a network's registry
 # chain"). The tier-0 come from their releases; --account-wasm and
-# --stateless-wasm take a release tag for the other two.
+# --constructorless-wasm take a release tag for the other two.
 #
 # Env: STELLAR_RPC_URL overrides the network's RPC (a rehearsal points it at a
 # soroban-sim fork: scripts/rehearse-bootstrap.sh). PERCH_ADMIN_KEY, the admin
@@ -98,7 +101,7 @@ sha256_text() { printf '%s' "$1" | if command -v sha256sum >/dev/null; then sha2
 
 NETWORK="" STEP="" SOURCE="" OWNER="" ADMIN="" MANAGER_ROLE="" NAME="" PROJECT=perch
 ADMIN_KEY="" ADMIN_SIGNER=external CI_KEY="" CI_EXPIRY="" ACCOUNT_WASM="" NIDO=1
-NIDO_NAMES="nido-factory nido-name-registry" SEND=0 I_MEAN_MAINNET=0 STATELESS_WASM="" ALLOW_UNATTESTED=" "
+NIDO_NAMES="nido-factory nido-name-registry" SEND=0 I_MEAN_MAINNET=0 REGISTRY_WASM="" ALLOW_UNATTESTED=" "
 while [ $# -gt 0 ]; do
     case "$1" in
         --network) NETWORK="$2"; shift 2 ;;
@@ -113,7 +116,7 @@ while [ $# -gt 0 ]; do
         --ci-key) CI_KEY="$2"; shift 2 ;;
         --ci-expiry-ledger) CI_EXPIRY="$2"; shift 2 ;;
         --account-wasm) ACCOUNT_WASM="$2"; shift 2 ;;
-        --stateless-wasm) STATELESS_WASM="$2"; shift 2 ;;
+        --constructorless-wasm) REGISTRY_WASM="$2"; shift 2 ;;
         --allow-unattested) ALLOW_UNATTESTED="$ALLOW_UNATTESTED$2 "; shift 2 ;;
         --nido-names) NIDO_NAMES="$2"; shift 2 ;;
         --no-nido) NIDO=0; shift ;;
@@ -160,12 +163,20 @@ fi
 
 # --- what the repository pins ----------------------------------------------------
 
-# perch-stateless-registry: the code every constructorless runs, the testnet
-# deployment's registry code. 0.1.0 is the version testnet's earlier chain
-# published those bytes under.
-STATELESS_NAME=perch-stateless-registry
-STATELESS_HASH="$(jq -r .registry.wasm_hash "$MANIFEST")"
-STATELESS_VERSION=0.1.0
+# perch-constructorless-registry: the code every constructorless runs. Like
+# the account, no hash is committed for it: its bytes are main's attested
+# build (--constructorless-wasm), and registry_wasm below reads the hash from
+# them. (deployments/testnet.json's registry code is what testnet's earlier
+# chain runs, built before the rename as perch-stateless-registry; this crate
+# cannot rebuild those bytes.) Published at the release tag's version, or this
+# checkout's.
+REGISTRY_NAME=perch-constructorless-registry
+if [[ "$REGISTRY_WASM" =~ ^$REGISTRY_NAME-v([0-9]+\.[0-9]+\.[0-9]+)$ ]] && [ ! -f "$REGISTRY_WASM" ]; then
+    REGISTRY_VERSION="${BASH_REMATCH[1]}"
+else
+    REGISTRY_VERSION="$(grep -m1 '^version = "' "$REPO/crates/$REGISTRY_NAME/Cargo.toml" | sed 's/^version = "\(.*\)"/\1/')"
+fi
+REGISTRY_HASH=""
 BOOTSTRAP_VERSION=0.0.0   # sorts below every real release (stellar-registry/perch#142)
 
 # The tier-0 an author's apply_doc reaches: the three the account pins, and
@@ -183,9 +194,9 @@ for n in "${SEEDED[@]}"; do
     TIER0+=("$n $v $h")
 done
 for n in $ALLOW_UNATTESTED; do
-    case " ${SEEDED[*]} perch-account $STATELESS_NAME " in
+    case " ${SEEDED[*]} perch-account $REGISTRY_NAME " in
         *" $n "*) warn "--allow-unattested $n: $n's wasm is used on $NETWORK even if no attestation verifies it" ;;
-        *) die "--allow-unattested names a wasm this script uses: ${SEEDED[*]} perch-account $STATELESS_NAME (got $n)" ;;
+        *) die "--allow-unattested names a wasm this script uses: ${SEEDED[*]} perch-account $REGISTRY_NAME (got $n)" ;;
     esac
 done
 hash_of_seeded() { local row; for row in "${TIER0[@]}"; do [ "${row%% *}" != "$1" ] || { echo "${row##* }"; return; }; done; }
@@ -194,8 +205,6 @@ COMPILER_HASH="$(hash_of_seeded perch-doc-compiler)"
 # Every other name the stack publishes (the account is install-only).
 read -r -a PERCH_SYNTH_NAMES <<<"$(jq -r --arg s " ${SEEDED[*]} " \
     '[.contracts | to_entries[] | select(.value.address) | .key | select(($s | index(" \(.) ")) | not)] | join(" ")' "$MANIFEST")"
-BYTES_RPC="$(jq -r .rpc_url "$MANIFEST")"
-BYTES_PASSPHRASE="$(jq -r .network_passphrase "$MANIFEST")"
 
 # --- reads -------------------------------------------------------------------
 
@@ -318,7 +327,7 @@ attest() { # name file
         warn "UNATTESTED: using it anyway because --allow-unattested $1"
     else
         die "$1 $h ($2) has no attestation from $ATTEST_SIGNER on $ATTEST_SOURCE $ATTEST_REF: $(grep -v '^[[:space:]]*$' <<<"$out" | tail -n 1)
-       use its release asset (--account-wasm perch-account-vX.Y.Z, --stateless-wasm $STATELESS_NAME-vX.Y.Z),
+       use its release asset (--account-wasm perch-account-vX.Y.Z, --constructorless-wasm $REGISTRY_NAME-vX.Y.Z),
        or, off mainnet, --allow-unattested $1"
     fi
     ATTESTED="$ATTESTED$h "
@@ -330,7 +339,7 @@ release_asset() { # name version out-file
     curl -fsSL --retry 3 -o "$3.tmp" "$RELEASES/$1-v$2/$1_v$2.wasm" && mv "$3.tmp" "$3"
 }
 
-# --account-wasm or --stateless-wasm: a file, or a release tag of that name.
+# --account-wasm or --constructorless-wasm: a file, or a release tag of that name.
 option_wasm() { # name option value -> WASM
     if [ -f "$3" ]; then
         [ -s "$3" ] || die "$2 $3 is empty"
@@ -345,32 +354,46 @@ option_wasm() { # name option value -> WASM
 }
 
 # Wasm bytes by hash into WASM, sha256 checked, then attested: the seeded
-# tier-0 from their release assets, the stateless registry from
-# --stateless-wasm or the testnet deployment's chain.
+# tier-0 from their release assets.
 WASM=""
 wasm_file() { # name hash -> WASM
     local f="$WASM_DIR/$1-$2.wasm" row n v h
-    if [ "$1" = "$STATELESS_NAME" ] && [ -n "$STATELESS_WASM" ]; then
-        option_wasm "$1" --stateless-wasm "$STATELESS_WASM"
-        [ "$(sha256_file "$WASM")" = "$2" ] ||
-            die "--stateless-wasm $STATELESS_WASM is $(sha256_file "$WASM"), not the registry code $2 that $MANIFEST records"
-        f="$WASM"
-    elif [ ! -f "$f" ]; then
+    if [ ! -f "$f" ]; then
         for row in "${TIER0[@]}"; do
             read -r n v h <<<"$row"
             [ "$n" = "$1" ] || continue
             release_asset "$1" "$v" "$f" || true
         done
-        if [ "$1" = "$STATELESS_NAME" ]; then
-            log "fetching $1 $2 from $BYTES_RPC"
-            stellar contract fetch --rpc-url "$BYTES_RPC" --network-passphrase "$BYTES_PASSPHRASE" \
-                --wasm-hash "$2" --out-file "$f" </dev/null || true
-        fi
     fi
     [ -f "$f" ] || die "no source for $1 $2"
     [ "$(sha256_file "$f")" = "$2" ] || { rm -f "$f"; die "$1 is not $2"; }
     attest "$1" "$f"
     WASM="$f"
+}
+
+# The registry wasm into WASM and its hash into REGISTRY_HASH, attested:
+# --constructorless-wasm, or, only with --allow-unattested
+# perch-constructorless-registry, built once from this checkout.
+REGISTRY_FILE=""
+registry_wasm() { # -> WASM, REGISTRY_HASH
+    if [ -z "$REGISTRY_FILE" ]; then
+        if [ -n "$REGISTRY_WASM" ]; then
+            option_wasm "$REGISTRY_NAME" --constructorless-wasm "$REGISTRY_WASM"
+            REGISTRY_FILE="$WASM"
+        else
+            [[ "$ALLOW_UNATTESTED" == *" $REGISTRY_NAME "* ]] ||
+                die "no --constructorless-wasm: pass the attested release (--constructorless-wasm $REGISTRY_NAME-vX.Y.Z), or, off mainnet, --allow-unattested $REGISTRY_NAME to build it from this checkout"
+            log "building $REGISTRY_NAME from this checkout (stellar contract build)"
+            mkdir -p "$WORK/registry"
+            (cd "$REPO" && stellar contract build --package "$REGISTRY_NAME" --out-dir "$WORK/registry") \
+                >"$WORK/registry/build.log" 2>&1 || { cat "$WORK/registry/build.log" >&2; die "the $REGISTRY_NAME build failed"; }
+            REGISTRY_FILE="$WORK/registry/${REGISTRY_NAME//-/_}.wasm"
+        fi
+        attest "$REGISTRY_NAME" "$REGISTRY_FILE"
+        REGISTRY_HASH="$(sha256_file "$REGISTRY_FILE")"
+        log "registry code: $REGISTRY_FILE ($REGISTRY_HASH), published as $REGISTRY_NAME $REGISTRY_VERSION"
+    fi
+    WASM="$REGISTRY_FILE"
 }
 
 # The perch-account wasm into WASM, attested: --account-wasm, or, only with
@@ -535,56 +558,54 @@ cmd_create_registry() {
     send_invoke "$ROOT" "${args[@]}"
 }
 
-cmd_code() { ensure_code "$STATELESS_NAME" "$STATELESS_HASH"; }
+cmd_code() { registry_wasm; ensure_code "$REGISTRY_NAME" "$REGISTRY_HASH" "$WASM"; }
 
-cmd_publish_stateless() {
+cmd_publish_constructorless() {
     local have args fee
+    registry_wasm
     if [ "$PRESENT_perch" != 1 ]; then
-        wasm_file "$STATELESS_NAME" "$STATELESS_HASH"
         warn "stops here: perch is not on $NETWORK yet"
-        plan "then: $PERCH.publish_hash(\"$STATELESS_NAME\", $PERCH_AUTHOR (the perch author), $STATELESS_HASH, \"$STATELESS_VERSION\"), signed by perch's manager"
+        plan "then: $PERCH.publish_hash(\"$REGISTRY_NAME\", $PERCH_AUTHOR (the perch author), $REGISTRY_HASH, \"$REGISTRY_VERSION\"), signed by perch's manager"
         return 1
     fi
-    have="$(hash_in "$PERCH" "$STATELESS_NAME" "$STATELESS_VERSION")"
-    if [ "$have" = "$STATELESS_HASH" ]; then
-        log "perch already publishes $STATELESS_NAME $STATELESS_VERSION = $STATELESS_HASH"
+    have="$(hash_in "$PERCH" "$REGISTRY_NAME" "$REGISTRY_VERSION")"
+    if [ "$have" = "$REGISTRY_HASH" ]; then
+        log "perch already publishes $REGISTRY_NAME $REGISTRY_VERSION = $REGISTRY_HASH"
         return
     fi
-    [ -z "$have" ] || die "perch publishes $STATELESS_NAME $STATELESS_VERSION as $have, not $STATELESS_HASH"
-    wasm_file "$STATELESS_NAME" "$STATELESS_HASH"
-    args=(publish_hash --wasm_name "$STATELESS_NAME" --author "$PERCH_AUTHOR" --wasm_hash "$STATELESS_HASH" --version "$STATELESS_VERSION")
+    [ -z "$have" ] || die "perch publishes $REGISTRY_NAME $REGISTRY_VERSION as $have, not $REGISTRY_HASH"
+    args=(publish_hash --wasm_name "$REGISTRY_NAME" --author "$PERCH_AUTHOR" --wasm_hash "$REGISTRY_HASH" --version "$REGISTRY_VERSION")
     log "simulate perch.publish_hash: $(simulate "$PERCH" "${args[@]}")"
     fee="$(fee_of "$PERCH" "${args[@]}")"
-    plan "$PERCH.publish_hash(\"$STATELESS_NAME\", $PERCH_AUTHOR, $STATELESS_HASH, \"$STATELESS_VERSION\"): fee $(xlm "$fee")"
+    plan "$PERCH.publish_hash(\"$REGISTRY_NAME\", $PERCH_AUTHOR, $REGISTRY_HASH, \"$REGISTRY_VERSION\"): fee $(xlm "$fee")"
     [ "$SEND" = 1 ] || return 0
-    require_signer "$MANAGER_G" "perch's first publish of $STATELESS_NAME"
-    mainnet_gate "publishing $STATELESS_NAME" "$fee"
+    require_signer "$MANAGER_G" "perch's first publish of $REGISTRY_NAME"
+    mainnet_gate "publishing $REGISTRY_NAME" "$fee"
     send_invoke "$PERCH" "${args[@]}"
 }
 
 cmd_constructorless() {
     local init args at r fee
+    registry_wasm
     if [ "$PRESENT_perch" != 1 ]; then
-        wasm_file "$STATELESS_NAME" "$STATELESS_HASH"
         warn "stops here: perch is not on $NETWORK yet"
-        plan "then: $PERCH.deploy(\"$STATELESS_NAME\", \"$STATELESS_VERSION\", \"constructorless\", owner $OWNER_G, [admin $ADMIN_G, manager $MANAGER_G, root $ROOT], None) -> $CONSTRUCTORLESS"
+        plan "then: $PERCH.deploy(\"$REGISTRY_NAME\", \"$REGISTRY_VERSION\", \"constructorless\", owner $OWNER_G, [admin $ADMIN_G, manager $MANAGER_G, root $ROOT], None) -> $CONSTRUCTORLESS"
         return 1
     fi
     at="$(name_in "$PERCH" constructorless)"
     if [ "$at" = "$CONSTRUCTORLESS" ]; then
         log "constructorless is at its derived id $CONSTRUCTORLESS"
         check_roles constructorless "$CONSTRUCTORLESS"
-        [ "$(executable_of "$CONSTRUCTORLESS")" = "$STATELESS_HASH" ] || die "constructorless does not run $STATELESS_HASH"
+        [ "$(executable_of "$CONSTRUCTORLESS")" = "$REGISTRY_HASH" ] || die "constructorless does not run $REGISTRY_HASH"
         return
     fi
     [ -z "$at" ] || die "perch's constructorless points at $at, not $CONSTRUCTORLESS"
-    wasm_file "$STATELESS_NAME" "$STATELESS_HASH"
-    [ "$(hash_in "$PERCH" "$STATELESS_NAME" "$STATELESS_VERSION")" = "$STATELESS_HASH" ] ||
-        { warn "stops here: perch does not publish $STATELESS_NAME $STATELESS_VERSION yet (publish-stateless)"; return 1; }
+    [ "$(hash_in "$PERCH" "$REGISTRY_NAME" "$REGISTRY_VERSION")" = "$REGISTRY_HASH" ] ||
+        { warn "stops here: perch does not publish $REGISTRY_NAME $REGISTRY_VERSION yet (publish-constructorless)"; return 1; }
     # A named deploy with no deployer: salt sha256("constructorless") from
     # perch itself, which is what puts it at the derived id.
     init="[{\"address\":\"$ADMIN_G\"},{\"address\":\"$MANAGER_G\"},{\"address\":\"$ROOT\"}]"
-    args=(deploy --wasm_name "$STATELESS_NAME" --version "\"$STATELESS_VERSION\"" --contract_name constructorless --admin "$OWNER_G" --init "$init")
+    args=(deploy --wasm_name "$REGISTRY_NAME" --version "\"$REGISTRY_VERSION\"" --contract_name constructorless --admin "$OWNER_G" --init "$init")
     r="$(simulate "$PERCH" "${args[@]}")"
     [ "$r" = "\"$CONSTRUCTORLESS\"" ] || die "perch.deploy simulated to $r, expected $CONSTRUCTORLESS"
     fee="$(fee_of "$PERCH" "${args[@]}")"
@@ -849,7 +870,7 @@ cmd_all() {
     account_wasm
     wasm="$WASM"
     ensure_code perch-account "$(sha256_file "$wasm")" "$wasm"
-    cmd_publish_stateless || stopped=1
+    cmd_publish_constructorless || stopped=1
     [ "$stopped" = 1 ] || cmd_constructorless || stopped=1
     cmd_seed || stopped=1
     [ "$stopped" = 1 ] || PROJECT=perch cmd_create_author || stopped=1
@@ -860,7 +881,7 @@ cmd_all() {
     fi
     if [ "$stopped" = 1 ]; then
         warn "all stopped at the first step the chain is not ready for; uploads simulated so far: $(xlm "$COST")"
-        plan "remaining, in order: publish-stateless, constructorless, seed, create-author --project perch, names --project perch, create-author --project nido, names --project nido"
+        plan "remaining, in order: publish-constructorless, constructorless, seed, create-author --project perch, names --project perch, create-author --project nido, names --project nido"
         return 0
     fi
     log "all done; uploads simulated: $(xlm "$COST")"
@@ -870,7 +891,7 @@ case "$STEP" in
     preflight) cmd_preflight ;;
     create-registry) cmd_create_registry ;;
     code) cmd_preflight; cmd_code ;;
-    publish-stateless) cmd_preflight; cmd_publish_stateless ;;
+    publish-constructorless) cmd_preflight; cmd_publish_constructorless ;;
     constructorless) cmd_preflight; cmd_constructorless ;;
     seed) cmd_preflight; cmd_seed ;;
     create-author) cmd_preflight; cmd_create_author ;;

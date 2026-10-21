@@ -1,5 +1,5 @@
 #![no_std]
-//! Resolve a stateless contract's on-chain address from the registry id and the
+//! Resolve a constructorless contract's on-chain address from the registry id and the
 //! contract's wasm hash, and hand callers a typed client — the "extend
 //! `stellar-registry`" macro, mirroring `import_contract_client!`.
 //!
@@ -11,7 +11,7 @@
 //! derivation and gives you a typed client for the resolved contract.
 //!
 //! The derivation is **pure SDK** — no deployment, no RPC. Perch deploys its
-//! stateless singletons (interpreter, compiler) with `salt == wasm_hash`, so the
+//! constructorless singletons (interpreter, compiler) with `salt == wasm_hash`, so the
 //! address is
 //!
 //! ```text
@@ -183,7 +183,7 @@ pub use perch_registry_resolve_macro::registry_contract;
 use soroban_sdk::{Address, BytesN, Env};
 
 /// The one derivation the macro is built on, as a plain function: the on-chain
-/// address of a stateless contract deployed with `salt == wasm_hash`, from the
+/// address of a constructorless contract deployed with `salt == wasm_hash`, from the
 /// registry id and that hash.
 ///
 /// `address = env.deployer().with_address(registry, wasm_hash).deployed_address()`

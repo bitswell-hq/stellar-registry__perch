@@ -26,7 +26,7 @@
 //! this test closes the loop on what was compiled. `scripts/check-pins.sh`
 //! applies the same rule offline.
 use perch_account_factory::pins;
-use perch_smart_account::{infra, stateless_registry};
+use perch_smart_account::{constructorless_registry, infra};
 use soroban_sdk::testutils::Ledger;
 use soroban_sdk::{Address, Bytes, BytesN, Env};
 
@@ -84,7 +84,7 @@ fn consumers_pin_the_deployment_manifest() {
             pins::perch_webauthn_verifier::REGISTRY_PATH.as_slice(),
         )
     );
-    let derived = stateless_registry(&env);
+    let derived = constructorless_registry(&env);
     assert_eq!(pins::perch_webauthn_verifier::registry(&env), derived);
 
     let network = m["network"].as_str().unwrap();

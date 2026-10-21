@@ -1,4 +1,4 @@
-//! `perch-testkit` — one-call bootstrap of the perch registry + stateless infra
+//! `perch-testkit` — one-call bootstrap of the perch registry + constructorless infra
 //! + account for tests.
 //!
 //! Every perch e2e suite used to re-implement a `struct World`/`fn setup()` to

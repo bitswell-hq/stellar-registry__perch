@@ -1683,6 +1683,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "perch-constructorless-registry"
+version = "0.1.0"
+dependencies = [
+ "admin-sep",
+ "registry-traits",
+ "soroban-sdk",
+]
+
+[[package]]
 name = "perch-deploy"
 version = "0.1.1"
 dependencies = [
@@ -1872,15 +1881,6 @@ version = "0.1.3"
 dependencies = [
  "soroban-sdk",
  "stellar-accounts",
-]
-
-[[package]]
-name = "perch-stateless-registry"
-version = "0.1.2"
-dependencies = [
- "admin-sep",
- "registry-traits",
- "soroban-sdk",
 ]
 
 [[package]]

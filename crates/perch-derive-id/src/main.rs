@@ -9,7 +9,7 @@
 //!     deployer(parent, salt = sha256(name)): a base-registry named deploy
 //! perch-derive-id registry <network-passphrase>
 //!     the registry this checkout's account derives its infra from on that
-//!     network (`perch_smart_account::stateless_registry`, from
+//!     network (`perch_smart_account::constructorless_registry`, from
 //!     `crates/perch-smart-account/wasm/registry.path`)
 //! ```
 //!
@@ -54,7 +54,7 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let id = match args.as_slice() {
         [m, passphrase] if m == "registry" => {
-            perch_smart_account::stateless_registry(&on(passphrase))
+            perch_smart_account::constructorless_registry(&on(passphrase))
         }
         [m, p, v, n] if m == "content" || m == "name" => derive(m, p, v, n),
         [p, v, n] => derive("name", p, v, n),

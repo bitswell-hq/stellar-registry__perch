@@ -64,7 +64,7 @@ before that's a deliberate decision — see `perch-recovery`'s introduction
 
 `perch-smart-account`'s `infra` module (`perch_registry_resolve::registry_contract!`)
 derives the doc-compiler/interpreter/spending-limit addresses as
-`deployer(stateless_registry_id, pinned_wasm_hash)`, where the registry's
+`deployer(constructorless_registry_id, pinned_wasm_hash)`, where the registry's
 derivation (`wasm/registry.path`: a root deployer and salt, then named
 deploys, derived under the ledger's network id) and the hashes are committed
 under `crates/*/wasm/` (the hashes refreshed by `scripts/fetch-infra-wasm.sh`)

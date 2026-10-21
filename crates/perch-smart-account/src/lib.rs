@@ -58,13 +58,13 @@ pub use stellar_accounts;
 /// Stellar Registry root's deployer and salt and the named deploys below it,
 /// and every hop is derived under the ledger's network id, so one build
 /// resolves each network's own registry.
-pub fn stateless_registry(env: &Env) -> Address {
+pub fn constructorless_registry(env: &Env) -> Address {
     infra::perch_doc_compiler::registry(env)
 }
 
 /// Content-addressed resolvers for the shared infra, named like
 /// `import_contract_client!`. Each `infra::<name>::address(env)` derives
-/// `deployer(stateless_registry(env), sha256(wasm))` fully offline, with
+/// `deployer(constructorless_registry(env), sha256(wasm))` fully offline, with
 /// **both** the registry's derivation (`wasm/registry.path`) and the wasm
 /// hash (`wasm/<name>.sha256`) baked at build time from the committed
 /// pins (`wasm/README.md`; a missing file is a build error). Pinned ⇒ a
@@ -413,7 +413,7 @@ pub trait PerchSmartAccount: CustomAccountInterface + SmartAccount {
     /// Apply a policy document — **the only way authorization changes**.
     /// The two shared, immutable infra contracts (the stateless doc compiler
     /// and the interpreter) are derived from the build-time-pinned
-    /// [`stateless_registry`] (see [`infra`]), never passed in. Brings the
+    /// [`constructorless_registry`] (see [`infra`]), never passed in. Brings the
     /// installed rules to the document in one invocation, changing only the
     /// rules that differ, and returns the canonical `doc_hash`.
     ///
