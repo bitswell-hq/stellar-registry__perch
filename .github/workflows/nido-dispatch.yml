@@ -68,7 +68,6 @@ jobs:
       - name: Find the manifests the release changed, check the package, and build each payload
         id: plan
         env:
-          EVENT: ${{ github.event_name }}
           REF: ${{ github.ref }}
           TAG: ${{ inputs.tag }}
           INPUT_NETWORK: ${{ inputs.network }}
@@ -76,7 +75,9 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
-          if [ "$EVENT" = workflow_dispatch ]; then
+          # By the tag, not the event: a release.yml npm_publish_tag dispatch
+          # calls this with a tag, and the caller's event is workflow_dispatch.
+          if [ -z "$TAG" ]; then
             if [ "$REF" != refs/heads/main ]; then
               echo "::error::manual re-send runs only from main (got $REF)"
               exit 1
