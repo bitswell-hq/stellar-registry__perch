@@ -25,16 +25,17 @@
 #      by a signer the real network knows, and exactly this run's overrides.
 #
 # Usage: scripts/rehearse-bootstrap.sh [--network testnet|mainnet] [--out DIR]
-#            [--account-wasm F|TAG] [--stateless-wasm F|TAG]
+#            [--account-wasm F|TAG] [--constructorless-wasm F|TAG]
 #   --network  one network (default: testnet, then mainnet)
 #   --out      where each network's report and logs land
 #              (default target/rehearse-bootstrap/<network>)
-#   --account-wasm, --stateless-wasm   passed to the bootstrap. Without one, the
-#              release of this checkout's version (perch-account-vX.Y.Z,
-#              perch-stateless-registry-vX.Y.Z) when it exists; otherwise a
-#              testnet rehearsal passes --allow-unattested for that wasm (the
-#              account then built from this checkout), and a mainnet one stops:
-#              mainnet takes only attested wasm.
+#   --account-wasm, --constructorless-wasm   passed to the bootstrap. Without
+#              one, the release of this checkout's version
+#              (perch-account-vX.Y.Z, perch-constructorless-registry-vX.Y.Z)
+#              when it exists; otherwise a testnet rehearsal passes
+#              --allow-unattested for that wasm (then built from this
+#              checkout), and a mainnet one stops: mainnet takes only attested
+#              wasm.
 # Env: SOROBAN_SIM, a soroban-sim binary built from SOROBAN_SIM_REV below;
 #      otherwise the script installs that commit under target/soroban-sim/.
 #
@@ -55,13 +56,13 @@ die() { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 sha256_file() { if command -v sha256sum >/dev/null; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi; }
 sha256_text() { printf '%s' "$1" | if command -v sha256sum >/dev/null; then sha256sum; else shasum -a 256; fi | cut -d' ' -f1; }
 
-networks=(testnet mainnet) out_base="$REPO/target/rehearse-bootstrap" account_wasm="" stateless_wasm=""
+networks=(testnet mainnet) out_base="$REPO/target/rehearse-bootstrap" account_wasm="" registry_wasm=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --network) networks=("$2"); shift 2 ;;
         --out) out_base="$2"; shift 2 ;;
         --account-wasm) account_wasm="$2"; shift 2 ;;
-        --stateless-wasm) stateless_wasm="$2"; shift 2 ;;
+        --constructorless-wasm) registry_wasm="$2"; shift 2 ;;
         -h|--help) awk 'NR>1 && /^#/{sub(/^# ?/,""); print; next} NR>1{exit}' "$0"; exit 0 ;;
         *) die "unknown option: $1" ;;
     esac
@@ -92,16 +93,20 @@ released_tag() { # crate
         echo "$1-v$v"
 }
 [ -n "$account_wasm" ] || account_wasm="$(released_tag perch-account || true)"
-[ -n "$stateless_wasm" ] || stateless_wasm="$(released_tag perch-stateless-registry || true)"
-# The bytes the authors must run: the file, the release asset the bootstrap
-# downloads, or its build of this checkout.
-if [ -f "$account_wasm" ]; then
-    account_file="$account_wasm"
-elif [ -n "$account_wasm" ]; then
-    account_file="$REPO/target/bootstrap-registry/wasm/$account_wasm.wasm"
-else
-    account_file="$REPO/target/bootstrap-registry/account/perch_account.wasm"
-fi
+[ -n "$registry_wasm" ] || registry_wasm="$(released_tag perch-constructorless-registry || true)"
+# The bytes the authors and constructorless must run: the file, the release
+# asset the bootstrap downloads, or its build of this checkout.
+given_file() { # option-value build-file
+    if [ -f "$1" ]; then
+        echo "$1"
+    elif [ -n "$1" ]; then
+        echo "$REPO/target/bootstrap-registry/wasm/$1.wasm"
+    else
+        echo "$REPO/target/bootstrap-registry/$2"
+    fi
+}
+account_file="$(given_file "$account_wasm" account/perch_account.wasm)"
+registry_file="$(given_file "$registry_wasm" registry/perch_constructorless_registry.wasm)"
 
 # --- one network ---------------------------------------------------------------
 
@@ -113,7 +118,7 @@ rehearse() {
     local network="$1" out passphrase url line role_source root perch constructorless nido role
     out="$out_base/$network"
     local w opt flag name wasm_flags=()
-    for w in "account_wasm --account-wasm perch-account" "stateless_wasm --stateless-wasm perch-stateless-registry"; do
+    for w in "account_wasm --account-wasm perch-account" "registry_wasm --constructorless-wasm perch-constructorless-registry"; do
         read -r opt flag name <<<"$w"
         if [ -n "${!opt}" ]; then
             wasm_flags+=("$flag" "${!opt}")
@@ -246,7 +251,7 @@ rehearse() {
         check "root.fetch_contract_id(perch)" "$(read_call "$root" fetch_contract_id --contract-name perch)" "$perch"
         check "root.fetch_contract_id(nido)" "$(read_call "$root" fetch_contract_id --contract-name nido)" "$nido"
         check "perch.fetch_contract_id(constructorless)" "$(read_call "$perch" fetch_contract_id --contract-name constructorless)" "$constructorless"
-        check "constructorless runs perch-stateless-registry" "$(executable "$constructorless")" "$(jq -r .registry.wasm_hash "$MANIFEST")"
+        check "constructorless runs perch-constructorless-registry" "$(executable "$constructorless")" "$(sha256_file "$registry_file")"
         local n v h at project author reg pins
         for n in perch-doc-compiler perch-interpreter perch-spending-limit perch-ed25519-verifier; do
             v="$(jq -r --arg n "$n" '.contracts[$n].version' "$MANIFEST")"

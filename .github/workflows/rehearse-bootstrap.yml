@@ -55,7 +55,7 @@ jobs:
           NETWORK: ${{ matrix.network }}
           # Read-only: `gh attestation verify` looks up each wasm's public
           # attestations. A mainnet rehearsal needs the attested
-          # perch-account and perch-stateless-registry releases of this
+          # perch-account and perch-constructorless-registry releases of this
           # checkout's versions (docs/deploy/README.md).
           GH_TOKEN: ${{ github.token }}
         run: scripts/rehearse-bootstrap.sh --network "$NETWORK"

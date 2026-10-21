@@ -23,7 +23,7 @@ perch-doc-compiler = { version = "0.3.4", path = "../perch-doc-compiler", defaul
 # wasm, and neither deployable pins the other.
 perch-recovery-interface = { version = "0.1.0", path = "../perch-recovery-interface" }
 # The pure `registry_id + wasm_hash → address` derivation `apply_doc` uses to
-# resolve the compiler + interpreter from the pinned stateless-registry id.
+# resolve the compiler + interpreter from the pinned constructorless-registry id.
 perch-registry-resolve = { version = "0.1.1", path = "../perch-registry-resolve" }
 
 [features]

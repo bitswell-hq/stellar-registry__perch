@@ -1,26 +1,29 @@
-//! # perch-stateless-registry
+//! # perch-constructorless-registry
 //!
-//! A **managed subregistry** whose policy is *"publish here iff your contract is
-//! stateless."* It is deployed and registered under the perch registry as
-//! `stateless` (`unverified/perch` → registers `stateless`), with
+//! A **managed subregistry** whose deploys are *constructorless*: every
+//! instance is initialised with no constructor arguments, at an address that
+//! is a pure function of the registry and the wasm hash. perch's one canonical
+//! instance is registered under the perch registry as `constructorless`, with
 //! `manager =` the perch smart account and `root =` the root registry.
 //!
-//! ## What makes it "stateless"
+//! ## What makes it "constructorless"
 //!
 //! Two things, neither of which is bytecode-checkable — hence *managed*:
 //!
 //! 1. **Content-addressed deploys.** Deploys are keyed by the wasm hash itself
-//!    (`salt = wasm_hash`), not by a caller-chosen name. Identical bytecode
-//!    always resolves to the same on-chain address, so a redeploy of the same
-//!    wasm is a no-op that returns the existing address. This is the
-//!    [`StatelessDeployable`] surface; the name-salted [`Deployable::deploy`]
-//!    path is deliberately **omitted** because a per-name salt conflicts with
-//!    content-addressing.
-//! 2. **Manager-gated publish/deploy.** Statelessness cannot be proven from
-//!    bytecode, so the manager (the perch smart account) gates the *initial*
-//!    publish/deploy of a wasm — that is where the "only stateless-eligible
-//!    wasm" policy is enforced off-chain. This falls out of composing
-//!    [`Manageable`] + [`Publishable`] with a `manager` set at construction.
+//!    (`salt = wasm_hash`), not by a caller-chosen name, and always pass `()`
+//!    to the constructor. Identical bytecode always resolves to the same
+//!    on-chain address, so a redeploy of the same wasm is a no-op that returns
+//!    the existing address. This is the upstream [`StatelessDeployable`]
+//!    surface (`deploy_stateless` is its name in `registry-traits`); the
+//!    name-salted [`Deployable::deploy`] path is deliberately **omitted**
+//!    because a per-name salt conflicts with content-addressing.
+//! 2. **Manager-gated publish/deploy.** Whether a wasm is safe to share as one
+//!    constructorless instance cannot be proven from bytecode, so the manager
+//!    (the perch smart account) gates the *initial* publish/deploy of a wasm —
+//!    that is where the eligibility policy is enforced off-chain. This falls
+//!    out of composing [`Manageable`] + [`Publishable`] with a `manager` set at
+//!    construction.
 //!
 //! ## Composition (the pattern this epic demonstrates)
 //!
@@ -94,34 +97,34 @@ mod contract {
     use soroban_sdk::{contract, contractimpl, Address, Env};
 
     #[contract]
-    pub struct StatelessRegistry;
+    pub struct ConstructorlessRegistry;
 
     #[contractimpl(contracttrait)]
-    impl Administratable for StatelessRegistry {}
+    impl Administratable for ConstructorlessRegistry {}
 
     #[contractimpl(contracttrait)]
-    impl Upgradable for StatelessRegistry {}
+    impl Upgradable for ConstructorlessRegistry {}
 
     #[contractimpl(contracttrait)]
-    impl Publishable for StatelessRegistry {}
+    impl Publishable for ConstructorlessRegistry {}
 
     #[contractimpl(contracttrait)]
-    impl Manageable for StatelessRegistry {}
+    impl Manageable for ConstructorlessRegistry {}
 
     // The content-addressed deploy surface (salt = wasm_hash, init = () always,
     // idempotent). `Deployable` itself is NOT composed: its name-salted `deploy`
     // conflicts with content-addressing.
     #[contractimpl(contracttrait)]
-    impl StatelessDeployable for StatelessRegistry {}
+    impl StatelessDeployable for ConstructorlessRegistry {}
 
     #[contractimpl]
-    impl StatelessRegistry {
-        /// Construct the managed `stateless` subregistry.
+    impl ConstructorlessRegistry {
+        /// Construct the managed `constructorless` subregistry.
         ///
         /// - `admin`: upgrades this registry and adds/sets/removes the manager.
         /// - `manager`: the perch smart account. Being *managed* means the
         ///   manager gates the initial publish/deploy of any wasm — the enforcement
-        ///   point for the "only stateless-eligible wasm" policy.
+        ///   point for the eligibility policy.
         /// - `root`: the root registry. This subregistry defers to `root` to
         ///   resolve sibling subregistry names during cross-registry deploys.
         ///
@@ -141,7 +144,7 @@ mod contract {
             Storage::set_root_registry(env, &root);
         }
 
-        /// The manager account which gates initial publishes / stateless deploys.
+        /// The manager account which gates initial publishes / constructorless deploys.
         pub fn manager(env: &Env) -> Option<Address> {
             Storage::manager(env)
         }
@@ -161,7 +164,7 @@ mod contract {
 }
 
 #[cfg(feature = "contract")]
-pub use contract::{StatelessRegistry, StatelessRegistryClient};
+pub use contract::{ConstructorlessRegistry, ConstructorlessRegistryClient};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tests. The first is fully self-contained and green: it validates that the
@@ -180,7 +183,7 @@ pub use contract::{StatelessRegistry, StatelessRegistryClient};
 // ─────────────────────────────────────────────────────────────────────────────
 #[cfg(all(test, feature = "contract"))]
 mod test {
-    use super::{StatelessRegistry, StatelessRegistryClient};
+    use super::{ConstructorlessRegistry, ConstructorlessRegistryClient};
     use soroban_sdk::{testutils::Address as _, Address, Bytes, BytesN, Env, String};
 
     /// Self-contained, green: constructing the subregistry wires `admin`,
@@ -197,10 +200,10 @@ mod test {
         let root = Address::generate(&env);
 
         let registry_id = env.register(
-            StatelessRegistry,
+            ConstructorlessRegistry,
             (admin.clone(), manager.clone(), root.clone()),
         );
-        let client = StatelessRegistryClient::new(&env, &registry_id);
+        let client = ConstructorlessRegistryClient::new(&env, &registry_id);
 
         assert_eq!(client.admin(), admin, "admin must be the constructor admin");
         assert_eq!(
@@ -219,7 +222,7 @@ mod test {
     // no-arg-`__constructor` contract works. TODO: point `contractimport!` at a
     // real fixture wasm once a build step materializes it under the crate.
     mod fixture {
-        // soroban_sdk::contractimport!(file = "fixtures/stateless_fixture.wasm");
+        // soroban_sdk::contractimport!(file = "fixtures/constructorless_fixture.wasm");
         pub const WASM: &[u8] = &[]; // placeholder — replaced by contractimport! WASM
     }
 
@@ -235,10 +238,10 @@ mod test {
 
         // Deploy the managed subregistry: __constructor(admin, manager, root).
         let registry_id = env.register(
-            StatelessRegistry,
+            ConstructorlessRegistry,
             (admin.clone(), manager.clone(), root.clone()),
         );
-        let client = StatelessRegistryClient::new(&env, &registry_id);
+        let client = ConstructorlessRegistryClient::new(&env, &registry_id);
 
         // Manager gates the initial publish (the perch smart account, mocked here).
         let wasm_name = String::from_str(&env, "fixture");

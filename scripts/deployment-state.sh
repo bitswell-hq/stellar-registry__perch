@@ -51,7 +51,7 @@ paths=(
     crates/perch-spending-limit
     crates/perch-account crates/perch-smart-account
     crates/perch-registry-resolve crates/perch-registry-resolve-macro
-    crates/perch-stateless-registry
+    crates/perch-constructorless-registry
     crates/perch-recovery
     crates/perch-webauthn-verifier
     crates/perch-zk-pool crates/perch-zk-primitives

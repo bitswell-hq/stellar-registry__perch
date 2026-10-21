@@ -85,7 +85,7 @@ crates/
                       fixtures, bench)
   perch-registry-resolve/, perch-registry-resolve-macro/  build-time infra pins:
                       `deployer(registry, sha256(pinned wasm))`, no runtime address
-  perch-stateless-registry/  the content-addressing registry contract
+  perch-constructorless-registry/  the content-addressing registry contract
   perch-deploy/       deploy/CI tool (lib + bin): signs smart-account auth entries
   perch-testnet/      exercises a deployed stack on testnet: passkey owners, G-account
                       guardians, real proofs, enforcing auth, measured transactions

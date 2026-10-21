@@ -15,7 +15,7 @@
 //! built account and factory under several networks.
 use perch_account_factory::pins;
 use perch_registry_resolve::registry_contract;
-use perch_smart_account::{infra, stateless_registry};
+use perch_smart_account::{constructorless_registry, infra};
 use soroban_sdk::testutils::Ledger;
 use soroban_sdk::{Address, Bytes, BytesN, Env};
 
@@ -106,7 +106,7 @@ fn each_network_resolves_perch_constructorless_under_its_own_root() {
         assert_eq!(root, Address::from_str(&env, live_root), "{passphrase}");
         let derived = constructorless::address(&env, &perch::address(&env, &root));
         assert_eq!(derived, Address::from_str(&env, registry), "{passphrase}");
-        assert_eq!(stateless_registry(&env), derived, "{passphrase}");
+        assert_eq!(constructorless_registry(&env), derived, "{passphrase}");
         assert_eq!(pins::perch_webauthn_verifier::registry(&env), derived);
     }
 }
@@ -126,5 +126,5 @@ fn an_unlisted_network_resolves_its_own_chain() {
             "CBPWEPHLO2QDXWMWMHLOWCLRKQT24EFH7GYW6G3UOFY45RYOHS32A5JP"
         )
     );
-    assert_eq!(stateless_registry(&env), derived);
+    assert_eq!(constructorless_registry(&env), derived);
 }

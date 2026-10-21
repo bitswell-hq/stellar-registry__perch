@@ -1,6 +1,6 @@
 [package]
 name = "perch-testkit"
-description = "One-call bootstrap of the perch registry + stateless infra + account for tests"
+description = "One-call bootstrap of the perch registry + constructorless infra + account for tests"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

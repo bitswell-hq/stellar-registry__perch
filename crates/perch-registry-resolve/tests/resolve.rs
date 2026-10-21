@@ -2,7 +2,7 @@
 //!
 //! The derivation under test is pure SDK: `address(env, registry)` must equal
 //! `env.deployer().with_address(registry, wasm_hash).deployed_address()`, which
-//! is what the registry uses when it actually deploys a stateless singleton with
+//! is what the registry uses when it actually deploys a constructorless singleton with
 //! `salt == wasm_hash`. We prove that against a real `deploy_v2` (pinned mode)
 //! and against a real cross-contract `fetch_hash` (runtime mode).
 
@@ -81,7 +81,7 @@ registry_contract! {
 
 // Name-salted mode: salt = sha256(normalized name). Resolves a *named* deploy
 // (e.g. a subregistry) from its PARENT registry — how the account derives the
-// stateless subregistry from the pinned perch registry.
+// constructorless subregistry from the pinned perch registry.
 registry_contract! {
     mod: named,
     deploy_name: "fixture",
@@ -149,7 +149,7 @@ fn pinned_address_matches_actual_deployment() {
     );
 
     // Deploy it with salt == wasm hash and deployer == registry, exactly as the
-    // registry deploys a stateless singleton.
+    // registry deploys a constructorless singleton.
     let deployed = env
         .deployer()
         .with_address(registry.clone(), wasm_hash.clone())

@@ -42,7 +42,7 @@ enum Mode {
     /// local file holding it as hex (`hash_file:`), or the sha256 of a local
     /// wasm file (`wasm_file:`, computed at build time) — or, when none is
     /// given, fetched at call time (runtime). This is how a
-    /// stateless singleton (compiler, interpreter) is resolved from the registry
+    /// constructorless singleton (compiler, interpreter) is resolved from the registry
     /// it was `deploy_stateless`'d in.
     Content {
         wasm_name: LitStr,
@@ -587,7 +587,7 @@ fn expand(spec: &RegistrySpec) -> TokenStream2 {
     // `hash()` accessor + the salt expression `address()`/`client()` derive from.
     // Both sub-modes end at the same pure derivation:
     //     env.deployer().with_address(registry.clone(), <salt>).deployed_address()
-    // where <salt> is the contract's wasm hash (perch's stateless-singleton
+    // where <salt> is the contract's wasm hash (perch's constructorless-singleton
     // deploy convention: salt == wasm hash, so the address is a pure function of
     // (registry id, wasm hash) with no on-chain lookup).
     let (hash_items, derive_impl) = if let Some(bytes) = hash {

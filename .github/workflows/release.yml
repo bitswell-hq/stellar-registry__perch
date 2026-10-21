@@ -74,7 +74,7 @@ name: Release
 #
 # A third dispatch-only path, `attested-plan` → `attested-build` →
 # `attested-summary`, builds and attests perch-account and
-# perch-stateless-registry from main as GitHub release assets, for
+# perch-constructorless-registry from main as GitHub release assets, for
 # scripts/bootstrap-registry.sh, which takes only attested wasm. It publishes
 # nothing to any registry.
 #
@@ -145,7 +145,7 @@ on:
         required: false
         type: choice
         default: none
-        options: [none, both, perch-account, perch-stateless-registry]
+        options: [none, both, perch-account, perch-constructorless-registry]
       # npm's publish-only recovery: re-pack an existing <pkg>-v<version> tag
       # from its tagged commit and publish it through npm-pack/npm-publish
       # (npm-recovery-plan below). A failed run's own "Re-run failed jobs"
@@ -240,7 +240,7 @@ jobs:
           # crates/<contract>/Cargo.toml in a PR; on merge this tags + publishes
           # it. The constructorless allow-list in publish-plan decides which of
           # these actually publish on-chain (the rest just get a tag).
-          CONTRACTS="perch-interpreter perch-doc-compiler perch-ed25519-verifier perch-spending-limit perch-account perch-stateless-registry perch-recovery perch-webauthn-verifier perch-zk-pool perch-zk-adapter perch-account-factory"
+          CONTRACTS="perch-interpreter perch-doc-compiler perch-ed25519-verifier perch-spending-limit perch-account perch-constructorless-registry perch-recovery perch-webauthn-verifier perch-zk-pool perch-zk-adapter perch-account-factory"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           releases='[]'
@@ -378,7 +378,7 @@ jobs:
             perch-account-factory) echo "perch-account-factory perch-account perch-smart-account perch-doc-compiler perch-compile perch-ir perch-program perch-registry-resolve perch-registry-resolve-macro perch-recovery-interface perch-webauthn-verifier";;
             *) echo "$1";;
           esac; }
-          CONTRACTS="perch-interpreter perch-doc-compiler perch-ed25519-verifier perch-spending-limit perch-account perch-stateless-registry perch-recovery perch-webauthn-verifier perch-zk-pool perch-zk-adapter perch-account-factory"
+          CONTRACTS="perch-interpreter perch-doc-compiler perch-ed25519-verifier perch-spending-limit perch-account perch-constructorless-registry perch-recovery perch-webauthn-verifier perch-zk-pool perch-zk-adapter perch-account-factory"
           # The committed build-time hash pins (crates/*/wasm/*.sha256) move
           # only after a source change that already bumped the contract, in
           # the deploy(<network>) commit recording that deployment: never a
@@ -884,7 +884,7 @@ jobs:
   # scripts/bootstrap-registry.sh uses only wasm that `gh attestation verify`
   # traces to contract-release.yml building stellar-registry/perch's
   # refs/heads/main. The tier-0 releases above carry that. perch-account and
-  # perch-stateless-registry are tagged but never built here, so a manual
+  # perch-constructorless-registry are tagged but never built here, so a manual
   # dispatch from main (attested_build) builds them through the same pinned
   # reusable workflow as GitHub release assets: tag `<name>-v<version>`, asset
   # `<name>_v<version>.wasm`, like the tier-0. Nothing goes to any registry,
@@ -921,8 +921,8 @@ jobs:
             exit 1
           fi
           case "$BUILD" in
-            both) packages="perch-account perch-stateless-registry" ;;
-            perch-account|perch-stateless-registry) packages="$BUILD" ;;
+            both) packages="perch-account perch-constructorless-registry" ;;
+            perch-account|perch-constructorless-registry) packages="$BUILD" ;;
             *) echo "::error::unexpected attested_build '$BUILD'"; exit 1 ;;
           esac
           # What a contract build reads beyond the docs.
@@ -971,15 +971,16 @@ jobs:
       release_name: ${{ matrix.tag }}
       release_description: >-
         Attested build of ${{ matrix.package }} from main, for
-        scripts/bootstrap-registry.sh (--account-wasm or --stateless-wasm with
-        this tag). Not published to any registry.
+        scripts/bootstrap-registry.sh (--account-wasm or --constructorless-wasm
+        with this tag). Not published to any registry.
     secrets:
       release_token: ${{ secrets.GITHUB_TOKEN }}
 
   # Each asset's sha256 against what the repository records, for the captain
   # to judge: a mismatch is reported, never failed on. perch-account against
-  # the factory's committed pin and deployments/testnet.json; the stateless
-  # registry against the testnet registry code the bootstrap requires.
+  # the factory's committed pin and deployments/testnet.json. Nothing records
+  # the constructorless registry's code: the bootstrap deploys the attested
+  # asset itself.
   attested-summary:
     needs: [attested-plan, attested-build]
     if: ${{ !cancelled() && needs.attested-plan.result == 'success' }}
@@ -1022,8 +1023,8 @@ jobs:
               perch-account)
                 recorded="committed pin $(same "$sha" "$(tr -d '[:space:]' <crates/perch-account-factory/wasm/perch-account.sha256)"),"
                 recorded="$recorded testnet.json $(same "$sha" "$(jq -r '.contracts["perch-account"].sha256 // empty' deployments/testnet.json)")" ;;
-              perch-stateless-registry)
-                recorded="testnet.json registry code $(same "$sha" "$(jq -r '.registry.wasm_hash // empty' deployments/testnet.json)")" ;;
+              perch-constructorless-registry)
+                recorded="none: the bootstrap deploys this asset" ;;
             esac
             echo "| $tag/$asset | \`$sha\` | $verified | $recorded |" >>"$GITHUB_STEP_SUMMARY"
           done
