@@ -53,6 +53,11 @@ jobs:
       - name: Rehearse the bootstrap on a ${{ matrix.network }} fork
         env:
           NETWORK: ${{ matrix.network }}
+          # Read-only: `gh attestation verify` looks up each wasm's public
+          # attestations. A mainnet rehearsal needs the attested
+          # perch-account and perch-stateless-registry releases of this
+          # checkout's versions (docs/deploy/README.md).
+          GH_TOKEN: ${{ github.token }}
         run: scripts/rehearse-bootstrap.sh --network "$NETWORK"
       - if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

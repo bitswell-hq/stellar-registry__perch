@@ -25,9 +25,16 @@
 #      by a signer the real network knows, and exactly this run's overrides.
 #
 # Usage: scripts/rehearse-bootstrap.sh [--network testnet|mainnet] [--out DIR]
+#            [--account-wasm F|TAG] [--stateless-wasm F|TAG]
 #   --network  one network (default: testnet, then mainnet)
 #   --out      where each network's report and logs land
 #              (default target/rehearse-bootstrap/<network>)
+#   --account-wasm, --stateless-wasm   passed to the bootstrap. Without one, the
+#              release of this checkout's version (perch-account-vX.Y.Z,
+#              perch-stateless-registry-vX.Y.Z) when it exists; otherwise a
+#              testnet rehearsal passes --allow-unattested for that wasm (the
+#              account then built from this checkout), and a mainnet one stops:
+#              mainnet takes only attested wasm.
 # Env: SOROBAN_SIM, a soroban-sim binary built from SOROBAN_SIM_REV below;
 #      otherwise the script installs that commit under target/soroban-sim/.
 #
@@ -48,17 +55,19 @@ die() { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 sha256_file() { if command -v sha256sum >/dev/null; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi; }
 sha256_text() { printf '%s' "$1" | if command -v sha256sum >/dev/null; then sha256sum; else shasum -a 256; fi | cut -d' ' -f1; }
 
-networks=(testnet mainnet) out_base="$REPO/target/rehearse-bootstrap"
+networks=(testnet mainnet) out_base="$REPO/target/rehearse-bootstrap" account_wasm="" stateless_wasm=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --network) networks=("$2"); shift 2 ;;
         --out) out_base="$2"; shift 2 ;;
+        --account-wasm) account_wasm="$2"; shift 2 ;;
+        --stateless-wasm) stateless_wasm="$2"; shift 2 ;;
         -h|--help) awk 'NR>1 && /^#/{sub(/^# ?/,""); print; next} NR>1{exit}' "$0"; exit 0 ;;
         *) die "unknown option: $1" ;;
     esac
 done
 for n in "${networks[@]}"; do case "$n" in testnet|mainnet) ;; *) die "--network testnet or --network mainnet" ;; esac; done
-for tool in stellar jq python3 curl cargo; do command -v "$tool" >/dev/null || die "$tool not found on PATH"; done
+for tool in stellar jq python3 curl cargo gh; do command -v "$tool" >/dev/null || die "$tool not found on PATH"; done
 
 # --- soroban-sim, pinned -----------------------------------------------------
 
@@ -70,6 +79,27 @@ if [ ! -x "$SIM" ]; then
         --root "$REPO/target/soroban-sim/$SOROBAN_SIM_REV"
 fi
 
+# --- the wasm the bootstrap is given ---------------------------------------------
+
+# This checkout's version's release tag, when that release has its asset.
+released_tag() { # crate
+    local v
+    v="$(grep -m1 '^version = "' "$REPO/crates/$1/Cargo.toml" | sed 's/^version = "\(.*\)"/\1/')"
+    curl -fsIL -o /dev/null "https://github.com/stellar-registry/perch/releases/download/$1-v$v/$1_v$v.wasm" 2>/dev/null &&
+        echo "$1-v$v"
+}
+[ -n "$account_wasm" ] || account_wasm="$(released_tag perch-account || true)"
+[ -n "$stateless_wasm" ] || stateless_wasm="$(released_tag perch-stateless-registry || true)"
+# The bytes the authors must run: the file, the release asset the bootstrap
+# downloads, or its build of this checkout.
+if [ -f "$account_wasm" ]; then
+    account_file="$account_wasm"
+elif [ -n "$account_wasm" ]; then
+    account_file="$REPO/target/bootstrap-registry/wasm/$account_wasm.wasm"
+else
+    account_file="$REPO/target/bootstrap-registry/account/perch_account.wasm"
+fi
+
 # --- one network ---------------------------------------------------------------
 
 SERVER_PID=""
@@ -79,6 +109,18 @@ trap stop_server EXIT
 rehearse() {
     local network="$1" out passphrase url line role_source root perch constructorless nido role
     out="$out_base/$network"
+    local w opt flag name wasm_flags=()
+    for w in "account_wasm --account-wasm perch-account" "stateless_wasm --stateless-wasm perch-stateless-registry"; do
+        read -r opt flag name <<<"$w"
+        if [ -n "${!opt}" ]; then
+            wasm_flags+=("$flag" "${!opt}")
+        elif [ "$network" = testnet ]; then
+            log "$network: no attested $name release yet: rehearsing with --allow-unattested $name"
+            wasm_flags+=(--allow-unattested "$name")
+        else
+            die "$network: no attested $name release of this checkout's version: pass $flag <file or $name-vX.Y.Z> (mainnet takes only attested wasm)"
+        fi
+    done
     rm -rf "$out"
     mkdir -p "$out/stellar-config" "$out/stellar-data"
     case "$network" in
@@ -157,6 +199,7 @@ rehearse() {
     expiry=$(( $(rpc getLatestLedger '{}' | jq -r .sequence) + 518400 ))
     flags=(--network "$network" --source "$role" --admin-key "$admin_g" --ci-key "$ci_g" --ci-expiry-ledger "$expiry")
     [ "$network" != mainnet ] || flags+=(--i-mean-mainnet)
+    flags+=("${wasm_flags[@]}")
     (
         export STELLAR_SIGN_WITH_KEY=operator
         PERCH_ADMIN_KEY="$(stellar keys secret admin)"
@@ -194,7 +237,7 @@ rehearse() {
         done
         echo no
     }
-    account_hash="$(sha256_file "$REPO/target/bootstrap-registry/account/perch_account.wasm")"
+    account_hash="$(sha256_file "$account_file")"
     {
         echo "$network: derived addresses on the fork"
         check "root.fetch_contract_id(perch)" "$(read_call "$root" fetch_contract_id --contract-name perch)" "$perch"
