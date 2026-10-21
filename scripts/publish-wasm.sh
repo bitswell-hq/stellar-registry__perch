@@ -115,7 +115,7 @@ upload() {
         log "  code $hash is already on the ledger"
         uploaded=already
     elif $plan; then
-        send "upload $name" stellar contract upload "${build[@]}" --wasm "$wasm"
+        send "upload $name" stellar contract upload ${build[@]+"${build[@]}"} --wasm "$wasm"
     else
         local got
         got="$(stellar contract upload --wasm "$wasm")"
@@ -145,7 +145,7 @@ else
 
     if ! $published; then
         upload
-        send "publish_hash $name $version" stellar contract invoke "${build[@]}" --id "$registry" -- \
+        send "publish_hash $name $version" stellar contract invoke ${build[@]+"${build[@]}"} --id "$registry" -- \
             publish_hash --wasm_name "$name" --author "$author" --wasm_hash "$hash" --version "$version"
         if ! $plan; then
             onchain="$(view fetch_hash --wasm_name "$name" --version "\"$version\"" | tr -d '"')"
@@ -164,7 +164,7 @@ else
         if $deployed; then
             log "  already deployed at $address"
         else
-            send "deploy_stateless $name $version" stellar contract invoke "${build[@]}" --id "$registry" -- \
+            send "deploy_stateless $name $version" stellar contract invoke ${build[@]+"${build[@]}"} --id "$registry" -- \
                 deploy_stateless --wasm_name "$name" --version "\"$version\""
         fi
         if $plan; then

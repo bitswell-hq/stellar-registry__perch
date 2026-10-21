@@ -299,7 +299,9 @@ jobs:
       # registry.path derives on its network. An earlier deployment's account
       # compiled in its network's registry and never runs on mainnet. Each
       # wasm is fetched by the address or hash the manifest records and
-      # refused unless its sha256 is the recorded one.
+      # refused unless its sha256 is the recorded one. build.json keeps the
+      # zk circuit that deployment recorded, so the mainnet record names the
+      # circuit these bytes compile in, not this checkout's.
       - name: Fetch the testnet deployment's wasm by hash
         run: |
           set -euo pipefail

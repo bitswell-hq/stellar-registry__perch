@@ -307,10 +307,13 @@ mainnet_gate() { # what, estimated stroops
     [ "$NETWORK" != mainnet ] || [ "$I_MEAN_MAINNET" = 1 ] || die "mainnet needs --i-mean-mainnet"
 }
 
+# Every submission dies when it fails: `all` runs its steps under `||`, where
+# set -e does not reach a failed command inside them.
 send_invoke() { # contract fn args...
     local id="$1"
     shift
-    stellar contract invoke "${NET[@]}" --id "$id" --source-account "$SOURCE" --send=yes -- "$@" </dev/null
+    stellar contract invoke "${NET[@]}" --id "$id" --source-account "$SOURCE" --send=yes -- "$@" </dev/null ||
+        die "submitting $id.$1 failed"
 }
 
 require_signer() { # role-address what
@@ -336,7 +339,8 @@ ensure_code() { # name hash [file]
     COST=$((COST + ${fee:-0}))
     [ "$SEND" = 1 ] || return 0
     mainnet_gate "the $1 upload" "$fee"
-    stellar contract upload "${NET[@]}" --source-account "$SOURCE" --wasm "$f" </dev/null
+    stellar contract upload "${NET[@]}" --source-account "$SOURCE" --wasm "$f" </dev/null ||
+        die "submitting the $1 upload failed"
 }
 
 # --- the chain ------------------------------------------------------------------
@@ -619,7 +623,7 @@ cmd_create_author() {
             if [ "$SEND" = 1 ]; then
                 mainnet_gate "deploying the $project author" "$fee"
                 r="$(stellar contract deploy "${NET[@]}" --source-account "$SOURCE" --wasm-hash "$hash" --salt "$salt" \
-                    -- --admin_signers "$signer" </dev/null)"
+                    -- --admin_signers "$signer" </dev/null)" || die "submitting the $project author's deploy failed"
                 [ "$(grep -o 'C[A-Z2-7]\{55\}' <<<"$r" | tail -n 1)" = "$author" ] || die "the $project author deployed to $r, not $author"
             fi
         else
@@ -691,7 +695,7 @@ cmd_create_author() {
     [ -n "${PERCH_ADMIN_KEY:-}" ] || die "--send needs PERCH_ADMIN_KEY, the secret of $ADMIN_KEY_G"
     mainnet_gate "the $project author's apply_doc" "$(fee_of "$author" apply_doc --doc_json "$hex" --approval_valid_until 0 --expected_revision 0)"
     cargo run --locked --manifest-path "$REPO/Cargo.toml" -q -p perch-deploy -- --rpc-url "$RPC_URL" --network-passphrase "$PASSPHRASE" \
-        apply --account "$author" --doc "$docfile" </dev/null
+        apply --account "$author" --doc "$docfile" </dev/null || die "submitting the $project author's apply_doc failed"
     author_scoped "$author" "$reg" || die "after apply_doc, $author has no ci-publish on $reg"
     log "$project author verified on chain: ci-publish on $reg"
 }

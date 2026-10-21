@@ -203,6 +203,9 @@ fi
 # 4. Manifest
 # ---------------------------------------------------------------------------
 mkdir -p "$(dirname "$manifest")"
+# The zk adapter and pool compile their circuit in: a fetched stack's
+# build.json carries the circuit its deployment recorded, and a stack built
+# here has this checkout's.
 circuit="$repo_root/circuits/manifest.json"
 jq -n \
     --arg network "$STELLAR_NETWORK" --arg passphrase "$PASSPHRASE" --arg rpc "$RPC_URL" \
@@ -224,7 +227,7 @@ jq -n \
       source: $build[0].source,
       toolchain: $build[0].toolchain,
       registry: {id: $reg, wasm_hash: $reg_wasm, admin: $admin, manager: $manager, root: $root},
-      zk: {circuit_id: $circuit_id, tree_depth: $depth, circuit_manifest: "circuits/manifest.json"},
+      zk: ($build[0].zk // {circuit_id: $circuit_id, tree_depth: $depth, circuit_manifest: "circuits/manifest.json"}),
       contracts: ($contracts | with_entries(.value |= del(.package)))
     }' >"$manifest"
 log "wrote ${manifest#"$repo_root"/}; check it with scripts/verify-deployment.sh --manifest ${manifest#"$repo_root"/}"

@@ -30,7 +30,8 @@
 #   --manifest  default deployments/${STELLAR_NETWORK:-testnet}.json
 #   --stack     also fetch every manifest contract into <dir> and write
 #               <dir>/build.json, so tests/release_stack.rs runs against the
-#               deployed bytes
+#               deployed bytes; it keeps the manifest's zk circuit, which
+#               those bytes compile in
 #
 # Requires the Stellar CLI. After a redeploy, run
 # `cargo test -p perch-integration-tests --test testnet_pins`.
@@ -140,7 +141,7 @@ if [ -n "$stack" ]; then
     for name in $(m '.contracts | keys[]'); do
         fetch "$name" "$stack/${name//-/_}.wasm"
     done
-    jq '{registry: .registry.id, source, toolchain,
+    jq '{registry: .registry.id, source, toolchain} + (if .zk then {zk} else {} end) + {
          artifacts: [.contracts | to_entries[] |
            {package: .key, version: .value.version, wasm: (.key | gsub("-"; "_") + ".wasm"),
             sha256: .value.sha256, bytes: .value.bytes, tier: .value.tier,

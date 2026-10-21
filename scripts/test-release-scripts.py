@@ -11,7 +11,8 @@ dispatch, compiles nothing, and reads only the mainnet environment's
 settings, which released commits a mainnet dispatch may publish
 (scripts/mainnet-plan.sh), what a mainnet publish sends and that its plan
 sends nothing (scripts/publish-wasm.sh), what a stack deploy sends and
-records (scripts/deploy-stack.sh), the contract-id derivation the release
+records (scripts/deploy-stack.sh), that a registry bootstrap fails on a
+refused submission (scripts/bootstrap-registry.sh), the contract-id derivation the release
 scripts share (scripts/derive-id.py) and the registry each network publishes
 into (scripts/registry-target.sh), the deploy-record perch-artifacts bump
 (scripts/deploy-record-bump.sh), what a stack build records as dirty
@@ -1401,12 +1402,14 @@ class MainnetSettings(unittest.TestCase):
 
 
 # A `stellar` that keeps a registry and a ledger in a JSON file and logs every
-# call, for scripts/publish-wasm.sh and scripts/deploy-stack.sh. Any call that
-# would send a transaction changes the state; --build-only, --send=no, and
-# `tx` calls never do. deploy_stateless answers ADDR, or with FAKE_DERIVE
-# (scripts/derive-id.py) the real content address.
+# call, for scripts/publish-wasm.sh, scripts/deploy-stack.sh and
+# scripts/fetch-infra-wasm.sh. Any call that would send a transaction changes
+# the state; --build-only, --send=no, and `tx` calls never do.
+# deploy_stateless answers ADDR, or with FAKE_DERIVE (scripts/derive-id.py)
+# the real content address. A fetch writes FAKE_CODE/<hash>.wasm when there
+# is one, else an empty file.
 FAKE_STELLAR = r"""#!/usr/bin/env python3
-import hashlib, importlib.util, json, os, sys
+import hashlib, importlib.util, json, os, shutil, sys
 args = sys.argv[1:]
 state_file, log_file = os.environ["FAKE_STATE"], os.environ["FAKE_LOG"]
 with open(state_file) as f:
@@ -1433,9 +1436,14 @@ elif args[:2] == ["tx", "simulate"]:
 elif args[:2] == ["tx", "decode"]:
     sys.stdin.read(); print(json.dumps({"tx": {"tx": {"fee": 1234}}}))
 elif args[:2] == ["contract", "fetch"]:
-    if opt("--wasm-hash") not in state["installed"]:
+    h = state["deployed"].get(opt("--id")) if "--id" in args else opt("--wasm-hash")
+    if h not in state["installed"]:
         sys.exit("Contract Code not found")
-    open(opt("--out-file"), "w").close()
+    code = os.path.join(os.environ.get("FAKE_CODE", ""), str(h) + ".wasm")
+    if "FAKE_CODE" in os.environ and os.path.exists(code):
+        shutil.copyfile(code, opt("--out-file"))
+    else:
+        open(opt("--out-file"), "w").close()
 elif args[:3] == ["contract", "info", "hash"]:
     if opt("--id") not in state["deployed"]:
         sys.exit("no contract")
@@ -1470,6 +1478,19 @@ elif args[:2] == ["contract", "invoke"]:
 else:
     sys.exit("unexpected call " + " ".join(args))
 """
+
+
+def old_bash():
+    """macOS's /bin/bash 3.2, or any bash before 4.4: there, under set -u,
+    "${a[@]}" of an empty array is an unbound variable."""
+    if not os.path.exists("/bin/bash"):
+        return None
+    out = run(["/bin/bash", "-c", 'echo "${BASH_VERSINFO[0]} ${BASH_VERSINFO[1]}"'], REPO, check=False)
+    major, minor = map(int, out.stdout.split())
+    return "/bin/bash" if (major, minor) < (4, 4) else None
+
+
+OLD_BASH = old_bash()
 
 
 @unittest.skipUnless(shutil.which("jq"), "jq not on PATH")
@@ -1528,8 +1549,8 @@ class PublishWasm(unittest.TestCase):
                 out.append(c[c.index("--") + 1])
         return out
 
-    def publish(self, *extra, check=True):
-        out = subprocess.run([PUBLISH_WASM, "--registry", self.REGISTRY, "--author", self.AUTHOR,
+    def publish(self, *extra, check=True, bash=None):
+        out = subprocess.run([*([bash] if bash else []), PUBLISH_WASM, "--registry", self.REGISTRY, "--author", self.AUTHOR,
                               "--name", "perch-x", "--version", "1.0.0", "--wasm", self.wasm, *extra],
                              capture_output=True, text=True, env=self.env)
         if check:
@@ -1560,6 +1581,23 @@ class PublishWasm(unittest.TestCase):
         self.assertEqual((out["status"], out["address"]), ("published", self.ADDR))
         publish = next(c for c in self.calls() if "publish_hash" in c)
         self.assertIn(self.AUTHOR, publish)
+
+    @unittest.skipUnless(OLD_BASH, "no bash before 4.4 (macOS's /bin/bash 3.2)")
+    def test_a_run_under_macos_bash_sends_every_transaction(self):
+        out = self.publish(bash=OLD_BASH)
+        self.assertEqual(self.sent(), ["upload", "publish_hash", "deploy_stateless"])
+        self.assertEqual((out["status"], out["address"]), ("published", self.ADDR))
+
+    def test_every_send_survives_an_empty_build_array(self):
+        # A real run's build=() is empty: a bare "${build[@]}" aborts a bash
+        # before 4.4 under set -u, which the test above runs where it can.
+        with open(PUBLISH_WASM) as f:
+            lines = [l for l in f if not l.lstrip().startswith("#")]
+        uses = [l for l in lines if "build[@]" in l]
+        self.assertGreaterEqual(len(uses), 2)
+        for l in uses:
+            with self.subTest(line=l.strip()):
+                self.assertNotIn("build[@]", l.replace('${build[@]+"${build[@]}"}', ""))
 
     def test_a_different_hash_under_the_version_is_refused_before_anything_is_sent(self):
         self.set_state({"perch-x@1.0.0": "ab" * 32})
@@ -1969,6 +2007,201 @@ class DeployStack(unittest.TestCase):
         self.set_state({}, [], {})
         self.assertIn("not deployed there", self.deploy(check=False))
         self.assertEqual(self.sent(), [])
+
+    def test_a_promoted_stack_records_its_deployments_circuit(self):
+        # A mainnet promotion: scripts/fetch-infra-wasm.sh --stack takes a
+        # testnet deployment's bytes, then deploy-stack.sh records them. The
+        # zk adapter and pool compile their circuit in, so the record keeps
+        # that deployment's circuit (depth 32), never the checkout's, which
+        # has moved on (depth 33). Both run from a scratch checkout, against
+        # a ledger already serving the stack.
+        checkout = os.path.join(self.dir, "checkout")
+        for f in ("scripts/fetch-infra-wasm.sh", "scripts/deploy-stack.sh", "scripts/publish-wasm.sh",
+                  "scripts/derive-id.py", "scripts/manifest-registry.sh",
+                  "crates/perch-smart-account/wasm/registry.path", "crates/perch-account-factory/wasm/registry.path"):
+            os.makedirs(os.path.dirname(os.path.join(checkout, f)), exist_ok=True)
+            shutil.copy2(os.path.join(REPO, f), os.path.join(checkout, f))
+        open(os.path.join(checkout, "Cargo.toml"), "w").close()
+        os.makedirs(os.path.join(checkout, "circuits"))
+        with open(os.path.join(checkout, "circuits", "manifest.json"), "w") as f:
+            json.dump({"circuits": {"perch_zk_recovery": {"vk_sha256": "0x" + "33" * 32, "depth": 33}}}, f)
+        circuit = {"circuit_id": "32" * 32, "tree_depth": 32, "circuit_manifest": "circuits/manifest.json"}
+        # Every name the fetch pins, each served at its content address.
+        with open(os.path.join(self.stack, "build.json")) as f:
+            artifacts = json.load(f)["artifacts"]
+        for pkg in ("perch-interpreter", "perch-spending-limit"):
+            data = b"\0asm\1\0\0\0" + pkg.encode()
+            self.hash[pkg] = hashlib.sha256(data).hexdigest()
+            with open(os.path.join(self.stack, pkg.replace("-", "_") + ".wasm"), "wb") as f:
+                f.write(data)
+            artifacts.append({"package": pkg, "version": "0.1.0", "sha256": self.hash[pkg], "bytes": len(data), "tier": 0})
+            self.content[pkg] = run(["python3", DERIVE_ID, "content", self.registry, self.hash[pkg],
+                                     PASSPHRASES["testnet"]], REPO).stdout.strip()
+        code = os.path.join(self.dir, "code")
+        shutil.move(self.stack, code)
+        for a in artifacts:
+            os.rename(os.path.join(code, a["package"].replace("-", "_") + ".wasm"),
+                      os.path.join(code, a["sha256"] + ".wasm"))
+        testnet = os.path.join(self.dir, "deployed-testnet.json")
+        with open(testnet, "w") as f:
+            json.dump({"schema": 1, "network": "testnet", "network_passphrase": PASSPHRASES["testnet"],
+                       "rpc_url": "http://127.0.0.1:9", "source": {"commit": "ab" * 20, "dirty": False},
+                       "toolchain": {"builder": "scaffold"}, "registry": {"id": self.registry}, "zk": circuit,
+                       "contracts": {a["package"]: {
+                           "version": a["version"], "sha256": a["sha256"], "bytes": a["bytes"], "tier": a["tier"],
+                           "pins": a.get("pins", {}),
+                           **({} if a["package"] == "perch-account" else {"address": self.content[a["package"]]})}
+                           for a in artifacts}}, f)
+        self.set_state({p + "@0.1.0": h for p, h in self.hash.items()}, self.hash.values(),
+                       {self.registry: "e" * 64,
+                        **{self.content[p]: h for p, h in self.hash.items() if p != "perch-account"}})
+        env = {**self.env, "FAKE_CODE": code, "STELLAR_FETCH_ATTEMPTS": "1"}
+        for cmd in ([os.path.join(checkout, "scripts", "fetch-infra-wasm.sh"), "--manifest", testnet, "--stack", self.stack],
+                    [os.path.join(checkout, "scripts", "deploy-stack.sh"), "--author", self.AUTHOR, "--stack", self.stack,
+                     "--manifest", self.manifest, "--reuse", "perch-doc-compiler perch-interpreter"]):
+            out = subprocess.run(cmd, capture_output=True, text=True, env=env)
+            self.assertEqual(out.returncode, 0, out.stderr)
+        with open(self.manifest) as f:
+            m = json.load(f)
+        self.assertEqual(m["zk"], circuit)
+        self.assertEqual({p: c["sha256"] for p, c in m["contracts"].items()}, self.hash)
+        self.assertEqual(self.sent(), [])
+
+
+@unittest.skipUnless(shutil.which("jq") and shutil.which("curl"), "jq or curl not on PATH")
+class BootstrapRegistry(unittest.TestCase):
+    """scripts/bootstrap-registry.sh all, against a fake `stellar` whose
+    ledger has every step done but the perch names, and which refuses every
+    submission: --send fails at the first refused one."""
+
+    REPO_WORK = os.path.join(REPO, "target", "bootstrap-registry")
+
+    FAKE = r"""#!/usr/bin/env python3
+import json, os, sys
+args = sys.argv[1:]
+with open(os.environ["FAKE_STATE"]) as f:
+    state = json.load(f)
+with open(os.environ["FAKE_LOG"], "a") as f:
+    f.write(json.dumps(args) + "\n")
+def opt(name):
+    return args[args.index(name) + 1]
+if args[:4] == ["ledger", "entry", "fetch", "contract-data"]:
+    wasm = state["contracts"].get(opt("--contract"))
+    entries = [] if wasm is None else [{"val": {"contract_data": {"val": {"contract_instance": {"executable": {"wasm": wasm}}}}}}]
+    print(json.dumps({"entries": entries}))
+elif args[:4] == ["ledger", "entry", "fetch", "contract-code"]:
+    print(json.dumps({"entries": [{"liveUntilLedgerSeq": 2}], "latestLedger": 1}))
+elif args[:2] == ["tx", "simulate"]:
+    sys.stdin.read(); print("SIMULATED")
+elif args[:2] == ["tx", "decode"]:
+    sys.stdin.read(); print(json.dumps({"tx": {"tx": {"fee": 100}}}))
+elif args[:2] == ["contract", "invoke"]:
+    cid, fn = opt("--id"), args[args.index("--") + 1]
+    rest = args[args.index("--") + 2:]
+    a = dict(zip(rest[::2], rest[1::2]))
+    if "--build-only" in args:
+        print("UNSIGNED")
+    elif "--send=yes" in args:
+        sys.exit("error: transaction submission failed")
+    elif fn in ("admin", "manager"):
+        print('"' + state["role"] + '"')
+    elif fn == "current_version":
+        print('"1.0.0"')
+    elif fn == "fetch_contract_id":
+        at = state["names"].get(cid, {}).get(a["--contract-name"])
+        if at is None:
+            sys.exit("HostError: Error(Contract, #4)")
+        print('"' + at + '"')
+    elif fn == "fetch_hash":
+        # With no version, the name's latest.
+        published = state["published"].get(cid, {})
+        if "--version" in a:
+            h = published.get(a["--wasm_name"] + "@" + a["--version"].strip('"'))
+        else:
+            h = next((v for k, v in published.items() if k.split("@")[0] == a["--wasm_name"]), None)
+        if h is None:
+            sys.exit("HostError: Error(Contract, #1)")
+        print('"' + h + '"')
+    elif fn == "publish_hash":
+        print("null")
+    elif fn == "infra":
+        print(json.dumps(state["infra"]))
+    elif fn == "get_context_rules_count":
+        print(len(state["rules"].get(cid, [])))
+    elif fn == "get_context_rule":
+        print(json.dumps(state["rules"][cid][int(a["--context_rule_id"])]))
+    else:
+        sys.exit("unexpected invoke " + fn)
+else:
+    sys.exit("unexpected call " + " ".join(args))
+"""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.dir)
+        bin_dir = os.path.join(self.dir, "bin")
+        os.makedirs(bin_dir)
+        with open(os.path.join(bin_dir, "stellar"), "w") as f:
+            f.write(self.FAKE)
+        os.chmod(os.path.join(bin_dir, "stellar"), 0o755)
+        t = PASSPHRASES["testnet"]
+        derive = lambda *a: run(["python3", DERIVE_ID, *a], REPO).stdout.strip()
+        self.source = "GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H"  # ed25519 key 0x01 * 32, no secret anywhere
+        root, perch, constructorless = derive("chain", t).split()
+        self.account = os.path.join(self.dir, "perch_account.wasm")
+        account = b"\0asm\1\0\0\0perch-account"
+        with open(self.account, "wb") as f:
+            f.write(account)
+        with open(os.path.join(REPO, "deployments", "testnet.json")) as f:
+            manifest = json.load(f)
+        tier0 = {n: manifest["contracts"][n] for n in
+                 ("perch-doc-compiler", "perch-interpreter", "perch-spending-limit", "perch-ed25519-verifier")}
+        at = {n: derive("content", constructorless, c["sha256"], t) for n, c in tier0.items()}
+        author = derive("name", self.source, "perch-author", t)
+        self.names = [n for n, c in manifest["contracts"].items() if c.get("address") and n not in tier0]
+        state = {
+            "role": self.source,
+            "contracts": {root: "e" * 64, perch: "e" * 64, constructorless: manifest["registry"]["wasm_hash"],
+                          author: hashlib.sha256(account).hexdigest(),
+                          **{at[n]: c["sha256"] for n, c in tier0.items()}},
+            "names": {root: {"perch": perch}, perch: {"constructorless": constructorless}},
+            "published": {perch: {"perch-stateless-registry@0.1.0": manifest["registry"]["wasm_hash"]},
+                          constructorless: {n + "@" + c["version"]: c["sha256"] for n, c in tier0.items()}},
+            "infra": {"doc_compiler": at["perch-doc-compiler"], "interpreter": at["perch-interpreter"],
+                      "spending_limit": at["perch-spending-limit"]},
+            "rules": {author: [{"name": "ci-publish", "context_type": {"CallContract": constructorless}}]},
+        }
+        self.state_file = os.path.join(self.dir, "state.json")
+        with open(self.state_file, "w") as f:
+            json.dump(state, f)
+        self.log_file = os.path.join(self.dir, "log")
+        self.env = {**os.environ, "PATH": bin_dir + os.pathsep + os.environ["PATH"],
+                    "FAKE_STATE": self.state_file, "FAKE_LOG": self.log_file, "STELLAR_RPC_URL": "http://127.0.0.1:9"}
+
+    def bootstrap(self, *extra):
+        return subprocess.run([os.path.join(REPO, "scripts", "bootstrap-registry.sh"), "--network", "testnet",
+                               "--source", self.source, "--account-wasm", self.account, "--no-nido", "all", *extra],
+                              capture_output=True, text=True, env=self.env)
+
+    def submissions(self):
+        with open(self.log_file) as f:
+            return [c for c in map(json.loads, f) if "--send=yes" in c]
+
+    def test_a_dry_run_plans_every_name(self):
+        out = self.bootstrap()
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("all done", out.stderr)
+        self.assertEqual(self.submissions(), [])
+        for n in self.names:
+            self.assertIn(n + " -> ", out.stderr)
+
+    def test_a_refused_submission_fails_the_run(self):
+        self.assertTrue(self.names)
+        out = self.bootstrap("--send")
+        self.assertNotEqual(out.returncode, 0, out.stderr)
+        self.assertNotIn("done", out.stderr)
+        self.assertEqual(len(self.submissions()), 1)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
