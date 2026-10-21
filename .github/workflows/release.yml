@@ -146,6 +146,15 @@ on:
         type: choice
         default: none
         options: [none, both, perch-account, perch-stateless-registry]
+      # npm's publish-only recovery: re-pack an existing <pkg>-v<version> tag
+      # from its tagged commit and publish it through npm-pack/npm-publish
+      # (npm-recovery-plan below). A failed run's own "Re-run failed jobs"
+      # replays that run's workflow file, so it cannot pick up a fix to the
+      # publish step; this can. Never creates a tag.
+      npm_publish_tag:
+        description: "Existing tag of an npm package to (re)pack from its tagged commit and publish to npm, e.g. perch-js-v0.4.1"
+        required: false
+        type: string
 
 permissions: {}
 
@@ -156,7 +165,7 @@ permissions: {}
 # skips a same-hash republish and refuses a different-hash one, and
 # deploy_stateless is idempotent.
 concurrency:
-  group: ${{ github.event_name == 'workflow_dispatch' && format('release-plz-dispatch-{0}', inputs.publish_tag) || 'release-plz' }}
+  group: ${{ github.event_name == 'workflow_dispatch' && format('release-plz-dispatch-{0}{1}', inputs.publish_tag, inputs.npm_publish_tag) || 'release-plz' }}
   cancel-in-progress: false
 
 jobs:
@@ -505,26 +514,88 @@ jobs:
   # workflow file and the `npm` environment, so a job outside that environment
   # cannot publish (docs/deploy/README.md "Release-path settings"). A failed
   # publish can be re-run: the tag and the CI-tested head sha are unchanged on
-  # a re-run, so it publishes exactly the tagged commit.
+  # a re-run, so it publishes exactly the tagged commit. A re-run replays the
+  # failed run's workflow file, though; when the publish step itself needed a
+  # fix, dispatch `npm_publish_tag` from main instead (npm-recovery-plan).
+  #
+  # The npm_publish_tag dispatch: one existing <pkg>-v<version> tag, whose
+  # commit is on main and whose manifest is that version, fed to npm-pack and
+  # npm-publish in place of detect-releases's output. It never tags.
+  npm-recovery-plan:
+    if: github.event_name == 'workflow_dispatch' && inputs.npm_publish_tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # the tag and its manifest
+    outputs:
+      npm_releases: ${{ steps.plan.outputs.npm_releases }}
+      head_sha: ${{ steps.plan.outputs.head_sha }}
+      artifacts_tag: ${{ steps.plan.outputs.artifacts_tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0 # the tags, and the commits they name
+          persist-credentials: false
+      - name: Which tag to publish
+        id: plan
+        env:
+          TAG: ${{ inputs.npm_publish_tag }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "::error::dispatch npm_publish_tag from main, not $GITHUB_REF"
+            exit 1
+          fi
+          # Keep in step with detect-releases's list.
+          NPM_PACKAGES="perch-js perch-interpreter-js perch-zk perch-relay perch-contracts perch-artifacts"
+          # Strict shape: the tag, package and version flow into later shells.
+          if ! [[ "$TAG" =~ ^([a-z-]+)-v([0-9]+\.[0-9]+\.[0-9]+)$ ]] || [[ " $NPM_PACKAGES " != *" ${BASH_REMATCH[1]} "* ]]; then
+            echo "::error::npm_publish_tag '$TAG' is not <pkg>-v<semver> for a package in: $NPM_PACKAGES"
+            exit 1
+          fi
+          p=${BASH_REMATCH[1]} ver=${BASH_REMATCH[2]}
+          if ! at=$(git rev-parse -q --verify "refs/tags/$TAG^{commit}"); then
+            echo "::error::$TAG is not tagged: only detect-releases tags a release, and this dispatch never does"
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$at" "$GITHUB_SHA"; then
+            echo "::error::$TAG is on $at, which is not on main"
+            exit 1
+          fi
+          manifest=$(jq -r .version <(git show "$at:packages/$p/package.json"))
+          if [ "$manifest" != "$ver" ]; then
+            echo "::error::packages/$p/package.json at $TAG is version '$manifest', not $ver"
+            exit 1
+          fi
+          {
+            echo "npm_releases=$(jq -cn --arg p "$p" --arg t "$TAG" --arg v "$ver" '[{package: $p, tag: $t, version: $v}]')"
+            echo "head_sha=$at"
+            [ "$p" != perch-artifacts ] || echo "artifacts_tag=$TAG"
+          } >>"$GITHUB_OUTPUT"
+          echo "- re-packing and publishing $TAG from $at (npm)" >>"$GITHUB_STEP_SUMMARY"
+
   npm-pack:
-    needs: [ci-green, detect-releases]
+    needs: [ci-green, detect-releases, npm-recovery-plan]
     if: >-
-      !cancelled() && needs.ci-green.outputs.go == 'true' &&
-      needs.detect-releases.outputs.npm_released == 'true'
+      !cancelled() && (
+        (needs.ci-green.outputs.go == 'true' &&
+         needs.detect-releases.outputs.npm_released == 'true') ||
+        needs.npm-recovery-plan.result == 'success'
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: read # check out the tested commit
     strategy:
       fail-fast: false
       matrix:
-        release: ${{ fromJSON(needs.detect-releases.outputs.npm_releases) }}
+        release: ${{ fromJSON(needs.detect-releases.outputs.npm_releases || needs.npm-recovery-plan.outputs.npm_releases) }}
     defaults:
       run:
         working-directory: packages/${{ matrix.release.package }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event.workflow_run.head_sha || needs.npm-recovery-plan.outputs.head_sha }}
           persist-credentials: false
       # No dependency cache in a release job (zizmor cache-poisoning: nothing a
       # cache write could later inject into a published package).
@@ -553,11 +624,9 @@ jobs:
           retention-days: 7
 
   npm-publish:
-    needs: [ci-green, detect-releases, npm-pack]
+    needs: [ci-green, detect-releases, npm-recovery-plan, npm-pack]
     if: >-
-      !cancelled() && needs.ci-green.outputs.go == 'true' &&
-      needs.detect-releases.outputs.npm_released == 'true' &&
-      needs.npm-pack.result == 'success'
+      !cancelled() && needs.npm-pack.result == 'success'
     runs-on: ubuntu-latest
     environment: npm
     permissions:
@@ -565,7 +634,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        release: ${{ fromJSON(needs.detect-releases.outputs.npm_releases) }}
+        release: ${{ fromJSON(needs.detect-releases.outputs.npm_releases || needs.npm-recovery-plan.outputs.npm_releases) }}
     steps:
       # Trusted publishing needs npm 11.5.1 or later; Node 24 bundles it. No
       # registry-url: npm's default registry is the one the OIDC exchange
@@ -581,7 +650,7 @@ jobs:
         env:
           PACKAGE: ${{ matrix.release.package }}
           VERSION: ${{ matrix.release.version }}
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha || needs.npm-recovery-plan.outputs.head_sha }}
         run: |
           set -euo pipefail
           npm_version=$(npm --version)
@@ -600,24 +669,30 @@ jobs:
           [ "$packed" = "$VERSION" ] || { echo "::error::$tgz is version $packed, the tag is $VERSION"; exit 1; }
           head=$(jq -r '.gitHead // ""' <<<"$manifest")
           [ "$head" = "$HEAD_SHA" ] || { echo "::error::$tgz was packed from '$head', the tag is on $HEAD_SHA"; exit 1; }
-          npm publish "$tgz" --provenance --ignore-scripts
+          # "./": npm reads a bare `pack/<name>.tgz` as a GitHub user/repo
+          # shorthand and tries to clone it.
+          npm publish "./$tgz" --provenance --ignore-scripts
 
   # Tell nidohq/nido about each deployment record this run's
   # @stellar-registry/perch-artifacts release ships (nido-dispatch.yml). It
   # runs only after npm-publish, so the package version the dispatch names
   # already carries the manifest; nido-dispatch.yml checks that on the
   # registry before sending. `!cancelled()` lets another package's failed leg
-  # pass: the registry check is what gates the send.
+  # pass: the registry check is what gates the send. An npm_publish_tag
+  # dispatch of a perch-artifacts tag notifies the same way.
   notify-nido:
-    needs: [ci-green, detect-releases, npm-publish]
+    needs: [ci-green, detect-releases, npm-recovery-plan, npm-publish]
     if: >-
-      !cancelled() && needs.ci-green.outputs.go == 'true' &&
-      needs.detect-releases.outputs.artifacts_tag != ''
+      !cancelled() && (
+        (needs.ci-green.outputs.go == 'true' &&
+         needs.detect-releases.outputs.artifacts_tag != '') ||
+        needs.npm-recovery-plan.outputs.artifacts_tag != ''
+      )
     permissions:
       contents: read
     uses: ./.github/workflows/nido-dispatch.yml
     with:
-      tag: ${{ needs.detect-releases.outputs.artifacts_tag }}
+      tag: ${{ needs.detect-releases.outputs.artifacts_tag || needs.npm-recovery-plan.outputs.artifacts_tag }}
 
   # ── Constructorless contract publishes ────────────────────────────────────
   # The generic, contract-agnostic half: any released infra contract in the
