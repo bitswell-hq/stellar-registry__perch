@@ -1663,6 +1663,20 @@ class DeriveId(unittest.TestCase):
                     self.assertEqual(self.py("name", self.py("name", root, "perch", PASSPHRASES[network]),
                                              "constructorless", PASSPHRASES[network]), registry)
 
+    def test_the_chain_lists_every_hop(self):
+        for network, (root, registry) in self.CHAINS.items():
+            if root:
+                with self.subTest(network=network):
+                    perch = self.py("name", root, "perch", PASSPHRASES[network])
+                    self.assertEqual(self.py("chain", PASSPHRASES[network]).split("\n"), [root, perch, registry])
+
+    def test_key_is_the_account_strkeys_ed25519_key(self):
+        deployer = REGISTRY_PATH_TEXT.split()[1]
+        key = self.py("key", deployer)
+        self.assertRegex(key, "^[0-9a-f]{64}$")
+        self.assertEqual(base64.b32decode(deployer)[1:33].hex(), key)
+        self.assertIn("not an account strkey", self.py("key", self.CHAINS["testnet"][0], check=False))
+
     def test_path_names_normalize_as_the_account_does(self):
         # Lowercased, `_` read as `-`; `path /` names the root itself.
         t = PASSPHRASES["testnet"]
