@@ -565,6 +565,7 @@ cmd_publish_stateless() {
 cmd_constructorless() {
     local init args at r fee
     if [ "$PRESENT_perch" != 1 ]; then
+        wasm_file "$STATELESS_NAME" "$STATELESS_HASH"
         warn "stops here: perch is not on $NETWORK yet"
         plan "then: $PERCH.deploy(\"$STATELESS_NAME\", \"$STATELESS_VERSION\", \"constructorless\", owner $OWNER_G, [admin $ADMIN_G, manager $MANAGER_G, root $ROOT], None) -> $CONSTRUCTORLESS"
         return 1

@@ -68,6 +68,9 @@ while [ $# -gt 0 ]; do
 done
 for n in "${networks[@]}"; do case "$n" in testnet|mainnet) ;; *) die "--network testnet or --network mainnet" ;; esac; done
 for tool in stellar jq python3 curl cargo gh; do command -v "$tool" >/dev/null || die "$tool not found on PATH"; done
+# The bootstrap's `gh attestation verify` keeps the caller's gh login, which
+# the stellar profile below would hide by moving XDG_CONFIG_HOME.
+export GH_CONFIG_DIR="${GH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/gh}"
 
 # --- soroban-sim, pinned -----------------------------------------------------
 
