@@ -112,6 +112,7 @@ DEFAULTS = dict(
     devonly="1.0.0",
     toolonly="1.0.0",
     member_version="0.1.0",
+    tool_version=None,
     members='"crates/contract", "crates/lib", "crates/tool"',
     opt_level="z",
     sdk_deps='"sdk-macros"',
@@ -120,6 +121,7 @@ DEFAULTS = dict(
 
 def workspace(repo, **over):
     v = {**DEFAULTS, **over}
+    v["tool_version"] = v["tool_version"] or v["member_version"]
     sdk = f'{{ version = "1.0.0", features = [{v["sdk_features"]}] }}' if v["sdk_features"] else '"1.0.0"'
     repo.write("Cargo.toml", f"""\
         [workspace]
@@ -165,7 +167,7 @@ def workspace(repo, **over):
     repo.write("crates/tool/Cargo.toml", f"""\
         [package]
         name = "tool"
-        version = "{v["member_version"]}"
+        version = "{v["tool_version"]}"
 
         [dependencies]
         sdk = {{ workspace = true }}
@@ -192,7 +194,7 @@ def workspace(repo, **over):
 
         [[package]]
         name = "tool"
-        version = "{v["member_version"]}"
+        version = "{v["tool_version"]}"
         dependencies = ["sdk", "toolonly"]
 
         [[package]]
@@ -388,6 +390,93 @@ def paths_for(contract):
 
 def contract_lists():
     return re.findall(r'^ *CONTRACTS="([^"]*)"', release_yml(), re.M)
+
+
+class BuildInputs(unittest.TestCase):
+    """release-deps.py inputs: what attested-plan compares between a tag's
+    commit and the commit it builds, for one package."""
+
+    def setUp(self):
+        self.repo = Repo()
+        workspace(self.repo)
+        self.repo.write("rust-toolchain.toml", '[toolchain]\nchannel = "stable"\n')
+        self.repo.write("crates/contract/src/lib.rs", "pub fn f() {}\n")
+        self.repo.commit("feat(contract): first release")
+
+    def tearDown(self):
+        self.repo.cleanup()
+
+    def changed(self, extra=None, **over):
+        workspace(self.repo, **over)
+        if extra:
+            extra(self.repo)
+        self.repo.commit("change")
+        return self.repo.deps("inputs", "contract", "HEAD~1", "HEAD")
+
+    def test_nothing_changed_is_no_input(self):
+        self.assertEqual(self.changed(), [])
+
+    def test_an_unlinked_crates_version_bump_is_no_input(self):
+        self.assertEqual(self.changed(tool_version="0.2.0"), [])
+
+    def test_a_lock_change_outside_the_closure_is_no_input(self):
+        self.assertEqual(self.changed(toolonly="1.5.0"), [])
+        self.assertEqual(self.changed(toolonly="1.5.0", devonly="2.0.0"), [])
+
+    def test_unrelated_files_are_no_input(self):
+        self.assertEqual(self.changed(extra=lambda r: r.write("crates/tool/src/main.rs", "fn main() {}\n")), [])
+        self.assertEqual(self.changed(extra=lambda r: r.write("docs/a.md", "a\n")), [])
+
+    def test_a_change_in_the_crate_is_an_input(self):
+        self.assertEqual(self.changed(extra=lambda r: r.write("crates/contract/src/lib.rs", "pub fn g() {}\n")),
+                         ["crates/contract/ changed"])
+
+    def test_a_change_in_a_path_dependency_is_an_input(self):
+        self.assertEqual(self.changed(extra=lambda r: r.write("crates/lib/src/lib.rs", "pub fn g() {}\n")),
+                         ["crates/lib/ changed"])
+        self.assertEqual(self.changed(extra=lambda r: r.write("vendor/v/src/lib.rs", "pub fn g() {}\n")),
+                         ["vendor/v/ changed"])
+
+    def test_a_linked_crates_version_bump_is_an_input(self):
+        changes = self.changed(member_version="0.2.0")
+        self.assertIn("crates/contract/ changed", changes)
+        self.assertIn("crates/lib/ changed", changes)
+        self.assertIn("Cargo.lock lib changed", changes)
+
+    def test_a_lock_change_in_the_closure_is_an_input(self):
+        self.assertEqual(self.changed(field="3.1.0"), [
+            "Cargo.lock field 3.0.0 registry+https://github.com/rust-lang/crates.io-index removed",
+            "Cargo.lock field 3.1.0 registry+https://github.com/rust-lang/crates.io-index added"])
+        changes = self.changed(field="3.1.0", oz_rev="bbbbbbbbbbbbbbbb")
+        self.assertIn("Cargo.toml [workspace.dependencies] oz changed", changes)
+        self.assertTrue(any(c.startswith("Cargo.lock oz-accounts 0.7.1 git+") and c.endswith(" added") for c in changes), changes)
+
+    def test_a_checksum_change_is_an_input(self):
+        def checksum(r):
+            with open(os.path.join(r.dir, "Cargo.lock")) as f:
+                text = f.read()
+            text = text.replace('name = "field"\nversion = "3.0.0"\n',
+                                'name = "field"\nversion = "3.0.0"\nchecksum = "' + "c" * 64 + '"\n')
+            with open(os.path.join(r.dir, "Cargo.lock"), "w") as f:
+                f.write(text)
+        self.assertEqual(self.changed(extra=checksum),
+                         ["Cargo.lock field 3.0.0 registry+https://github.com/rust-lang/crates.io-index changed"])
+
+    def test_the_build_settings_are_inputs(self):
+        self.assertEqual(self.changed(opt_level="s"), ["Cargo.toml [profile] changed"])
+        self.assertEqual(self.changed(opt_level="s", sdk_features='"alloc"'), ["Cargo.toml [workspace.dependencies] sdk changed"])
+        settled = dict(opt_level="s", sdk_features='"alloc"')
+        self.assertEqual(self.changed(extra=lambda r: r.write("rust-toolchain.toml", '[toolchain]\nchannel = "1.90"\n'), **settled),
+                         ["rust-toolchain.toml changed"])
+        self.assertEqual(self.changed(extra=lambda r: r.write(".cargo/config.toml", "[build]\n"), **settled),
+                         [".cargo/config.toml changed"])
+
+    def test_a_file_included_from_outside_the_closure_is_an_input(self):
+        self.repo.write("crates/contract/src/lib.rs", 'const K: &[u8] = include_bytes!("../../../circuits/k.bin");\n')
+        self.repo.write("circuits/k.bin", "one\n")
+        self.repo.commit("include")
+        self.assertEqual(self.changed(extra=lambda r: r.write("circuits/k.bin", "two\n")), ["circuits/k.bin changed"])
+        self.assertEqual(self.changed(extra=lambda r: r.write("circuits/other.bin", "x\n")), [])
 
 
 class ReleaseScope(unittest.TestCase):
@@ -1285,11 +1374,32 @@ sys.exit(0 if args[2] in os.environ.get("FAKE_RELEASED", "").split() else "relea
                 self.assertNotIn("vars.", body)
                 self.assertEqual(set(re.findall(r"secrets\.([A-Za-z0-9_]+)", body)) - {"GITHUB_TOKEN"}, set())
 
+    def workspace(self, other="0.1.0", ext_a="1.0.0", ext_b="1.0.0", ext_c="1.0.0"):
+        """The two packages and an unrelated crate: perch-account links the
+        path crate perch-lib and ext-a, the registry links ext-b, and
+        perch-other (linked by neither) links ext-c."""
+        self.repo.write("Cargo.toml", '[workspace]\nmembers = ["crates/*"]\n\n[profile.release]\nopt-level = "z"\n')
+        crates = {"perch-account": ("0.4.0", ['perch-lib = { version = "0.1.0", path = "../perch-lib" }', 'ext-a = "1"'],
+                                    ["ext-a", "perch-lib"]),
+                  "perch-lib": ("0.1.0", [], []),
+                  "perch-constructorless-registry": ("0.1.3", ['ext-b = "1"'], ["ext-b"]),
+                  "perch-other": (other, ['ext-c = "1"'], ["ext-c"])}
+        lock = ["version = 3"]
+        for c, (v, deps, locked) in crates.items():
+            self.repo.write(f"crates/{c}/Cargo.toml",
+                            f'[package]\nname = "{c}"\nversion = "{v}"\n\n[dependencies]\n' + "".join(d + "\n" for d in deps))
+            lock.append(f'[[package]]\nname = "{c}"\nversion = "{v}"\ndependencies = {json.dumps(locked)}')
+        for n, v in (("ext-a", ext_a), ("ext-b", ext_b), ("ext-c", ext_c)):
+            lock.append(f'[[package]]\nname = "{n}"\nversion = "{v}"\n'
+                        'source = "registry+https://github.com/rust-lang/crates.io-index"')
+        self.repo.write("Cargo.lock", "\n\n".join(lock) + "\n")
+
     def setUp(self):
         self.repo = Repo()
         self.addCleanup(self.repo.cleanup)
-        for c, v in (("perch-account", "0.4.0"), ("perch-constructorless-registry", "0.1.3")):
-            self.repo.write(f"crates/{c}/Cargo.toml", f'[package]\nname = "{c}"\nversion = "{v}"\n')
+        self.workspace()
+        os.makedirs(os.path.join(self.repo.dir, "scripts"))
+        shutil.copy(RELEASE_DEPS, os.path.join(self.repo.dir, "scripts", "release-deps.py"))
         self.repo.write("docs/a.md", "a\n")
         self.repo.commit("feat: contracts")
         bin_dir = os.path.join(self.repo.dir, ".bin")
@@ -1340,6 +1450,39 @@ sys.exit(0 if args[2] in os.environ.get("FAKE_RELEASED", "").split() else "relea
         self.assertIn("perch-constructorless-registry-v0.1.3 is not tagged yet", r.stdout)
         self.assertIsNone(matrix)
         self.assertEqual(run(["git", "tag", "-l", "perch-constructorless-registry-*"], self.repo.dir).stdout, "")
+
+    def behind(self, change, message="change"):
+        """Tag both versions, then commit `change` on top: the plan for each
+        package, as (returncode, stdout)."""
+        self.tag("perch-account-v0.4.0", "perch-constructorless-registry-v0.1.3")
+        change()
+        self.repo.commit(message)
+        return {p: self.plan(p)[0] for p in ("perch-account", "perch-constructorless-registry")}
+
+    def test_an_unlinked_crates_version_bump_does_not_block(self):
+        # A release commit that bumps only another crate (fb26f9c for the
+        # registry's tag on ada73bb).
+        for p, r in self.behind(lambda: self.workspace(other="0.2.0"), "chore: release").items():
+            with self.subTest(package=p):
+                self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_a_change_in_the_package_or_a_path_dependency_blocks(self):
+        plans = self.behind(lambda: self.repo.write("crates/perch-lib/src/lib.rs", "// changed\n"))
+        self.assertNotEqual(plans["perch-account"].returncode, 0)
+        self.assertIn("build inputs differ", plans["perch-account"].stdout)
+        self.assertIn("crates/perch-lib/ changed", plans["perch-account"].stdout)
+        self.assertEqual(plans["perch-constructorless-registry"].returncode, 0, plans["perch-constructorless-registry"].stdout)
+
+    def test_a_lock_change_in_the_closure_blocks_and_one_outside_does_not(self):
+        plans = self.behind(lambda: self.workspace(ext_b="1.1.0"))
+        self.assertNotEqual(plans["perch-constructorless-registry"].returncode, 0)
+        self.assertIn("Cargo.lock ext-b 1.1.0", plans["perch-constructorless-registry"].stdout)
+        self.assertEqual(plans["perch-account"].returncode, 0, plans["perch-account"].stdout)
+
+    def test_a_lock_change_outside_both_closures_does_not_block(self):
+        for p, r in self.behind(lambda: self.workspace(ext_c="2.0.0")).items():
+            with self.subTest(package=p):
+                self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
     def test_a_tag_behind_main_is_built_only_when_its_build_inputs_match(self):
         self.tag("perch-account-v0.4.0", "perch-constructorless-registry-v0.1.3")

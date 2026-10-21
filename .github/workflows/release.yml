@@ -891,8 +891,9 @@ jobs:
   # and no secret beyond the release token is read.
   #
   # The tag must already exist (detect-releases tags every version of both)
-  # and sit on the commit built, or on one with the same build inputs, so a
-  # release's asset is always a build of its tag's source. A dispatch never
+  # and sit on the commit built, or on one where everything the package
+  # builds from is the same (scripts/release-deps.py inputs), so a release's
+  # asset is always a build of its tag's source. A dispatch never
   # creates a tag: detect-releases would then skip that version.
   attested-plan:
     if: github.event_name == 'workflow_dispatch' && inputs.attested_build != 'none'
@@ -925,8 +926,6 @@ jobs:
             perch-account|perch-constructorless-registry) packages="$BUILD" ;;
             *) echo "::error::unexpected attested_build '$BUILD'"; exit 1 ;;
           esac
-          # What a contract build reads beyond the docs.
-          inputs=(crates vendor circuits Cargo.toml Cargo.lock rust-toolchain.toml .cargo)
           matrix='[]'
           for p in $packages; do
             ver=$(grep -m1 '^version = "' "crates/$p/Cargo.toml" | sed 's/^version = "\(.*\)"/\1/')
@@ -939,9 +938,18 @@ jobs:
               echo "::error::$tag is not tagged yet: detect-releases tags it once the version bump passes CI as main's tip; dispatch after that"
               exit 1
             fi
-            if [ "$at" != "$GITHUB_SHA" ] && ! git diff --quiet "$at" "$GITHUB_SHA" -- "${inputs[@]}"; then
-              echo "::error::$tag is on $at, whose build inputs differ from $GITHUB_SHA: release a new $p version (the release PR, or a bump) and dispatch once main's tip has its tag"
-              exit 1
+            # Only what this package builds from (scripts/release-deps.py
+            # inputs): another crate's version bump since the tag is not a
+            # reason to refuse.
+            if [ "$at" != "$GITHUB_SHA" ]; then
+              if ! changed=$(python3 scripts/release-deps.py inputs "$p" "$at" "$GITHUB_SHA"); then
+                echo "::error::could not compare $p's build inputs on $at and $GITHUB_SHA"
+                exit 1
+              fi
+              if [ -n "$changed" ]; then
+                echo "::error::$tag is on $at, whose build inputs differ from $GITHUB_SHA for $p ($(paste -sd ';' - <<<"$changed")): release a new $p version (the release PR, or a bump) and dispatch once main's tip has its tag"
+                exit 1
+              fi
             fi
             if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
               echo "::error::$tag already has a GitHub release; its asset is what the bootstrap downloads"
