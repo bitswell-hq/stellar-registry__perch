@@ -438,10 +438,8 @@ the passphrase. Every address is derived (`derive-id.py chain`, `name`,
 above, and it reads the root's registry version and manager and each
 registry's admin and manager from the chain. Hashes and versions come from
 `deployments/testnet.json`, checked against the account's committed pins.
-The bytes come from three places, each checked against its sha256: the
-seeded tier-0 from their GitHub release assets, the stateless registry from
-testnet by hash, and the account from this checkout
-(`stellar contract build --package perch-account`, or `--account-wasm`).
+Every wasm the script uploads, publishes or deploys must hash to its pin and
+then carry an attestation ([Attested wasm](#attested-wasm)).
 
 Every step is a dry run unless `--send` is given: it simulates from the
 source's address and loads no secret. Mainnet `--send` also needs
@@ -456,8 +454,73 @@ scripts/bootstrap-registry.sh --network mainnet --source <root manager> create-r
 scripts/bootstrap-registry.sh --network mainnet --source <root manager> create-registry --name nido
 # Then the rest; each command is a dry run until --send (and, on mainnet, --i-mean-mainnet).
 scripts/bootstrap-registry.sh --network mainnet --source <registries' manager> \
+  --account-wasm perch-account-v<X.Y.Z> --stateless-wasm perch-stateless-registry-v<X.Y.Z> \
   --admin-key <G> --ci-key <G> --ci-expiry-ledger <N> all
 ```
+
+### Attested wasm
+
+The script takes only bytes that GitHub's build provenance traces to the
+release build of this repository's main. After the sha256 check against its
+pin, each wasm must pass, dry runs included:
+
+```sh
+gh attestation verify <wasm> --owner stellar-registry \
+  --signer-workflow stellar-registry/actions/.github/workflows/contract-release.yml \
+  --source-ref refs/heads/main --format json
+```
+
+and the verified certificate's source repository must be
+`https://github.com/stellar-registry/perch`. Use `--owner`, not `--repo`:
+`--repo stellar-registry/perch` alone also requires the signing workflow to
+live in stellar-registry/perch, and `contract-release.yml` lives in
+stellar-registry/actions, so it fails on every release. The script checks a
+wasm only when a step would upload, publish or deploy it; a step the chain
+already shows as done needs no bytes.
+
+| wasm | bytes from | pin |
+| --- | --- | --- |
+| the four tier-0 | their GitHub release assets | `deployments/testnet.json` and the account's committed pins |
+| `perch-stateless-registry` | `--stateless-wasm`: a file, or a release tag (`perch-stateless-registry-vX.Y.Z`) whose asset is downloaded; by default fetched from testnet by hash | the testnet registry code, `4b2d9ea4…` |
+| `perch-account` | `--account-wasm`: a file, or a release tag (`perch-account-vX.Y.Z`) | none: the authors' `infra()` check confirms it resolves this network's tier-0 |
+
+A wasm with no attestation is refused unless `--allow-unattested <name>`
+names it. That flag is repeatable, prints a warning for each name and each
+wasm it lets through, and is refused with `--network mainnet`. Without
+`--account-wasm` the script builds the account from this checkout, and only
+with `--allow-unattested perch-account`.
+
+The tier-0 releases already carry attestations. `perch-account` and
+`perch-stateless-registry` get theirs from `release.yml`'s `attested_build`
+dispatch input. The `attested-plan`, `attested-build` and `attested-summary`
+jobs build them from main through the same pinned `contract-release.yml`
+as the tier-0, each as a GitHub release of its existing
+`<name>-v<version>` tag with the asset `<name>_v<version>.wasm`. They
+publish nothing to any registry, run in no environment, and read no secret
+except the release token. `attested-plan` refuses a dispatch from any ref
+but main, a version detect-releases has not tagged yet, a tag whose commit
+has build inputs (`crates`, `vendor`, `circuits`, `Cargo.toml`,
+`Cargo.lock`, `rust-toolchain.toml`, `.cargo`) that differ from main's tip,
+and a tag that already has a release. The job never creates a tag, because
+detect-releases would then skip that version. The run's summary lists each
+asset's sha256, whether its attestation verifies, and whether it equals
+the recorded hash: the account against the factory's committed pin and
+`deployments/testnet.json`, the stateless registry against `4b2d9ea4…`. A
+mismatch is reported, never failed on. The bootstrap still requires the
+stateless registry to hash to `4b2d9ea4…`, so an attested build of other
+bytes is usable only after that pin moves.
+
+The order:
+
+1. Merge the change, and let its release land: detect-releases tags each
+   bumped version. A version whose tag sits on a commit with other build
+   inputs needs a new version first (the release PR, or a bump).
+2. Dispatch the release from main:
+   `gh workflow run release.yml --ref main -f attested_build=both`, and read
+   its summary.
+3. Bootstrap with the tags:
+   `--account-wasm perch-account-v<X.Y.Z> --stateless-wasm perch-stateless-registry-v<X.Y.Z>`,
+   testnet first, mainnet later.
 
 ### Order, and who signs
 
@@ -574,6 +637,12 @@ keys. The script then checks every derived address on the fork, and that a
 dry rerun of `all` finds nothing left to do. It also checks the fork's
 report: it passed, no envelope carries a signature the real network would
 accept, and it lists exactly the overrides the run made.
+
+`--account-wasm` and `--stateless-wasm` pass through to the bootstrap.
+Without them the rehearsal uses the release of this checkout's version of
+each, if it exists. Otherwise a testnet rehearsal passes `--allow-unattested`
+for that wasm and builds the account from this checkout. A mainnet
+rehearsal stops instead, because mainnet takes only attested wasm.
 
 ```sh
 scripts/rehearse-bootstrap.sh                     # testnet, then mainnet

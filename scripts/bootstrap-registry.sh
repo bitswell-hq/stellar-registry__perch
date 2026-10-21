@@ -44,12 +44,28 @@
 #                      this script cannot sign
 #   --ci-key G         the authors' ci-publish delegate (required with --send)
 #   --ci-expiry-ledger N   ci-publish's not-after-ledger (required with --send)
-#   --account-wasm F   the perch-account wasm (default: built from this checkout
-#                      with `stellar contract build --package perch-account`)
+#   --account-wasm F|TAG   the perch-account wasm: a file, or a release tag
+#                      (perch-account-vX.Y.Z) whose asset is downloaded. Without
+#                      it the account is built from this checkout (`stellar
+#                      contract build --package perch-account`), which only
+#                      --allow-unattested perch-account permits
+#   --stateless-wasm F|TAG   the perch-stateless-registry wasm: a file, or a
+#                      release tag (perch-stateless-registry-vX.Y.Z); default
+#                      fetched from testnet by the deployment's hash. It must
+#                      hash to deployments/testnet.json's registry code
+#   --allow-unattested NAME   use NAME's wasm although no attestation verifies
+#                      it (repeatable; refused with --network mainnet)
 #   --nido-names "a b" names bound to the nido author (default "nido-factory nido-name-registry")
 #   --no-nido          leave nido out of preflight and all
 #   --send             sign and submit; otherwise every step is a dry run of simulations
 #   --i-mean-mainnet   required with --network mainnet --send
+#
+# Every wasm a step uploads, publishes or deploys, dry runs included, must
+# first hash to its pin and then pass `gh attestation verify`: built by
+# stellar-registry/actions' contract-release.yml from stellar-registry/perch's
+# refs/heads/main (docs/deploy/README.md, "Bootstrapping a network's registry
+# chain"). The tier-0 come from their releases; --account-wasm and
+# --stateless-wasm take a release tag for the other two.
 #
 # Env: STELLAR_RPC_URL overrides the network's RPC (a rehearsal points it at a
 # soroban-sim fork: scripts/rehearse-bootstrap.sh). PERCH_ADMIN_KEY, the admin
@@ -72,7 +88,7 @@ warn() { printf '\033[1;33m!!\033[0m %s\n' "$*" >&2; }
 die() { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 usage() { awk 'NR>1 && /^#/{sub(/^# ?/,""); print; next} NR>1{exit}' "$0"; }
 
-for tool in stellar jq python3 curl od; do
+for tool in stellar jq python3 curl od gh; do
     command -v "$tool" >/dev/null || die "$tool not found on PATH"
 done
 sha256_file() { if command -v sha256sum >/dev/null; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi; }
@@ -82,7 +98,7 @@ sha256_text() { printf '%s' "$1" | if command -v sha256sum >/dev/null; then sha2
 
 NETWORK="" STEP="" SOURCE="" OWNER="" ADMIN="" MANAGER_ROLE="" NAME="" PROJECT=perch
 ADMIN_KEY="" ADMIN_SIGNER=external CI_KEY="" CI_EXPIRY="" ACCOUNT_WASM="" NIDO=1
-NIDO_NAMES="nido-factory nido-name-registry" SEND=0 I_MEAN_MAINNET=0
+NIDO_NAMES="nido-factory nido-name-registry" SEND=0 I_MEAN_MAINNET=0 STATELESS_WASM="" ALLOW_UNATTESTED=" "
 while [ $# -gt 0 ]; do
     case "$1" in
         --network) NETWORK="$2"; shift 2 ;;
@@ -97,6 +113,8 @@ while [ $# -gt 0 ]; do
         --ci-key) CI_KEY="$2"; shift 2 ;;
         --ci-expiry-ledger) CI_EXPIRY="$2"; shift 2 ;;
         --account-wasm) ACCOUNT_WASM="$2"; shift 2 ;;
+        --stateless-wasm) STATELESS_WASM="$2"; shift 2 ;;
+        --allow-unattested) ALLOW_UNATTESTED="$ALLOW_UNATTESTED$2 "; shift 2 ;;
         --nido-names) NIDO_NAMES="$2"; shift 2 ;;
         --no-nido) NIDO=0; shift ;;
         --send) SEND=1; shift ;;
@@ -136,6 +154,9 @@ mkdir -p "$OUT" "$WASM_DIR"
 if [ "$SEND" = 1 ] && [ "$NETWORK" = mainnet ] && [ "$I_MEAN_MAINNET" != 1 ]; then
     die "--network mainnet --send also needs --i-mean-mainnet"
 fi
+if [ "$ALLOW_UNATTESTED" != " " ] && [ "$NETWORK" = mainnet ]; then
+    die "--allow-unattested is refused with --network mainnet: mainnet takes only attested wasm"
+fi
 
 # --- what the repository pins ----------------------------------------------------
 
@@ -160,6 +181,12 @@ for n in "${SEEDED[@]}"; do
         die "the account pins $n $(cat "$PINS/$n.sha256"), but $MANIFEST records $h: seed what the account pins"
     fi
     TIER0+=("$n $v $h")
+done
+for n in $ALLOW_UNATTESTED; do
+    case " ${SEEDED[*]} perch-account $STATELESS_NAME " in
+        *" $n "*) warn "--allow-unattested $n: $n's wasm is used on $NETWORK even if no attestation verifies it" ;;
+        *) die "--allow-unattested names a wasm this script uses: ${SEEDED[*]} perch-account $STATELESS_NAME (got $n)" ;;
+    esac
 done
 hash_of_seeded() { local row; for row in "${TIER0[@]}"; do [ "${row%% *}" != "$1" ] || { echo "${row##* }"; return; }; done; }
 ED25519_HASH="$(hash_of_seeded perch-ed25519-verifier)"
@@ -257,47 +284,117 @@ hash_in() { # registry name [version]
     fi
 }
 
-# Wasm bytes by hash, sha256 checked: the seeded tier-0 from their release
-# assets, the stateless registry from the testnet deployment's chain, the
-# account from --account-wasm or this checkout's build.
-wasm_file() { # name hash
+# --- the wasm this run uses ---------------------------------------------------
+
+# What every wasm must be attested by: the release workflow's build
+# (contract-release.yml, the same signer the tier-0 releases carry) of
+# stellar-registry/perch's main. The source repository is read from the
+# verified certificate: `--repo stellar-registry/perch` alone would also demand
+# a signer workflow in that repository, and the signer lives in
+# stellar-registry/actions.
+ATTEST_OWNER=stellar-registry
+ATTEST_SOURCE=https://github.com/stellar-registry/perch
+ATTEST_SIGNER=stellar-registry/actions/.github/workflows/contract-release.yml
+ATTEST_REF=refs/heads/main
+ATTESTED=" "
+
+# Require a wasm's attestation, once per hash. Called in this shell, never in
+# a command substitution, so its die ends the run even under `all`'s `||`.
+attest() { # name file
+    local h out commit=""
+    h="$(sha256_file "$2")"
+    [[ "$ATTESTED" != *" $h "* ]] || return 0
+    if out="$(gh attestation verify "$2" --owner "$ATTEST_OWNER" --signer-workflow "$ATTEST_SIGNER" \
+        --source-ref "$ATTEST_REF" --format json </dev/null 2>&1)"; then
+        commit="$(jq -r --arg s "$ATTEST_SOURCE" --arg r "$ATTEST_REF" 'first(.[].verificationResult.signature.certificate
+            | select(.sourceRepositoryURI == $s and .sourceRepositoryRef == $r) | .sourceRepositoryDigest) // empty' \
+            <<<"$out" 2>/dev/null || true)"
+        [ -n "$commit" ] || out="verified, but not as a build of $ATTEST_SOURCE $ATTEST_REF"
+    fi
+    if [ -n "$commit" ]; then
+        log "$1 $h is attested: built by $ATTEST_SIGNER from ${ATTEST_SOURCE#https://github.com/}@$commit"
+    elif [[ "$ALLOW_UNATTESTED" == *" $1 "* ]]; then
+        warn "UNATTESTED: $1 $h ($2) has no attestation from $ATTEST_SIGNER on $ATTEST_SOURCE $ATTEST_REF"
+        warn "UNATTESTED: using it anyway because --allow-unattested $1"
+    else
+        die "$1 $h ($2) has no attestation from $ATTEST_SIGNER on $ATTEST_SOURCE $ATTEST_REF: $(grep -v '^[[:space:]]*$' <<<"$out" | tail -n 1)
+       use its release asset (--account-wasm perch-account-vX.Y.Z, --stateless-wasm $STATELESS_NAME-vX.Y.Z),
+       or, off mainnet, --allow-unattested $1"
+    fi
+    ATTESTED="$ATTESTED$h "
+}
+
+release_asset() { # name version out-file
+    log "downloading $1 $2 from its release ($RELEASES/$1-v$2)"
+    rm -f "$3"
+    curl -fsSL --retry 3 -o "$3.tmp" "$RELEASES/$1-v$2/$1_v$2.wasm" && mv "$3.tmp" "$3"
+}
+
+# --account-wasm or --stateless-wasm: a file, or a release tag of that name.
+option_wasm() { # name option value -> WASM
+    if [ -f "$3" ]; then
+        [ -s "$3" ] || die "$2 $3 is empty"
+        WASM="$3"
+    elif [[ "$3" =~ ^$1-v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+        WASM="$WASM_DIR/$3.wasm"
+        release_asset "$1" "${BASH_REMATCH[1]}" "$WASM" || true
+        [ -s "$WASM" ] || die "could not download $3's $1_v${BASH_REMATCH[1]}.wasm"
+    else
+        die "$2 $3 is neither a file nor a $1-vX.Y.Z release tag"
+    fi
+}
+
+# Wasm bytes by hash into WASM, sha256 checked, then attested: the seeded
+# tier-0 from their release assets, the stateless registry from
+# --stateless-wasm or the testnet deployment's chain.
+WASM=""
+wasm_file() { # name hash -> WASM
     local f="$WASM_DIR/$1-$2.wasm" row n v h
-    if [ ! -f "$f" ]; then
+    if [ "$1" = "$STATELESS_NAME" ] && [ -n "$STATELESS_WASM" ]; then
+        option_wasm "$1" --stateless-wasm "$STATELESS_WASM"
+        [ "$(sha256_file "$WASM")" = "$2" ] ||
+            die "--stateless-wasm $STATELESS_WASM is $(sha256_file "$WASM"), not the registry code $2 that $MANIFEST records"
+        f="$WASM"
+    elif [ ! -f "$f" ]; then
         for row in "${TIER0[@]}"; do
             read -r n v h <<<"$row"
             [ "$n" = "$1" ] || continue
-            log "downloading $1 $v from its release ($RELEASES/$1-v$v)"
-            curl -fsSL --retry 3 -o "$f.tmp" "$RELEASES/$1-v$v/$1_v$v.wasm" && mv "$f.tmp" "$f"
+            release_asset "$1" "$v" "$f" || true
         done
         if [ "$1" = "$STATELESS_NAME" ]; then
             log "fetching $1 $2 from $BYTES_RPC"
             stellar contract fetch --rpc-url "$BYTES_RPC" --network-passphrase "$BYTES_PASSPHRASE" \
-                --wasm-hash "$2" --out-file "$f" </dev/null
+                --wasm-hash "$2" --out-file "$f" </dev/null || true
         fi
     fi
     [ -f "$f" ] || die "no source for $1 $2"
     [ "$(sha256_file "$f")" = "$2" ] || { rm -f "$f"; die "$1 is not $2"; }
-    printf '%s\n' "$f"
+    attest "$1" "$f"
+    WASM="$f"
 }
 
-# The perch-account wasm: --account-wasm, or built once from this checkout
-# against its committed pins and registry.path.
+# The perch-account wasm into WASM, attested: --account-wasm, or, only with
+# --allow-unattested perch-account, built once from this checkout against its
+# committed pins and registry.path.
 ACCOUNT_FILE=""
-account_wasm() {
+account_wasm() { # -> WASM
     if [ -z "$ACCOUNT_FILE" ]; then
         if [ -n "$ACCOUNT_WASM" ]; then
-            [ -s "$ACCOUNT_WASM" ] || die "--account-wasm $ACCOUNT_WASM is missing or empty"
-            ACCOUNT_FILE="$ACCOUNT_WASM"
+            option_wasm perch-account --account-wasm "$ACCOUNT_WASM"
+            ACCOUNT_FILE="$WASM"
         else
+            [[ "$ALLOW_UNATTESTED" == *" perch-account "* ]] ||
+                die "no --account-wasm: pass the attested release (--account-wasm perch-account-vX.Y.Z), or, off mainnet, --allow-unattested perch-account to build it from this checkout"
             log "building perch-account from this checkout (stellar contract build)"
             mkdir -p "$WORK/account"
             (cd "$REPO" && stellar contract build --package perch-account --out-dir "$WORK/account") \
                 >"$WORK/account/build.log" 2>&1 || { cat "$WORK/account/build.log" >&2; die "the perch-account build failed"; }
             ACCOUNT_FILE="$WORK/account/perch_account.wasm"
         fi
+        attest perch-account "$ACCOUNT_FILE"
         cp "$ACCOUNT_FILE" "$WASM_DIR/perch-account-$(sha256_file "$ACCOUNT_FILE").wasm"
     fi
-    printf '%s\n' "$ACCOUNT_FILE"
+    WASM="$ACCOUNT_FILE"
 }
 
 # --- sending -----------------------------------------------------------------
@@ -332,7 +429,7 @@ ensure_code() { # name hash [file]
         return
     fi
     [ "$SEND" = 1 ] || DRY_UPLOADED="$DRY_UPLOADED $2"
-    f="${3:-$(wasm_file "$1" "$2")}"
+    if [ -n "${3:-}" ]; then f="$3"; else wasm_file "$1" "$2"; f="$WASM"; fi
     tx="$(stellar contract upload "${NET[@]}" --source-account "$SRC_G" --wasm "$f" --build-only </dev/null)"
     fee="$(fee_of_tx <<<"$tx")"
     plan "upload $1 ($(wc -c <"$f" | tr -d ' ') bytes) to $NETWORK: simulated fee $(xlm "$fee")"
@@ -443,6 +540,7 @@ cmd_code() { ensure_code "$STATELESS_NAME" "$STATELESS_HASH"; }
 cmd_publish_stateless() {
     local have args fee
     if [ "$PRESENT_perch" != 1 ]; then
+        wasm_file "$STATELESS_NAME" "$STATELESS_HASH"
         warn "stops here: perch is not on $NETWORK yet"
         plan "then: $PERCH.publish_hash(\"$STATELESS_NAME\", $PERCH_AUTHOR (the perch author), $STATELESS_HASH, \"$STATELESS_VERSION\"), signed by perch's manager"
         return 1
@@ -453,6 +551,7 @@ cmd_publish_stateless() {
         return
     fi
     [ -z "$have" ] || die "perch publishes $STATELESS_NAME $STATELESS_VERSION as $have, not $STATELESS_HASH"
+    wasm_file "$STATELESS_NAME" "$STATELESS_HASH"
     args=(publish_hash --wasm_name "$STATELESS_NAME" --author "$PERCH_AUTHOR" --wasm_hash "$STATELESS_HASH" --version "$STATELESS_VERSION")
     log "simulate perch.publish_hash: $(simulate "$PERCH" "${args[@]}")"
     fee="$(fee_of "$PERCH" "${args[@]}")"
@@ -466,6 +565,7 @@ cmd_publish_stateless() {
 cmd_constructorless() {
     local init args at r fee
     if [ "$PRESENT_perch" != 1 ]; then
+        wasm_file "$STATELESS_NAME" "$STATELESS_HASH"
         warn "stops here: perch is not on $NETWORK yet"
         plan "then: $PERCH.deploy(\"$STATELESS_NAME\", \"$STATELESS_VERSION\", \"constructorless\", owner $OWNER_G, [admin $ADMIN_G, manager $MANAGER_G, root $ROOT], None) -> $CONSTRUCTORLESS"
         return 1
@@ -478,6 +578,7 @@ cmd_constructorless() {
         return
     fi
     [ -z "$at" ] || die "perch's constructorless points at $at, not $CONSTRUCTORLESS"
+    wasm_file "$STATELESS_NAME" "$STATELESS_HASH"
     [ "$(hash_in "$PERCH" "$STATELESS_NAME" "$STATELESS_VERSION")" = "$STATELESS_HASH" ] ||
         { warn "stops here: perch does not publish $STATELESS_NAME $STATELESS_VERSION yet (publish-stateless)"; return 1; }
     # A named deploy with no deployer: salt sha256("constructorless") from
@@ -501,6 +602,9 @@ cmd_seed() {
     local row n v h at have args fee
     for row in "${TIER0[@]}"; do
         read -r n v h <<<"$row"
+        # Deployed at its content address means published and deployed:
+        # anything less is still to publish or deploy.
+        [ "$(executable_of "$(content "$CONSTRUCTORLESS" "$h")")" = "$h" ] || wasm_file "$n" "$h"
         ensure_code "$n" "$h"
     done
     if ! instance_exists "$CONSTRUCTORLESS"; then
@@ -596,7 +700,8 @@ cmd_create_author() {
     if instance_exists "$author"; then
         log "$project author already exists, running $(executable_of "$author")"
     else
-        wasm="$(account_wasm)"
+        account_wasm
+        wasm="$WASM"
         hash="$(sha256_file "$wasm")"
         log "account code: $wasm ($hash)"
         ensure_code perch-account "$hash" "$wasm"
@@ -741,7 +846,8 @@ cmd_all() {
     local stopped=0 wasm
     cmd_preflight
     cmd_code
-    wasm="$(account_wasm)"
+    account_wasm
+    wasm="$WASM"
     ensure_code perch-account "$(sha256_file "$wasm")" "$wasm"
     cmd_publish_stateless || stopped=1
     [ "$stopped" = 1 ] || cmd_constructorless || stopped=1
