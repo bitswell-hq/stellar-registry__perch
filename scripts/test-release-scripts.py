@@ -13,7 +13,8 @@ settings, which released commits a mainnet dispatch may publish
 sends nothing (scripts/publish-wasm.sh), what a stack deploy sends and
 records (scripts/deploy-stack.sh), that a registry bootstrap fails on a
 refused submission and uses only attested wasm (scripts/bootstrap-registry.sh),
-the attested_build dispatch of release.yml, the contract-id derivation the release
+the attested_build dispatch of release.yml, that npm-publish passes its
+tarball to npm as a file and the npm_publish_tag dispatch, the contract-id derivation the release
 scripts share (scripts/derive-id.py) and the registry each network publishes
 into (scripts/registry-target.sh), the deploy-record perch-artifacts bump
 (scripts/deploy-record-bump.sh), what a stack build records as dirty
@@ -431,9 +432,10 @@ def npm_paths_for(pkg, cwd=REPO):
 class NpmScope(unittest.TestCase):
     """The workflow's npm package lists against packages/."""
 
-    def test_both_lists_name_every_package(self):
+    def test_every_list_names_every_package(self):
+        # detect-releases, release-pr, and npm-recovery-plan.
         lists = npm_lists()
-        self.assertEqual(len(lists), 2)
+        self.assertEqual(len(lists), 3)
         on_disk = sorted(os.listdir(os.path.join(REPO, "packages")))
         for listed in lists:
             self.assertEqual(sorted(listed.split()), on_disk)
@@ -1358,6 +1360,180 @@ sys.exit(0 if args[2] in os.environ.get("FAKE_RELEASED", "").split() else "relea
         r, matrix = self.plan(released="perch-stateless-registry-v0.1.3")
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("perch-stateless-registry-v0.1.3 already has a GitHub release", r.stdout)
+
+
+def npm_package_arg():
+    """npm's own spec parser (npm-package-arg, bundled with npm), as a node
+    script printing the type npm gives its argument, or None without one."""
+    if not (NPM and shutil.which("node")):
+        return None
+    root = run([NPM, "root", "-g"], REPO, check=False).stdout.strip()
+    npa = os.path.join(root, "npm", "node_modules", "npm-package-arg")
+    return npa if os.path.isdir(npa) else None
+
+
+@unittest.skipUnless(shutil.which("jq"), "jq not on PATH")
+class NpmPublish(unittest.TestCase):
+    """release.yml's npm publish: the tarball reaches npm as a file, and the
+    npm_publish_tag dispatch re-packs an existing tag from its commit through
+    the same npm-pack/npm-publish jobs, never tagging."""
+
+    FAKE_NPM = r"""#!/usr/bin/env python3
+import os, sys
+args = sys.argv[1:]
+if args == ["--version"]:
+    print("11.6.0")
+elif args[:1] == ["publish"]:
+    with open(os.environ["NPM_ARGS"], "w") as f:
+        f.write("\n".join(args[1:]))
+else:
+    sys.exit("unexpected npm " + " ".join(args))
+"""
+
+    def publish(self, version="0.4.1", head="a" * 40):
+        """Runs the publish step against a packed tarball, returning the
+        arguments it passed to `npm publish`."""
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d)
+        os.makedirs(os.path.join(d, "pack"))
+        os.makedirs(os.path.join(d, ".bin"))
+        manifest = json.dumps({"name": "@stellar-registry/perch", "version": version, "gitHead": head}).encode()
+        with tarfile.open(os.path.join(d, "pack", f"stellar-registry-perch-{version}.tgz"), "w:gz") as t:
+            info = tarfile.TarInfo("package/package.json")
+            info.size = len(manifest)
+            t.addfile(info, io.BytesIO(manifest))
+        with open(os.path.join(d, ".bin", "npm"), "w") as f:
+            f.write(self.FAKE_NPM)
+        os.chmod(os.path.join(d, ".bin", "npm"), 0o755)
+        args = os.path.join(d, ".args")
+        env = {**os.environ, "PATH": os.path.join(d, ".bin") + os.pathsep + os.environ["PATH"],
+               "PACKAGE": "perch-js", "VERSION": "0.4.1", "HEAD_SHA": "a" * 40, "NPM_ARGS": args}
+        script = step_script(release_jobs()["npm-publish"], "Publish the packed tarball")
+        r = subprocess.run(["bash", "-c", script], cwd=d, env=env, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        with open(args) as f:
+            return f.read().split("\n")
+
+    def test_the_tarball_is_published_as_a_file(self):
+        # npm reads `pack/<name>.tgz` as the GitHub shorthand pack/<name>
+        # and tries `git ls-remote ssh://git@github.com/pack/...`: the
+        # perch-js 0.4.1 release failed that way before reaching the registry.
+        args = self.publish()
+        self.assertEqual(args[1:], ["--provenance", "--ignore-scripts"])
+        spec = args[0]
+        self.assertTrue(spec.endswith("pack/stellar-registry-perch-0.4.1.tgz"), spec)
+        # npm-package-arg's file-spec test.
+        self.assertRegex(spec, r"^(\.{1,2}/|/|~/)")
+        npa = npm_package_arg()
+        if npa:
+            types = run(["node", "-e", "const n = require(process.argv[1]); for (const s of process.argv.slice(2)) console.log(n(s).type)",
+                         npa, spec, "pack/stellar-registry-perch-0.4.1.tgz"], REPO).stdout.split()
+            self.assertEqual(types, ["file", "git"])
+
+    def test_the_publish_still_checks_the_tarball(self):
+        with self.assertRaises(AssertionError):
+            self.publish(version="0.4.0")
+        with self.assertRaises(AssertionError):
+            self.publish(head="b" * 40)
+
+    def test_the_dispatch_feeds_the_same_jobs(self):
+        jobs = release_jobs()
+        self.assertEqual(job_if(jobs["npm-recovery-plan"]).strip(),
+                         "github.event_name == 'workflow_dispatch' && inputs.npm_publish_tag != ''")
+        self.assertNotIn("id-token", jobs["npm-recovery-plan"])
+        self.assertNotRegex(jobs["npm-recovery-plan"], r"(?m)^ +contents: write")
+        for name in ("npm-pack", "npm-publish", "notify-nido"):
+            with self.subTest(job=name):
+                self.assertIn("npm-recovery-plan", job_needs(jobs[name]))
+        for name in ("npm-pack", "npm-publish"):
+            with self.subTest(job=name):
+                self.assertIn("fromJSON(needs.detect-releases.outputs.npm_releases || needs.npm-recovery-plan.outputs.npm_releases)", jobs[name])
+                self.assertIn("github.event.workflow_run.head_sha || needs.npm-recovery-plan.outputs.head_sha", jobs[name])
+        self.assertIn("needs.detect-releases.outputs.artifacts_tag || needs.npm-recovery-plan.outputs.artifacts_tag", jobs["notify-nido"])
+        # The called workflow sees the caller's event, so a dispatched release
+        # must still plan from its tag rather than as a manual re-send.
+        with open(os.path.join(REPO, ".github", "workflows", "nido-dispatch.yml")) as f:
+            self.assertIn('if [ -z "$TAG" ]; then', f.read())
+
+    def setUp(self):
+        self.repo = Repo()
+        self.addCleanup(self.repo.cleanup)
+        for p, v in (("perch-js", "0.4.1"), ("perch-artifacts", "0.2.0")):
+            self.repo.write(f"packages/{p}/package.json", json.dumps({"version": v}))
+        self.repo.write("crates/perch-interpreter/Cargo.toml", '[package]\nversion = "0.1.5"\n')
+        self.repo.commit("chore: release")
+        self.script = step_script(release_jobs()["npm-recovery-plan"], "Which tag to publish")
+
+    def tag(self, *tags):
+        for t in tags:
+            run(["git", "tag", t], self.repo.dir)
+
+    def plan(self, tag, ref="refs/heads/main"):
+        out = os.path.join(self.repo.dir, ".out")
+        open(out, "w").close()
+        sha = run(["git", "rev-parse", "HEAD"], self.repo.dir).stdout.strip()
+        env = {**os.environ, "TAG": tag, "GITHUB_REF": ref, "GITHUB_SHA": sha,
+               "GITHUB_OUTPUT": out, "GITHUB_STEP_SUMMARY": os.devnull}
+        r = subprocess.run(["bash", "-c", self.script], cwd=self.repo.dir, env=env, capture_output=True, text=True)
+        with open(out) as f:
+            outputs = dict(l.split("=", 1) for l in f.read().splitlines())
+        return r, outputs
+
+    def test_an_existing_tag_on_main(self):
+        self.tag("perch-js-v0.4.1")
+        at = run(["git", "rev-parse", "HEAD"], self.repo.dir).stdout.strip()
+        self.repo.write("docs/a.md", "a\n")
+        self.repo.commit("docs: later")
+        r, out = self.plan("perch-js-v0.4.1")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(json.loads(out["npm_releases"]), [{"package": "perch-js", "tag": "perch-js-v0.4.1", "version": "0.4.1"}])
+        self.assertEqual(out["head_sha"], at)
+        self.assertNotIn("artifacts_tag", out)
+
+    def test_a_perch_artifacts_tag_notifies_nido(self):
+        self.tag("perch-artifacts-v0.2.0")
+        r, out = self.plan("perch-artifacts-v0.2.0")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(out["artifacts_tag"], "perch-artifacts-v0.2.0")
+
+    def test_only_from_main(self):
+        self.tag("perch-js-v0.4.1")
+        r, out = self.plan("perch-js-v0.4.1", ref="refs/heads/feature")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("dispatch npm_publish_tag from main", r.stdout)
+        self.assertEqual(out, {})
+
+    def test_never_tags(self):
+        r, out = self.plan("perch-js-v0.4.1")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("perch-js-v0.4.1 is not tagged", r.stdout)
+        self.assertEqual(out, {})
+        self.assertEqual(run(["git", "tag", "-l"], self.repo.dir).stdout, "")
+
+    def test_only_an_npm_package_tag(self):
+        self.tag("perch-interpreter-v0.1.5")
+        for tag in ("perch-interpreter-v0.1.5", "perch-js-v0.4.1;x", "perch-js-v0.4", "../perch-js-v0.4.1"):
+            with self.subTest(tag=tag):
+                r, out = self.plan(tag)
+                self.assertNotEqual(r.returncode, 0)
+                self.assertIn("is not <pkg>-v<semver>", r.stdout)
+                self.assertEqual(out, {})
+
+    def test_a_tag_off_main_is_refused(self):
+        run(["git", "checkout", "-q", "-b", "side"], self.repo.dir)
+        self.repo.write("docs/b.md", "b\n")
+        self.repo.commit("docs: side")
+        self.tag("perch-js-v0.4.1")
+        run(["git", "checkout", "-q", "-"], self.repo.dir)
+        r, out = self.plan("perch-js-v0.4.1")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("which is not on main", r.stdout)
+
+    def test_a_tag_whose_manifest_is_another_version_is_refused(self):
+        self.tag("perch-js-v0.4.2")
+        r, out = self.plan("perch-js-v0.4.2")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("is version '0.4.1', not 0.4.2", r.stdout)
 
 
 @unittest.skipUnless(shutil.which("jq"), "jq not on PATH")
