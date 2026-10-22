@@ -3,8 +3,9 @@
 //! A **managed subregistry** whose deploys are *constructorless*: every
 //! instance is initialised with no constructor arguments, at an address that
 //! is a pure function of the registry and the wasm hash. perch's one canonical
-//! instance is registered under the perch registry as `constructorless`, with
-//! `manager =` the perch smart account and `root =` the root registry.
+//! instance is deployed by the perch registry as `constructorless`, with
+//! `root =` the root registry and `manager =` the key that approves each new
+//! name (`docs/deploy/README.md`, "Bootstrapping a network's registry chain").
 //!
 //! ## What makes it "constructorless"
 //!
@@ -18,12 +19,13 @@
 //!    surface (`deploy_stateless` is its name in `registry-traits`); the
 //!    name-salted [`Deployable::deploy`] path is deliberately **omitted**
 //!    because a per-name salt conflicts with content-addressing.
-//! 2. **Manager-gated publish/deploy.** Whether a wasm is safe to share as one
+//! 2. **Manager-gated first publish.** Whether a wasm is safe to share as one
 //!    constructorless instance cannot be proven from bytecode, so the manager
-//!    (the perch smart account) gates the *initial* publish/deploy of a wasm —
-//!    that is where the eligibility policy is enforced off-chain. This falls
-//!    out of composing [`Manageable`] + [`Publishable`] with a `manager` set at
-//!    construction.
+//!    approves the *initial* publish of each name, which binds its author —
+//!    that is where the eligibility policy is enforced off-chain. Later
+//!    versions need only the author, and `deploy_stateless` is
+//!    permissionless. This falls out of composing [`Manageable`] +
+//!    [`Publishable`] with a `manager` set at construction.
 //!
 //! ## Composition (the pattern this epic demonstrates)
 //!
@@ -121,10 +123,10 @@ mod contract {
     impl ConstructorlessRegistry {
         /// Construct the managed `constructorless` subregistry.
         ///
-        /// - `admin`: upgrades this registry and adds/sets/removes the manager.
-        /// - `manager`: the perch smart account. Being *managed* means the
-        ///   manager gates the initial publish/deploy of any wasm — the enforcement
-        ///   point for the eligibility policy.
+        /// - `admin`: upgrades this registry and sets or removes the manager.
+        /// - `manager`: approves the initial publish of each wasm name (later
+        ///   versions need only that name's author). Being *managed* makes
+        ///   this approval the enforcement point for the eligibility policy.
         /// - `root`: the root registry. This subregistry defers to `root` to
         ///   resolve sibling subregistry names during cross-registry deploys.
         ///
@@ -144,18 +146,20 @@ mod contract {
             Storage::set_root_registry(env, &root);
         }
 
-        /// The manager account which gates initial publishes / constructorless deploys.
+        /// The manager, which approves the initial publish of each name, if
+        /// one is set.
         pub fn manager(env: &Env) -> Option<Address> {
             Storage::manager(env)
         }
 
-        /// Admin can set a new manager.
+        /// Replace the manager. Admin only.
         pub fn set_manager(env: &Env, new_manager: Address) {
             Self::require_admin(env);
             Storage::set_manager_no_auth(env, &new_manager);
         }
 
-        /// Admin can remove the manager.
+        /// Remove the manager, after which a name's first publish needs only
+        /// its author. Admin only.
         pub fn remove_manager(env: &Env) {
             Self::require_admin(env);
             Storage::remove_manager_no_auth(env);

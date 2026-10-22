@@ -25,14 +25,16 @@ fn verifier(e: &Env) -> Option<UltraHonkZkVerifier> {
 
 #[contractimpl]
 impl PerchZkAdapter {
-    /// See [`VERSION`](crate::VERSION).
+    /// The adapter's semantics version ([`VERSION`](crate::VERSION)). A new
+    /// version is a new wasm and a new address.
     pub fn version(_e: &Env) -> u32 {
         VERSION
     }
 
-    /// `ZkAdapterInterface::tree_depth`: see
-    /// [`CIRCUIT_DEPTH`](crate::CIRCUIT_DEPTH). The controller checks it
-    /// against the pool's `depth()` when a ZK factor is enrolled.
+    /// `ZkAdapterInterface::tree_depth`: the Merkle depth the compiled-in
+    /// circuit proves ([`CIRCUIT_DEPTH`](crate::CIRCUIT_DEPTH)). The
+    /// controller checks it against the pool's `depth()` when a ZK factor is
+    /// enrolled.
     pub fn tree_depth(_e: &Env) -> u32 {
         CIRCUIT_DEPTH
     }
@@ -48,8 +50,11 @@ impl PerchZkAdapter {
         e.crypto().sha256(&Self::vk(e)).to_bytes()
     }
 
-    /// `ZkAdapterInterface::verify`. Writes nothing; nullifier bookkeeping
-    /// and evidence freshness are the controller's.
+    /// `ZkAdapterInterface::verify`: `Ok(())` iff `evidence` proves, for
+    /// exactly `statement`, knowledge of the credential enrolled under
+    /// `binding`, against a root `binding.pool` has had for
+    /// `evidence.tree_id`. Writes nothing; nullifier bookkeeping and evidence
+    /// freshness are the controller's.
     pub fn verify(
         e: &Env,
         statement: RecoveryStatement,
@@ -88,8 +93,9 @@ impl PerchZkAdapter {
     }
 
     /// `ProofVerifierInterface::verify_proof`: the raw verifier, for callers
-    /// that assemble public inputs themselves. Same ABI and error codes as
-    /// Nido's old `nido-recovery-verifier`.
+    /// that assemble public inputs themselves. `ProofParseError` means the
+    /// proof is not a zero-knowledge proof's length. Same ABI and error codes
+    /// as Nido's old `nido-recovery-verifier`.
     pub fn verify_proof(
         e: &Env,
         public_inputs: Bytes,
