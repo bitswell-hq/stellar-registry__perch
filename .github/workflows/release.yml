@@ -14,10 +14,10 @@ name: Release
 #      `constructorless-publish`) — a generic, contract-AGNOSTIC fan-out:
 #      whichever infra contracts this run released (the ALLOW list in
 #      publish-plan: perch-interpreter, perch-doc-compiler,
-#      perch-ed25519-verifier, perch-spending-limit) are each built+attested
-#      and published + `deploy_stateless`'d (content-addressed, salt =
-#      wasm_hash) into perch's testnet registry via the reusable
-#      stellar-registry/actions workflows (contract-release →
+#      perch-ed25519-verifier, perch-spending-limit, perch-mldsa-verifier) are
+#      each built+attested and published + `deploy_stateless`'d
+#      (content-addressed, salt = wasm_hash) into perch's testnet registry via
+#      the reusable stellar-registry/actions workflows (contract-release →
 #      registry-publish), authored by the perch-author-account smart account
 #      and signed by the theahaco/stellar-cli fork (on-chain rule discovery —
 #      no perch-deploy). No per-contract code — the set is data (see
@@ -240,7 +240,7 @@ jobs:
           # crates/<contract>/Cargo.toml in a PR; on merge this tags + publishes
           # it. The constructorless allow-list in publish-plan decides which of
           # these actually publish on-chain (the rest just get a tag).
-          CONTRACTS="perch-interpreter perch-doc-compiler perch-ed25519-verifier perch-spending-limit perch-account perch-constructorless-registry perch-recovery perch-webauthn-verifier perch-zk-pool perch-zk-adapter perch-account-factory"
+          CONTRACTS="perch-interpreter perch-doc-compiler perch-ed25519-verifier perch-spending-limit perch-account perch-constructorless-registry perch-recovery perch-webauthn-verifier perch-zk-pool perch-zk-adapter perch-account-factory perch-mldsa-verifier"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           releases='[]'
@@ -378,7 +378,7 @@ jobs:
             perch-account-factory) echo "perch-account-factory perch-account perch-smart-account perch-doc-compiler perch-compile perch-ir perch-program perch-registry-resolve perch-registry-resolve-macro perch-recovery-interface perch-webauthn-verifier";;
             *) echo "$1";;
           esac; }
-          CONTRACTS="perch-interpreter perch-doc-compiler perch-ed25519-verifier perch-spending-limit perch-account perch-constructorless-registry perch-recovery perch-webauthn-verifier perch-zk-pool perch-zk-adapter perch-account-factory"
+          CONTRACTS="perch-interpreter perch-doc-compiler perch-ed25519-verifier perch-spending-limit perch-account perch-constructorless-registry perch-recovery perch-webauthn-verifier perch-zk-pool perch-zk-adapter perch-account-factory perch-mldsa-verifier"
           # The committed build-time hash pins (crates/*/wasm/*.sha256) move
           # only after a source change that already bumped the contract, in
           # the deploy(<network>) commit recording that deployment: never a
@@ -762,12 +762,12 @@ jobs:
           # pin order (reusing these allow-listed tier-0 bytes for the account's
           # pins) and records the deployment manifest. That job stays gated off
           # until the manager's one-time initial publish of each new name.
-          ALLOW='["perch-interpreter","perch-doc-compiler","perch-ed25519-verifier","perch-spending-limit"]'
+          ALLOW='["perch-interpreter","perch-doc-compiler","perch-ed25519-verifier","perch-spending-limit","perch-mldsa-verifier"]'
           if [ -n "$DISPATCH_TAG" ]; then
             # Strict allow-list regex, not a prefix glob: the tag and the package
             # parsed from it flow into later `run:` shells and perch-deploy args,
             # so anything beyond exact <pkg>-v<semver> shape is rejected.
-            if [[ "$DISPATCH_TAG" =~ ^(perch-interpreter|perch-doc-compiler|perch-ed25519-verifier|perch-spending-limit)-v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            if [[ "$DISPATCH_TAG" =~ ^(perch-interpreter|perch-doc-compiler|perch-ed25519-verifier|perch-spending-limit|perch-mldsa-verifier)-v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
               matrix=$(jq -cn \
                 --arg p "${BASH_REMATCH[1]}" --arg t "$DISPATCH_TAG" --arg v "${BASH_REMATCH[2]}" \
                 '[{package: $p, tag: $t, version: $v}]')
@@ -1177,7 +1177,8 @@ jobs:
       STELLAR_RPC_URL: https://soroban-testnet.stellar.org
       STELLAR_NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
       # The ALLOW-listed tier-0 to reuse (published by the constructorless jobs,
-      # not rebuilt here). Kept in step with publish-plan's ALLOW list.
+      # not rebuilt here): publish-plan's ALLOW list but perch-mldsa-verifier,
+      # which no stack contract pins and the stack does not deploy.
       REUSE: "perch-doc-compiler perch-interpreter perch-spending-limit perch-ed25519-verifier"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

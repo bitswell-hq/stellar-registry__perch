@@ -951,6 +951,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26b73573e6edcd2af0cdf47bd6cb58f0b3839491263c314eaad1ccf24430e1de"
 
 [[package]]
+name = "fips204"
+version = "0.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c9fb5a367b9846933e271a3c2a992930743f82ae5e8cb7faa780715a80fa0b15"
+dependencies = [
+ "rand_core 0.6.4",
+ "sha2",
+ "sha3",
+ "zeroize",
+]
+
+[[package]]
 name = "flate2"
 version = "1.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1759,6 +1771,7 @@ version = "0.1.1"
 dependencies = [
  "arbitrary",
  "ed25519-dalek",
+ "fips204",
  "hex",
  "perch-account",
  "perch-account-factory",
@@ -1767,6 +1780,7 @@ dependencies = [
  "perch-ed25519-verifier",
  "perch-interpreter",
  "perch-ir",
+ "perch-mldsa-verifier",
  "perch-program",
  "perch-recovery",
  "perch-recovery-interface",
@@ -1803,6 +1817,17 @@ dependencies = [
  "hifijson",
  "serde_json",
  "sha2",
+]
+
+[[package]]
+name = "perch-mldsa-verifier"
+version = "0.1.0"
+dependencies = [
+ "fips204",
+ "hex",
+ "serde_json",
+ "soroban-sdk",
+ "stellar-accounts",
 ]
 
 [[package]]
