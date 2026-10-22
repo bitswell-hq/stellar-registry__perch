@@ -1,8 +1,8 @@
 //! The perch document compiler: a **stateless** deployable contract that turns
 //! a policy document's JSON bytes into compiled rules plus the canonical
 //! `doc_hash` — nothing else. It reads no storage and writes no storage;
-//! deployed once per network, immutable, and shared by every perch account,
-//! exactly like the interpreter.
+//! constructorless, deployed once per network, immutable, and shared by every
+//! perch account, exactly like the interpreter.
 //!
 //! The split keeps state and computation apart: this contract owns *parsing
 //! and compiling* (the JSON parser and the lowering logic live here, in one
@@ -118,7 +118,9 @@ pub enum DocCompilerError {
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub enum RuleScope {
+    /// Calls to the applying account itself (`CallContract(self)`).
     SelfAdmin,
+    /// Calls to this contract.
     Contract(Address),
 }
 
@@ -128,27 +130,27 @@ pub enum RuleScope {
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct CompiledRule {
+    /// The rule's name in the document. The account matches installed rules
+    /// by name and scope.
     pub name: String,
     pub scope: RuleScope,
+    /// The rule's signers, with external keys as declared (already
+    /// verifier-canonical).
     pub signers: Vec<Signer>,
+    /// The last ledger the rule authorizes, if bounded: OZ's inclusive
+    /// `valid_until`, one below the document's `not-after-ledger`.
     pub valid_until: Option<u32>,
-    /// Zero or one entries — a `Vec` rather than `Option<CompiledCap>`-style
-    /// `Option` because `InstallParams` is itself a `#[contracttype]` struct,
-    /// and `#[contracttype]`'s derive macro has no `ScVal`/spec conversion
-    /// for `Option<T>` where `T` is a custom struct or enum (confirmed
-    /// directly: it fails to compile with "the trait bound `ScVal:
-    /// TryFrom<&Option<T>>` is not satisfied" — `Option<u32>` on
-    /// `valid_until` above works because `u32` is a host-builtin type with
-    /// its own direct `ScVal` conversion, not because `Option` itself is the
-    /// problem). Empty ⇒ policy-free rule.
+    /// The interpreter program to attach: zero or one entries. A `Vec`
+    /// because `#[contracttype]` has no conversion for `Option` of a custom
+    /// struct (`Option<u32>` on `valid_until` works because `u32` is a host
+    /// type). Empty ⇒ a policy-free rule.
     pub install: Vec<InstallParams>,
-    /// Zero or one entries (a `Vec` for the same reason as `install` —
-    /// `CompiledCap` is itself a `#[contracttype]` struct). Present ⇒ also
-    /// attach OZ `spending_limit` with these params — the cumulative cap the
-    /// stateless interpreter cannot express. The applier resolves the
-    /// policy's content-addressed address and keys it into the rule's policy
-    /// map beside the interpreter; the tracked token is the rule's `Contract`
-    /// scope (validation pins `token == scope`).
+    /// Zero or one entries (a `Vec` for the same reason as `install`).
+    /// Present ⇒ also attach OZ `spending_limit` with these params — the
+    /// cumulative cap the stateless interpreter cannot express. The applier
+    /// resolves the policy's content-addressed address and keys it into the
+    /// rule's policy map beside the interpreter; the tracked token is the
+    /// rule's `Contract` scope (validation pins `token == scope`).
     pub cap: Vec<CompiledCap>,
 }
 
@@ -181,17 +183,12 @@ pub struct CompiledDoc {
     /// keys canonicalized by their verifier. What revocation compares
     /// (spec §8).
     pub fingerprints: Vec<BytesN<32>>,
+    /// One compiled rule per document rule, in the submitted order.
     pub rules: Vec<CompiledRule>,
-    /// Zero or one entries — a `Vec` because `CompiledRecoveryConfig` is
-    /// itself a `#[contracttype]` struct (see [`CompiledRule::install`]'s
-    /// doc comment for why `Option<CompiledRecoveryConfig>` doesn't compile
-    /// here). Present ⇒ the document enrolls account recovery — the applier
-    /// is expected to sync this configuration to the adopted
-    /// recovery-controller instance named in it. See `docs/recovery/` for
-    /// the full design; wire-compat notes live there too (this is a new
-    /// field on an existing constructorless, immutable deployable — a
-    /// compiler build carrying it is a new instance, not an in-place change
-    /// to any already-deployed one).
+    /// The compiled `recovery` member: zero or one entries (a `Vec` for the
+    /// same reason as [`CompiledRule::install`]). Present ⇒ the document
+    /// enrolls account recovery, and the applier syncs this configuration to
+    /// the controller instance it names (`docs/recovery/`).
     pub recovery: Vec<CompiledRecoveryConfig>,
 }
 
@@ -203,6 +200,7 @@ pub struct DerivedTarget {
     /// The target's canonical bytes: exactly what the completing `apply_doc`
     /// must submit.
     pub canonical: Bytes,
+    /// `sha256` of `canonical`: the target's `doc_hash`.
     pub doc_hash: BytesN<32>,
     /// The target's recovery `config_hash` (the current one, or the current
     /// one with the declared ZK rotation).
@@ -329,7 +327,10 @@ impl PerchDocCompiler {
     /// JSON bytes in → compiled rules + canonical `doc_hash` out. Pure:
     /// no auth, no storage. The document must name THIS network (its
     /// `network` string must hash to the chain's network id), so a testnet
-    /// document can never compile on mainnet or vice versa.
+    /// document can never compile on mainnet or vice versa. It must also fit
+    /// the document caps ([`Self::limits`]), and every external signer key
+    /// must already be its verifier-canonical form: the compiler calls each
+    /// named verifier's `batch_canonicalize_key` to check.
     pub fn compile_doc(e: &Env, doc_json: Bytes) -> Result<CompiledDoc, DocCompilerError> {
         compile_parsed(e, &parse(&doc_json)?)
     }
@@ -465,9 +466,9 @@ fn compile_parsed(e: &Env, doc: &perch_ir::PolicyDoc) -> Result<CompiledDoc, Doc
     }
 
     // Compile. The config's wasm-hash pin is advisory metadata for
-    // off-chain plans; on-chain the account resolves the interpreter itself
-    // through its pinned stateless registry (fetch hash → derive address),
-    // so this hash is unused here.
+    // off-chain plans; on-chain the account derives the interpreter's address
+    // itself from its build-time pins (registry path and wasm hash), so this
+    // hash is unused here.
     let cfg = CompileConfig {
         interpreter_wasm_hash: BytesN::from_array(e, &[0u8; 32]),
     };

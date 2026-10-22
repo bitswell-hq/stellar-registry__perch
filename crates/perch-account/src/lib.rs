@@ -1,5 +1,6 @@
-//! The perch smart account, deployable shell: author of the perch wasm
-//! releases and manager of the `unverified/perch` subregistry.
+//! The perch smart account, deployable shell: the account the factory
+//! deploys, and the account type of the perch author that publishes perch's
+//! wasm releases.
 //!
 //! All behavior comes from libraries — OZ evaluation plus
 //! [`perch_smart_account::PerchSmartAccount`], whose `apply_doc` is **the only
@@ -31,10 +32,11 @@ pub struct PerchAccount;
 
 #[contractimpl]
 impl PerchAccount {
-    /// Deploy-time rule 0: a policy-free self-admin rule for the admin
-    /// signers. A rule scoped to the account authorizes every account entry
-    /// point — `apply_doc`, `schedule_upgrade`/`cancel_upgrade`, and `execute`
-    /// (arbitrary calls as the account) — so this is full owner authority, not
+    /// Deploy-time rule 0, `admin`: a policy-free self-admin rule for the
+    /// admin signers. A rule scoped to the account authorizes every entry
+    /// point that requires the account's own authorization — `apply_doc`,
+    /// `execute` (arbitrary calls as the account), the upgrade entry points,
+    /// and `cancel_recovery` — so this is full owner authority, not
     /// `apply_doc` alone.
     pub fn __constructor(e: &Env, admin_signers: Vec<Signer>) {
         perch_smart_account::install_admin(e, &admin_signers);

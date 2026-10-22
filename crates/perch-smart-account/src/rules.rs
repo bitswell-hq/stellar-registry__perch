@@ -43,6 +43,7 @@ use stellar_accounts::smart_account::{self, ContextRuleType, Signer, MAX_POLICIE
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InstalledPolicy {
+    /// The policy contract.
     pub policy: Address,
     /// `sha256` of the install parameters' XDR. A policy whose parameters
     /// change is uninstalled and installed again; one whose parameters are
@@ -78,10 +79,16 @@ pub struct InstalledRule {
     /// the recovery rule by this flag, so a document rule that happens to be
     /// named `recovery` is never confused with it.
     pub recovery: bool,
+    /// The rule's name: the document rule's, `admin` for the constructor's,
+    /// `recovery` for the recovery rule.
     pub name: String,
+    /// The rule's OZ scope.
     pub context_type: ContextRuleType,
+    /// OZ's inclusive last valid ledger, if bounded.
     pub valid_until: Option<u32>,
+    /// The rule's signers.
     pub signers: Vec<Signer>,
+    /// The policies attached to the rule.
     pub policies: Vec<InstalledPolicy>,
 }
 
@@ -265,7 +272,9 @@ pub enum Step {
     Remove,
     /// Only in the document.
     Add,
+    /// In both but different: edited in place, keeping its id.
     InPlace,
+    /// In both but different: removed and added again under a new id.
     Replace,
 }
 

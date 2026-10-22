@@ -23,12 +23,14 @@ pub struct PerchZkPool;
 
 #[contractimpl]
 impl PerchZkPool {
-    /// See [`VERSION`].
+    /// The pool's interface and semantics version ([`VERSION`]). A new
+    /// version is a new wasm and a new address.
     pub fn version(_e: &Env) -> u32 {
         VERSION
     }
 
-    /// `MembershipPoolInterface::depth`: see [`TREE_DEPTH`].
+    /// `MembershipPoolInterface::depth`: each tree's Merkle depth
+    /// ([`TREE_DEPTH`]), a build constant.
     pub fn depth(_e: &Env) -> u32 {
         TREE_DEPTH
     }
@@ -90,11 +92,14 @@ impl PerchZkPool {
         merkle::current_tree(e)
     }
 
+    /// Tree `tree_id`'s summary. `UnknownTree` if it was never opened.
     pub fn tree(e: &Env, tree_id: u32) -> Result<TreeInfo, PoolError> {
         merkle::tree_info(e, TREE_DEPTH, tree_id)
     }
 
-    /// A page of `tree_id`'s leaves, for rebuilding witnesses from storage.
+    /// Leaves `start..start + count` of `tree_id`, clamped to its size, for
+    /// rebuilding witnesses from storage. `count` is at most
+    /// [`MAX_PAGE`](crate::MAX_PAGE) (`PageTooLarge`).
     pub fn leaves(
         e: &Env,
         tree_id: u32,
@@ -116,7 +121,8 @@ impl PerchZkPool {
         merkle::renew_root(e, tree_id, &root);
     }
 
-    /// Permissionless keep-alive for a page of `tree_id`'s leaves.
+    /// Permissionless keep-alive for leaves `start..start + count` of
+    /// `tree_id`, as [`Self::leaves`] pages them.
     pub fn renew_leaves(e: &Env, tree_id: u32, start: u64, count: u32) -> Result<(), PoolError> {
         merkle::renew_leaves(e, tree_id, start, count)
     }

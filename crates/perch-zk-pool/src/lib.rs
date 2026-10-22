@@ -70,6 +70,7 @@ pub enum PoolError {
 pub struct Insertion {
     pub tree_id: u32,
     pub index: u64,
+    /// The stored leaf, `H(DOM_BIND, account, enrollment_id, inner)`.
     pub leaf: BytesN<32>,
     pub root: BytesN<32>,
 }
@@ -78,7 +79,9 @@ pub struct Insertion {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LeafPosition {
+    /// The tree the leaf is in.
     pub tree_id: u32,
+    /// The leaf's index in that tree.
     pub index: u64,
 }
 
@@ -89,6 +92,7 @@ pub struct TreeInfo {
     pub tree_id: u32,
     /// Leaves inserted so far.
     pub size: u64,
+    /// The most leaves the tree holds, `2^TREE_DEPTH`.
     pub capacity: u64,
     /// The latest root (the empty-tree root before any insertion).
     pub root: BytesN<32>,

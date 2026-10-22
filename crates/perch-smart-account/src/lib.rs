@@ -116,8 +116,12 @@ pub enum PerchAccountError {
     /// The recovery generation moved since the upgrade was scheduled
     /// (spec §12). The request stays pending but can never execute.
     StaleUpgrade,
+    /// The doc compiler refused the document (its `DocCompilerError` says
+    /// why).
     #[from_contract_client]
     Compiler(DocCompilerError),
+    /// The adopted recovery controller refused the call (its `RecoveryError`
+    /// says why).
     #[from_contract_client]
     Recovery(RecoveryError),
     /// `apply_doc` named an `expected_revision` and the account is at
@@ -148,6 +152,8 @@ pub enum PerchAuthError {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FreezeGate {
+    /// The authorized attempt, the only one whose completion the account
+    /// authorizes while frozen.
     pub attempt_id: u64,
     /// The authorized attempt's `expires_at`.
     pub until: u32,
@@ -174,6 +180,7 @@ pub struct AccountConfiguration {
     pub doc_hash: Option<BytesN<32>>,
     /// Every installed context rule, with its OZ id.
     pub rules: Vec<InstalledRule>,
+    /// The adopted recovery controller, if any.
     pub recovery_controller: Option<Address>,
     /// The zero-signer recovery rule's OZ id, if one is installed.
     pub recovery_rule: Option<u32>,
@@ -181,7 +188,11 @@ pub struct AccountConfiguration {
     /// `#[contracttype]` has no conversion for `Option` of a custom struct).
     /// It is in force while the ledger is below its `until`.
     pub gate: Vec<FreezeGate>,
+    /// The recovery generation (spec §12), as
+    /// [`PerchSmartAccount::recovery_generation`] returns it.
     pub recovery_generation: u64,
+    /// The shared infra the account pins, as [`PerchSmartAccount::infra`]
+    /// returns it.
     pub infra: InfraPins,
 }
 
@@ -338,6 +349,7 @@ pub struct UpgradeScheduled {
     #[topic]
     pub request_id: u64,
     pub wasm_hash: BytesN<32>,
+    /// The first ledger at which `execute_upgrade` may run it.
     pub executable_at: u32,
 }
 
@@ -411,11 +423,11 @@ struct PerchStorage {
 #[contracttrait]
 pub trait PerchSmartAccount: CustomAccountInterface + SmartAccount {
     /// Apply a policy document — **the only way authorization changes**.
-    /// The two shared, immutable infra contracts (the stateless doc compiler
-    /// and the interpreter) are derived from the build-time-pinned
-    /// [`constructorless_registry`] (see [`infra`]), never passed in. Brings the
-    /// installed rules to the document in one invocation, changing only the
-    /// rules that differ, and returns the canonical `doc_hash`.
+    /// The shared, immutable infra it uses (the doc compiler, the
+    /// interpreter, and the spending limit) is derived from build-time pins
+    /// (see [`infra`]), never passed in. Brings the installed rules to the
+    /// document in one invocation, changing only the rules that differ, and
+    /// returns the canonical `doc_hash`.
     ///
     /// Authorized by the owner (any ordinary rule scoped to the account),
     /// or, for a recovery completion only, by the zero-signer recovery rule
@@ -474,8 +486,8 @@ pub trait PerchSmartAccount: CustomAccountInterface + SmartAccount {
     }
 
     /// The canonical `doc_hash` of the currently applied policy document, or
-    /// `None` if only the constructor's admin rule exists. Anyone can check
-    /// installed == reviewed.
+    /// `None` before the first `apply_doc` (only the constructor's admin rule
+    /// exists then). Anyone can check installed == reviewed.
     fn applied_doc_hash(e: &Env) -> Option<BytesN<32>> {
         PerchStorage::get_applied_doc(e)
     }
@@ -724,9 +736,9 @@ pub trait PerchSmartAccount: CustomAccountInterface + SmartAccount {
         }
     }
 
-    /// Extend the account's instance, applied document, and the named
-    /// revoked-set and enrolled-id entries to the network maximum.
-    /// Permissionless; changes no meaning.
+    /// Extend the account's instance, the applied document and its credential
+    /// fingerprints, and the named revoked-set and enrolled-id entries to the
+    /// network maximum. Permissionless; changes no meaning.
     fn renew(e: &Env, fingerprints: Vec<BytesN<32>>, enrollment_ids: Vec<BytesN<32>>) {
         extend_persistent(e, |ttl| {
             e.storage().instance().extend_ttl(ttl, ttl);
@@ -755,13 +767,15 @@ pub trait PerchSmartAccount: CustomAccountInterface + SmartAccount {
         PerchStorage::get_installed_rules(e).unwrap_or(Vec::new(e))
     }
 
+    /// OZ's count of the account's context rules, expired ones included.
     /// Read-only rule surface, re-exposed here because `SmartAccount` itself
     /// is deliberately not exported by doc-only accounts.
     fn get_context_rules_count(e: &Env) -> u32 {
         smart_account::get_context_rules_count(e)
     }
 
-    /// See [`Self::get_context_rules_count`].
+    /// The OZ context rule with this id; panics if there is none. Re-exposed
+    /// like [`Self::get_context_rules_count`].
     fn get_context_rule(e: &Env, context_rule_id: u32) -> ContextRule {
         smart_account::get_context_rule(e, context_rule_id)
     }
@@ -1085,10 +1099,12 @@ fn apply_rules(e: &Env, compiled: &CompiledDoc, mode: rules::Mode) -> rules::Del
     sum
 }
 
-/// Constructor helper: install rule 0, "admin", scoped
-/// `CallContract(self)` — the admin signers may manage this account (i.e.
-/// call `apply_doc`) and nothing else. Every other capability arrives via an
-/// applied, doc-reviewed rule set.
+/// Constructor helper: install rule 0, "admin", a policy-free rule scoped
+/// `CallContract(self)`. A rule scoped to the account authorizes every
+/// account entry point that requires the account's own authorization
+/// (`apply_doc`, `execute`, the upgrade and recovery-cancel entry points), so
+/// the admin signers hold full owner authority. Every other rule arrives via
+/// an applied, doc-reviewed document.
 pub fn install_admin(e: &Env, admin_signers: &Vec<Signer>) {
     let rule = smart_account::add_context_rule(
         e,
@@ -1129,6 +1145,9 @@ macro_rules! impl_perch_smart_account {
             type Error = $crate::soroban_sdk::Error;
             type Signature = $crate::stellar_accounts::smart_account::AuthPayload;
 
+            /// Refuse reserved invoker-only names and, under a `Protected`
+            /// freeze, everything but the authorized completion; then bind
+            /// the digest to this account and run OZ's rule evaluation.
             fn __check_auth(
                 e: $crate::soroban_sdk::Env,
                 signature_payload: $crate::soroban_sdk::crypto::Hash<32>,

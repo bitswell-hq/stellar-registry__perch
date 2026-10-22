@@ -291,8 +291,11 @@ pub trait MembershipPoolInterface {
 /// behind an adapter unchanged.
 #[scerr]
 pub enum ProofVerifierError {
+    /// The verification key could not be parsed.
     VkParseError,
+    /// The proof could not be parsed (for example, it has the wrong length).
     ProofParseError,
+    /// The proof does not verify against the public inputs.
     VerificationFailed,
 }
 

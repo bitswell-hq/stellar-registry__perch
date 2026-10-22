@@ -177,10 +177,15 @@ pub struct UpgradeSubject {
 #[contracttype]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StatementSubject {
+    /// A lost-key attempt's initiation statement.
     LostKey(AttemptSubject),
+    /// A compromise attempt's initiation statement.
     Compromise(AttemptSubject),
+    /// Cancel one attempt.
     Cancel(CancelSubject),
+    /// Change or remove the enrolled configuration.
     Reconfigure(ConfigChange),
+    /// Approve one account upgrade request, checked when it is scheduled.
     Upgrade(UpgradeSubject),
 }
 
@@ -197,8 +202,11 @@ pub struct RecoveryStatement {
     /// the currently adopted one, even when the change adopts another).
     /// Must be a contract address.
     pub controller: Address,
+    /// The enrolled configuration and epoch the evidence is for.
     pub config: ConfigBinding,
+    /// The enrolled timing terms and the evidence's freshness bound.
     pub timing: StatementTiming,
+    /// What the evidence approves.
     pub subject: StatementSubject,
 }
 

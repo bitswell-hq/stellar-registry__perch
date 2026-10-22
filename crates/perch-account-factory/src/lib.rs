@@ -51,7 +51,8 @@ pub struct PerchAccountFactory;
 
 #[contractimpl]
 impl PerchAccountFactory {
-    /// See [`VERSION`].
+    /// The factory's interface version ([`VERSION`]). A new version is a
+    /// new wasm and a new address.
     pub fn version(_e: &Env) -> u32 {
         VERSION
     }
@@ -74,7 +75,8 @@ impl PerchAccountFactory {
     }
 
     /// Deploy an account whose constructor installs `admin_signers` as its
-    /// admin rule. Permissionless. Fails if that account already exists.
+    /// admin rule, at [`Self::address_of`], and emit `AccountCreated`.
+    /// Permissionless. Fails if that account already exists.
     pub fn create(e: &Env, salt: BytesN<32>, admin_signers: Vec<Signer>) -> Address {
         let account = e
             .deployer()

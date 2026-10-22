@@ -31,9 +31,11 @@ pub struct RecoveryStorage {
     pub authorized: PersistentMap<Address, u64>,
     /// Evidence-based cancellations of authorized attempts (spec T6).
     pub cancels: PersistentMap<Address, u32>,
-    /// Attempts that were ever authorized.
+    /// Attempts that were ever authorized, and collecting attempts whose
+    /// evidence window outlives any temporary entry (`contract::save`).
     pub attempt: PersistentMap<(Address, u64), Attempt>,
-    /// Attempts that never left `Collecting` (or were cancelled there).
+    /// Every other attempt that never left `Collecting` (or was cancelled
+    /// there), kept for its evidence window.
     pub collecting: TemporaryMap<(Address, u64), Attempt>,
     /// The completing invocation's marker (spec T5).
     pub completing: TemporaryMap<Address, CompletionMarker>,
