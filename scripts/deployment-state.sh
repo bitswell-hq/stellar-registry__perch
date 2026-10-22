@@ -48,6 +48,7 @@ paths=(
     crates/perch-doc-compiler crates/perch-compile crates/perch-ir
     crates/perch-recovery-interface
     crates/perch-ed25519-verifier
+    crates/perch-mldsa-verifier
     crates/perch-spending-limit
     crates/perch-account crates/perch-smart-account
     crates/perch-registry-resolve crates/perch-registry-resolve-macro

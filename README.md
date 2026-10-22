@@ -69,6 +69,8 @@ crates/
                       wasm at an address bound to its admin signers
   perch-spending-limit/  deployable wrapper of OZ spending_limit (cumulative caps)
   perch-ed25519-verifier/  deployable ed25519 verifier for External signers
+  perch-mldsa-verifier/  deployable ML-DSA-65 (FIPS 204, post-quantum) verifier for
+                      External signers; constructorless, no admin
   perch-webauthn-verifier/  deployable WebAuthn (passkey, secp256r1) verifier for
                       External signers; constructorless, no admin
   perch-recovery/     deployable recovery controller: the one implementation of

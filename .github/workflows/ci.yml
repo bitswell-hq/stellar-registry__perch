@@ -121,6 +121,11 @@ jobs:
       # with the vectors under the soroban host (rustc/LLVM/wasmi in the loop).
       - run: cargo build -p perch-bench-rpn --target wasm32v1-none --release
       - run: cargo test -p perch-conformance --test wasm_leg -- --ignored
+      # The ML-DSA verifier verifies in guest wasm, so its cost is its own
+      # code: the release wasm's metered instructions and memory, within the
+      # budget rule, and a stack sized to it (crates/perch-mldsa-verifier/build.rs).
+      - run: stellar contract build --package perch-mldsa-verifier
+      - run: cargo test -p perch-mldsa-verifier --test costs -- --ignored --nocapture
 
   # The PR's own source as a deployment of it would run: every contract built
   # in pin order by scripts/build-stack.sh (tier 0, then the account against

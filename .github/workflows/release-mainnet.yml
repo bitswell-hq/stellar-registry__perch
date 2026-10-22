@@ -82,7 +82,7 @@ jobs:
       # Kept in step with release.yml's publish-plan ALLOW, deploy-plan
       # DEPLOY_SET, and deploy-stack jobs' REUSE (scripts/test-release-scripts.py
       # checks).
-      MAINNET_ALLOW: "perch-interpreter perch-doc-compiler perch-ed25519-verifier perch-spending-limit"
+      MAINNET_ALLOW: "perch-interpreter perch-doc-compiler perch-ed25519-verifier perch-spending-limit perch-mldsa-verifier"
       MAINNET_STACK: "perch-webauthn-verifier perch-recovery perch-zk-pool perch-zk-adapter perch-account perch-account-factory"
       REUSE: "perch-doc-compiler perch-interpreter perch-spending-limit perch-ed25519-verifier"
     steps:

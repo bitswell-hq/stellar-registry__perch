@@ -13,6 +13,7 @@ members = [
     "crates/perch-conformance",
     "crates/perch-analyze",
     "crates/perch-ed25519-verifier",
+    "crates/perch-mldsa-verifier",
     "crates/perch-spending-limit",
     "crates/perch-doc-compiler",
     "crates/perch-smart-account",
@@ -72,6 +73,11 @@ perch-program = { version = "0.1.1", path = "crates/perch-program" }
 # soroban-flux blocked the entire release pipeline. 0.1.0 was cut from the
 # same source the git rev pinned, so builds stay byte-identical.
 soroban-flux = "0.1.0"
+
+# ML-DSA (FIPS 204) verification in guest wasm, for perch-mldsa-verifier: pure
+# Rust, no_std, no allocation. Unaudited. Verification needs no randomness, so
+# the OS RNG feature stays off; only the ML-DSA-65 parameter set is compiled.
+fips204 = { version = "0.4.6", default-features = false, features = ["ml-dsa-65"] }
 
 # Poseidon2 on the Soroban host (`poseidon2_permutation` host function). Must
 # stay byte-identical to noir-lang/poseidon v0.2.0, which the recovery circuit
