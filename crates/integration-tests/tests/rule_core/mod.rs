@@ -29,6 +29,12 @@
 //! Before each authorization, `soroban-facade` reads the contexts the
 //! harness built and they must equal the trace's batch under the renaming,
 //! so the account is shown exactly the trace's authorization.
+//!
+//! After every `apply_doc` (the predecessor's and the trace's), the
+//! account's stored rule-eval rule set must equal both the lowering of the
+//! applied document's model and the denotation of the rules OZ, the
+//! interpreter and the spending limit hold (`perch_testkit::rule_set`); a
+//! difference fails the run.
 #![allow(dead_code)]
 
 use std::collections::BTreeMap;
@@ -183,6 +189,10 @@ pub struct Run {
     /// Authorizations with a `Delegated` / an `External` authenticated signer.
     pub delegated: usize,
     pub external: usize,
+    /// The stored rule sets checked (one per `apply_doc`), and the rules in
+    /// them.
+    pub rule_sets: usize,
+    pub stored_rules: usize,
 }
 
 // ---------------------------------------------------------------------------
@@ -802,15 +812,27 @@ pub fn run(t: &Trace, start: Start) -> Result<Run, String> {
 
     // Every rule is installed at ledger 0, before any authorization's ledger.
     e.ledger().with_mut(|l| l.sequence_number = 0);
+    let mut stored_rules = 0;
+    let mut rule_set = |what: &str| -> Result<(), String> {
+        let c = perch_testkit::rule_set::check(&e, &w.account)
+            .map_err(|x| format!("the rule set after {what}: {x}"))?;
+        stored_rules += c.rules;
+        Ok(())
+    };
+    let mut rule_sets = 0;
     if start == Start::AfterPredecessor {
         let p = lab.predecessor(t);
         let bytes = Bytes::from_slice(&e, perch_ir::canonical_json(&p).as_bytes());
         w.apply_bytes(&bytes, 0)
             .map_err(|x| format!("apply_doc refuses the predecessor: {x:?}"))?;
+        rule_set("the predecessor")?;
+        rule_sets += 1;
     }
     let bytes = Bytes::from_slice(&e, perch_ir::canonical_json(&doc).as_bytes());
     w.apply_bytes(&bytes, 0)
         .map_err(|x| format!("apply_doc refuses the document: {x:?}"))?;
+    rule_set("the document")?;
+    rule_sets += 1;
 
     // Rule index (the document's, then the recovery rule) to OZ id, while the
     // account still serves its views.
@@ -838,6 +860,8 @@ pub fn run(t: &Trace, start: Start) -> Result<Run, String> {
         verdicts: vec![],
         delegated: 0,
         external: 0,
+        rule_sets,
+        stored_rules,
     };
     for (i, a) in t.authorizations.iter().enumerate() {
         e.ledger().with_mut(|l| l.sequence_number = a.now);

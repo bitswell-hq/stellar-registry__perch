@@ -77,6 +77,19 @@ const TX_MAX_FOOTPRINT_ENTRIES: u64 = 400;
 const TX_MAX_EVENTS_BYTES: u64 = 16_384;
 /// `docs/recovery/budgets.md` §2: every row within 75% of each limit.
 const BUDGET_PCT: u64 = 75;
+/// Temporary, within the M6 stack only (`docs/recovery/budgets.md`,
+/// "Document caps"): the one flow allowed past [`BUDGET_PCT`], and only in
+/// instructions, up to [`M6_INSTRUCTIONS_PCT`]. The account lowers the
+/// compiled model and stores the rule-eval rule set on every `apply_doc`
+/// while still installing interpreter programs and spending caps, and this
+/// completion at the document caps measures 78.5% of the instruction limit.
+/// M6's switch (P6), which stops installing those policies on document
+/// rules, removes this exception and measures the flow at 75% again.
+const M6_EXCEPTION_FLOW: &str =
+    "completion apply_doc (compromise, Combined, ZK rotation, both key \
+     sets revoked; the thief kept every name, changed every program) [8 signers, 11 rules,";
+/// See [`M6_EXCEPTION_FLOW`].
+const M6_INSTRUCTIONS_PCT: u64 = 80;
 
 thread_local! {
     /// Set by [`cap_sweep`] only: report rows without asserting the budget.
@@ -141,8 +154,13 @@ fn report(label: &str, e: &Env) {
         return;
     }
     let within = |used: u64, limit: u64| used * 100 <= limit * BUDGET_PCT;
+    let instructions_pct = if label.starts_with(M6_EXCEPTION_FLOW) {
+        M6_INSTRUCTIONS_PCT
+    } else {
+        BUDGET_PCT
+    };
     assert!(
-        within(r.instructions as u64, TX_MAX_INSTRUCTIONS),
+        r.instructions as u64 * 100 <= TX_MAX_INSTRUCTIONS * instructions_pct,
         "{label}: instructions over budget"
     );
     assert!(

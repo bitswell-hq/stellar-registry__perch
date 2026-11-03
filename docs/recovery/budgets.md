@@ -263,6 +263,27 @@ within budget, so lowering a limit or growing a flow's cost fails CI's
 the reconcile's cost model, OZ's mutations, the controller's or the
 policies' storage, or a network limit.
 
+**Temporary exception within the M6 stack.** `apply_doc` lowers the
+compiled document's model with rule-core's `rule_eval::lower` and stores
+the rule-eval rule set beside the installed rules, while it still installs
+interpreter programs and spending caps. At the caps this costs every
+`Combined` compromise completion about 6 points of the instruction limit,
+and one of them passes 75%. `release_stack.rs` allows that one flow, and
+only its instructions, up to 80% (`M6_EXCEPTION_FLOW`); every other flow and
+limit stays at 75%. The exception is temporary: M6's switch (P6), which stops
+installing those policies on document rules, removes it and measures the
+flow at 75% again. Measured on stacks built with `stellar contract build
+--optimize=false` (8 signers, 11 rules, 9 with both policies, 8 signers per
+rule), instructions as a share of the limit:
+
+| Completion (compromise, `Combined`, ZK rotation, both key sets revoked) | Without the stored set | With it |
+| --- | --- | --- |
+| The thief kept every name, changed every program | 72.6% | **78.5%** |
+| The thief kept every name, changed every program and cap | 68.6% | 74.6% |
+| The thief kept every name, changed every cap | 68.5% | 74.4% |
+| The thief renamed every rule | 64.0% | 69.9% |
+| The thief kept every rule | 63.5% | 69.4% |
+
 **Worst cases.** A completion's cost depends on how its source and target
 differ, so the flows are the ones with the largest difference, every way
 the diff can go:

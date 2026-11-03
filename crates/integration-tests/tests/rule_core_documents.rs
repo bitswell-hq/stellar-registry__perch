@@ -5,8 +5,11 @@
 //! document has other rule names (the delta then adds every rule and removes
 //! every earlier one). Perch's lowering of the document's rules, each
 //! verdict, and each accepted authorization's spending records must equal
-//! the trace's, which rule-core's Lean model computed. Every difference is
-//! reported, by trace and authorization.
+//! the trace's, which rule-core's Lean model computed. After every apply the
+//! account's stored rule-eval rule set must equal the lowering of the
+//! document's model and the denotation of what is installed
+//! (`perch_testkit::rule_set`). Every difference is reported, by trace and
+//! authorization.
 //!
 //! Scoped traces need `apply_scope`, which Perch does not have: they are the
 //! only traces not run, and the test checks that.
@@ -26,6 +29,7 @@ fn every_admin_document_trace_agrees_with_perch() {
     let mut ran = 0;
     let mut recovery = 0;
     let (mut authorizations, mut delegated, mut external) = (0, 0, 0);
+    let (mut rule_sets, mut stored_rules) = (0, 0);
     let mut failures = vec![];
     for (_, t) in &traces {
         if t.scoped.is_some() {
@@ -40,6 +44,8 @@ fn every_admin_document_trace_agrees_with_perch() {
                     authorizations += r.verdicts.len();
                     delegated += r.delegated;
                     external += r.external;
+                    rule_sets += r.rule_sets;
+                    stored_rules += r.stored_rules;
                     for d in differences(t, &r) {
                         failures.push(format!("{} ({start:?}): {d}", t.name));
                     }
@@ -51,7 +57,8 @@ fn every_admin_document_trace_agrees_with_perch() {
     println!(
         "traces: {}, admin traces run: {ran} (with recovery: {recovery}), scoped not run: {}, \
          authorizations run: {authorizations} (with a delegated signer: {delegated}, with an \
-         external signer: {external}), differences: {}",
+         external signer: {external}), rule sets checked: {rule_sets} ({stored_rules} rules), \
+         differences: {}",
         traces.len(),
         skipped.len(),
         failures.len()
@@ -60,6 +67,8 @@ fn every_admin_document_trace_agrees_with_perch() {
     assert_eq!(ran + skipped.len(), traces.len());
     assert_eq!(skipped.len(), scoped, "a trace was not run: {skipped:?}");
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+    // One apply on a fresh account, two after a predecessor.
+    assert_eq!(rule_sets, 3 * ran);
 }
 
 /// The comparison is not vacuous: a trace whose expected verdict, records or

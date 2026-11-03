@@ -21,6 +21,8 @@
 //! installed == reviewed via [`PerchSmartAccount::applied_doc_hash`].
 #![no_std]
 
+extern crate alloc;
+
 use perch_doc_compiler::{
     admin_survives, CompiledDoc, CompiledZkFactor, DocCompilerClient, DocCompilerError,
 };
@@ -32,6 +34,9 @@ use perch_recovery_interface::controller::{
 use perch_recovery_interface::credential::{revocations, Credential};
 use perch_recovery_interface::zk::MembershipPoolClient;
 use perch_recovery_interface::{address_payload, UpgradeSubject};
+/// The stored rule-eval rule ([`PerchSmartAccount::rule_set`]),
+/// re-exported so a deployable can name it for `impl_perch_smart_account!`.
+pub use perch_rule_eval::StoredRule;
 use soroban_sdk::{
     auth::{Context, ContractContext, CustomAccountInterface},
     contractevent, contracttrait, contracttype,
@@ -43,6 +48,7 @@ use stellar_accounts::smart_account::{
     self, AuthPayload, ContextRule, ContextRuleType, Signer, SmartAccount,
 };
 
+mod rule_set;
 mod rules;
 pub use rules::{InstalledPolicy, InstalledRule};
 
@@ -123,8 +129,16 @@ pub enum PerchAccountError {
     /// that has since changed.
     StaleRevision,
     /// A completed recovery would advance the scope generation past
-    /// `u64::MAX`. Last, so every earlier code is unchanged.
+    /// `u64::MAX`.
     GenerationExhausted,
+    /// The compiled document carries no model, more than one, a model
+    /// soroban-facade cannot read, or one whose rules or recovery do not
+    /// match the compiled rules one for one.
+    ModelInvalid,
+    /// A rule other than the recovery rule asks for no signer (INV-1), so an
+    /// authorization with no signer at all would satisfy it. Last, so every
+    /// earlier code is unchanged.
+    UnguardedRule,
 }
 
 /// Why `__check_auth` refused before evaluating any rule.
@@ -394,6 +408,11 @@ struct PerchStorage {
     /// by how many rules the account ever had, and an unchanged rule is not
     /// touched at all (`rules`).
     installed_rules: PersistentItem<Vec<InstalledRule>>,
+    /// The rule-eval rule set the installed rules enforce, aligned with
+    /// `installed_rules` (`rule_set`): written with it by the constructor and
+    /// `apply_doc`, absent on an account neither wrote since it was upgraded
+    /// to code that keeps it.
+    rule_set: PersistentItem<Vec<StoredRule>>,
     /// The next upgrade request id. Never reused.
     next_upgrade_id: InstanceItem<u64>,
     /// The configuration revision: 0 after the constructor, advanced by one
@@ -764,6 +783,14 @@ pub trait PerchSmartAccount: CustomAccountInterface + SmartAccount {
         PerchStorage::get_installed_rules(e).unwrap_or(Vec::new(e))
     }
 
+    /// The rule-eval rules the installed rules enforce, aligned with
+    /// [`Self::installed_rules`]: entry `i` is what installed rule `i`
+    /// enforces. Empty on an account that has not applied a document since
+    /// it was upgraded to code that keeps them. Nothing evaluates them yet.
+    fn rule_set(e: &Env) -> Vec<StoredRule> {
+        PerchStorage::get_rule_set(e).unwrap_or(Vec::new(e))
+    }
+
     /// Read-only rule surface, re-exposed here because `SmartAccount` itself
     /// is deliberately not exported by doc-only accounts.
     fn get_context_rules_count(e: &Env) -> u32 {
@@ -921,6 +948,7 @@ fn apply(
     if !admin_survives(&compiled.rules) {
         return Err(PerchAccountError::AdminLockout);
     }
+    let rule_set = rule_set::lowered(e, &compiled)?;
     for fingerprint in compiled.fingerprints.iter() {
         if PerchStorage::has_revoked(e, &fingerprint) {
             return Err(PerchAccountError::RevokedCredential);
@@ -972,7 +1000,7 @@ fn apply(
         }
     }
 
-    let delta = apply_rules(e, &compiled, mode);
+    let delta = apply_rules(e, &compiled, &rule_set, mode);
 
     if let Some(leaf) = &insert {
         MembershipPoolClient::new(e, &leaf.pool).rcv_insert(
@@ -1062,6 +1090,12 @@ pub mod testutils {
         PerchStorage::set_scope_generation(e, &generation);
     }
 
+    /// Overwrite the stored rule set. Run as the account
+    /// (`env.as_contract`).
+    pub fn set_rule_set(e: &Env, rule_set: &Vec<StoredRule>) {
+        PerchStorage::set_rule_set(e, rule_set);
+    }
+
     /// What applying `doc_json` would do to each rule slot, and what the cost
     /// model prices it at, without applying it. Run as the account
     /// (`env.as_contract`).
@@ -1080,7 +1114,14 @@ pub mod testutils {
 /// observable half-migrated state. The recovery rule is not one of
 /// `doc.rules`: it is a zero-signer self-scoped rule whose only policy is the
 /// adopted controller, installed for the compiled configuration's hash.
-fn apply_rules(e: &Env, compiled: &CompiledDoc, mode: rules::Mode) -> rules::DeltaSummary {
+/// `rule_set` (`rule_set::lowered`) is stored beside the records, which come
+/// out of the reconcile in its order.
+fn apply_rules(
+    e: &Env,
+    compiled: &CompiledDoc,
+    rule_set: &Vec<StoredRule>,
+    mode: rules::Mode,
+) -> rules::DeltaSummary {
     let current = PerchStorage::get_installed_rules(e).unwrap_or(Vec::new(e));
     let (desired, params) = rules::desired(e, compiled);
     let (next, sum) = rules::reconcile(e, &current, &desired, &params, mode);
@@ -1089,6 +1130,10 @@ fn apply_rules(e: &Env, compiled: &CompiledDoc, mode: rules::Mode) -> rules::Del
         extend_persistent(e, |ttl| {
             PerchStorage::extend_installed_rules_ttl(e, ttl, ttl)
         });
+    }
+    if PerchStorage::get_rule_set(e).as_ref() != Some(rule_set) {
+        PerchStorage::set_rule_set(e, rule_set);
+        extend_persistent(e, |ttl| PerchStorage::extend_rule_set_ttl(e, ttl, ttl));
     }
     let recovery_rule = next.iter().find(|r| r.recovery).map(|r| r.id);
     if PerchStorage::get_recovery_rule(e) != recovery_rule {
@@ -1124,8 +1169,10 @@ pub fn install_admin(e: &Env, admin_signers: &Vec<Signer>) {
         e,
         &Vec::from_array(e, [rules::admin_rule(e, rule.id, admin_signers)]),
     );
+    PerchStorage::set_rule_set(e, &Vec::from_array(e, [rule_set::admin(e, admin_signers)]));
     extend_persistent(e, |ttl| {
-        PerchStorage::extend_installed_rules_ttl(e, ttl, ttl)
+        PerchStorage::extend_installed_rules_ttl(e, ttl, ttl);
+        PerchStorage::extend_rule_set_ttl(e, ttl, ttl);
     });
 }
 
