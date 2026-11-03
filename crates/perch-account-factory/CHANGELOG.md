@@ -4,22 +4,42 @@ All notable changes to this component are documented here. Contract versions
 are the on-chain wasm publishes and `perch-js` versions are the npm releases of
 `@stellar-registry/perch`; the format follows [Keep a Changelog](https://keepachangelog.com).
 
-## [0.1.3] - 2026-10-15
+## [0.2.0] - 2026-11-03
+
+### 🚀 Features
+
+- *(deps)* [**breaking**] Move to soroban-sdk 29.0.1, pinned by a recorded authorization corpus (#50)
 
 ### 🐛 Bug Fixes
 
-- *(perch-ir)* Refuse documents the compiler would trap on or could never enforce
-- *(perch-program)* Match a string prefix against an argument of any length
-- *(perch-smart-account)* Treat a signer reorder as a rule change in delta apply
-- *(deps)* Getrandom 0.2.17 -> 0.2.17, 0.3.4
+- *(deps)* Soroban-builtin-sdk-macros 27.0.1 -> 29.0.1
+- *(deps)* Soroban-env-common 27.0.1 -> 29.0.1
+- *(deps)* Soroban-env-guest 27.0.1 -> 29.0.1
+- *(deps)* Soroban-env-host 27.0.1 -> 29.0.1
+- *(deps)* Soroban-env-macros 27.0.1 -> 29.0.1
+- *(deps)* Soroban-ledger-snapshot 27.0.6 -> 29.0.1
+- *(deps)* Soroban-sdk 27.0.6 -> 29.0.1
+- *(deps)* Soroban-sdk-macros 27.0.6 -> 29.0.1
+- *(deps)* Soroban-spec 27.0.6 -> 29.0.1
+- *(deps)* Soroban-spec-rust 27.0.6 -> 29.0.1
+- *(deps)* Soroban-wasmi 0.31.1-soroban.20.0.1 -> 0.31.1-soroban.29.0.0
+- *(deps)* Stellar-accounts 0.7.1 (git 33726766a1fd) -> 0.7.1 (git 42089fc90684)
+- *(deps)* Stellar-xdr 27.0.0 -> 28.0.0
 
-## [0.1.2] - 2026-10-12
+## [0.1.3] - 2026-10-19
 
 ### 🐛 Bug Fixes
 
 - *(smart-account)* Bind external signer authorization to the account
 - *(doc-compiler)* Refuse non-canonical webauthn keys
 - *(recovery)* Keep recovery targets installable
+- *(perch-ir)* Refuse documents the compiler would trap on or could never enforce
+- *(perch-program)* Match a string prefix against an argument of any length
+- *(perch-smart-account)* Treat a signer reorder as a rule change in delta apply
+
+### 📚 Documentation
+
+- Audit documentation for the recovery stack and policy language (#133)
 
 ## [0.1.1] - 2026-10-09
 
