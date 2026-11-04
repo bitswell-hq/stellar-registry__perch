@@ -40,8 +40,7 @@ m() { jq -r "$1" "$manifest"; }
 net=(--rpc-url "$(m .rpc_url)" --network-passphrase "$(m .network_passphrase)")
 reader="${PERCH_READER:-perch-fetch-reader}"
 stellar keys address "$reader" >/dev/null 2>&1 || stellar keys generate "$reader" >/dev/null 2>&1
-(cd "$repo_root" && cargo build -q -p perch-derive-id)
-derive() { "$repo_root/target/debug/perch-derive-id" "$@" "$(m .network_passphrase)"; }
+derive() { "$repo_root/scripts/derive-id.py" "$@" "$(m .network_passphrase)"; }
 # A chain read that fails prints `unavailable: <its error>`, which `check`
 # reports apart from a mismatch: an RPC outage is not a wrong deployment.
 read_chain() { # command...

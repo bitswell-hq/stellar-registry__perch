@@ -13,13 +13,14 @@ members = [
     "crates/perch-conformance",
     "crates/perch-analyze",
     "crates/perch-ed25519-verifier",
+    "crates/perch-mldsa-verifier",
     "crates/perch-spending-limit",
     "crates/perch-doc-compiler",
     "crates/perch-smart-account",
     "crates/perch-account",
     "crates/perch-deploy",
     "crates/perch-derive-id",
-    "crates/perch-stateless-registry",
+    "crates/perch-constructorless-registry",
     "crates/perch-registry-resolve-macro",
     "crates/perch-registry-resolve",
     "crates/perch-testkit",
@@ -83,6 +84,11 @@ perch-program = { version = "0.1.1", path = "crates/perch-program" }
 # the matching flux toolchain rev), moved to soroban-sdk 29
 # (vendor/soroban-flux/NOTICE).
 soroban-flux = { version = "0.1.0", path = "vendor/soroban-flux" }
+
+# ML-DSA (FIPS 204) verification in guest wasm, for perch-mldsa-verifier: pure
+# Rust, no_std, no allocation. Unaudited. Verification needs no randomness, so
+# the OS RNG feature stays off; only the ML-DSA-65 parameter set is compiled.
+fips204 = { version = "0.4.6", default-features = false, features = ["ml-dsa-65"] }
 
 # Poseidon2 on the Soroban host (`poseidon2_permutation` host function). Must
 # stay byte-identical to noir-lang/poseidon v0.2.0, which the recovery circuit

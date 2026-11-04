@@ -1,8 +1,8 @@
 //! The perch document compiler: a **stateless** deployable contract that turns
 //! a policy document's JSON bytes into compiled rules, the document's model,
 //! and the canonical `doc_hash` — nothing else. It reads no storage and
-//! writes no storage; deployed once per network, immutable, and shared by
-//! every perch account.
+//! writes no storage; constructorless, deployed once per network, immutable,
+//! and shared by every perch account.
 //!
 //! The split keeps state and computation apart: this contract owns *parsing
 //! and validating* (the JSON parser and the checks live here, in one audited
@@ -129,7 +129,9 @@ pub enum DocCompilerError {
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub enum RuleScope {
+    /// Calls to the applying account itself (`CallContract(self)`).
     SelfAdmin,
+    /// Calls to this contract.
     Contract(Address),
 }
 
@@ -142,11 +144,15 @@ pub enum RuleScope {
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct CompiledRule {
+    /// The rule's name in the document. The account matches installed rules
+    /// by name and scope.
     pub name: String,
     pub scope: RuleScope,
+    /// The rule's signers, with external keys as declared (already
+    /// verifier-canonical).
     pub signers: Vec<Signer>,
-    /// The last ledger the rule authorizes in: one before the document's
-    /// `not-after-ledger`, as OZ's `valid_until` is inclusive.
+    /// The last ledger the rule authorizes, if bounded: OZ's inclusive
+    /// `valid_until`, one below the document's `not-after-ledger`.
     pub valid_until: Option<u32>,
 }
 
@@ -167,18 +173,14 @@ pub struct CompiledDoc {
     /// keys canonicalized by their verifier. What revocation compares
     /// (spec §8).
     pub fingerprints: Vec<BytesN<32>>,
+    /// One compiled rule per document rule, in the submitted order.
     pub rules: Vec<CompiledRule>,
-    /// Zero or one entries — a `Vec` because `CompiledRecoveryConfig` is
-    /// itself a `#[contracttype]` struct, and `#[contracttype]` has no
-    /// `ScVal` conversion for an `Option` of one (`Option<u32>` on
-    /// [`CompiledRule::valid_until`] works because `u32` is a host type).
-    /// Present ⇒ the document enrolls account recovery — the applier
-    /// is expected to sync this configuration to the adopted
-    /// recovery-controller instance named in it. See `docs/recovery/` for
-    /// the full design; wire-compat notes live there too (this is a new
-    /// field on an existing constructorless, immutable deployable — a
-    /// compiler build carrying it is a new instance, not an in-place change
-    /// to any already-deployed one).
+    /// The compiled `recovery` member: zero or one entries (a `Vec` because
+    /// `#[contracttype]` has no conversion for an `Option` of a custom struct;
+    /// `Option<u32>` on [`CompiledRule::valid_until`] works because `u32` is
+    /// a host type). Present ⇒ the document enrolls account recovery, and the
+    /// applier syncs this configuration to the controller instance it names
+    /// (`docs/recovery/`).
     pub recovery: Vec<CompiledRecoveryConfig>,
     /// The document as rule-core's lowering reads it (`rule_eval::Doc`, in
     /// host types): one entry. A `Vec` for the same reason as `recovery`.
@@ -196,6 +198,7 @@ pub struct DerivedTarget {
     /// The target's canonical bytes: exactly what the completing `apply_doc`
     /// must submit.
     pub canonical: Bytes,
+    /// `sha256` of `canonical`: the target's `doc_hash`.
     pub doc_hash: BytesN<32>,
     /// The target's recovery `config_hash` (the current one, or the current
     /// one with the declared ZK rotation).
@@ -334,7 +337,10 @@ impl PerchDocCompiler {
     /// JSON bytes in → compiled rules + canonical `doc_hash` out. Pure:
     /// no auth, no storage. The document must name THIS network (its
     /// `network` string must hash to the chain's network id), so a testnet
-    /// document can never compile on mainnet or vice versa.
+    /// document can never compile on mainnet or vice versa. It must also fit
+    /// the document caps ([`Self::limits`]), and every external signer key
+    /// must already be its verifier-canonical form: the compiler calls each
+    /// named verifier's `batch_canonicalize_key` to check.
     pub fn compile_doc(e: &Env, doc_json: Bytes) -> Result<CompiledDoc, DocCompilerError> {
         compile_parsed(e, &parse(&doc_json)?)
     }
