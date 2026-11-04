@@ -43,8 +43,7 @@
 extern crate alloc;
 
 use perch_doc_compiler::{
-    admin_survives, CompiledDoc, CompiledRule, CompiledZkFactor, DocCompilerClient,
-    DocCompilerError, RuleScope,
+    CompiledDoc, CompiledZkFactor, DocCompilerClient, DocCompilerError, RuleScope,
 };
 use perch_recovery_interface::account::{
     is_frozen, is_guardian_approval, is_reserved_invoker_only, UpgradeReadiness,
@@ -64,7 +63,7 @@ use soroban_sdk::{
     auth::{Context, ContractContext, CustomAccountInterface},
     contractevent, contracttrait, contracttype,
     crypto::Hash,
-    Address, Bytes, BytesN, ContractExecutable, Env, Map, String, Symbol, TryFromVal, Val, Vec,
+    Address, Bytes, BytesN, ContractExecutable, Env, Map, String, Symbol, Val, Vec,
 };
 use soroban_sdk_tools::{contractstorage, scerr, InstanceItem, PersistentItem, PersistentMap};
 use stellar_accounts::smart_account::{
@@ -115,8 +114,8 @@ pub mod infra {
 /// failures flatten in via `#[from_contract_client]`, converted by `??`.
 #[scerr]
 pub enum PerchAccountError {
-    /// The compiled document contains no policy-free self-admin rule with at
-    /// least one signer. Applying it could lock the admin out; refused
+    /// The document keeps no constraint-free, never-expiring self-admin rule
+    /// with a signer. Applying it could lock the admin out; refused
     /// (anti-brick).
     AdminLockout,
     /// The document names a credential in the account's revoked set
@@ -1343,10 +1342,10 @@ fn apply_scope_doc(e: &Env, scope: u32, doc_json: Bytes) -> Result<BytesN<32>, P
 /// Refuse a compiled document that would reach past a scope: a recovery
 /// member, a rule scoped to the account itself (every `self-admin` rule)
 /// or to a contract of the excluded set (spec §7.6; the compiler checks the
-/// ZK adapter and pool only within one document, spec §15 rule 3), or a
-/// rule whose `functions` names a guardian approval (§2). A rule that
-/// leaves its functions unrestricted is refused a guardian approval in
-/// `__check_auth` instead.
+/// ZK adapter and pool only within one document, spec §15 rule 3). A rule
+/// whose `functions` names a guardian approval (§2) is refused by
+/// `rule_set::lowered_scoped`; one that leaves its functions unrestricted
+/// is refused a guardian approval in `__check_auth` instead.
 fn check_scoped(e: &Env, me: &Address, compiled: &CompiledDoc) -> Result<(), PerchAccountError> {
     if !compiled.recovery.is_empty() {
         return Err(PerchAccountError::ScopeEscalation);
@@ -1355,33 +1354,11 @@ fn check_scoped(e: &Env, me: &Address, compiled: &CompiledDoc) -> Result<(), Per
         let RuleScope::Contract(target) = &rule.scope else {
             return Err(PerchAccountError::ScopeEscalation);
         };
-        if target == me || excluded_contract(e, target) || names_guardian_approval(e, &rule) {
+        if target == me || excluded_contract(e, target) {
             return Err(PerchAccountError::ScopeEscalation);
         }
     }
     Ok(())
-}
-
-/// Whether a compiled rule's function list (the interpreter program's
-/// `Op::FnIn`, which a rule's `functions` lowers to) names a guardian
-/// approval. Each op is read as its raw `[variant, fields..]` value rather
-/// than decoded as an `Op`, which would link every variant's conversion
-/// into the account for this one check.
-fn names_guardian_approval(e: &Env, rule: &CompiledRule) -> bool {
-    let fn_in = Symbol::new(e, "FnIn");
-    rule.install.iter().any(|params| {
-        params.program.ops.to_vals().iter().any(|op| {
-            let Ok(op) = Vec::<Val>::try_from_val(e, &op) else {
-                return false;
-            };
-            op.get(0)
-                .is_some_and(|tag| Symbol::try_from_val(e, &tag).is_ok_and(|tag| tag == fn_in))
-                && op.get(1).is_some_and(|names| {
-                    Vec::<Symbol>::try_from_val(e, &names)
-                        .is_ok_and(|names| names.iter().any(|name| is_guardian_approval(e, &name)))
-                })
-        })
-    })
 }
 
 /// Whether `contract` is in the applied admin document's excluded set,
@@ -1516,9 +1493,6 @@ fn apply(
 
     let compiled: CompiledDoc = DocCompilerClient::new(e, &infra::perch_doc_compiler::address(e))
         .try_compile_doc(&doc_json)??;
-    if !admin_survives(&compiled.rules) {
-        return Err(PerchAccountError::AdminLockout);
-    }
     let rule_set = rule_set::lowered(e, &compiled)?;
     for fingerprint in compiled.fingerprints.iter() {
         if PerchStorage::has_revoked(e, &fingerprint) {
