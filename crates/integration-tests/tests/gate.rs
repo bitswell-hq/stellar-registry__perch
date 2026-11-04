@@ -25,6 +25,7 @@
 mod support;
 
 use perch_account::{PerchAccountError, PerchAuthError};
+use perch_account_types::{AuthPayload, Signer};
 use perch_recovery::EvidenceDomain;
 use perch_recovery_interface::RecoveryAction;
 use perch_smart_account::testutils::{
@@ -37,7 +38,7 @@ use soroban_sdk::{
     contract, contractimpl, symbol_short, vec, Address, Bytes, BytesN, Env, IntoVal, Symbol,
 };
 use stellar_accounts::policies::spending_limit::get_spending_limit_data;
-use stellar_accounts::smart_account::{self, AuthPayload, Signer};
+use stellar_accounts::smart_account;
 use support::*;
 
 type CallResult<T> = Result<T, Result<PerchAccountError, soroban_sdk::InvokeError>>;
