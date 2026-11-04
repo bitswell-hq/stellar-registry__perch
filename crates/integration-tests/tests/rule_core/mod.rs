@@ -63,6 +63,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use ed25519_dalek::{Signer as _, SigningKey};
+use perch_account_types::{AuthPayload, Signer};
 use perch_compile::{compile, CompileConfig, LoweredRule, ScopeSpec, SignerSpec};
 use perch_ed25519_verifier::PerchEd25519Verifier;
 use perch_ir::{
@@ -94,7 +95,6 @@ use soroban_sdk::{
     contract, contractimpl, Address, Bytes, BytesN, Env, IntoVal, Map, String as SString, Symbol,
     Val, Vec as SVec,
 };
-use stellar_accounts::smart_account::{AuthPayload, Signer};
 
 use crate::support::{self, Key, Opts, World};
 use perch_account::PerchAccountError;

@@ -164,12 +164,14 @@ names it, in that scope's set. It runs at the current ledger and scope
 generation, under every signer the payload names, with the account's own
 spending records, and refuses what it does not accept with
 `RuleEvalRefused`, as it does a chosen recovery rule or a batch it cannot
-read; a chosen id that names no installed rule fails with OZ's
-`ContextRuleNotFound`, as OZ refused it, which perch-js reads as a stale
-selection. `authorize` reads only the chosen rules, so this is its verdict
-over the whole stored set. OZ's `authenticate` then checks every payload
-signer against OZ's digest (the account-bound payload with the chosen ids),
-and the records `authorize` charged are stored. A document rule's OZ
+read; a chosen id that names no installed rule fails with
+`ContextRuleNotFound` (#3000), as OZ refused it, which perch-js reads as a
+stale selection. `authorize` reads only the chosen rules, so this is its
+verdict over the whole stored set. The account's `authenticate` (`auth.rs`)
+then checks every payload signer against OZ's digest (the account-bound
+payload with the chosen ids), calling an `External` signer's verifier and
+handing a `Delegated` one to the host as OZ's does, and the records
+`authorize` charged are stored. A document rule's OZ
 context rule carries no policy: OZ's context rules are the registry of rule
 ids and signers. Two things stay with OZ's `do_check_auth`: a recovery
 completion (one `apply_doc` context selecting the recovery rule), which the
