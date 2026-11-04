@@ -43,7 +43,7 @@
 extern crate alloc;
 
 use perch_doc_compiler::{
-    admin_survives, CompiledDoc, CompiledZkFactor, DocCompilerClient, DocCompilerError, RuleScope,
+    CompiledDoc, CompiledZkFactor, DocCompilerClient, DocCompilerError, RuleScope,
 };
 use perch_recovery_interface::account::{is_frozen, is_reserved_invoker_only, UpgradeReadiness};
 use perch_recovery_interface::config::{leaf_to_insert, zk_factor_transition_ok};
@@ -112,8 +112,8 @@ pub mod infra {
 /// failures flatten in via `#[from_contract_client]`, converted by `??`.
 #[scerr]
 pub enum PerchAccountError {
-    /// The compiled document contains no policy-free self-admin rule with at
-    /// least one signer. Applying it could lock the admin out; refused
+    /// The document keeps no constraint-free, never-expiring self-admin rule
+    /// with a signer. Applying it could lock the admin out; refused
     /// (anti-brick).
     AdminLockout,
     /// The document names a credential in the account's revoked set
@@ -1483,9 +1483,6 @@ fn apply(
 
     let compiled: CompiledDoc = DocCompilerClient::new(e, &infra::perch_doc_compiler::address(e))
         .try_compile_doc(&doc_json)??;
-    if !admin_survives(&compiled.rules) {
-        return Err(PerchAccountError::AdminLockout);
-    }
     let rule_set = rule_set::lowered(e, &compiled)?;
     for fingerprint in compiled.fingerprints.iter() {
         if PerchStorage::has_revoked(e, &fingerprint) {

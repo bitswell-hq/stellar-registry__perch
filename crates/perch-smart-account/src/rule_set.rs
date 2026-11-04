@@ -14,7 +14,7 @@
 use perch_doc_compiler::CompiledDoc;
 use perch_rule_eval::convert::Addresses;
 use perch_rule_eval::{
-    admin_survives, doc_of_in, guarded, CompiledModel, StoredFunctions, StoredRule,
+    admin_declared, admin_survives, doc_of_in, guarded, CompiledModel, StoredFunctions, StoredRule,
 };
 use soroban_sdk::{Address, Env, Vec};
 use stellar_accounts::smart_account::Signer;
@@ -82,7 +82,9 @@ fn stored(
 /// rules or recovery do not match the compiled document's one for one; with
 /// `UnguardedRule` when a rule other than the recovery rule asks for no
 /// signer (INV-1); and with `AdminLockout` when no rule lets its signers
-/// manage the account unconditionally and for good.
+/// manage the account unconditionally and for good, or the document
+/// declares no such rule as a constraint-free `all` rule (the compiled
+/// document's anti-brick check, `perch_doc_compiler::admin_survives`).
 pub(crate) fn lowered(
     e: &Env,
     compiled: &CompiledDoc,
@@ -96,7 +98,7 @@ pub(crate) fn lowered(
         .ok_or(PerchAccountError::ModelInvalid)?;
     let doc = doc_of_in(e, &model, &mut known).ok_or(PerchAccountError::ModelInvalid)?;
     let kept = kept(e, compiled, rule_eval::lower(&doc, &me))?;
-    if !admin_survives(&kept, &me) {
+    if !admin_survives(&kept, &me) || !admin_declared(&doc) {
         return Err(PerchAccountError::AdminLockout);
     }
     stored(e, &kept, &known)
