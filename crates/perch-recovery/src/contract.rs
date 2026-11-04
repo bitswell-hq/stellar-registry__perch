@@ -642,6 +642,7 @@ impl PerchRecovery {
     }
 
     /// Extend a spent nullifier's record to the network maximum.
+    /// Permissionless; changes no meaning.
     pub fn renew_nullifier(e: &Env, account: Address, nullifier: BytesN<32>) {
         let key = (account, nullifier);
         if RecoveryStorage::has_nullifier(e, &key) {

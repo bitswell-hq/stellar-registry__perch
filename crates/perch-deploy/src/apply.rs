@@ -92,7 +92,7 @@ pub fn run(
 
     // The document bytes, an `approval_valid_until` of 0, and the revision
     // the admin rule was read at: the account resolves the compiler +
-    // interpreter itself through its pinned stateless registry, the
+    // interpreter itself through its pinned constructorless registry, the
     // freshness bound is read only for a `Protected` recovery
     // reconfiguration, which needs recorded approvals this tool does not
     // collect, and `expected_revision` refuses the apply (`StaleRevision`)

@@ -26,16 +26,23 @@ use crate::{Insertion, LeafPosition, PoolError, TreeInfo, MAX_PAGE};
 use perch_zk_primitives::{Hasher, ZERO_HASHES};
 use soroban_sdk::{contracttype, Address, BytesN, Env, Vec};
 
+/// The pool's storage keys (see the layout table in the module docs).
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum PoolKey {
+    /// The tree insertions go into (absent = tree 0).
     CurrentTree,
+    /// A tree's [`TreeState`].
     Tree(u32),
+    /// A root the tree has had, holding the tree size right after it.
     Root(u32, BytesN<32>),
+    /// The leaf at an index of a tree.
     Leaf(u32, u64),
+    /// An account's enrollment's [`LeafPosition`].
     Enrollment(Address, BytesN<32>),
 }
 
+/// A tree's incremental-Merkle state.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TreeState {

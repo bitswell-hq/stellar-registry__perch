@@ -64,6 +64,7 @@ pub struct Attempt {
     pub action: RecoveryAction,
     /// The epoch the attempt was opened under; it is dead under any other.
     pub epoch: u64,
+    /// The ledger the attempt was opened in (T1).
     pub created_at: u32,
     /// Last ledger (inclusive) initiation evidence is accepted.
     pub evidence_deadline: u32,
@@ -101,6 +102,7 @@ pub struct Attempt {
     /// (the baseline's, for compromise), keys canonicalized. The completion
     /// returns them for the account to revoke (spec §8).
     pub replaced: Vec<Credential>,
+    /// The stored state; see [`AttemptState`] for what is derived instead.
     pub state: AttemptState,
     /// Distinct enrolled guardians that approved the initiation statement.
     pub guardians: Vec<Address>,
@@ -119,7 +121,9 @@ pub struct Attempt {
 #[contracttype]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ChangeApproval {
+    /// Distinct enrolled guardians that approved the statement.
     pub guardians: Vec<Address>,
+    /// Whether a proof for the statement was accepted.
     pub zk: bool,
 }
 
@@ -139,7 +143,9 @@ impl ChangeApproval {
 #[contracttype]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CompletionMarker {
+    /// The authorized attempt `enforce` checked.
     pub attempt_id: u64,
+    /// The target the completing `apply_doc` must apply.
     pub target_doc_hash: BytesN<32>,
     /// The ledger `enforce` ran in. A marker from an earlier ledger is
     /// stale.
