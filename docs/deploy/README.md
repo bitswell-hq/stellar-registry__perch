@@ -439,16 +439,20 @@ never creates a tag.
 ## Bootstrapping a network's registry chain
 
 [`scripts/bootstrap-registry.sh`](../../scripts/bootstrap-registry.sh)
-creates, on one network, everything `registry.path` derives and everything
-the release path then needs there:
+creates, on one network, everything `registry.path` and `verifiers.path`
+derive and everything the release path then needs there:
 
 ```text
 root                deployer(GAMPJROH…, sha256("2026-04-24T13:41:00"))   exists on both networks
 ├─ perch            root.deploy("registry", <root's version>, "perch", …)   testnet CBZGS6DZ…, mainnet CCDXWLV6…
 │  └─ constructorless   perch.deploy("perch-constructorless-registry", "0.1.0", "constructorless", …)
 │                       testnet CDZGU4AI…, mainnet CC236AK2…
-│     ├─ compiler, interpreter, spending limit, ed25519 verifier at deployer(constructorless, wasm hash)
-│     └─ every other stack name, bound to the perch author
+│  │  ├─ compiler, interpreter, spending limit, ed25519 verifier at deployer(constructorless, wasm hash)
+│  │  └─ every other stack name, bound to the perch author
+│  └─ verifiers     perch.deploy("perch-constructorless-registry", "0.1.0", "verifiers", …)
+│                   testnet CCHJ7RWP…, mainnet CCDCKRUV…
+│     └─ ed25519 and WebAuthn verifiers at deployer(verifiers, wasm hash): what a document's
+│        verifier-name resolves to, an admin signer's verifier, and the factory's passkey pin
 └─ nido             testnet CDTMMWLB…, mainnet CDPA3SYN…; its names bound to the nido author
 perch author        deployer(<source>, sha256("perch-author")), a design-A perch-account
 nido author         deployer(<source>, sha256("nido-author"))
@@ -456,8 +460,8 @@ nido author         deployer(<source>, sha256("nido-author"))
 
 The same code runs on both networks. `--network` chooses only the RPC and
 the passphrase. Every address is derived (`derive-id.py chain`, `name`,
-`content`), the script asserts the perch, constructorless and nido ids
-above, and it reads the root's registry version and manager and each
+`content`), the script asserts the perch, constructorless, verifiers and nido
+ids above, and it reads the root's registry version and manager and each
 registry's admin and manager from the chain. The tier-0 hashes and versions
 come from `deployments/testnet.json`, checked against the account's committed
 pins. Every wasm the script uploads, publishes or deploys must hash to its pin,
@@ -536,11 +540,18 @@ only with `--allow-unattested perch-constructorless-registry`.
 | 3 | `publish-constructorless` | `perch.publish_hash("perch-constructorless-registry", <perch author>, <its hash>, "0.1.0")` | perch's manager |
 | 4 | `constructorless` | `perch.deploy("perch-constructorless-registry", "0.1.0", "constructorless", owner, [admin, manager, root], None)`: a named deploy with no `deployer`, so it lands at `deployer(perch, sha256("constructorless"))` | perch's manager |
 | 5 | `seed` | upload the four tier-0 if missing; `constructorless.publish_hash(name, <perch author>, <released hash>, <released version>)` for each, then `deploy_stateless` (permissionless) | constructorless's manager |
-| 6 | `create-author --project perch` | deploy the account with an `External(ed25519 verifier, admin key)` admin, check its `infra()` resolves in constructorless, then `apply_doc` with `admin`, `ci-publish` (scoped to constructorless, until `--ci-expiry-ledger`) and `admin-registry` | the source deploys; the admin key signs `apply_doc` |
-| 7 | `names --project perch` | `publish_hash(name, <perch author>, sha256("perch-bootstrap:<name>"), "0.0.0")` for every other name `deployments/testnet.json` deploys ([#142](https://github.com/stellar-registry/perch/issues/142)); refused until step 6 is on chain | constructorless's manager |
-| 8 | `create-author --project nido`, `names --project nido` | as 6 and 7, scoped to `nido`; `--nido-names` (default `nido-factory nido-name-registry`) | the source, the admin key, nido's manager |
+| 6 | `verifiers` | `perch.deploy("perch-constructorless-registry", "0.1.0", "verifiers", owner, [admin, manager, root], None)`: the managed registry a document's `verifier-name` resolves in, at `deployer(perch, sha256("verifiers"))` | perch's manager |
+| 7 | `seed-verifiers` | for the ed25519 and WebAuthn verifiers, at their released versions and hashes: upload if missing, `verifiers.publish_hash(name, <perch author>, <released hash>, <released version>)`, then `deploy_stateless`. Admitting a new verifier later is the same first publish, which only the manager approves | verifiers's manager |
+| 8 | `create-author --project perch` | deploy the account with an `External(ed25519 verifier, admin key)` admin, check its `infra()` resolves in constructorless, then `apply_doc` with `admin`, `ci-publish` (scoped to constructorless, until `--ci-expiry-ledger`) and `admin-registry`. Where the compiler resolves verifier names (its `verifier_registry` view), the admin verifier is the one in `perch/verifiers`, named in the document (`perch-ed25519-verifier@<version>`), as such an account requires; with an earlier compiler, the one in constructorless, by contract id | the source deploys; the admin key signs `apply_doc` |
+| 9 | `names --project perch` | `publish_hash(name, <perch author>, sha256("perch-bootstrap:<name>"), "0.0.0")` for every other name `deployments/testnet.json` deploys ([#142](https://github.com/stellar-registry/perch/issues/142)); refused until step 8 is on chain | constructorless's manager |
+| 10 | `create-author --project nido`, `names --project nido` | as 8 and 9, scoped to `nido`; `--nido-names` (default `nido-factory nido-name-registry`) | the source, the admin key, nido's manager |
 
-`all` runs 2 to 8 in that order (`--no-nido` leaves out 8).
+`all` runs 2 to 10 in that order (`--no-nido` leaves out 10).
+
+A verifier's tagged release publishes into `perch/constructorless` only
+(`release.yml`'s `ALLOW`); publishing a new verifier version into
+`perch/verifiers` is its author's (the perch author's) `publish_hash` there,
+which no workflow sends yet.
 
 ### Signers
 

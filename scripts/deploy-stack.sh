@@ -8,8 +8,11 @@
 # deployment's bytes).
 #
 #   1. Registry: the one crates/*/wasm/registry.path derives on this network
-#      (scripts/derive-id.py), the only registry this source's account and
-#      factory resolve. It must already exist.
+#      (scripts/derive-id.py), the only registry this source's account
+#      resolves its infra in. It must already exist. The verifiers a document
+#      names, the factory's WebAuthn verifier included, are in
+#      perch/verifiers, which scripts/bootstrap-registry.sh seeds
+#      (verifiers, seed-verifiers).
 #   2. Tier 0, then the factory (tier 2): scripts/publish-wasm.sh each one
 #      (preflight, upload with a hash check, publish_hash under its crate name
 #      and version authored by --author, deploy_stateless, code-hash check),
@@ -109,7 +112,9 @@ artifact() { jq -c --arg p "$1" '.artifacts[] | select(.package == $p)' "$build"
 wasm_of() { printf '%s/%s.wasm' "$stack" "${1//-/_}"; }
 for pkg in $(jq -r '.artifacts[].package' "$build"); do
     [[ "$pkg" =~ ^[a-z0-9-]+$ ]] || die "build.json names a package '$pkg'"
-    [[ "$(artifact "$pkg" | jq -r .version)" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "build.json: $pkg has no semver version"
+    # The registry code (tier -1) is not published here, so it needs no version.
+    [ "$(artifact "$pkg" | jq -r .tier)" = -1 ] || [[ "$(artifact "$pkg" | jq -r .version)" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+        || die "build.json: $pkg has no semver version"
     [ "$(sha256 "$(wasm_of "$pkg")")" = "$(artifact "$pkg" | jq -r .sha256)" ] \
         || die "$(wasm_of "$pkg") is not the $pkg bytes build.json records"
 done
