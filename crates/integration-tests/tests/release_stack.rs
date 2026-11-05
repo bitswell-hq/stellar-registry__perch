@@ -18,6 +18,10 @@
 //! cargo test -p perch-integration-tests --test release_stack -- --ignored --nocapture
 //! ```
 //!
+//! A rehearsal's stack, built from dev registry paths, adds `--skip
+//! one_build_resolves_each_networks_own_registry`, which checks the canonical
+//! registries.
+//!
 //! Each transaction-shaped call prints one `{"case": ...}` JSON line with its
 //! metered resources (the in-process estimate of the on-chain cost), and is
 //! asserted to fit within the budget rule's 75% of the per-transaction limits
@@ -1710,7 +1714,9 @@ fn the_stack_compiler_hashes_the_canonical_recovery_text() {
 /// network's own Stellar Registry root, the stack's own infra bytes at their
 /// content addresses in the first, and its WebAuthn verifier's in the
 /// second. The registries are written out here, not derived
-/// (`registry_path.rs` derives them hop by hop).
+/// (`registry_path.rs` derives them hop by hop), so a rehearsal's stack,
+/// built from dev registry paths, fails it by design: run the suite on one
+/// with `--skip one_build_resolves_each_networks_own_registry`.
 #[test]
 #[ignore = "needs the built stack"]
 fn one_build_resolves_each_networks_own_registry() {
@@ -1735,7 +1741,12 @@ fn one_build_resolves_each_networks_own_registry() {
     let stack = load_stack();
     // build-stack.sh builds for one network's registry; the bytes are the
     // same on every network.
-    assert!(NETWORKS.iter().any(|(_, r, _)| *r == stack.registry));
+    assert!(
+        NETWORKS.iter().any(|(_, r, _)| *r == stack.registry),
+        "the stack was built for {}, no canonical registry: a rehearsal's stack \
+         (--skip one_build_resolves_each_networks_own_registry)",
+        stack.registry
+    );
     let env = Env::new_with_config(EnvTestConfig {
         capture_snapshot_at_drop: false,
     });

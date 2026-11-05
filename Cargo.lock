@@ -1972,6 +1972,7 @@ dependencies = [
  "perch-account",
  "perch-deploy",
  "perch-doc-compiler",
+ "perch-ir",
  "perch-recovery",
  "perch-recovery-interface",
  "perch-testkit",

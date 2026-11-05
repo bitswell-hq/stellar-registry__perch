@@ -11,8 +11,8 @@
 //! - the factory's pinned account wasm hash is the manifest's, and its
 //!   WebAuthn verifier the manifest's hash at its content address in
 //!   `perch/verifiers`, the registry `crates/*/wasm/verifiers.path` derives,
-//!   which a manifest records as `verifier_registry` once a deployment has
-//!   created it;
+//!   which a manifest records under `verifiers` (with that address) once a
+//!   deployment has created it;
 //! - every manifest address is the content address of its recorded hash.
 //!
 //! **Pending migration.** When the source derives another registry than the
@@ -117,13 +117,6 @@ fn consumers_pin_the_deployment_manifest() {
     // `perch/verifiers`.
     let verifiers = verifier_registry(&env);
     assert_eq!(pins::perch_webauthn_verifier::registry(&env), verifiers);
-    match m["verifier_registry"]["id"].as_str() {
-        Some(id) => assert_eq!(Address::from_str(&env, id), verifiers),
-        None => println!(
-            "{network}.json records no perch/verifiers registry yet; this source derives {}",
-            perch_testkit::delta::strkey(&verifiers)
-        ),
-    }
     assert_eq!(
         pins::perch_webauthn_verifier::WASM_HASH,
         hash(&m, "perch-webauthn-verifier")
@@ -132,4 +125,18 @@ fn consumers_pin_the_deployment_manifest() {
         pins::perch_webauthn_verifier::address(&env),
         content(&verifiers, "perch-webauthn-verifier")
     );
+    match m["verifiers"]["id"].as_str() {
+        Some(id) => {
+            assert_eq!(Address::from_str(&env, id), verifiers);
+            let webauthn = &m["verifiers"]["contracts"]["perch-webauthn-verifier"];
+            assert_eq!(
+                Address::from_str(&env, webauthn["address"].as_str().expect("address")),
+                pins::perch_webauthn_verifier::address(&env)
+            );
+        }
+        None => println!(
+            "{network}.json records no perch/verifiers yet; this source derives {}",
+            perch_testkit::delta::strkey(&verifiers)
+        ),
+    }
 }
