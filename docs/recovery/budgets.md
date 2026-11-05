@@ -754,6 +754,57 @@ the source before it (109,908), and 28,753 under the 131,072-byte limit.
 The recovery controller, the doc compiler and every other tier-0 contract
 build byte-identical; the factory changes only in the account hash it pins.
 
+### The recovery controller's own hooks
+
+The account calls its recovery controller through Perch's hooks
+`rcv_install` and `rcv_complete`, which take the recovery rule as a
+`RecoveryRule` (its signer count and scope); the controller has no OZ
+`Policy` hooks (`spec.md` §10, T5). Source: 2026-11-05, stacks built with
+`scripts/build-stack.sh --builder contract` from this source and from the
+source before it, where the account called the controller's OZ `install`
+and `enforce`, through every `release_stack.rs` flow (26 tests, `--skip
+cap_sweep`), real proofs, passkeys, enforcing authorization. Both pass.
+The completion rows:
+
+| Row | Instructions | Memory |
+| --- | --- | --- |
+| Compromise completion on the long-lived host (8 signers, 10 rules), the worst of its rows | 165.57M → 165.47M (41.4%) | 5,839,774 → 5,828,203 |
+| The same on the fork, the worst of its rows | 165.42M → 165.30M (41.3%) | 5,273,181 → 5,261,610 |
+| Lost-key completion (`Combined`, ZK rotation, every signer revoked; 8 signers, 10 rules) | 162.95M → 162.85M (40.7%) | 5,074,956 → 5,063,385 |
+| Lost-key completion (`Combined`, ZK rotation) | 58.84M → 58.72M | 2,851,784 → 2,840,213 |
+| Lost-key completion (`GuardianOnly`) | 15.99M → 15.94M | 1,539,423 → 1,532,363 |
+| Compromise completion (revokes the stolen and added keys) | 17.30M → 17.25M | 1,554,918 → 1,547,858 |
+
+- **Footprint, written entries, write bytes and events** are unchanged in
+  all 264 metered rows.
+- **Every row that calls the controller costs fewer instructions**: each
+  completion 0.05M to 0.13M fewer and 7 to 12 KB less memory, each
+  enrollment and `Protected` reconfiguration 0.04M to 0.06M fewer.
+- **Rows that only authorize cost more instructions**: the 41 rows of
+  grants, transfers and signer transitions move by −700 to +12,600 (most
+  by about 8,000), and the 10 calls through `execute` by +11,400 to
+  +22,100, because `__check_auth`, and `execute`, refuse ten reserved
+  names instead of eight. The same account built without `rcv_install`
+  and `rcv_complete` in the list costs 3,800 to 15,600 fewer instructions
+  on those 41 rows and 12,700 to 18,300 fewer through `execute`. Rows over
+  scope sweeps and thief scopes move by up to ±0.06M between any two of
+  the three builds, which differ in the account's code and so in where the
+  factory puts each account; the six rows that verify a real ZK proof move
+  by up to ±0.05M between two runs of one stack.
+- **Every row is within 75%.** The worst share of each limit: instructions
+  41.6% → 41.5% (the `Protected` reconfiguration that edits every rule),
+  memory 23.6%, write bytes 50.0%, footprint 15.2%, written entries 19.0%,
+  and events 20.5%, the last five unchanged.
+
+The recovery controller wasm is 67,700 bytes as `stellar contract build`
+builds it (32,067 of code, 30,879 of contract spec, 3,374 of data), 2,088
+fewer than the source before it (69,788): its spec names no OZ type or
+hook. The account wasm is 102,450 bytes (71,294 of code, 24,767 of
+contract spec, 4,461 of data), 131 more, for the two reserved names, and
+28,622 under the 131,072-byte limit. The doc compiler, the pool, the ZK
+adapter and every other tier-0 contract build byte-identical; the factory
+changes only in the account hash it pins.
+
 ### Wasm stack
 
 Every stack contract links a 64 KiB wasm stack (`build.rs`,
