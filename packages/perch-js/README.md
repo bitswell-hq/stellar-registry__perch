@@ -283,3 +283,32 @@ compiler is authoritative; `checkLimits` checks only its caps.
 ## License
 
 Apache-2.0
+
+
+### Exact authorization-entry roots
+
+`.authRoot(gameAddress, 'guess')` on a rule adds an exact entry-root
+constraint. For a capped token transfer, put it on the transfer rule; the
+companion game rule authorizes the guess itself. `request` also accepts
+`authRoot: { contract: gameAddress, function: 'guess' }` per permission.
+
+Pass the actual authorization-entry preorder to rule selection:
+
+```ts
+const selection = selectRules(snapshot, [gameRef, transferRef], [
+  { contract: gameAddress, function: 'guess' },
+  { contract: tokenAddress, function: 'transfer' },
+]);
+```
+
+This screens the root, but the caller must derive it from the XDR being
+signed. The account's host-authenticated entry is authoritative. A root-only
+winning guess selects just the game rule; a direct transfer fails the transfer
+rule's root condition. An outer router with no account authorization is not
+that entry root. General ancestry and root arguments are outside this feature.
+
+`readSnapshot` accepts legacy snapshot 1 and root-aware snapshot 2; every
+snapshot-2 rule must include root metadata. Applying root-bearing documents
+requires interface >=3 and snapshot >=2. Canonical bytes/hashes of documents
+without `auth-root` are unchanged. Existing deployments require a deliberate
+new build/upgrade before accepting it. See [root semantics and compatibility](../../docs/auth-root.md).
