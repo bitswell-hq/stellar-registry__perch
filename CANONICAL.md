@@ -31,7 +31,11 @@ A new optional member of the model is not such a change: it is written when
 present and omitted when absent, by the rules below, so a document without it
 keeps its bytes and its `doc_hash`. The document's `recovery` member and an
 external signer's `verifier-name` (`"<name>@<version>"`, beside its
-`verifier` address, which `doc_hash` then binds with it) are two.
+`verifier` address, which `doc_hash` then binds with it) are examples. An
+ordinary rule's optional `auth-root` is another: its object contains exactly
+`contract` and `function`, in that order. The rule key sorts after `args`
+and before `cap`. Both strings bind `doc_hash` and `rule_hash`; omission
+keeps legacy bytes. `testdata/auth-root.*` is the shared Rust/TS/Lean vector.
 
 ## Encoding
 

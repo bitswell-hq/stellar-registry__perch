@@ -115,6 +115,12 @@ Structural shape and the representable data constraints:
   *stricter* than the compiler (a non-ASCII name within the byte cap is
   schema-rejected; it fails closed, the safe direction for an editing schema).
 
+The optional rule member `auth-root` is a strict object with a contract
+C-address and a 1–32 character function symbol. Null, extra members and
+self-admin use are refused. Omission preserves legacy identity. See
+[Exact authorization-entry roots](auth-root.md) for capability and rollout
+requirements; schema acceptance alone does not establish account support.
+
 ## What stays outside the schema
 
 Schema-valid is **not** the same as authorized or canonically encoded. These
