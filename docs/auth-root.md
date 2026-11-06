@@ -43,10 +43,8 @@ account-target aliases with this condition are refused. Constructor admin and
 generated recovery rules remain unrestricted; existing freeze, completion,
 reserved-function, generation and anti-escalation checks still apply.
 
-The canonical emitter sorts `auth-root` between `args` and `cap`, and its
-object members as `contract`, `function`. Both strings affect `doc_hash` and
-`rule_hash`. Documents without the member retain their exact canonical bytes
-and hashes; CANON v1 and document `version: 1` are unchanged.
+The canonical encoding and hash compatibility are defined in
+[`CANONICAL.md`](../CANONICAL.md#version).
 
 The host representations (`StoredRule`, `ModelRule`, `CompiledRule`,
 `InstalledRule`) use `auth_root: Option<Vec<StoredAuthRoot>>`: `None` is

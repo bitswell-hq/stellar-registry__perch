@@ -170,8 +170,8 @@ substitute:
   rule holds one signer per such verifier, are the doc compiler's checks
   (`docs/account-interface.md`, "Verifiers").
 - **Signatures and authorization.** Whether an invocation is actually
-  authorized is `__check_auth` / OZ policy enforcement on-chain, nothing a
-  document schema can state.
+  authorized is decided on-chain by the account's `__check_auth`, nothing a
+  document schema can state. See [the account interface](account-interface.md).
 
 ## Conformance
 

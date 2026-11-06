@@ -119,7 +119,7 @@ under a domain tag of its own.
 
 | Hash | Fragment `F` | Preimage | Used by |
 | --- | --- | --- | --- |
-| `rule_hash` | one element of the top-level `rules` array, without the separating commas | `"perch/rule" ‖ F` | interpreter program provenance: an installed program carries its rule's `rule_hash` (in the `InstallParams` field named `doc_hash`), so editing one rule leaves every other rule's install parameters unchanged and a delta `apply_doc` reinstalls only what changed (`docs/recovery/spec.md` §3.2, §7.5) |
+| `rule_hash` | one element of the top-level `rules` array, without the separating commas | `"perch/rule" ‖ F` | legacy interpreter program provenance (`InstallParams.doc_hash`); current account reconciliation uses stored rule records (`docs/recovery/spec.md` §7.5) |
 | `config_hash` | the value of the top-level `recovery` member | `"perch/recovery/config" ‖ F` | recovery configuration identity (`docs/recovery/spec.md` §3.2) |
 
 Both are `SHA-256` of the preimage. The tags are ASCII and are part of the
@@ -157,7 +157,7 @@ Code:
 
 - Rust, on-chain: `perch_recovery_interface::fragment::rule_hash` and
   `perch_recovery_interface::config::config_hash`; the doc compiler computes
-  both from the canonical bytes it already emits. Rust, native:
+  `config_hash` from the canonical bytes it emits. Rust, native:
   `perch_ir::rule_hash`.
 - TypeScript: `ruleHash` and `configHash` in `perch-js`.
 
