@@ -7,5 +7,4 @@ source download includes the execution/packaging sources and instructions for
 refreshing marked asset blocks without replacing the narrative.
 
 The future-work link uses `../cedar-walkthrough/index.html#perch` so it works in
-both the site root and a nested pull-request preview. Keep the local review
-mirror coordinated with this maintained copy.
+both the site root and a nested pull-request preview.
