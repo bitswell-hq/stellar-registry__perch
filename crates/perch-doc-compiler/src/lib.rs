@@ -281,7 +281,7 @@ pub struct CompilerCapabilities {
 /// self-admin rule with at least one signer — the anti-brick check every
 /// applied document and every recovery target must pass, so the admin path
 /// never depends on a constraint and never lapses. A constraint-free rule
-/// has `all` principals and no `functions`, `args` or `cap`: it allows every
+/// has `all` principals and no `functions`, `args`, `auth-root` or `cap`: it allows every
 /// function of the account to all of its signers. A `threshold` rule never
 /// counts, even one asking all of its signers. A document whose model does
 /// not match its rules one for one keeps none.
