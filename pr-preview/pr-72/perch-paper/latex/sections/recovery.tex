@@ -1,0 +1,31 @@
+The account document's recovery profile states the threat recovery must handle.
+\emph{Loss} assumes the owner's key may be lost, not stolen: activity continues
+during an attempt, and the owner, or a thief holding the key, can cancel it.
+\emph{Protected} assumes theft: once the recovery condition authorizes an
+attempt, the account refuses everything but its completion, and changing
+recovery or upgrading needs the condition's evidence. A Protected configuration
+may enroll a baseline, the hash of an approved document; a compromise recovery
+restores it and revokes every credential added since. The condition is a guardian
+quorum, a zero-knowledge proof, or both (modes \fact{recovery-modes};
+Appendix~\ref{sec:formal-appendix}).
+
+Anyone may open an attempt naming replacement credentials; the controller derives
+the target document on chain, so nobody chooses a target hash. Each guardian
+approves the SHA-256 digest of a statement binding the network, account,
+controller, configuration, timing, attempt and the hashes of source, target and
+replacement set. With the reference run's \fact{recovery-guardians-demo}
+guardians, the second approval authorizes the attempt at ledger $A$, and
+completion is allowed in \fact{recovery-window}. Completion is one transaction:
+the controller's \code{rcv\_complete} confirms the approved bytes and the window,
+and \code{rcv\_sync} marks the attempt completed, spends any nullifier and
+advances the controller's epoch. The account applies the target, advances the
+grant generation (refusing on overflow), permanently revokes the administrative
+credentials the target replaced or removed, lifts any freeze and drops any pending
+upgrade (Fig.~\ref{fig:fig-recovery}).
+
+\paragraph{Ending authority.} Each earlier grant keeps its earlier generation, so
+it refuses every nonempty authorization while its rules remain stored. A
+credential index refuses (\code{WipedCredential}) any later document naming a
+credential an earlier grant named, except the recovery target, which may keep it
+until rotated. Table~\ref{tab:tab-ending} separates invalidation, a policy event,
+from collection, a storage operation, and archival, which is neither.

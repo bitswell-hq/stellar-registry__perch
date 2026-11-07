@@ -1,0 +1,89 @@
+The evaluator is about \fact{rule-eval-lines} lines of dependency-free
+\code{no\_std} Rust without \code{unsafe}, in a subset Aeneas translates: no
+traits, closures or iterator adaptors, and every loop a \code{while} over one
+slice. Charon reads the MIR of rustc \fact{rustc-mir-nightly}, and
+Aeneas~\cite{aeneas} translates it into a generated
+\fact{extracted-lean-lines}-line Lean file, which rule-core's CI regenerates and
+diffs; CI pins all \fact{exported-theorems} exported theorems to Lean's three
+standard axioms. We say \emph{proved} only of kernel-checked statements, each about one object:
+the \emph{model}, the \emph{translation}, a two-event \emph{account model} with
+no Rust counterpart, a tested \emph{host model}, or Perch's canonical encoding.
+Proving that a translated function returns $\mathsf{ok}$ on every input rules
+out panics and divergence.
+
+\begin{perchdefinition}{D1}{contexts and authorizations}\label{def:d1}
+A context is $c ::= \mathsf{call}(C, f, \vec v) \mid \mathsf{create}(h)$. An
+authorization is $a = (\vec c, \vec\jmath, S, \ell, g)$: one entry's contexts in
+preorder, root first; one rule index per context; the claimed signers; the
+ledger; and the account's generation.
+\leannames{\lean{Chain.Context}, \lean{Authorization}}
+\end{perchdefinition}
+
+\begin{perchdefinition}{D2}{rules and \textit{allows}}\label{def:d2}
+A rule $r$ has a scope $\mathit{sc}_r$ (a contract and function list, false on
+creations), conditions $\Phi_r$, signers $\Sigma_r$, a threshold $k_r$, and
+optionally a cap $(\lambda_r, P_r)$, a last ledger $u_r$ and a generation $g_r$;
+$\mathit{allows}(r, c, S) \iff \mathit{sc}_r(c) \wedge \bigwedge_{\varphi \in
+\Phi_r} \varphi(c) \wedge k_r \le |\Sigma_r \cap S|$, counting distinct signers.
+A rule set allows $c$ under $S$ when one of its rules does; $R' \sqsubseteq R$
+when $R$ allows every $(c, S)$ that $R'$ allows.
+\leannames{\lean{Rule.allows}, \lean{RuleSet.narrower}}
+\end{perchdefinition}
+
+\begin{perchdefinition}{D3}{\textit{authorize} and runs}\label{def:d3}
+Given one record per rule, $\rho$, $\mathit{authorize}(R, \rho, a)$ refuses
+unless $|\vec\jmath| = |\vec c|$ and $|\rho| = |R|$, and then unless (i)~for each
+$i$, $r = R_{j_i}$ exists, is unexpired ($\ell \le u_r$), is current ($g_r = g$
+when present) and $\mathit{allows}(r, c_i, S)$; and (ii)~every $s \in S$ is a
+signer of a chosen rule. It then (iii)~charges, in context order, each context
+whose chosen rule is capped to that rule's record: a charge refuses a missing or
+negative amount, a ledger before the newest entry, overflow, a full history, or
+an in-window total above $\lambda_r$; otherwise it evicts entries at or before
+$\ell \mathbin{\dot-} P_r$ and appends the spend. It returns the records or the
+first refusal. A run applies authorizations in order; a refused one leaves the
+records unchanged.
+\leannames{\lean{RuleSet.authorize}, \lean{Params.check}, \lean{RuleSet.Accepts}}
+\end{perchdefinition}
+
+
+\noindent Appendix~\ref{sec:formal-appendix} gives D4--D9 and the remaining
+statements.
+
+\input{generated/statements-body}
+
+\paragraph{From the theorems to the account.} The account calls the Rust
+\code{lower} and \code{lower\_scoped}, whose translations the theorems cover, on
+install, and \code{rule\_eval::authorize} in \code{\_\_check\_auth}. Perch's
+integration suite runs rule-core's \fact{lean-doc-traces} Lean-generated traces
+through natively compiled \code{apply\_doc}, \code{apply\_scope} and Perch's
+\code{check\_auth}, with the real Ed25519 verifier and the generation set from
+each trace, and checks stored rules, verdicts and spending records against the
+model. The theorems hold over one fixed rule slice, while the shell builds a slice
+of the selected rules for each authorization; carrying them through that
+selection is obligation O2 of Table~\ref{tab:tab-obligations}.
+
+\begin{proposition}[argued]\label{prop:end-to-end}
+Under obligations O1--O8, \ref{stmt:total-equivalence-of-the-evaluator} with
+\lean{RuleSet.authorize\_chosen}, the per-rule forms of
+\ref{stmt:grant-target-containment} and \ref{stmt:the-containment-chain}, and
+\lean{authorize\_generation} (\ref{stmt:recovery-invalidation}) give, for each
+context whose selected rule belongs to a grant: the context is allowed by the
+grant's source document, calls neither the account nor its excluded set, and is
+refused after a completed recovery.
+\end{proposition}
+
+\noindent The proposition is argued, not mechanized: O1, O3, O4 and O6--O8 are
+tested, O2 is argued and tested, and O5, that compiler outputs satisfy
+\code{Doc.Valid}, is unproven (\fact{claim-perch-validation}).
+
+\begin{perchbox}
+\textbf{Trust base.} The formal results assume the Lean kernel and its three
+axioms, \fact{standard-axioms}; Charon \fact{charon-rev}, Aeneas
+\fact{aeneas-rev} and Aeneas's Lean library's model of Rust primitives; the MIR
+of rustc \fact{rustc-mir-nightly}; the denotations and \code{Doc.allows}, written
+from Perch \fact{doc-allows-source}; and the host models, tested against
+\fact{host-model-tested-versions}. The deployed account also relies on rustc
+\fact{rustc-perch} and its Wasm back end; the document compiler, which turns grant
+JSON into the model the account lowers; the tested shell, verifiers and recovery
+controller; and soroban-env-host (Fig.~\ref{fig:fig-proof-paths}).
+\end{perchbox}

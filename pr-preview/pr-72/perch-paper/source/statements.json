@@ -1,0 +1,270 @@
+[
+ {
+  "id": "total-equivalence-of-the-evaluator",
+  "title": "Total equivalence of the evaluator.",
+  "text": "On every input the translated evaluator succeeds, never panicking or diverging, and its value denotes the model's result on the denoted inputs; this says nothing about allocation failure or compiled Wasm.",
+  "evidence": "[Equiv.authorize_eq](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Equiv/Authorize.lean#L499) · {{obj:PROVED · TRANSLATION}}",
+  "label": "T1",
+  "latex_body": true,
+  "objects": [
+   "translation",
+   "model"
+  ],
+  "assumes": [
+   "kernel",
+   "rustc-nightly",
+   "charon",
+   "aeneas",
+   "aeneas-lib",
+   "denotations"
+  ],
+  "hypotheses": "None: every input"
+ },
+ {
+  "id": "acceptance-implies-permission",
+  "title": "Acceptance implies permission.",
+  "text": "If evaluation accepts, the selected rule set allows every supplied context for the signer list it was given. The theorem takes that list as an input; authenticating it is the shell's obligation ({{ref:sec:authorization}}).",
+  "evidence": "[Extracted.authorize_allows_all](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/ExtractedAuthorize.lean) and [Chain.RuleSet.authorize_allowsAll](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/Chain.lean) · {{obj:PROVED · MODEL + TRANSLATION}}",
+  "label": "T2",
+  "latex_body": true,
+  "objects": [
+   "model",
+   "translation"
+  ],
+  "assumes": [
+   "kernel",
+   "rustc-nightly",
+   "charon",
+   "aeneas",
+   "aeneas-lib",
+   "denotations"
+  ],
+  "hypotheses": "The signer list is an input; the shell authenticates it (O1)"
+ },
+ {
+  "id": "signer-accounting",
+  "title": "Signer accounting.",
+  "text": "Acceptance implies every supplied signer occurs in a chosen rule, and a threshold counts distinct listed identities. Adding identities preserves a rule's permission, though not whole-batch acceptance if an added identity is in no chosen rule.",
+  "evidence": "[Extracted.authorize_signers](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/ExtractedAuthorize.lean); [Chain.Rule.signed_iff; RuleSet.allows_of_subset](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/Chain.lean) · {{obj:PROVED · MODEL + TRANSLATION}}",
+  "label": "T3",
+  "latex_body": false,
+  "objects": [
+   "model",
+   "translation"
+  ],
+  "assumes": [
+   "kernel",
+   "rustc-nightly",
+   "charon",
+   "aeneas",
+   "aeneas-lib",
+   "denotations"
+  ],
+  "hypotheses": "As T2"
+ },
+ {
+  "id": "attenuation-narrows-authority",
+  "title": "Attenuation narrows authority.",
+  "text": "Successful attenuation by the ten attenuation steps yields a rule set narrower than its parent: under any signers, every action the child allows, the parent allows. Repeated derivation preserves this relationship.",
+  "evidence": "[Chain.RuleSet.Derives.narrower](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/Chain.lean#L755); [Extracted.Derives.narrower](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/Extracted.lean) · {{obj:PROVED · MODEL + TRANSLATION}}",
+  "label": "T4",
+  "latex_body": false,
+  "objects": [
+   "model",
+   "translation"
+  ],
+  "assumes": [
+   "kernel",
+   "rustc-nightly",
+   "charon",
+   "aeneas",
+   "aeneas-lib",
+   "denotations"
+  ],
+  "hypotheses": "Each derivation step is one of the ten attenuation steps and succeeds"
+ },
+ {
+  "id": "trace-inclusion",
+  "title": "Trace inclusion.",
+  "text": "For a single successful derivation lineage, every accepted child history from empty records is accepted by the parent from empty records, with rule choices renumbered past dropped rules. Sibling histories are not covered ({{ref:sec:grants}}).",
+  "evidence": "[Chain.RuleSet.attenuateAll_traceNarrower](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/Chain.lean); [Extracted.DerivesAlong.traceNarrower](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/ExtractedAuthorize.lean) · {{obj:PROVED · MODEL + TRANSLATION}}",
+  "label": "T5",
+  "latex_body": false,
+  "objects": [
+   "model",
+   "translation"
+  ],
+  "assumes": [
+   "kernel",
+   "rustc-nightly",
+   "charon",
+   "aeneas",
+   "aeneas-lib",
+   "denotations"
+  ],
+  "hypotheses": "Empty records; one derivation lineage"
+ },
+ {
+  "id": "cap-window-safety",
+  "title": "Cap-window safety.",
+  "text": "From empty records, in any run, counting its accepted authorizations, the charges made to a capped rule with a non-negative limit after *L* − *P* and through *L* sum to at most its limit, for every ledger *L* and with no ledger assumption. The model also proves the bound for every *P* consecutive ledgers when every authorization is at ledger 1 or later.",
+  "evidence": "[RuleSet.window_le_limit](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/Authorize.lean#L678); [Extracted.runAuthorizations_window_le_limit](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/ExtractedAuthorize.lean) · {{obj:PROVED · MODEL + TRANSLATION}}. [RuleSet.period_le_limit](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/Authorize.lean#L700) · {{obj:PROVED · MODEL}}",
+  "label": "T6",
+  "latex_body": true,
+  "objects": [
+   "model",
+   "translation"
+  ],
+  "assumes": [
+   "kernel",
+   "rustc-nightly",
+   "charon",
+   "aeneas",
+   "aeneas-lib",
+   "denotations"
+  ],
+  "hypotheses": "Empty records; a cap with a non-negative limit; for the bound over every *P* consecutive ledgers, every authorization at ledger 1 or later",
+  "latex": "From empty records, in any run, counting its accepted authorizations, the charges made to a capped rule with a non-negative limit after $L-P$ and through $L$ sum to at most its limit, for every ledger $L$; the model also bounds every $P$ consecutive ledgers from ledger~1 (Appendix~\\ref{sec:formal-appendix})."
+ },
+ {
+  "id": "delegation-tree-budgets",
+  "title": "Delegation-tree budgets.",
+  "text": "From a valid tree with nothing spent, and for its budget operations, spending beneath every node is at most that node's allowance at the end of the run, including when child allowances oversubscribe their parent. Allowances are lifetime totals, not windows, and refills raise them.",
+  "evidence": "[Budget.Tree.spentUnder_le_allowance](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/Budget.lean#L852); [Extracted.runBudget_spentUnder_le_allowance](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/ExtractedBudget.lean) · {{obj:PROVED · MODEL + TRANSLATION}}",
+  "label": "T7",
+  "latex_body": false,
+  "objects": [
+   "model",
+   "translation"
+  ],
+  "assumes": [
+   "kernel",
+   "rustc-nightly",
+   "charon",
+   "aeneas",
+   "aeneas-lib",
+   "denotations"
+  ],
+  "hypotheses": "A valid tree with nothing spent"
+ },
+ {
+  "id": "grant-target-containment",
+  "title": "Grant target containment.",
+  "text": "A document lowered with account address A, excluded set X and generation g allows no call to A or to an element of X, and attenuation preserves this. In the account, X is the adopted recovery controller and the zero-knowledge adapter and pool of its recovery configuration ({{ref:sec:grants}}).",
+  "evidence": "[Document.Doc.lowerScoped_allows_excluded](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/Scoped.lean); [Extracted.lower_scoped_allows_excluded; derives_allows_excluded](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/ExtractedLowering.lean) · {{obj:PROVED · MODEL + TRANSLATION}}",
+  "label": "T8",
+  "latex_body": true,
+  "objects": [
+   "model",
+   "translation"
+  ],
+  "assumes": [
+   "kernel",
+   "rustc-nightly",
+   "charon",
+   "aeneas",
+   "aeneas-lib",
+   "denotations",
+   "doc-allows"
+  ],
+  "hypotheses": "The document is lowered with account address *A*, excluded set *X* and generation *g*; `ArgsRoom`"
+ },
+ {
+  "id": "the-containment-chain",
+  "title": "The containment chain.",
+  "text": "A grant issued from a valid grant document, then attenuated and accepted, allows only the source document's actions and no call to the account or the excluded set at issue, and a nonempty batch is evaluated at the grant's issuing generation. The theorem assumes `Doc.Valid`; that Perch's validator accepts only valid documents is recorded as unproven (`{{fact:claim-perch-validation}}`). In the theorem, *X* is the translated `excluded`; the account builds *X* from its storage instead (obligation O4), and because a controller can be adopted after a grant is installed, `__check_auth` rechecks each selected grant rule against the current set (`{{fact:claim-scoped-admin-change}}`).",
+  "evidence": "[Document.Account.chain](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/Scoped.lean); [Extracted.chain](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/ExtractedLowering.lean) · {{obj:PROVED · MODEL + TRANSLATION}}",
+  "label": "T9",
+  "latex_body": true,
+  "objects": [
+   "model",
+   "translation"
+  ],
+  "assumes": [
+   "kernel",
+   "rustc-nightly",
+   "charon",
+   "aeneas",
+   "aeneas-lib",
+   "denotations",
+   "doc-allows"
+  ],
+  "hypotheses": "`Doc.Valid`; `ArgsRoom`; a nonempty batch; *X* is the translated `excluded`",
+  "latex": "A grant issued from a valid grant document, then attenuated and accepted, allows only the source document's actions and no call to the account or the excluded set at issue, and a nonempty batch is evaluated at the grant's issuing generation. The account builds $X$ from its storage (O4) and rechecks it in \\code{\\_\\_check\\_auth} (\\code{\\fact{claim-scoped-admin-change}})."
+ },
+ {
+  "id": "recovery-invalidation",
+  "title": "Recovery invalidation.",
+  "text": "In the account event model, the generation advances by exactly the number of completed recoveries, and a grant issued before one, or derived from such a grant, accepts no nonempty batch at the new generation. Administrative rules are generation-independent.",
+  "evidence": "[Document.Account.run_generation; issued_stale; chain_after_recovery](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/Scoped.lean) · {{obj:PROVED · ACCOUNT MODEL}} (no Rust counterpart); stale-rule rejection: [Extracted.authorize_generation](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/ExtractedAuthorize.lean) · {{obj:PROVED · MODEL + TRANSLATION}}",
+  "label": "T10",
+  "latex_body": true,
+  "objects": [
+   "account-model",
+   "translation"
+  ],
+  "assumes": [
+   "kernel",
+   "rustc-nightly",
+   "charon",
+   "aeneas",
+   "aeneas-lib",
+   "denotations"
+  ],
+  "hypotheses": "A nonempty batch; the authorization carries the account's current generation (O3)"
+ },
+ {
+  "id": "authorization-tree-coverage",
+  "title": "Authorization-tree coverage.",
+  "text": "In the host model, every `require_auth` that an account's authorization entry satisfies is for a call that every rule set the modeled `__check_auth` checks allows, and `__check_auth` receives the entry's invocation tree in preorder, root first, so never an empty batch. The statement covers authorization by entry, not invoker authority, so an owner's `execute` falls outside it by construction. The modeled account is an abstract program checking the stateless `allows`, not Perch's shell. The model was tested against {{fact:host-model-tested-versions}} on {{fact:host-traces-generated}} traces it generated ({{fact:host-traces-named}} named, {{fact:host-traces-random}} random) and on {{fact:host-traces-transcribed}} traces transcribed from {{fact:host-tests-expressed}}, agreeing on every case it expresses ({{fact:host-cases-agreeing}} cases). It models CAP-0071 delegation between contract accounts; source-account credentials, classic Stellar-account signers and delegates, `require_auth_for_args`, `authorize_as_current_contract`, contract creation as a call, `require_auth` inside `__check_auth`, recording authorization, TTL and footprints are outside it, and the simulator host {{fact:soroban-env-host-sim}} was not tested.",
+  "evidence": "[Soroban.Tx.run_authorized_allowed; run_checkAuth_contexts](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/Soroban.lean) · {{obj:PROVED · HOST MODEL}} (model tested against the host)",
+  "label": "T11",
+  "latex_body": false,
+  "objects": [
+   "host-model"
+  ],
+  "assumes": [
+   "kernel",
+   "host-models"
+  ],
+  "hypotheses": "Contract accounts; `require_auth` satisfied by an authorization entry"
+ },
+ {
+  "id": "lowering-equivalence",
+  "title": "Lowering equivalence.",
+  "text": "Translated `lower` returns the model's lowering when the document leaves room in its bounded vectors (`LowerRoom`), and translated `lower_scoped` does, refusals included, under the weaker `ArgsRoom`. For a valid document the lowered rules allow exactly what the document allows plus, when recovery is configured, every `apply_account_doc` call (`apply_doc` at the pin) through the recovery rule, which the shell refuses outside a completion (tested; O8, {{ref:sec:authorization}}).",
+  "evidence": "[Equiv.lower_eq; lower_scoped_eq](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Equiv/Lowering.lean#L602) · {{obj:PROVED · TRANSLATION}}; [Extracted.lower_allows; lower_authorize](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/ExtractedLowering.lean) · {{obj:PROVED · MODEL + TRANSLATION}}",
+  "label": "T12",
+  "latex_body": false,
+  "objects": [
+   "translation",
+   "model"
+  ],
+  "assumes": [
+   "kernel",
+   "rustc-nightly",
+   "charon",
+   "aeneas",
+   "aeneas-lib",
+   "denotations",
+   "doc-allows"
+  ],
+  "hypotheses": "`LowerRoom` for `lower`, `ArgsRoom` for `lower_scoped`; `Doc.Valid` for the semantic part"
+ },
+ {
+  "id": "canonical-identity",
+  "title": "Canonical identity.",
+  "text": "Perch's canonical encoding is injective on the modeled document type, so hash identity holds up to SHA-256 collisions. The theorem is about a Lean emitter written to match Perch's Rust `canon.rs` and linked to it by golden fixtures and fuzzing, not extraction; JSON parsing and compiler correctness need separate assurance, and no theorem connects this encoding to rule-core's document type. The CANON version is not part of the hashed bytes, so a `doc_hash` is read under the identity the account reports (`capabilities().doc_identity`); three domain separations are proven: `configPreimage_ne_emitDoc`, `rulePreimage_ne_configPreimage` and `rulePreimage_ne_emitDoc` (rule, recovery-configuration and document preimages are pairwise distinct).",
+  "evidence": "[PerchFormal.Canon.emitDoc_injective; canonical_bytes_identity](https://github.com/bitswell-hq/stellar-registry__perch/blob/f0275f41c5ab47c903bbfe9986b4bf3239c01b11/formal/PerchFormal/CanonProofs.lean) · {{obj:PROVED · PERCH CANON PACKAGE}}",
+  "label": "T13",
+  "latex_body": false,
+  "objects": [
+   "canon"
+  ],
+  "assumes": [
+   "kernel",
+   "canon-emitter"
+  ],
+  "hypotheses": "The modeled document type; SHA-256 collision resistance"
+ }
+]

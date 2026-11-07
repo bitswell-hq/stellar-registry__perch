@@ -1,0 +1,20 @@
+% Generated from source/tables/tab-status.json; edit that.
+\begin{table}[tbp]
+\centering
+\caption{\textbf{Status on \fact{paper-date}.} \emph{Deployed}: recorded in Perch's deployment manifests and present on the network. \emph{Preview}: a separate testnet deployment outside those manifests. \emph{Merged}: on a main branch, not deployed. \emph{Open PR}: unmerged code. \emph{Proposed}: not implemented. \emph{Not done}: not started or not complete.}\label{tab:tab-status}
+\scriptsize\begin{tabularx}{\linewidth}{@{}LlLL@{}}
+\toprule
+\textbf{Component} & \textbf{Status} & \textbf{Where} & \textbf{Evidence} \\
+\midrule
+Perch 0.5.1 (earlier design: an OpenZeppelin account-library fork with two Perch policy contracts), document compiler, recovery controller, Ed25519 and WebAuthn verifiers, ZK pool and adapter & \badge{DEPLOYED} & Perch \code{\fact{perch-deployed-source-short}}: testnet \fact{perch-deployed-testnet-date}, mainnet \fact{perch-deployed-mainnet-date} & \code{deployments/\allowbreak{}testnet.\allowbreak{}json}, \code{mainnet.json} \\
+This paper's account (deciding with \code{rule\_eval}; installed grants; credential index; named verifiers; rebuilt recovery hooks) & \badge{OPEN PR} & Perch \fact{perch-pin-short}, head of the open stack ending at \fact{perch-pr-stack-head} & Unmerged \\
+The same contract source on testnet & \badge{PREVIEW} & Separate deployment, \fact{preview-deploy-date}, ledger \fact{preview-deploy-ledger}; account Wasm \fact{preview-account-wasm-short} (\fact{preview-account-bytes} B) & Built from \fact{perch-preview-source}, whose contract sources equal the pin's \\
+Wallet on that deployment (\fact{wallet-name}) & \badge{PREVIEW} & \fact{nido-preview-pr} (draft) & \fact{nido-run-transactions} testnet transactions (\S\ref{sec:evaluation}) \\
+rule-core evaluator, model and proofs & \badge{MERGED} & rule-core \fact{rule-core-pin-short} & CI regenerates the translation, builds the proofs and checks the claims ledger \\
+Exact authorization-entry roots & \badge{OPEN PR} & \fact{exact-roots-prs} & No theorem at \fact{rule-core-pin-short} \\
+External audit of the Perch contracts (account, compiler, recovery controller, verifiers, ZK pool and adapter, registry) and of rule-core's evaluator & \badge{NOT DONE} & --- & Only the vendored UltraHonk base verifier, from Nethermind, has one (by OpenZeppelin); Perch's zero-knowledge additions have none \\
+Contract exports under this paper's names & \badge{PROPOSED} & Table~\ref{tab:tab-api} & Exports unchanged \\
+Agent runtime; x402 payments; Cedar authoring; delegation-tree budget runtime; account entry point for attenuated grants; in-page proof check & \badge{PROPOSED} & \S\ref{sec:agents} & Not implemented \\
+\bottomrule
+\end{tabularx}
+\end{table}

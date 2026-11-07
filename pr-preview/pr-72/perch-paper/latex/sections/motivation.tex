@@ -1,0 +1,51 @@
+A player keeps a Perch account in \fact{wallet-name} and wants Guess the Number,
+a Soroban game that takes \fact{game-wrong-guess-xlm}~XLM per wrong guess and
+pays out its balance on a right one, to play without a passkey prompt per turn.
+The owner can install a \emph{grant} naming the contract and functions an app may
+call, the signer that may act, how much it may spend over time and when it ends;
+it must not let the app reach the account's own entry points or its recovery
+controller. In the reference run (\S\ref{sec:evaluation}), grant~1 lets an app
+transfer at most \fact{grant1-cap-xlm}~XLM in any
+\fact{grant1-period-ledgers}-ledger window (\fact{grant1-period-minutes} at the
+nominal \fact{nominal-ledger-seconds}-second ledger), and grant~3 lets the app key
+call the game's \code{guess} and lets the game take at most
+\fact{grant3-cap-xlm}~XLM per \fact{grant3-period-ledgers} ledgers from the
+account, so two lost guesses fit and a third is refused.
+
+\paragraph{Problem and approach.} A grant needs one meaning across the nested
+calls of one authorization, which Soroban asks the account to decide one at a
+time; under rule selection, which whoever builds the transaction performs; and
+across recovery, which replaces the credentials a grant was issued under. A cap
+also needs state. Perch makes the decision a pure state transition, linked into
+the account and run before any signer is authenticated, and separates what is
+proved about it from the obligations of the account around it
+(Fig.~\ref{fig:fig-parts}).
+
+\perchfigure{fig-parts}
+
+\paragraph{Contributions.}
+\begin{enumerate}[nosep,leftmargin=*]
+\item A Soroban smart-account design whose authorization is a pure state
+  transition over the selected rules, account-held spending records and a grant
+  generation. Grant lowering excludes the account, its adopted recovery
+  controller, and the zero-knowledge adapter and pool of its recovery
+  configuration (\S\S\ref{sec:grants}--\ref{sec:authorization}).
+\item A grant generation that a completed recovery advances: afterwards no earlier
+  grant authorizes, nor, in the account model, any grant derived from one, and a
+  credential index bars their keys from later documents other than a completion's
+  target (\S\ref{sec:recovery}).
+\item Lean theorems over the Aeneas translation of the Rust evaluator, with an
+  explicit trust base and \fact{lean-doc-traces} Lean-generated traces that
+  connect them to the account (\S\ref{sec:proofs}).
+\item A source-cited comparison with oz-policy-builder, with one task run in both
+  designs (\S\ref{sec:compare}), and an evaluation on a local Soroban host and on
+  testnet (\S\ref{sec:evaluation}). Comparative cost measurement is proposed.
+\end{enumerate}
+
+\paragraph{Research questions.} \textbf{RQ1}: does the built account enforce
+grants, caps and recovery invalidation as designed? \textbf{RQ2}: which parts of
+a decision are proved, tested or trusted? \textbf{RQ3}: what does a decision cost
+on chain, for Perch alone? \textbf{RQ4}: how does a linked evaluator differ from
+an attached shared interpreter? \S\ref{sec:evaluation} answers RQ1 and RQ3,
+\S\ref{sec:proofs} RQ2 and \S\ref{sec:compare} RQ4. The design is an open
+pull-request stack, previewed on Stellar testnet (\S\ref{sec:status}).

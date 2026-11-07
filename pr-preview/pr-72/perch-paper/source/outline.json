@@ -1,0 +1,279 @@
+{
+ "nav_note": "A research paper with an executable example.<br>Third iteration · November 2026",
+ "sections": [
+  {
+   "id": "motivation",
+   "title_html": "What did the owner authorize?",
+   "title_latex": "Introduction",
+   "nav": "Introduction",
+   "figures": [
+    "fig-parts"
+   ]
+  },
+  {
+   "id": "background",
+   "title_html": "How does a Soroban account approve a call?",
+   "title_latex": "Background: Soroban Authorization and OpenZeppelin Accounts",
+   "nav": "Background",
+   "figures": [
+    "fig-contexts"
+   ]
+  },
+  {
+   "id": "threat-model",
+   "title_html": "Who might misuse a grant, and what must hold?",
+   "title_latex": "Threat Model and Goals",
+   "nav": "Threat model",
+   "tables": [
+    "tab-adversaries"
+   ]
+  },
+  {
+   "id": "status",
+   "title_html": "What is built, deployed and proposed?",
+   "title_latex": "Implementation Status",
+   "nav": "Status",
+   "tables": [
+    "tab-status"
+   ]
+  },
+  {
+   "id": "grants",
+   "title_html": "What can a grant say?",
+   "title_latex": "Grants, Rules and Spending Caps",
+   "nav": "Grants",
+   "figures": [
+    "fig-cap-window"
+   ],
+   "aliases": [
+    "model",
+    "authority"
+   ]
+  },
+  {
+   "id": "authorization",
+   "title_html": "How does the account decide one authorization?",
+   "title_latex": "The Authorization Path",
+   "nav": "Authorization",
+   "figures": [
+    "fig-check-auth"
+   ],
+   "tables": [
+    "tab-binding"
+   ],
+   "aliases": [
+    "api",
+    "gate"
+   ]
+  },
+  {
+   "id": "recovery",
+   "title_html": "How does recovery end a grant?",
+   "title_latex": "Recovery and the End of Authority",
+   "nav": "Recovery",
+   "figures": [
+    "fig-recovery"
+   ],
+   "tables": []
+  },
+  {
+   "id": "compare",
+   "title_html": "How does this differ from oz-policy-builder?",
+   "title_latex": "Comparison with oz-policy-builder",
+   "nav": "Comparison",
+   "figures": [
+    "fig-same-task",
+    "fig-two-paths",
+    "fig-two-spellings"
+   ],
+   "tables": [
+    "tab-compare",
+    "tab-walkthrough"
+   ]
+  },
+  {
+   "id": "proofs",
+   "title_html": "What is proved, and about what?",
+   "title_latex": "Formal Results",
+   "nav": "Formal results",
+   "figures": [
+    "fig-proof-paths"
+   ]
+  },
+  {
+   "id": "evaluation",
+   "title_html": "What did running it show?",
+   "title_latex": "Evaluation",
+   "nav": "Evaluation",
+   "tables": [
+    "tab-run"
+   ]
+  },
+  {
+   "id": "experiment",
+   "title_html": "Run the account, then change the inputs",
+   "title_latex": "Run the account",
+   "nav": "Run it",
+   "editions": [
+    "html"
+   ],
+   "unnumbered": true
+  },
+  {
+   "id": "related",
+   "title_html": "Related work",
+   "title_latex": "Related Work",
+   "nav": "Related work"
+  },
+  {
+   "id": "limits",
+   "title_html": "What does Perch not protect?",
+   "title_latex": "Limitations",
+   "nav": "Limitations"
+  },
+  {
+   "id": "agents",
+   "title_html": "What we propose next",
+   "title_latex": "Future Work",
+   "nav": "Future work"
+  },
+  {
+   "id": "conclusion",
+   "title_html": "What this shows",
+   "title_latex": "Conclusion",
+   "nav": "Conclusion"
+  },
+  {
+   "id": "repro",
+   "title_html": "Reproducibility and artifacts",
+   "title_latex": "Artifacts and Reproducibility",
+   "nav": "Reproducibility",
+   "appendix": true,
+   "tables": [
+    "tab-api",
+    "tab-artifacts",
+    "tab-ending"
+   ]
+  },
+  {
+   "id": "glossary",
+   "title_html": "Glossary",
+   "title_latex": "Glossary",
+   "nav": "Glossary",
+   "editions": [
+    "html"
+   ],
+   "appendix": true,
+   "unnumbered": true
+  },
+  {
+   "id": "formal-appendix",
+   "title_html": "Formal appendix",
+   "title_latex": "Formal Appendix",
+   "nav": "Formal appendix",
+   "editions": [
+    "latex"
+   ],
+   "appendix": true,
+   "tables": [
+    "tab-attenuation",
+    "tab-counters",
+    "tab-obligations"
+   ]
+  },
+  {
+   "id": "compare-appendix",
+   "title_html": "Comparison sources and open items",
+   "title_latex": "Comparison Sources and Open Items",
+   "nav": "Comparison sources",
+   "editions": [
+    "latex"
+   ],
+   "appendix": true,
+   "tables": [
+    "tab-compare-full",
+    "tab-disclosed"
+   ]
+  },
+  {
+   "id": "references",
+   "title_html": "References",
+   "title_latex": "References",
+   "nav": "References",
+   "editions": [
+    "html"
+   ],
+   "appendix": true,
+   "unnumbered": true
+  }
+ ],
+ "figures": {
+  "fig-parts": {
+   "title": "The parts of a Perch account at the pinned build.",
+   "caption": "Arrows are calls out of the account, labelled with when they happen. Double border: the evaluator functions the theorems cover. Single border: tested code. Hatched: trusted components."
+  },
+  "fig-contexts": {
+   "title": "One authorization, several contexts, using grant 3.",
+   "caption": "The authorization payload names one installed rule per context. (a) A lost guess: the game's `guess` and the transfer it makes from the account; the capped rule charges the transfer. (b) A win authorizes only the root, and the game pays from its own balance. (c) A direct transfer within the cap, with no game call, is also allowed, because each context is checked alone. Draft changes after the pinned build ({{fact:exact-roots-prs}}) would let a rule require its entry's root ({{ref:sec:status}}).",
+   "latex_section": "compare-appendix"
+  },
+  "fig-cap-window": {
+   "title": "Grant 1's cap, {{fact:grant1-cap-xlm}} XLM per {{fact:grant1-period-ledgers}} ledgers, on illustrative ledgers.",
+   "caption": "At ledger *L* the window holds charges made after *L* − 100 and through *L*. Borders show the window at *t* + 100: solid inside it, dashed outside. A refused transfer leaves the spending record unchanged. A charge stops counting exactly 100 ledgers after it was made.",
+   "interactive": "cap-window",
+   "latex_section": "formal-appendix"
+  },
+  "fig-check-auth": {
+   "title": "One authorization through `__check_auth` at the pinned build.",
+   "caption": "Step 7, the evaluator, is covered by the theorems; the other steps are tested account-shell code. Each exit except a verifier trap names the account's error and its number, which a wallet finds in the diagnostic events of the host's `Error(Auth, InvalidAction)`; a verifier that traps fails in the host's signature check. No exit leaves a write. A recovery completion leaves at step 4 and is decided by the recovery controller.",
+   "kind": "algorithm"
+  },
+  "fig-recovery": {
+   "title": "Recovery in the reference run, commands 5–18.",
+   "caption": "For each command 5–18, its result and the state it changes. Completion (command 12) moves the grant generation from 0 to 1 and revokes the replaced owner key. Grant 1 stops authorizing there but stays stored until anyone collects it (command 18); its key stays barred. Command numbers match {{ref:tab:tab-run}}.",
+   "interactive": "stepper",
+   "latex_section": "repro"
+  },
+  "fig-two-paths": {
+   "title": "One guarded call in two accounts.",
+   "caption": "One guarded call, phase by phase, through `__check_auth`, in three scenarios (a lost guess, a guess over the cap and a direct transfer): under Perch, and under an OpenZeppelin account whose rules carry oz-policy-builder's `policy-interpreter` and OpenZeppelin's `spending_limit`. The Perch signer is a passkey checked by a verifier contract. oz-policy-builder's rules accept only delegated signers; here the signer is a Stellar account whose own authorization entry the host checks. The OpenZeppelin account runs a rule's policies in the rule's stored order, which for policies given at creation is their address order. A cross marks where each design refuses a guess over the cap: Perch before any signer is authenticated, the OpenZeppelin account in `spending_limit` after authentication. Dashed: no such phase in that design, or not reached in the scenario. Read from source at Perch {{fact:perch-pin-short}}, OpenZeppelin `stellar-contracts` {{fact:oz-v080-tag}} and oz-policy-builder {{fact:opb-pin-short}}; {{ref:tab:tab-walkthrough}} gives the measured run of a related task.",
+   "interactive": "stepper",
+   "scenarios": "lost:Lost guess|overcap:Guess over the cap|direct:Direct transfer",
+   "latex_section": "compare-appendix"
+  },
+  "fig-two-spellings": {
+   "title": "One intent, two spellings.",
+   "caption": "The intent: the app key may call `guess` on the game, and may send XLM only to the game, at most 2 XLM per {{fact:preview-game-period-ledgers}} ledgers, through ledger *N* − 1. (a) Perch: one grant document, installed by one `apply_grant` call. (b) oz-policy-builder: an Intent, lowered to one predicate per contract. (c) The XLM rule's predicate in wire form, and the `install_policy` arguments that attach OpenZeppelin's `spending_limit`; a second call installs the game rule. `C…`, `G…` and *N* are placeholders; `{ \"...\": \"(b)\" }` stands for the Intent in (b), passed as `intent`. Read from source; these two oz-policy-builder installs were not run.",
+   "kind": "code",
+   "panels": [
+    {
+     "file": "a",
+     "title": "(a) Perch grant document"
+    },
+    {
+     "file": "b",
+     "title": "(b) oz-policy-builder Intent",
+     "latex_width": 0.49
+    },
+    {
+     "file": "c",
+     "title": "(c) XLM rule: wire predicate and install arguments",
+     "latex_width": 0.49
+    }
+   ],
+   "latex_section": "compare-appendix"
+  },
+  "fig-proof-paths": {
+   "title": "One source, two paths.",
+   "caption": "Lean's kernel checks theorems about the Aeneas translation of the MIR that nightly rustc produces. The account ships WebAssembly from rustc {{fact:rustc-perch}}, and nothing checks one against the other. Double border: proved. Single border: tested. Hatched: trusted. Inside the double border are the objects the theorems are about; that each model matches its subject is trusted (hatched row). Dashed connectors are the tests that bridge the two paths.",
+   "interactive": "proof-paths",
+   "latex_section": "formal-appendix"
+  },
+  "fig-same-task": {
+   "title": "One task in both designs, replayed from the recorded run.",
+   "caption": "Each row is one request of the walkthrough ({{ref:tab:tab-walkthrough}}); for each design it lists, in order, the contracts called while the account authorized the request, and where the request was refused. Below the rows, one panel repeats in-rule payments: under a per-call bound alone, an OpenZeppelin account whose rule carries only the interpreter, run on a local network outside the walkthrough, where {{fact:opb-per-call-applied-sends}} sends moved {{fact:opb-per-call-moved-xlm}} XLM under a {{fact:opb-per-call-bound-xlm}}-XLM bound; and under a window, OpenZeppelin's `spending_limit` or a Perch grant, from the walkthrough. The last panel lists the contracts each design called for one payment and where its decision state lives. The OpenZeppelin side's second authorization entry is its delegated signer's, because oz-policy-builder takes only delegated signers. Calls and codes are recorded, not drawn from source.",
+   "interactive": "same-task",
+   "latex_section": "compare-appendix"
+  }
+ }
+}

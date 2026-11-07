@@ -1,0 +1,31 @@
+% Generated from source/statements.json; edit that.
+\begin{perchstatement}{T1}{Total equivalence of the evaluator.}\label{stmt:total-equivalence-of-the-evaluator}
+On every input the translated evaluator succeeds, never panicking or diverging, and its value denotes the model's result on the denoted inputs; this says nothing about allocation failure or compiled Wasm.
+\statementhypotheses{None: every input}
+\statementevidence{\repolink{https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Equiv/Authorize.lean\#L499}{Equiv.authorize\_eq} \ensuremath{\cdot} \statusobj{PROVED \ensuremath{\cdot} TRANSLATION}}
+\end{perchstatement}
+\begin{perchstatement}{T2}{Acceptance implies permission.}\label{stmt:acceptance-implies-permission}
+If evaluation accepts, the selected rule set allows every supplied context for the signer list it was given. The theorem takes that list as an input; authenticating it is the shell's obligation (\S\ref{sec:authorization}).
+\statementhypotheses{The signer list is an input; the shell authenticates it (O1)}
+\statementevidence{\repolink{https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/ExtractedAuthorize.lean}{Extracted.authorize\_allows\_all} and \repolink{https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/Chain.lean}{Chain.RuleSet.authorize\_allowsAll} \ensuremath{\cdot} \statusobj{PROVED \ensuremath{\cdot} MODEL + TRANSLATION}}
+\end{perchstatement}
+\begin{perchstatement}{T6}{Cap-window safety.}\label{stmt:cap-window-safety}
+From empty records, in any run, counting its accepted authorizations, the charges made to a capped rule with a non-negative limit after $L-P$ and through $L$ sum to at most its limit, for every ledger $L$; the model also bounds every $P$ consecutive ledgers from ledger~1 (Appendix~\ref{sec:formal-appendix}).
+\statementhypotheses{Empty records; a cap with a non-negative limit; for the bound over every \emph{P} consecutive ledgers, every authorization at ledger 1 or later}
+\statementevidence{\repolink{https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/Authorize.lean\#L678}{RuleSet.window\_le\_limit}; \repolink{https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/ExtractedAuthorize.lean}{Extracted.runAuthorizations\_window\_le\_limit} \ensuremath{\cdot} \statusobj{PROVED \ensuremath{\cdot} MODEL + TRANSLATION}. \repolink{https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/Authorize.lean\#L700}{RuleSet.period\_le\_limit} \ensuremath{\cdot} \statusobj{PROVED \ensuremath{\cdot} MODEL}}
+\end{perchstatement}
+\begin{perchstatement}{T8}{Grant target containment.}\label{stmt:grant-target-containment}
+A document lowered with account address A, excluded set X and generation g allows no call to A or to an element of X, and attenuation preserves this. In the account, X is the adopted recovery controller and the zero-knowledge adapter and pool of its recovery configuration (\S\ref{sec:grants}).
+\statementhypotheses{The document is lowered with account address \emph{A}, excluded set \emph{X} and generation \emph{g}; \code{ArgsRoom}}
+\statementevidence{\repolink{https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/Scoped.lean}{Document.Doc.lowerScoped\_allows\_excluded}; \repolink{https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/ExtractedLowering.lean}{Extracted.lower\_scoped\_allows\_excluded; derives\_allows\_excluded} \ensuremath{\cdot} \statusobj{PROVED \ensuremath{\cdot} MODEL + TRANSLATION}}
+\end{perchstatement}
+\begin{perchstatement}{T9}{The containment chain.}\label{stmt:the-containment-chain}
+A grant issued from a valid grant document, then attenuated and accepted, allows only the source document's actions and no call to the account or the excluded set at issue, and a nonempty batch is evaluated at the grant's issuing generation. The account builds $X$ from its storage (O4) and rechecks it in \code{\_\_check\_auth} (\code{\fact{claim-scoped-admin-change}}).
+\statementhypotheses{\code{Doc.Valid}; \code{ArgsRoom}; a nonempty batch; \emph{X} is the translated \code{excluded}}
+\statementevidence{\repolink{https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/Scoped.lean}{Document.Account.chain}; \repolink{https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/ExtractedLowering.lean}{Extracted.chain} \ensuremath{\cdot} \statusobj{PROVED \ensuremath{\cdot} MODEL + TRANSLATION}}
+\end{perchstatement}
+\begin{perchstatement}{T10}{Recovery invalidation.}\label{stmt:recovery-invalidation}
+In the account event model, the generation advances by exactly the number of completed recoveries, and a grant issued before one, or derived from such a grant, accepts no nonempty batch at the new generation. Administrative rules are generation-independent.
+\statementhypotheses{A nonempty batch; the authorization carries the account's current generation (O3)}
+\statementevidence{\repolink{https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/Scoped.lean}{Document.Account.run\_generation; issued\_stale; chain\_after\_recovery} \ensuremath{\cdot} \statusobj{PROVED \ensuremath{\cdot} ACCOUNT MODEL} (no Rust counterpart); stale-rule rejection: \repolink{https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/ExtractedAuthorize.lean}{Extracted.authorize\_generation} \ensuremath{\cdot} \statusobj{PROVED \ensuremath{\cdot} MODEL + TRANSLATION}}
+\end{perchstatement}

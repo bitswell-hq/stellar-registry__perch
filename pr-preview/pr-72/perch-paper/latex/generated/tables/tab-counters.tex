@@ -1,0 +1,15 @@
+% Generated from source/tables/tab-counters.json; edit that.
+\begin{table}[tbp]
+\centering
+\caption{\textbf{Four counters, each with its own trigger; Figure~\ref{fig:fig-recovery} shows the first two in the reference run.} }\label{tab:tab-counters}
+\scriptsize\begin{tabularx}{\linewidth}{@{}LLLL@{}}
+\toprule
+\textbf{Counter} & \textbf{Lives in} & \textbf{Advances on} & \textbf{Used for} \\
+\midrule
+Grant generation & Account & Each completed recovery, nothing else & Stamping grants; refusing stale ones \\
+Recovery generation & Account & Every recovery-configuration change (enrollment, reconfiguration, removal, each side of a controller switch), each completed recovery, each executed upgrade & Making scheduled upgrades stale \\
+Revision & Account & Every \code{apply\_\allowbreak{}account\_\allowbreak{}doc} and executed upgrade & The optional expected-revision check on account-document writes \\
+Epoch & Recovery controller & Every configuration change, completed recovery and executed account upgrade & Invalidating older evidence and attempts \\
+\bottomrule
+\end{tabularx}
+\end{table}

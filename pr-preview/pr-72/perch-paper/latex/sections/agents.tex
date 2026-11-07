@@ -1,0 +1,20 @@
+Everything here is proposed, not implemented. We propose an agent runtime with
+the same split, a pure engine that decides and a host that mediates, in which a
+root agent holds a Perch grant and derives child grants with delegation-tree
+budgets (\ref{stmt:delegation-tree-budgets} is their model result). We also
+propose exact entry roots (\fact{exact-roots-prs}), an entry point for attenuated
+grants, a recording front end that emits grant documents, a Lean lemma for O2, and
+exact-metered workloads W1--W5 on both designs.
+
+\paragraph{A proved bridge from Cedar.} Proposed, not under way. The Lean library
+of cedar-spec~\cite{cedar-spec} loads unchanged into rule-core's proof toolchain;
+both semantics are total definitional interpreters, so a simulation between them
+is one commuting equation. In an unpublished experiment
+we proved it for a cut-down fragment, with no \code{sorry}, and composed Cedar's
+\lean{allowed\_iff\_explicitly\_permitted\_and\_not\_denied}, the simulation and
+rule-core's \lean{allows\_eq} down to the extracted Rust. Perch would borrow
+Cedar's specification, not its large proofs, through a Lean-verified compiler from
+a Cedar fragment to rule-core rules, each installed rule set checked in the
+kernel. Known limits: Lean-version lockstep between cedar-spec and Aeneas,
+Cedar's 64-bit integers against \code{i128}, and a parser that is tested, not
+proved.

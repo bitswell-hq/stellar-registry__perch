@@ -1,0 +1,38 @@
+The account decides with rule-core's \code{rule\_eval::authorize} (D3,
+\S\ref{sec:proofs}), which neither searches for rules nor verifies signatures.
+Figure~\ref{fig:fig-check-auth} lists the steps of \code{\_\_check\_auth}. A
+recovery completion leaves at step~4 for the recovery
+controller, so a recovery completion never depends on the evaluator; enrollment
+and reconfiguration are document writes the evaluator decides. Otherwise the
+account binds the payload, resolves the selected rule IDs, runs the evaluator,
+authenticates every claimed signer and stores each changed record, so a refused
+batch calls no verifier. A stale grant refuses with \code{StaleScope} (auth error
+\fact{auth-error-stale-scope}) and any other evaluator refusal with
+\code{RuleEvalRefused} (\fact{auth-error-rule-eval-refused}), inside
+\fact{host-auth-error}; a wallet re-runs the evaluator off chain for the reason.
+Because a controller can be adopted after a grant is installed, step~4 rechecks
+each selected grant rule against the current excluded set (\code{ScopeEscalation},
+\fact{auth-error-scope-escalation}); the install-time property is proved
+(\ref{stmt:grant-target-containment}), the recheck tested. Infrastructure
+addresses derive from a Wasm hash and registry path fixed at build time; once that
+code is deployed on a network, no registry action changes it
+(Appendix~\ref{sec:formal-appendix}).
+
+\perchfigure{fig-check-auth}
+
+\paragraph{What a signature binds.} For a legacy \code{Address} credential the
+host's payload $P$ does not name the account; \code{AddressV2} and delegated
+entries hash \code{SorobanAuthorizationWithAddress}, which adds it. Perch binds
+the account either way: an external signer signs
+$D = H(H(\tau \,\|\, \mathit{id}_A \,\|\, P) \,\|\, \mathrm{XDR}(\rho))$, with
+$H$ = SHA-256, the tag $\tau$ = \code{\fact{auth-domain-tag}}, the account's ID
+$\mathit{id}_A$ and the selected rule IDs $\rho$. A delegated signer approves the
+host's address-bound payload, which omits $\rho$, so a submitter may select any
+rule that lists the delegate; OpenZeppelin \fact{oz-v080-tag} binds $\rho$ for
+both signer kinds (Table~\ref{tab:tab-binding}). A credential's authority is the
+union of every live rule that names it; binding the rule IDs stops a relayer, not
+the signer, from choosing among those rules.
+
+Ed25519~\cite{rfc8032} and WebAuthn~\cite{webauthn2} verifiers are deployed and
+an \fact{mldsa-verifier}~\cite{fips204} verifier is built and tested
+(Appendix~\ref{sec:formal-appendix}).

@@ -1,0 +1,11 @@
+The design is pinned at Perch \fact{perch-pin-short}, the head of an unmerged
+pull-request stack ending at \fact{perch-pr-stack-head}, with its evaluator at
+rule-core \fact{rule-core-pin-short}. Perch's manifests record an earlier design,
+account \fact{perch-deployed-account-version} built from
+\fact{perch-deployed-source-short}, on testnet and, since
+\fact{perch-deployed-mainnet-date}, on mainnet~\selfcite{perch-deployments}; it
+decides with a fork of OpenZeppelin's account library and two Perch policy
+contracts, and its accounts cannot be upgraded in place to this design. This
+paper's contracts run on a separate testnet deployment, where a preview of
+\fact{wallet-name} creates accounts. No external audit of either Perch build has
+been completed. Table~\ref{tab:tab-status} gives the status of each component.

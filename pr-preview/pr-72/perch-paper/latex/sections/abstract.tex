@@ -1,0 +1,20 @@
+\begin{abstract}
+Soroban smart accounts let an owner give applications bounded authority, but a
+grant's meaning must survive nested contract calls, rule selection by whoever
+submits the transaction, and account recovery. We present Perch, a smart account
+in which the owner installs grants: rules that fix a target contract, functions,
+argument conditions, a signer threshold, an optional expiry and an optional
+sliding-window spending cap. A pure evaluator linked into the account decides
+each authorization from the selected rules, their spending records and a grant
+generation, before any signer is authenticated. We translate this Rust evaluator
+into Lean with Charon and Aeneas and prove that the translation agrees with a
+model on every input, that acceptance implies permission, and that histories
+accepted from empty records keep each cap window within its limit. An account
+model shows that after a completed recovery no earlier grant authorizes; the
+account shell is tested, not proved. We compare Perch with oz-policy-builder,
+which attaches a shared predicate interpreter to OpenZeppelin accounts, run one
+task in both designs, and evaluate Perch on a local Soroban host and on Stellar
+testnet.
+\keywords{Smart accounts \and Authorization \and Soroban \and Capabilities
+\and Formal verification \and Lean}
+\end{abstract}

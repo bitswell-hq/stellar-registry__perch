@@ -1,0 +1,75 @@
+% Generated from source/outline.json and source/figures/fig-parts.svg; edit those.
+\begin{figure}[tbp]
+\centering
+\begin{adjustbox}{max width=\linewidth,max totalheight=0.8\textheight}%
+\begin{tikzpicture}[x=1pt,y=-1pt,line join=round,line cap=round]
+\useasboundingbox (0,0) rectangle (760,406);
+\path[fill=cfig-fill, draw=ckey, line width=2pt, rounded corners=6pt] (2,2) rectangle (246,86);
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily\bfseries] at (14,30) {Owner, passkey wallet};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (14,50) {Signs account documents and};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (14,70) {grant installs.};
+\path[fill=cfig-fill, draw=ckey, line width=2pt, rounded corners=6pt] (258,2) rectangle (502,86);
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily\bfseries] at (270,30) {App (Guess the Number)};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (270,50) {Signs its calls with its grant};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (270,70) {key.};
+\path[fill=cfig-fill, draw=ckey, line width=2pt, rounded corners=6pt] (514,2) rectangle (758,86);
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily\bfseries] at (526,30) {Soroban host};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (526,50) {Calls {\ttfamily \_\_check\_auth} for each};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (526,70) {authorization entry.};
+\path[draw=ckey, line width=2pt, {}-{Triangle[length=8pt,width=8pt,color=ckey,fill=ckey,line width=0pt]}] (502,44) -- (512,44);
+\path[draw=ckey, line width=2pt, {}-{Triangle[length=8pt,width=8pt,color=ckey,fill=ckey,line width=0pt]}] (123,86) -- (123,100) -- (590,100) -- (590,88);
+\path[draw=camber, line width=2pt, {}-{Triangle[length=8pt,width=8pt,color=camber,fill=camber,line width=0pt]}] (690,86) -- (690,114);
+\node[anchor=base east, inner sep=0, text=cmuted, font=\fontsize{14}{16.8}\selectfont\sffamily] at (682,112) {{\ttfamily \_\_check\_auth}};
+\path[fill=cfig-fill, draw=cfig-stroke, line width=1.5pt, rounded corners=8pt] (2,116) rectangle (758,264);
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{16}{19.2}\selectfont\sffamily\bfseries] at (14,139) {Perch account, {\ttfamily perch\_account.wasm}};
+\path[fill=cfig-fill, draw=cfig-stroke, line width=1.5pt, rounded corners=6pt] (14,148) rectangle (214,252);
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily\bfseries] at (26,176) {{\ttfamily \_\_check\_auth}};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (26,196) {Account shell: guards,};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (26,216) {digest, signers};
+\node[anchor=base west, inner sep=0, text=cmuted, font=\fontsize{14}{16.8}\selectfont\sffamily\bfseries] at (26,236) {TESTED};
+\path[fill=cfig-proved, draw=cgreen, line width=2.5pt, rounded corners=6pt] (226,148) rectangle (518,252);
+\path[draw=cgreen, line width=2pt, rounded corners=2pt] (230,152) rectangle (514,248);
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily\bfseries] at (238,176) {{\ttfamily rule\_eval}, a linked library};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{14}{16.8}\selectfont\sffamily] at (238,196) {{\ttfamily authorize}, {\ttfamily lower}, {\ttfamily lower\_scoped}};
+\node[anchor=base west, inner sep=0, text=cgreen, font=\fontsize{14}{16.8}\selectfont\sffamily\bfseries] at (238,216) {PROVED};
+\path[fill=cfig-fill, draw=cfig-stroke, line width=1.5pt, rounded corners=6pt] (530,148) rectangle (746,252);
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily\bfseries] at (542,176) {Storage};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (542,196) {Rules, grants, spending};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (542,216) {records, grant generation,};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (542,236) {credential index};
+\path[draw=cfig-stroke, line width=1.5pt, {}-{Triangle[length=8pt,width=8pt,color=cfig-stroke,fill=cfig-stroke,line width=0pt]}] (214,200) -- (224,200);
+\path[draw=camber, line width=2pt, {}-{Triangle[length=8pt,width=8pt,color=camber,fill=camber,line width=0pt]}] (32,264) -- (32,288);
+\path[fill=cfig-fill, draw=cfig-stroke, line width=1.5pt, rounded corners=6pt] (2,290) rectangle (178,404);
+\path[pattern=north east lines, pattern color=cfig-stroke] (5,293) rectangle (16,401);
+\node[anchor=base west, inner sep=0, text=camber, font=\fontsize{14}{16.8}\selectfont\sffamily] at (28,317) {Every authorization};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{14}{16.8}\selectfont\sffamily\bfseries] at (28,335) {Verifier contracts};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{14}{16.8}\selectfont\sffamily] at (28,353) {Ed25519, WebAuthn};
+\node[anchor=base west, inner sep=0, text=cmuted, font=\fontsize{14}{16.8}\selectfont\sffamily\bfseries] at (28,371) {TRUSTED};
+\path[draw=camber, line width=2pt, {}-{Triangle[length=8pt,width=8pt,color=camber,fill=camber,line width=0pt]}] (218,264) -- (218,288);
+\path[fill=cfig-fill, draw=cfig-stroke, line width=1.5pt, rounded corners=6pt] (188,290) rectangle (364,404);
+\node[anchor=base west, inner sep=0, text=camber, font=\fontsize{14}{16.8}\selectfont\sffamily] at (200,317) {Every install};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{14}{16.8}\selectfont\sffamily\bfseries] at (200,335) {Document compiler};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{14}{16.8}\selectfont\sffamily] at (200,353) {Resolves names in};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{14}{16.8}\selectfont\sffamily] at (200,371) {{\ttfamily perch/verifiers}};
+\node[anchor=base west, inner sep=0, text=cmuted, font=\fontsize{14}{16.8}\selectfont\sffamily\bfseries] at (200,389) {TESTED};
+\path[draw=camber, line width=2pt, {}-{Triangle[length=8pt,width=8pt,color=camber,fill=camber,line width=0pt]}] (404,264) -- (404,288);
+\path[fill=cfig-fill, draw=cfig-stroke, line width=1.5pt, rounded corners=6pt] (374,290) rectangle (576,404);
+\node[anchor=base west, inner sep=0, text=camber, font=\fontsize{14}{16.8}\selectfont\sffamily] at (386,317) {Account-document writes,};
+\node[anchor=base west, inner sep=0, text=camber, font=\fontsize{14}{16.8}\selectfont\sffamily] at (386,335) {upgrades, cancellations,};
+\node[anchor=base west, inner sep=0, text=camber, font=\fontsize{14}{16.8}\selectfont\sffamily] at (386,353) {completions};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{14}{16.8}\selectfont\sffamily\bfseries] at (386,371) {Recovery controller};
+\node[anchor=base west, inner sep=0, text=cmuted, font=\fontsize{14}{16.8}\selectfont\sffamily\bfseries] at (386,389) {TESTED};
+\path[draw=camber, line width=2pt, {}-{Triangle[length=8pt,width=8pt,color=camber,fill=camber,line width=0pt]}] (616,264) -- (616,288);
+\path[fill=cfig-fill, draw=cfig-stroke, line width=1.5pt, rounded corners=6pt] (586,290) rectangle (678,404);
+\node[anchor=base west, inner sep=0, text=camber, font=\fontsize{14}{16.8}\selectfont\sffamily] at (598,317) {Enrollment};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{14}{16.8}\selectfont\sffamily\bfseries] at (598,335) {ZK pool};
+\node[anchor=base west, inner sep=0, text=cmuted, font=\fontsize{14}{16.8}\selectfont\sffamily\bfseries] at (598,353) {TESTED};
+\path[draw=camber, line width=2pt, {}-{Triangle[length=8pt,width=8pt,color=camber,fill=camber,line width=0pt]}] (718,264) -- (718,288);
+\node[anchor=base west, inner sep=0, text=camber, font=\fontsize{14}{16.8}\selectfont\sffamily] at (692,312) {Owner};
+\node[anchor=base west, inner sep=0, text=camber, font=\fontsize{14}{16.8}\selectfont\sffamily] at (692,330) {{\ttfamily execute}};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{14}{16.8}\selectfont\sffamily\bfseries] at (692,352) {Any};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{14}{16.8}\selectfont\sffamily\bfseries] at (692,370) {contract};
+\end{tikzpicture}%
+\end{adjustbox}
+\caption{\textbf{The parts of a Perch account at the pinned build.} Arrows are calls out of the account, labelled with when they happen. Double border: the evaluator functions the theorems cover. Single border: tested code. Hatched: trusted components.}\label{fig:fig-parts}
+\end{figure}
