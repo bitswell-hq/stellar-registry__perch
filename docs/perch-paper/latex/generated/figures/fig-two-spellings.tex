@@ -1,0 +1,20 @@
+% Generated from source/outline.json and source/figures/fig-two-spellings.svg; edit those.
+\begin{figure}[tbp]
+\centering
+\begin{minipage}[t]{1\linewidth}\footnotesize\textbf{(a) Perch grant document}
+\begin{Verbatim}[fontsize=\scriptsize,frame=single,framesep=1.5mm]
+placeholder
+\end{Verbatim}
+\end{minipage}\par\medskip
+\begin{minipage}[t]{1\linewidth}\footnotesize\textbf{(b) oz-policy-builder Intent}
+\begin{Verbatim}[fontsize=\scriptsize,frame=single,framesep=1.5mm]
+placeholder
+\end{Verbatim}
+\end{minipage}\par\medskip
+\begin{minipage}[t]{1\linewidth}\footnotesize\textbf{(c) XLM rule: wire predicate and install arguments}
+\begin{Verbatim}[fontsize=\scriptsize,frame=single,framesep=1.5mm]
+placeholder
+\end{Verbatim}
+\end{minipage}
+\caption{\textbf{One intent, two spellings.} The intent: the app key may call \code{guess} on the game, and may send XLM only to the game, at most 2 XLM per 17,280 ledgers, through ledger \emph{N} \ensuremath{-} 1. (a) Perch: one grant document, installed by one \code{apply\_scope} call. (b) oz-policy-builder: an Intent, lowered to one predicate per contract. (c) The XLM rule's predicate in wire form, and the \code{install\_policy} arguments that attach OpenZeppelin's \code{spending\_limit}; a second call installs the game rule. Read from source; the oz-policy-builder installs were not run.}\label{fig:fig-two-spellings}
+\end{figure}

@@ -1,0 +1,12 @@
+% Generated from source/outline.json and source/figures/fig-check-auth.svg; edit those.
+\begin{figure}[tbp]
+\centering
+\footnotesize\begin{tabularx}{\linewidth}{@{}r>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}p{0.3\linewidth}l@{}}
+\toprule
+\textbf{No.} & \textbf{Step} & \textbf{Exit and code} & \textbf{Assurance} \\
+\midrule
+1 & placeholder & -- & tested \\
+\bottomrule
+\end{tabularx}
+\caption{\textbf{One authorization through \code{\_\_check\_auth} at the pinned build.} Step 7, the evaluator, is covered by the theorems; the other steps are tested account-shell code. Each exit names the account's error and its number, which a wallet finds in the diagnostic events of the host's \code{Error(Auth, InvalidAction)}. No exit leaves a write. A recovery completion leaves at step 4 and is decided by the recovery controller.}\label{fig:fig-check-auth}
+\end{figure}

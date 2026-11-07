@@ -28,6 +28,7 @@ SRC = ROOT / 'source'
 LATEX = ROOT / 'latex'
 GEN = LATEX / 'generated'
 INDEX = ROOT / 'index.html'
+WALKTHROUGH = ROOT.parent / 'oz-walkthrough' / 'index.html'
 CARRIED = ('MEASUREMENTS', 'MANIFEST_TABLE', 'GOLDEN', 'EMBEDDED_ASSETS')
 ERRORS = []
 
@@ -60,6 +61,9 @@ class Paper:
         for f in self.figures:
             if f not in [x for s in self.sections for x in s.get('figures', [])]:
                 fail(f'figure {f} is in no section')
+        for s in self.sections:
+            if s.get('editions') and set(s['editions']) != {'html', 'latex'} and not (s.get('unnumbered') or s.get('appendix')):
+                fail(f'section {s["id"]} is in one edition only, so it must be unnumbered or an appendix')
         self.numbers = {ed: self._number(ed) for ed in ('html', 'latex')}
 
     def in_edition(self, item, ed):
@@ -70,10 +74,12 @@ class Paper:
         for s in self.sections:
             if not self.in_edition(s, ed):
                 continue
-            if s.get('appendix'):
+            if s.get('unnumbered'):
+                pass
+            elif s.get('appendix'):
                 nums['sec:' + s['id']] = 'ABCDEFGH'[app]
                 app += 1
-            elif not s.get('unnumbered'):
+            else:
                 main += 1
                 nums['sec:' + s['id']] = f'{main:02d}' if ed == 'html' else str(main)
             for f in s.get('figures', []):
@@ -120,10 +126,15 @@ def _directive(p, body, ed, ctx):
             fail(f'unknown or excluded reference {arg!r} in {ctx} ({ed})')
             return '??'
         if ed == 'latex':
+            if arg.startswith('sec:') and arg not in p.numbers['latex']:
+                fail(f'reference {arg!r} in {ctx} names a section that has no number in the LaTeX edition')
             pre = {'sec': r'\S', 'fig': r'Figure~', 'tab': r'Table~'}[arg[:3]]
             return pre + r'\ref{' + arg + '}'
-        n = p.numbers['html'].get(arg, '??')
-        label = {'sec': '§', 'fig': 'Figure ', 'tab': 'Table '}[arg[:3]] + n
+        n = p.numbers['html'].get(arg)
+        if n is None and arg.startswith('sec:'):
+            sec = next(x for x in p.sections if x['id'] == arg[4:])
+            return f'<a href="#{arg[4:]}">{html.escape(sec["title_html"])}</a>'
+        label = {'sec': '§', 'fig': 'Figure ', 'tab': 'Table '}[arg[:3]] + (n or '??')
         target = arg[4:]
         return f'<a href="#{target}">{label}</a>'
     if kind == 'cite':
@@ -174,15 +185,18 @@ def render(p, s, ed, ctx=''):
     return ''.join(out)
 
 
-def fact_value(p, key, ed):
+def fact_value(p, key, ed, anon=False):
     f = p.facts[key]
-    v = f['value'] if isinstance(f, dict) else f
-    code = isinstance(f, dict) and f.get('code')
+    if not isinstance(f, dict):
+        f = {'value': f}
+    v = f['anon'] if anon and 'anon' in f else f['value']
+    if f.get('markup'):
+        return render(p, v, ed, key)
     if ed == 'latex':
         v = svg2tikz.tex_escape(v)
-        return r'\code{' + v + '}' if code else v
+        return r'\code{' + v + '}' if f.get('code') else v
     v = html.escape(v, quote=False)
-    return f'<code>{v}</code>' if code else v
+    return f'<code>{v}</code>' if f.get('code') else v
 
 
 # ---------------------------------------------------------------- HTML edition
@@ -194,9 +208,18 @@ def html_figure(p, fid):
     cap = render(p, f.get('caption', ''), 'html', fid)
     cls = 'fig' + (' interactive' if f.get('interactive') else '')
     attrs = f' data-interactive="{f["interactive"]}"' if f.get('interactive') else ''
+    if f.get('scenarios'):
+        attrs += f' data-scenarios="{html.escape(f["scenarios"])}"'
     if f.get('kind') == 'table':
         body = html_table_body(p, p.tables[f['table']], f['table'])
         return (f'<figure class="{cls} fig-table" id="{fid}"{attrs}>{body}'
+                f'<figcaption><span class="figure-title" id="{fid}-title">Figure {n}. {title}</span> {cap}</figcaption></figure>')
+    if f.get('kind') == 'code':
+        panels = ''.join(
+            f'<div class="code-panel"><p class="panel-title">{render(p, pa["title"], "html", fid)}</p>'
+            f'<pre>{html.escape(read(SRC / "figures" / f"{fid}.{pa["file"]}.txt").rstrip())}</pre></div>'
+            for pa in f['panels'])
+        return (f'<figure class="{cls} fig-code" id="{fid}"{attrs}><div class="code-panels">{panels}</div>'
                 f'<figcaption><span class="figure-title" id="{fid}-title">Figure {n}. {title}</span> {cap}</figcaption></figure>')
     wide = read(SRC / 'figures' / f'{fid}.svg').strip()
     narrow_p = SRC / 'figures' / f'{fid}.narrow.svg'
@@ -230,19 +253,19 @@ def html_steps(p, fid, st):
 
 
 def latex_steps(p, fid, st):
-    out = []
-    if st.get('intro'):
-        out.append(render(p, st['intro'], 'latex', fid) + r'\par\smallskip')
-    out.append(r'\begin{enumerate}[leftmargin=*,itemsep=1pt,topsep=2pt]')
+    # An algorithm figure: one row per step (number, action, exits with codes, assurance).
+    rows = []
     for x in st['steps']:
         if x.get('latex') is False:
             continue
-        exits = ''.join(r'\newline\hspace*{1em}$\rightarrow$ ' + render(p, e, 'latex', fid) for e in x.get('exits', []))
-        out.append(r'\item[' + str(x['n']) + '.] ' + render(p, x['text'], 'latex', fid) + exits)
-    out.append(r'\end{enumerate}')
-    if st.get('outro'):
-        out.append(r'\smallskip' + render(p, st['outro'], 'latex', fid))
-    return r'\begin{minipage}{\linewidth}\small' + '\n' + '\n'.join(out) + '\n' + r'\end{minipage}'
+        exits = '; '.join(render(p, e, 'latex', fid) for e in x.get('exits', [])) or '--'
+        rows.append(f'{x["n"]} & {render(p, x["text"], "latex", fid)} & {exits} & {render(p, x.get("assurance", ""), "latex", fid)} \\\\')
+    intro = render(p, st['intro'], 'latex', fid) + '\\par\\smallskip\n' if st.get('intro') else ''
+    outro = '\n\\par\\smallskip ' + render(p, st['outro'], 'latex', fid) if st.get('outro') else ''
+    return (intro + '\\footnotesize\\begin{tabularx}{\\linewidth}{@{}r>{\\raggedright\\arraybackslash}X'
+            '>{\\raggedright\\arraybackslash}p{0.3\\linewidth}l@{}}\n\\toprule\n'
+            '\\textbf{No.} & \\textbf{Step} & \\textbf{Exit and code} & \\textbf{Assurance} \\\\\n\\midrule\n'
+            + '\n'.join(rows) + '\n\\bottomrule\n\\end{tabularx}' + outro)
 
 
 def html_table_body(p, t, tid):
@@ -252,22 +275,23 @@ def html_table_body(p, t, tid):
     return f'<div class="table-wrap"><table{cls}><thead><tr>{head}</tr></thead><tbody>{rows}</tbody></table></div>'
 
 
-def html_table(p, tid):
+def html_table(p, tid, numbered=True):
     t = p.tables[tid]
-    n = p.numbers['html']['tab:' + tid]
     body = html_table_body(p, t, tid)
-    cap = (f'<caption>Table {n}. {render(p, t["title"], "html", tid)} '
+    lead = f'Table {p.numbers["html"]["tab:" + tid]}. ' if numbered else ''
+    cap = (f'<caption>{lead}{render(p, t["title"], "html", tid)} '
            f'{render(p, t.get("caption", ""), "html", tid)}</caption>')
     return body.replace('</tbody></table>', f'</tbody>{cap}</table>', 1).replace('<table', f'<table id="{tid}"', 1)
 
 
 def html_statements(p):
-    items = ''.join(
-        f'<li id="stmt-{st["id"]}"><strong>{render(p, st["title"], "html", st["id"])}</strong>'
-        f'<p>{render(p, st["text"], "html", st["id"])}</p>'
-        f'<div class="artifact">{render(p, st["evidence"], "html", st["id"])}</div></li>'
-        for st in p.statements)
-    return f'<ol class="proof-list">{items}</ol>'
+    def item(st):
+        data = ''.join(f' data-{k}="{html.escape(" ".join(st[k]))}"' for k in ('objects', 'assumes') if st.get(k))
+        label = f'{st["label"]} · ' if st.get('label') else ''
+        return (f'<li id="stmt-{st["id"]}"{data}><strong>{label}{render(p, st["title"], "html", st["id"])}</strong>'
+                f'<p>{render(p, st["text"], "html", st["id"])}</p>'
+                f'<div class="artifact">{render(p, st["evidence"], "html", st["id"])}</div></li>')
+    return '<ol class="proof-list">' + ''.join(item(st) for st in p.statements) + '</ol>'
 
 
 def html_references(p):
@@ -309,7 +333,7 @@ def bib_html(e):
     return ' '.join(parts)
 
 
-DIRECTIVE = re.compile(r'\{\{([a-z]+):?([^}]*)\}\}')
+DIRECTIVE = re.compile(r'\{\{([a-z-]+):?([^}]*)\}\}')
 
 
 def expand_html(p, text, ctx, blocks, seen):
@@ -319,8 +343,13 @@ def expand_html(p, text, ctx, blocks, seen):
             seen['fig'].append(arg)
             return html_figure(p, arg)
         if kind == 'table':
-            seen['tab'].append(arg)
-            return html_table(p, arg)
+            tid, _, flag = arg.partition('|')
+            if flag == 'unnumbered':
+                return html_table(p, tid, numbered=False)
+            seen['tab'].append(tid)
+            return html_table(p, tid)
+        if kind == 'if-walkthrough':
+            return expand_html(p, read(SRC / 'html' / arg), arg, blocks, seen) if WALKTHROUGH.exists() else ''
         if kind == 'statements':
             return html_statements(p)
         if kind == 'block':
@@ -357,9 +386,12 @@ def build_html(p, blocks):
             label = f'{n} · {s["nav"]}' if n and n.isdigit() else s['nav']
             nav.append(f'<a href="#{s["id"]}">{html.escape(label)}</a>')
     nav.append(f'</div><small>{o["nav_note"]}</small></nav>')
-    head = read(SRC / 'html' / 'head.html').replace('{{style}}', read(SRC / 'html' / 'style.css').strip())
+    css = '\n'.join(read(SRC / 'html' / n).strip() for n in ('style.css', 'page.css', 'figures.css')
+                    if (SRC / 'html' / n).exists())
+    head = read(SRC / 'html' / 'head.html').replace('{{style}}', css)
     parts = [expand_html(p, head, 'head', blocks, seen).strip(), ''.join(nav), '']
-    parts.append('<main id="main">' + read(SRC / 'html' / 'sprite.svg').strip()
+    wt = ' data-walkthrough="../oz-walkthrough/index.html"' if WALKTHROUGH.exists() else ''
+    parts.append(f'<main id="main"{wt}>' + read(SRC / 'html' / 'sprite.svg').strip()
                  + expand_html(p, read(SRC / 'html' / 'header.html'), 'header', blocks, seen).strip())
     parts.append(expand_html(p, read(SRC / 'html' / 'abstract.html'), 'abstract', blocks, seen).strip())
     for s in p.sections:
@@ -368,7 +400,8 @@ def build_html(p, blocks):
         n = p.numbers['html'].get('sec:' + s['id'])
         body = expand_html(p, read(SRC / 'html' / 'sections' / f'{s["id"]}.html'), s['id'], blocks, seen).strip()
         head = f'<h2><span class="n">{n}</span>{html.escape(s["title_html"])}</h2>' if n else f'<h2>{html.escape(s["title_html"])}</h2>'
-        parts.append(f'<section id="{s["id"]}">{head}{body}</section>')
+        alias = ''.join(f'<span class="alias" id="{a}"></span>' for a in s.get('aliases', []))
+        parts.append(f'<section id="{s["id"]}">{alias}{head}{body}</section>')
     parts.append(expand_html(p, read(SRC / 'html' / 'footer.html'), 'footer', blocks, seen).strip())
     parts.append('</main></div>')
     parts.append(blocks['EMBEDDED_ASSETS'])
@@ -380,7 +413,24 @@ def build_html(p, blocks):
         fail(f'HTML figure order {seen["fig"]} != outline {want_f}')
     if seen['tab'] != want_t:
         fail(f'HTML table order {seen["tab"]} != outline {want_t}')
-    return '\n'.join(parts)
+    page = '\n'.join(parts)
+    # build-page.mjs refreshes these blocks in place, so each must survive a rebuild.
+    for name in CARRIED:
+        if page.count(f'<!-- {name}_START -->') != 1:
+            fail(f'the {name} block must appear exactly once in the HTML edition (place {{{{block:{name}}}}})')
+    return page
+
+
+MEASURED = {'Install transfer grant': 'cpu-install-grant', 'Spend six demo XLM': 'cpu-spend-6',
+            'Complete guardian recovery': 'cpu-complete', 'Spend with fresh grant': 'cpu-spend-grant2',
+            'Losing game guess': 'cpu-guess-1', 'Winning game guess': 'cpu-win'}
+
+
+def check_measurements(p, block):
+    for label, value in re.findall(r'<tr><td>([^<]+)</td><td>([\d,]+)</td>', block):
+        key = MEASURED.get(label)
+        if key and key in p.facts and p.facts[key]['value'] != value:
+            fail(f'MEASUREMENTS row {label!r} is {value} but fact {key} is {p.facts[key]["value"]}')
 
 
 def carried_blocks(text):
@@ -396,18 +446,54 @@ def carried_blocks(text):
 
 # ---------------------------------------------------------------- LaTeX edition
 
+LINT = []
+
+
+def lint_svg(fid, f):
+    for suffix in ('svg', 'narrow.svg'):
+        path = SRC / 'figures' / f'{fid}.{suffix}'
+        if not path.exists():
+            continue
+        t = read(path)
+        if ' style="' in t or ' opacity="' in t:
+            LINT.append(f'{path.name}: no style= or opacity attributes')
+        for size in re.findall(r'font-size="([\d.]+)"', t):
+            if not 14 <= float(size) <= 17:
+                LINT.append(f'{path.name}: font-size {size} outside 14-17')
+                break
+        vb = re.search(r'viewBox="0 0 ([\d.]+) ([\d.]+)"', t)
+        want = 340 if suffix == 'narrow.svg' else 760
+        if vb and float(vb.group(1)) != want:
+            LINT.append(f'{path.name}: width {vb.group(1)}, want {want}')
+        if suffix == 'svg' and vb and float(vb.group(2)) > 900 and f.get('kind') != 'algorithm':
+            LINT.append(f'{path.name}: height {vb.group(2)} > 900 (redesign, or make it an algorithm figure)')
+
+
 def latex_figure(p, fid):
     f = p.figures[fid]
     env = "figure*" if f.get("latex_span") == "full" else "figure"
     cap = r'\textbf{' + render(p, f['title'], 'latex', fid) + '} ' + render(p, f.get('caption', ''), 'latex', fid)
     if f.get('kind') == 'table':
         body = latex_tabular(p, p.tables[f['table']], f['table'])
-    elif f.get('latex_form') == 'steps':
+    elif f.get('kind') == 'algorithm':
         st = load_steps(fid)
         if not st:
-            fail(f'{fid}: latex_form steps needs source/figures/{fid}.steps.json')
+            fail(f'{fid}: kind algorithm needs source/figures/{fid}.steps.json')
             return ''
         body = latex_steps(p, fid, st)
+    elif f.get('kind') == 'code':
+        parts = []
+        for pa in f['panels']:
+            w = pa.get('latex_width', 1)
+            text = read(SRC / 'figures' / f'{fid}.{pa["file"]}.txt').rstrip()
+            parts.append(f'\\begin{{minipage}}[t]{{{w}\\linewidth}}\\footnotesize\\textbf{{{render(p, pa["title"], "latex", fid)}}}\n'
+                         f'\\begin{{Verbatim}}[fontsize=\\scriptsize,frame=single,framesep=1.5mm]\n{text}\n\\end{{Verbatim}}\n\\end{{minipage}}')
+        body = ''
+        for i, part in enumerate(parts):
+            body += part
+            if i + 1 < len(parts):
+                a, b = f['panels'][i].get('latex_width', 1), f['panels'][i + 1].get('latex_width', 1)
+                body += '\\hfill\n' if a < 1 and b < 1 and a + b <= 1 else '\\par\\medskip\n'
     else:
         tikz, w, h = svg2tikz.convert(read(SRC / 'figures' / f'{fid}.svg'))
         maxh = f.get('latex_max_height', '0.8\\textheight')
@@ -438,20 +524,31 @@ def latex_table(p, tid):
             f'\\caption{{{cap}}}\\label{{tab:{tid}}}\n{latex_tabular(p, t, tid)}\n\\end{{{env}}}\n')
 
 
-def latex_statements(p):
+def latex_statements(p, body):
+    # Statements with "latex_body": true go in the body (generated/statements-body.tex);
+    # the rest in the formal appendix (generated/statements-appendix.tex).
     out = ['% Generated from source/statements.json; edit that.']
     for st in p.statements:
-        body = st.get('latex') or render(p, st['text'], 'latex', st['id'])
-        out.append(f'\\begin{{statement}}[{render(p, st["title"], "latex", st["id"])}]\\label{{stmt:{st["id"]}}}\n'
-                   f'{body}\n\\statementevidence{{{render(p, st["evidence"], "latex", st["id"])}}}\n'
-                   '\\end{statement}')
+        if bool(st.get('latex_body')) != body:
+            continue
+        text = st.get('latex') or render(p, st['text'], 'latex', st['id'])
+        hyp = ''
+        if st.get('hypotheses'):
+            hyp = '\\statementhypotheses{' + render(p, st['hypotheses'], 'latex', st['id']) + '}\n'
+        out.append(f'\\begin{{perchstatement}}{{{st.get("label", "")}}}{{{render(p, st["title"], "latex", st["id"])}}}\\label{{stmt:{st["id"]}}}\n'
+                   f'{text}\n{hyp}\\statementevidence{{{render(p, st["evidence"], "latex", st["id"])}}}\n'
+                   '\\end{perchstatement}')
     return '\n'.join(out) + '\n'
 
 
 def latex_facts(p):
     out = ['% Generated from source/facts.json; edit that.']
     for k in sorted(p.facts):
-        out.append(f'\\expandafter\\def\\csname perchfact@{k}\\endcsname{{{fact_value(p, k, "latex")}}}')
+        v = fact_value(p, k, 'latex')
+        f = p.facts[k]
+        if isinstance(f, dict) and 'anon' in f:
+            v = '\\ifdefined\\anonymous ' + fact_value(p, k, 'latex', anon=True) + '\\else ' + v + '\\fi'
+        out.append(f'\\expandafter\\def\\csname perchfact@{k}\\endcsname{{{v}}}')
     return '\n'.join(out) + '\n'
 
 
@@ -481,8 +578,11 @@ def latex_bib(p):
 def build_latex(p):
     files = {'body.tex': latex_body(p), 'facts.tex': latex_facts(p),
              'colors.tex': '% Generated from build/svg2tikz.py (the page\'s light theme).\n' + svg2tikz.color_definitions() + '\n',
-             'statements.tex': latex_statements(p), 'refs.bib': latex_bib(p)}
+             'statements-body.tex': latex_statements(p, True),
+             'statements-appendix.tex': latex_statements(p, False), 'refs.bib': latex_bib(p)}
     for f in p.figures:
+        if p.figures[f].get('kind') not in ('table', 'code'):
+            lint_svg(f, p.figures[f])
         if p.in_edition(p.figures[f], 'latex'):
             files[f'figures/{f}.tex'] = latex_figure(p, f)
     for t in p.tables:
@@ -522,10 +622,16 @@ def main(argv):
     p = Paper()
     current = read(INDEX)
     blocks = carried_blocks(current)
+    if 'MEASUREMENTS' in blocks:
+        check_measurements(p, blocks['MEASUREMENTS'])
     page = build_html(p, blocks) if not ERRORS else ''
     latex = build_latex(p)
+    if LINT:
+        print('\n'.join(('error: ' if check else 'warning: ') + 'figure lint: ' + e for e in LINT), file=sys.stderr)
+        if check:
+            ERRORS.extend(LINT)
     if ERRORS:
-        print('\n'.join('error: ' + e for e in ERRORS), file=sys.stderr)
+        print('\n'.join('error: ' + e for e in ERRORS if e not in LINT), file=sys.stderr)
         return 1
     stale = []
     if page != current:

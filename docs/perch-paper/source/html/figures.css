@@ -1,0 +1,20 @@
+/* Interactive figures (figures.js). Without the script, or in print, every step shows. */
+.fig [data-print=no]{display:none}
+.fig.js [data-print=no]{display:revert}
+.fig .off{display:none}
+.fig-bar{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin:0 0 .6rem;position:sticky;top:0;z-index:2;background:var(--bg);padding:.4rem 0;border-bottom:1px solid var(--line)}
+.fig-bar button,.fig-bar select{min-height:44px;min-width:44px;font:inherit;font-size:.85rem;padding:.4rem .8rem;border-radius:6px;border:1px solid var(--edge);background:var(--btn);color:var(--text)}
+.fig-bar button:disabled{opacity:.5}
+.fig-bar button:focus-visible,.fig-bar select:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.fig-count{font-size:.8rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.fig-live,.fig-detail{min-height:1.5em;margin:.5rem 0;font-size:.9rem;color:var(--em);border-left:3px solid var(--amber);padding-left:.6rem}
+.fig-detail{border-left-color:var(--key)}
+.fig [data-state=future] .bx,.fig [data-state=future] .pill{stroke-dasharray:5 4}
+.fig [data-state=future] text{fill:var(--muted)}
+.fig [data-state=current] .bx,.fig [data-state=current] .pill{stroke:var(--amber);stroke-width:3.5}
+.fig [data-state=current] text{font-weight:650}
+.fig [data-detail]{cursor:pointer}
+.fig .hot .bx,.fig .hot.bx{stroke:var(--key);stroke-width:3}
+@media(prefers-reduced-motion:no-preference){.fig [data-step] .bx,.fig [data-step] .pill{transition:stroke .12s,stroke-width .12s}}
+@media(forced-colors:active){.fig [data-state=current] .bx{stroke-width:5}}
+@media print{.fig-bar,.fig-live,.fig-detail{display:none}.fig [data-print=no]{display:none!important}.fig .off{display:revert!important}}

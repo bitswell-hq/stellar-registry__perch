@@ -1,0 +1,34 @@
+{
+ "paper-date": {
+  "value": "7 November 2026",
+  "note": "O resets it to the r3 build date",
+  "source": "`source/facts/paper.json` (C)"
+ },
+ "paper-title-latex": {
+  "value": "Perch: Bounded, Recoverable Grants for Soroban Smart Accounts",
+  "source": "editor decision 12"
+ },
+ "paper-subtitle-html": {
+  "value": "Bounded, recoverable grants for Soroban smart accounts",
+  "source": "editor decision 12"
+ },
+ "paper-iteration": {
+  "value": "Third iteration · November 2026",
+  "source": "editor"
+ },
+ "authors": {
+  "value": "Willem Wyndham and Elizabeth Engelman",
+  "anon": "Anonymous authors",
+  "source": "panel brief"
+ },
+ "affiliation": {
+  "value": "The Aha Company",
+  "anon": "Anonymous institution",
+  "source": "panel brief"
+ },
+ "wallet-name": {
+  "value": "Nido",
+  "anon": "a passkey wallet",
+  "source": "panel brief"
+ }
+}

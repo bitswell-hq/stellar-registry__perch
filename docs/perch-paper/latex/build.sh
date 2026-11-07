@@ -13,7 +13,8 @@ if [ "$version" != "Tectonic $TECTONIC_VERSION" ]; then
   echo "build.sh: need Tectonic $TECTONIC_VERSION, found: $version" >&2
   exit 1
 fi
-python3 ../build/paper.py --check
+# SKIP_CHECK=1 skips the source/generated consistency check for local drafting; CI never sets it.
+if [ "${SKIP_CHECK:-0}" != 1 ]; then python3 ../build/paper.py --check; fi
 rm -rf out && mkdir out
 "$TECTONIC" -X compile --bundle "$BUNDLE" --keep-logs --keep-intermediates --outdir out perch-paper.tex
 status=0

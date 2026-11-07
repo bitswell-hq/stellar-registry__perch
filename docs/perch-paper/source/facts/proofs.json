@@ -1,0 +1,121 @@
+{
+ "rule-eval-lines": {
+  "value": "2,400",
+  "note": "prints about 2,400",
+  "source": "`rc:crates/rule-eval/src/*.rs`: 2,403 lines in 14 files (V, `wc -l`)"
+ },
+ "extracted-lean-lines": {
+  "value": "3,653",
+  "source": "`rc:formal/RuleCore/Extracted/RuleEval.lean` (V, line count)"
+ },
+ "exported-theorems": {
+  "value": "940",
+  "source": "`rc:formal/RuleCore/Axioms.lean` (R, r1 pl-formal)"
+ },
+ "standard-axioms": {
+  "value": "`propext`, `Quot.sound`, `Classical.choice`",
+  "markup": true,
+  "source": "same (C)"
+ },
+ "claims-total": {
+  "value": "180",
+  "source": "`rc:claims.yaml`, status counts (V)"
+ },
+ "claims-proven": {
+  "value": "107",
+  "source": "same (V)"
+ },
+ "claims-tested": {
+  "value": "40",
+  "source": "same (V)"
+ },
+ "claims-assumed": {
+  "value": "19",
+  "source": "same (V)"
+ },
+ "claims-unproven": {
+  "value": "14",
+  "source": "same (V)"
+ },
+ "claim-perch-validation": {
+  "value": "unproven.perch-validation",
+  "code": true,
+  "source": "`rc:claims.yaml:2928` (V)"
+ },
+ "claim-scoped-admin-change": {
+  "value": "unproven.scoped-admin-change",
+  "code": true,
+  "source": "`rc:claims.yaml:2954` (V)"
+ },
+ "statements-count": {
+  "value": "13",
+  "source": "`source/statements.json` (V)"
+ },
+ "lean-doc-traces": {
+  "value": "57",
+  "source": "r2:491 (C)"
+ },
+ "host-traces-generated": {
+  "value": "95",
+  "source": "r2:481; r1-plan C8 (C)"
+ },
+ "host-traces-named": {
+  "value": "35",
+  "source": "same (C)"
+ },
+ "host-traces-random": {
+  "value": "60",
+  "source": "same (C)"
+ },
+ "host-traces-transcribed": {
+  "value": "39",
+  "note": "34 authorization, 5 storage",
+  "source": "r2:481; r2-final (C)"
+ },
+ "host-tests-expressed": {
+  "value": "27 of 74 tests in five host test files",
+  "source": "same (C)"
+ },
+ "host-cases-agreeing": {
+  "value": "155 of 213",
+  "source": "`rc:conformance/vectors/soroban/seed/coverage.json` (C)"
+ },
+ "attenuation-steps": {
+  "value": "10",
+  "source": "`rc:crates/rule-eval/src/attenuate.rs`; r2:167 (C)"
+ },
+ "evaluator-history-bound": {
+  "value": "1,000",
+  "source": "r2:191 (C)"
+ },
+ "doc-conditions": {
+  "value": "`is-self`, `address-eq`, `string-in`, `string-prefix`, `u32-eq`",
+  "markup": true,
+  "source": "`P:crates/perch-ir/src/doc.rs:281-304` (V)"
+ },
+ "doc-conditions-count": {
+  "value": "five",
+  "source": "same (V)"
+ },
+ "rule-core-conditions": {
+  "value": "`ArgEq`, `ArgIn`, `ArgStrPrefix`, `ArgI128AtMost`",
+  "markup": true,
+  "source": "`rc:crates/rule-eval/src/rule.rs:20-36` (V)"
+ },
+ "inpage-theorems": {
+  "value": "768",
+  "source": "r2:645 (C)"
+ },
+ "inpage-declarations": {
+  "value": "10,306",
+  "source": "r2:645 (C)"
+ },
+ "inpage-size": {
+  "value": "9.5 MB under brotli",
+  "source": "r2:645 (C)"
+ },
+ "inpage-check-time": {
+  "value": "2.2 s",
+  "source": "r2:645 (C)"
+ }
+}

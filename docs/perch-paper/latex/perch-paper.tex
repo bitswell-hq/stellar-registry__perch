@@ -16,6 +16,7 @@
 \usetikzlibrary{arrows.meta,patterns}
 \usepackage{newunicodechar}
 \usepackage{enumitem}
+\usepackage{fancyvrb}
 \usepackage[hidelinks]{hyperref}
 \usepackage{xurl}
 \usepackage{caption}
@@ -52,11 +53,17 @@
 \newcommand\badge[1]{\textsc{\MakeLowercase{#1}}}
 \newcommand\perchfigure[1]{\input{generated/figures/#1}}
 \newcommand\perchtable[1]{\input{generated/tables/#1}}
-\spnewtheorem{statement}{Statement}{\bfseries}{\itshape}
-\newcommand\statementevidence[1]{\par\smallskip\noindent{\footnotesize Evidence: #1}}
+% A formal statement: \begin{perchstatement}{T1}{Title} ... \end{perchstatement};
+% \ref to its \label prints the T-label.
+\makeatletter
+\newenvironment{perchstatement}[2]{\par\medskip\noindent
+  \def\@currentlabel{#1}\phantomsection\textbf{#1 (#2).}\itshape\ }{\par\medskip}
+\makeatother
+\newcommand\statementhypotheses[1]{\par\smallskip\noindent{\upshape\footnotesize Hypotheses: #1}}
+\newcommand\statementevidence[1]{\par\smallskip\noindent{\upshape\footnotesize Evidence: #1}}
 \input{generated/facts}
 
-\title{Perch: Programmable, Recoverable Authority\\for Soroban Smart Accounts}
+\title{Perch: Bounded, Recoverable Grants\\for Soroban Smart Accounts}
 \titlerunning{Perch}
 \ifdefined\anonymous
 \author{Anonymous authors}

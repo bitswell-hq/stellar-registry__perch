@@ -1,0 +1,11 @@
+{
+ "title": "Placeholder.",
+ "caption": "",
+ "columns": [
+  "Artifact",
+  "Network or build",
+  "Bytes",
+  "Identifier"
+ ],
+ "rows": []
+}

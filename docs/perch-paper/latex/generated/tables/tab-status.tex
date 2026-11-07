@@ -1,0 +1,19 @@
+% Generated from source/tables/tab-status.json; edit that.
+\begin{table}[tbp]
+\centering
+\caption{\textbf{Status on 7 November 2026.} \emph{Deployed}: recorded in Perch's deployment manifests and present on the network. \emph{Preview}: a separate testnet deployment outside those manifests. \emph{Merged}: on a main branch, not deployed. \emph{Open PR}: unmerged code. \emph{Proposed}: not implemented. \emph{Not done}: not started or not complete.}\label{tab:tab-status}
+\footnotesize\begin{tabularx}{\linewidth}{@{}LLLL@{}}
+\toprule
+\textbf{Component} & \textbf{Status} & \textbf{Where} & \textbf{Evidence} \\
+\midrule
+Conventional account (OpenZeppelin library fork, interpreter, spending limit), compiler, recovery controller, Ed25519 and WebAuthn verifiers, ZK pool and adapter & \badge{DEPLOYED} & Perch \code{c135aca}: testnet 2026-10-22, mainnet 2026-10-26 & \code{deployments/testnet.json}, \code{mainnet.json} \\
+The same contract source on testnet & \badge{PREVIEW} & Separate deployment, 2026-11-05, ledger 5,577,521; account Wasm \code{0bdbdd14\ldots{}} (106,584 B) & Built from \code{a410123}, whose contract sources equal the pin's \\
+Nido wallet on that deployment & \badge{PREVIEW} & Draft \code{nidohq/nido\#356}, \code{356.test.nido.fyi} & 11 testnet transactions (\S{}10) \\
+rule-core evaluator, model and proofs & \badge{MERGED} & rule-core \code{cbabe59}, on its main branch & CI regenerates the translation, builds the proofs and checks the claims ledger \\
+The account deciding with \code{rule\_eval}; installed grants; credential index; named verifiers; rebuilt recovery hooks & \badge{OPEN PR} & Perch \code{f0275f4}, head of the open stack ending at \#68 & Unmerged \\
+Exact authorization-entry roots & \badge{OPEN PR} & Perch \#69 and rule-core \#17, drafts after the pin & No theorem at \code{cbabe59} \\
+Contract exports under this paper's names & \badge{PROPOSED} & \S{}05 & Exports unchanged \\
+In-page proof check; agent runtime; x402 payments; Cedar authoring; shared-budget runtime & \badge{PROPOSED} & Appendix A, \S{}13, \S{}04 & Not implemented \\
+\bottomrule
+\end{tabularx}
+\end{table}

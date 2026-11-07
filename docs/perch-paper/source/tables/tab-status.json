@@ -1,0 +1,61 @@
+{
+ "columns": [
+  "Component",
+  "Status",
+  "Where",
+  "Evidence"
+ ],
+ "rows": [
+  [
+   "Conventional account (OpenZeppelin library fork, interpreter, spending limit), compiler, recovery controller, Ed25519 and WebAuthn verifiers, ZK pool and adapter",
+   "{{badge:plain:DEPLOYED}}",
+   "Perch `c135aca`: testnet 2026-10-22, mainnet 2026-10-26",
+   "`deployments/testnet.json`, `mainnet.json`"
+  ],
+  [
+   "The same contract source on testnet",
+   "{{badge:plain:PREVIEW}}",
+   "Separate deployment, 2026-11-05, ledger 5,577,521; account Wasm `0bdbdd14…` (106,584 B)",
+   "Built from `a410123`, whose contract sources equal the pin's"
+  ],
+  [
+   "Nido wallet on that deployment",
+   "{{badge:plain:PREVIEW}}",
+   "Draft `nidohq/nido#356`, `356.test.nido.fyi`",
+   "11 testnet transactions (§10)"
+  ],
+  [
+   "rule-core evaluator, model and proofs",
+   "{{badge:plain:MERGED}}",
+   "rule-core `cbabe59`, on its main branch",
+   "CI regenerates the translation, builds the proofs and checks the claims ledger"
+  ],
+  [
+   "The account deciding with `rule_eval`; installed grants; credential index; named verifiers; rebuilt recovery hooks",
+   "{{badge:plain:OPEN PR}}",
+   "Perch `f0275f4`, head of the open stack ending at #68",
+   "Unmerged"
+  ],
+  [
+   "Exact authorization-entry roots",
+   "{{badge:plain:OPEN PR}}",
+   "Perch #69 and rule-core #17, drafts after the pin",
+   "No theorem at `cbabe59`"
+  ],
+  [
+   "Contract exports under this paper's names",
+   "{{badge:plain:PROPOSED}}",
+   "§05",
+   "Exports unchanged"
+  ],
+  [
+   "In-page proof check; agent runtime; x402 payments; Cedar authoring; shared-budget runtime",
+   "{{badge:plain:PROPOSED}}",
+   "Appendix A, §13, §04",
+   "Not implemented"
+  ]
+ ],
+ "html_class": "status",
+ "title": "Status on {{fact:paper-date}}.",
+ "caption": "*Deployed*: recorded in Perch's deployment manifests and present on the network. *Preview*: a separate testnet deployment outside those manifests. *Merged*: on a main branch, not deployed. *Open PR*: unmerged code. *Proposed*: not implemented. *Not done*: not started or not complete."
+}

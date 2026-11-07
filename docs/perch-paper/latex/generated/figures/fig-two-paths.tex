@@ -1,0 +1,12 @@
+% Generated from source/outline.json and source/figures/fig-two-paths.svg; edit those.
+\begin{figure}[tbp]
+\centering
+\begin{adjustbox}{max width=\linewidth,max totalheight=0.8\textheight}%
+\begin{tikzpicture}[x=1pt,y=-1pt,line join=round,line cap=round]
+\useasboundingbox (0,0) rectangle (760,120);
+\path[fill=cfig-fill, draw=cfig-stroke, line width=1.5pt, rounded corners=8pt] (10,10) rectangle (750,110);
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (30,60) {placeholder: figure engineer draws this figure};
+\end{tikzpicture}%
+\end{adjustbox}
+\caption{\textbf{One guarded call in two accounts.} A lost guess under Perch (left) and under an OpenZeppelin account whose rules carry oz-policy-builder's \code{policy-interpreter} and OpenZeppelin's \code{spending\_limit} (right). Rows are phases of one \code{\_\_check\_auth}. The Perch signer is a passkey checked by a verifier contract. oz-policy-builder's rules accept only delegated signers; here the signer is a Stellar account checked by the host. A cross marks where each design refuses a guess over the cap: Perch before any signer is authenticated, the OpenZeppelin account in \code{spending\_limit} after authentication and the interpreter. Read from source at Perch f0275f4, OpenZeppelin \code{stellar-contracts} v0.8.0 and oz-policy-builder 43b13ed; nothing in this figure is measured.}\label{fig:fig-two-paths}
+\end{figure}
