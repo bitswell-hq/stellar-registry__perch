@@ -66,9 +66,9 @@
   "id": "attenuation-narrows-authority",
   "title": "Attenuation narrows authority.",
   "text": "Successful attenuation by the ten attenuation steps yields a rule set narrower than its parent: under any signers, every action the child allows, the parent allows. Repeated derivation preserves this relationship.",
-  "evidence": "[RuleSet.Derives.narrower](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/Attenuation.lean); [Extracted.Derives.narrower](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/Extracted.lean) · {{obj:PROVED · MODEL + TRANSLATION}}",
+  "evidence": "[Chain.RuleSet.Derives.narrower](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/Chain.lean#L755); [Extracted.Derives.narrower](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/Extracted.lean) · {{obj:PROVED · MODEL + TRANSLATION}}",
   "label": "T4",
-  "latex_body": true,
+  "latex_body": false,
   "objects": [
    "model",
    "translation"
@@ -107,8 +107,8 @@
  {
   "id": "cap-window-safety",
   "title": "Cap-window safety.",
-  "text": "From empty records, the charges an accepted run makes to a capped rule with a non-negative limit after *L* − *P* and through *L* sum to at most its limit, for every ledger *L* and with no ledger assumption. The model also proves the bound for every *P* consecutive ledgers when every authorization is at ledger 1 or later.",
-  "evidence": "[Cap.window_le_limit](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/Cap.lean); [Extracted.runAuthorizations_window_le_limit](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/ExtractedAuthorize.lean) · {{obj:PROVED · MODEL + TRANSLATION}}. [RuleSet.period_le_limit](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/Authorize.lean#L700) · {{obj:PROVED · MODEL}}",
+  "text": "From empty records, in any run, counting its accepted authorizations, the charges made to a capped rule with a non-negative limit after *L* − *P* and through *L* sum to at most its limit, for every ledger *L* and with no ledger assumption. The model also proves the bound for every *P* consecutive ledgers when every authorization is at ledger 1 or later.",
+  "evidence": "[RuleSet.window_le_limit](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/Authorize.lean#L678); [Extracted.runAuthorizations_window_le_limit](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/ExtractedAuthorize.lean) · {{obj:PROVED · MODEL + TRANSLATION}}. [RuleSet.period_le_limit](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/Authorize.lean#L700) · {{obj:PROVED · MODEL}}",
   "label": "T6",
   "latex_body": true,
   "objects": [
@@ -123,7 +123,8 @@
    "aeneas-lib",
    "denotations"
   ],
-  "hypotheses": "Empty records; a cap with a non-negative limit; for the bound over every *P* consecutive ledgers, every authorization at ledger 1 or later"
+  "hypotheses": "Empty records; a cap with a non-negative limit; for the bound over every *P* consecutive ledgers, every authorization at ledger 1 or later",
+  "latex": "From empty records, in any run, counting its accepted authorizations, the charges made to a capped rule with a non-negative limit after $L-P$ and through $L$ sum to at most its limit, for every ledger $L$; the model also bounds every $P$ consecutive ledgers from ledger~1 (Appendix~\\ref{sec:formal-appendix})."
  },
  {
   "id": "delegation-tree-budgets",
@@ -152,7 +153,7 @@
   "text": "A document lowered with account address A, excluded set X and generation g allows no call to A or to an element of X, and attenuation preserves this. In the account, X is the adopted recovery controller and the zero-knowledge adapter and pool of its recovery configuration ({{ref:sec:grants}}).",
   "evidence": "[Document.Doc.lowerScoped_allows_excluded](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/Scoped.lean); [Extracted.lower_scoped_allows_excluded; derives_allows_excluded](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/ExtractedLowering.lean) · {{obj:PROVED · MODEL + TRANSLATION}}",
   "label": "T8",
-  "latex_body": false,
+  "latex_body": true,
   "objects": [
    "model",
    "translation"
@@ -188,7 +189,8 @@
    "denotations",
    "doc-allows"
   ],
-  "hypotheses": "`Doc.Valid`; a nonempty batch; *X* is the translated `excluded`"
+  "hypotheses": "`Doc.Valid`; `ArgsRoom`; a nonempty batch; *X* is the translated `excluded`",
+  "latex": "A grant issued from a valid grant document, then attenuated and accepted, allows only the source document's actions and no call to the account or the excluded set at issue, and a nonempty batch is evaluated at the grant's issuing generation. The account builds $X$ from its storage (O4) and rechecks it in \\code{\\_\\_check\\_auth} (\\code{\\fact{claim-scoped-admin-change}})."
  },
  {
   "id": "recovery-invalidation",
@@ -209,7 +211,7 @@
    "aeneas-lib",
    "denotations"
   ],
-  "hypotheses": "A nonempty batch"
+  "hypotheses": "A nonempty batch; the authorization carries the account's current generation (O3)"
  },
  {
   "id": "authorization-tree-coverage",
@@ -230,7 +232,7 @@
  {
   "id": "lowering-equivalence",
   "title": "Lowering equivalence.",
-  "text": "Translated `lower` returns the model's lowering when the document leaves room in its bounded vectors (`LowerRoom`), and translated `lower_scoped` does, refusals included, under the weaker `ArgsRoom`. For a valid document the lowered rules allow exactly what the document allows plus, when recovery is configured, every `apply_account_doc` call (`apply_doc` at the pin) through the recovery rule, which ordinary authorization never selects ({{ref:sec:authorization}}).",
+  "text": "Translated `lower` returns the model's lowering when the document leaves room in its bounded vectors (`LowerRoom`), and translated `lower_scoped` does, refusals included, under the weaker `ArgsRoom`. For a valid document the lowered rules allow exactly what the document allows plus, when recovery is configured, every `apply_account_doc` call (`apply_doc` at the pin) through the recovery rule, which the shell refuses outside a completion (tested; O8, {{ref:sec:authorization}}).",
   "evidence": "[Equiv.lower_eq; lower_scoped_eq](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Equiv/Lowering.lean#L602) · {{obj:PROVED · TRANSLATION}}; [Extracted.lower_allows; lower_authorize](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/ExtractedLowering.lean) · {{obj:PROVED · MODEL + TRANSLATION}}",
   "label": "T12",
   "latex_body": false,

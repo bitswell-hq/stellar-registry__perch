@@ -1,6 +1,6 @@
 {
  "title": "The reference run.",
- "caption": "Commands are numbered as in the live experiment. CPU is the host CPU instructions of each applied, signed transaction under enforcing authorization in soroban-sim with soroban-env-host {{fact:soroban-env-host-sim}}, so `__check_auth` and verifier calls are included. The build omits soroban-sim's exact-metering host, so counts can differ from stellar-core metering. Refusals are caught in enforcing simulation and never submitted. Auth errors {{fact:auth-error-stale-scope}} and {{fact:auth-error-rule-eval-refused}} are `__check_auth`'s codes inside {{fact:host-auth-error}}; {{fact:account-error-scope-live}} and {{fact:account-error-wiped-credential}} are account entry-point errors.",
+ "caption": "Commands are numbered as in the live experiment. CPU is the host CPU instructions of each applied, signed transaction in soroban-sim with soroban-env-host {{fact:soroban-env-host-sim}}, applying with enforcing authorization, so `__check_auth` and verifier calls are included. The host is simulation's recording-mode build, not the exact-metering one, so counts can differ from stellar-core's metering. Refusals are caught in enforcing simulation and never submitted. Auth errors {{fact:auth-error-stale-scope}} and {{fact:auth-error-rule-eval-refused}} are `__check_auth`'s codes inside {{fact:host-auth-error}}; {{fact:account-error-scope-live}} and {{fact:account-error-wiped-credential}} are account entry-point errors.",
  "columns": [
   "#",
   "Command",
@@ -111,5 +111,6 @@
    "Applied; 90 → 93; cap record unchanged",
    "{{fact:cpu-win}}"
   ]
- ]
+ ],
+ "latex_section": "repro"
 }

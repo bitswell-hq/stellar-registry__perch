@@ -1,56 +1,44 @@
-\paragraph{Proof and binary.} The theorems concern the translation of the MIR of
-rustc \fact{rustc-mir-nightly}; rule-core's CI also builds the evaluator with
-rustc \fact{rustc-rule-core-stable}, Perch builds with rustc \fact{rustc-perch},
-and nothing checks the Wasm against the translation. Allocation failure and stack
-exhaustion, which the model omits, trap. The specification is trusted, including
-\code{Doc.allows}, written from Perch's earlier OpenZeppelin-based account
-(\fact{doc-allows-source}) and not re-derived from the pinned gate.
-
-\paragraph{Shell and host.} Tested, not proved: the parser and compiler,
-stored-value decoding, rule-ID resolution, context conversion, the excluded set's
-assembly, record persistence, the credential index, the generation update, the
-composition of evaluation with authentication, and the recovery controller. The
-integration tests run them as natively registered contracts. The host models
-omit TTL, archival, fees, footprints and pre-host validation.
+\paragraph{Proofs, shell and host.} The theorems concern the translation, not
+the Wasm that rustc \fact{rustc-perch} builds (Fig.~\ref{fig:fig-proof-paths});
+the specification is trusted, including \code{Doc.allows}, written from Perch's
+earlier account (\fact{doc-allows-source}), not from the pinned gate. The shell obligations of
+Table~\ref{tab:tab-obligations} are tested or argued, not proved, and no single
+theorem covers the whole authorization path, including mixed administrative and
+grant batches. The host models omit TTL, archival, fees, footprints and pre-host
+validation.
 
 \paragraph{Grantees (A1) and submitters (A2).} A key named by several live rules
-has the union of their authority; caps are per rule, not per grant. Allowances
-used by \code{transfer\_from}, and funds held by other contracts, move without
-the account's authorization, and a token rule that does not restrict functions
-also allows \code{approve}. An owner-authorized \code{execute} runs as the
-account, so no rule or cap sees the callee's \code{require\_auth}; grants cannot
-reach it, but an administrative rule that allows it has unlimited authority over
-its targets. A grantee can fill its window with \fact{spends-per-window} small
-spends, and replacing a capped rule or its cap starts an empty window. Delegated
-signers do not bind rule IDs, a rule edited in place decides under its new
-contents, a refused entry can be resubmitted until it expires, and grant installs
-are unordered.
+has the union of their authority; caps are per rule, not per grant. Each context
+is checked alone, so a rule meant for a call the game makes also allows that call
+made directly. Allowances used by \code{transfer\_from}, and funds held by other
+contracts, move without the account's authorization, and a token rule that does
+not restrict functions also allows \code{approve}. An owner-authorized
+\code{execute} runs as the account, so no rule or cap sees the callee's
+\code{require\_auth}; an administrative rule that allows it has unlimited
+authority over its targets. Replacing a capped rule or its cap starts an empty
+window. Delegated signers do not bind rule IDs; a rule edited in place between
+signing and inclusion decides under its new contents; a refused entry can be
+resubmitted until it expires; and \code{apply\_grant} takes no expected version,
+so two pre-signed installs for one grant ID can land in either order.
 
-\paragraph{Owner-key theft and recovery (A3).} Under Loss a thief holding the
-owner key can cancel every recovery; Protected without an enrolled baseline
-protects no better. The owner may schedule an upgrade outside an attempt and
+\paragraph{Owner-key theft and recovery (A3, A4).} Under Loss a thief holding
+the owner key can cancel every recovery; Protected without an enrolled baseline
+protects no better, and a full guardian quorum is trusted. The owner may schedule an upgrade outside an attempt and
 execute it after \fact{upgrade-delay-ledgers} ledgers
 (\fact{upgrade-delay-days}); new code inherits the account's storage, including
 the revoked set and generation, and the proofs do not cover it. A completion
 marker is consumed by the target's canonical identity, not its exact bytes
 (issue \fact{completion-marker-issue}).
 
-\paragraph{Trusted components.} The account trusts its verifiers and the recovery
-controller its document names; the controller gets no registry provenance check,
-so wallets should pin its content address. Once pinned code is deployed, no
-registry action changes it, but a verified name means only that the registry
-deployed that code at its own hash: the manager (A5) decides which hashes it
-deploys, its admin can replace the registry's code, and one key holds both roles
-on testnet and mainnet. WebAuthn origin is not checked, and the wallet must show
-what a signed payload commits to.
+\paragraph{Trusted components (A5).} The account trusts its verifiers and its
+recovery controller, which gets no registry provenance check. A verified verifier
+name means only that the registry deployed that code at its own hash; its manager
+decides which hashes it deploys, its admin can replace the registry's code, and
+one key holds both roles on testnet and mainnet. WebAuthn origin is not checked.
 
-\paragraph{Resources, coverage and audit.} Bounded records and arithmetic can
-refuse permitted actions. Documents are capped at \fact{doc-max-signers}
-signers, \fact{doc-max-rules} rules, \fact{doc-max-canonical-bytes} canonical
-bytes and \fact{doc-max-rule-name-bytes}-byte rule names, so a key thief cannot
-make recovery too costly to complete; the worst case at those caps uses
-\fact{worst-case-completion-share} of the instruction limit, and disk-read bytes
-are not measured. \code{renew} does not extend installed-grant records. No single
-theorem covers the whole authorization path, including mixed administrative and
-grant batches (Proposition~\ref{prop:end-to-end} is argued), and no external
-audit has been completed.
+\paragraph{Resources and audit.} Bounded records and arithmetic can refuse
+permitted actions. Document caps (\fact{doc-max-signers} signers,
+\fact{doc-max-rules} rules, \fact{doc-max-canonical-bytes} canonical bytes) are
+meant to keep a thief holding the owner key from making recovery too expensive to
+complete; disk-read bytes are not measured. \code{renew} does not extend
+installed-grant records. No external audit has been completed.

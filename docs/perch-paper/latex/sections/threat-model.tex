@@ -1,27 +1,31 @@
-Table~\ref{tab:tab-adversaries} lists the adversaries, A1 to A5, what each can
-do and what Perch claims against each; its caption lists the trusted parties.
-The account is a reference monitor~\cite{saltzer-schroeder} only for actions
-whose authority passes through \code{require\_auth} on the account: mediation is
-complete on those paths and on no others.
-
-\perchtable{tab-adversaries}
+The adversaries (Table~\ref{tab:tab-adversaries}) are \emph{A1}, a grantee that
+signs within rules naming its key and builds any invocation tree; \emph{A2}, a
+submitter that wraps signed entries and resubmits refused ones until they expire;
+\emph{A3}, a thief of the owner key; \emph{A4}, guardians below quorum; and
+\emph{A5}, the \code{perch/verifiers} registry's manager or admin. Trusted, not adversaries: the Soroban host and
+validators, the verifiers documents name, the adopted recovery controller, the
+document compiler, rustc \fact{rustc-perch}, the wallet's display and, for the
+proofs, the trust base of \S\ref{sec:proofs}. In Saltzer and Schroeder's
+terms~\cite{saltzer-schroeder}, \code{\_\_check\_auth} mediates every
+\code{require\_auth} on the account that the host satisfies from an authorization
+entry; one satisfied by invoker authority, as in the owner's \code{execute},
+never reaches it (\S\ref{sec:limits}).
 
 \paragraph{Goals.} \emph{G1, containment}: no grant rule allows a call to the
-account or its excluded set; proved for lowering
+account or its excluded set; proved for lowering under \code{Doc.Valid}
 (\ref{stmt:grant-target-containment}, \ref{stmt:the-containment-chain}), runtime
 recheck tested. \emph{G2, permission soundness}: an accepted authorization is
 allowed by the rules it selects; proved for the evaluator
-(\ref{stmt:acceptance-implies-permission}), signer authentication tested.
-\emph{G3, window safety}: no capped rule's window exceeds its limit; proved from
-empty records (\ref{stmt:cap-window-safety}), with an on-chain bound of
-\fact{spends-per-window} spends per window. \emph{G4, recovery invalidation}: a
-completed recovery ends every earlier grant in the completion transaction;
-proved in the account model (\ref{stmt:recovery-invalidation}), tested, executed
-and recorded on testnet. \emph{G5, signature binding}: an external signer's
-signature authorizes only the account, entry and rule IDs it was made for;
+(\ref{stmt:acceptance-implies-permission}); signer authentication, selection and
+context conversion tested. \emph{G3, window safety}: no capped rule's window
+exceeds its limit; proved for the evaluator from empty records
+(\ref{stmt:cap-window-safety}); selection and record persistence tested.
+\emph{G4, recovery invalidation}: after a completed recovery no earlier grant
+authorizes through the account; proved in the account model
+(\ref{stmt:recovery-invalidation}), tested, executed and recorded on testnet. \emph{G5, signature binding}: an external
+signer's signature binds the account, the entry and the selected rule IDs;
 tested, with a paper lemma in Appendix~\ref{sec:formal-appendix}; delegated
 signers excluded. \emph{G6, fail-closed refusal}: a refusal writes nothing;
-tested, and in the model a refusal yields no next state. \emph{Non-goals}:
-budgets across grants; effects outside authorization (allowances, the owner's
-\code{execute}, funds held by other contracts); confidentiality; verifier
-correctness; and what a wallet displays.
+tested. \emph{Non-goals}: budgets across grants; effects outside authorization
+(allowances, the owner's \code{execute}, funds held by other contracts);
+confidentiality; verifier correctness; and what a wallet displays.

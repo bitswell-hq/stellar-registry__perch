@@ -123,5 +123,5 @@
 \node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{14}{16.8}\selectfont\sffamily] at (416,524) {Collect grant 1: anyone may; index kept};
 \end{tikzpicture}%
 \end{adjustbox}
-\caption{\textbf{Recovery in the reference run, commands 5--18.} Columns are commands; lanes are pieces of state. Completion (command 12) moves the grant generation from 0 to 1 and revokes the replaced owner key. Grant 1 stops authorizing there but stays stored until anyone collects it (command 18); its key stays barred. Command numbers match Table~\ref{tab:tab-run}.}\label{fig:fig-recovery}
+\caption{\textbf{Recovery in the reference run, commands 5--18.} For each command 5--18, its result and the state it changes. Completion (command 12) moves the grant generation from 0 to 1 and revokes the replaced owner key. Grant 1 stops authorizing there but stays stored until anyone collects it (command 18); its key stays barred. Command numbers match Table~\ref{tab:tab-run}.}\label{fig:fig-recovery}
 \end{figure}

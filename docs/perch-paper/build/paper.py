@@ -290,8 +290,9 @@ def link_glossary(p, page):
     t = p.tables.get('tab-glossary')
     if not t:
         return page
-    names = {}
+    names, defs = {}, {}
     for r in t['rows']:
+        defs[slug(r[0])] = html.escape(re.sub(r'<[^>]+>', '', render(p, r[1], 'html', 'glossary')))
         for name in [r[0]] + [x.strip() for x in re.split(r',| and ', r[0])]:
             names.setdefault(slug(name), slug(r[0]))
 
@@ -299,7 +300,7 @@ def link_glossary(p, page):
         key = slug(re.sub(r'<[^>]+>', '', m.group(1)))
         for k in (key, key[:-1] if key.endswith('s') else key, key[:-2] if key.endswith('es') else key):
             if k in names:
-                return f'<dfn><a href="#{t["row_ids"]}-{names[k]}">{m.group(1)}</a></dfn>'
+                return f'<dfn><a href="#{t["row_ids"]}-{names[k]}" title="{defs[names[k]]}">{m.group(1)}</a></dfn>'
         fail(f'glossary link {m.group(1)!r} matches no glossary row')
         return m.group(0)
     return GLOSS_LINK.sub(sub, page)
@@ -363,7 +364,8 @@ def html_statements(p):
         label = f'{st["label"]} · ' if st.get('label') else ''
         return (f'<li id="stmt-{st["id"]}"{data}><strong>{label}{render(p, st["title"], "html", st["id"])}</strong>'
                 f'<p>{render(p, st["text"], "html", st["id"])}</p>'
-                f'<div class="artifact">{render(p, st["evidence"], "html", st["id"])}</div></li>')
+                + (f'<p class="hyp">Hypotheses: {render(p, st["hypotheses"], "html", st["id"])}</p>' if st.get('hypotheses') else '')
+                + f'<div class="artifact">{render(p, st["evidence"], "html", st["id"])}</div></li>')
     return '<ol class="proof-list">' + ''.join(item(st) for st in p.statements) + '</ol>'
 
 

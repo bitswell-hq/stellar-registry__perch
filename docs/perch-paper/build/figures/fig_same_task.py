@@ -126,9 +126,8 @@ def flow(s, x, y, w, items, size=14, lh=30, draw=True):
 def detail(d):
     calls = ' → '.join(f'{h["contract"]}.{h["fn"]}' for h in d['hops'] if 'fn' in h)
     n = d['entries']
+    # Instruction counts are left out: the paper reports no cross-design cost.
     parts = [calls, f'{n} authorization {"entry" if n == 1 else "entries"}']
-    if d['insns']:
-        parts.append(f'{d["insns"]:,} instructions (recorded; not a performance result)')
     return ' · '.join(parts)
 
 
@@ -390,10 +389,7 @@ def text_alt():
             n = d['entries']
             parts.append(f'{"OpenZeppelin" if key == "oz" else "Perch"}, {n} authorization '
                          f'{"entry" if n == 1 else "entries"}: {html.escape(chain)}; {html.escape(res)}.')
-        ins = [f'{"OpenZeppelin" if k == "oz" else "Perch"} {st["designs"][k]["insns"]:,}'
-               for k, _ in DESIGNS if st['designs'][k]['insns']]
-        extra = (f'<ul><li>Instructions, recorded and not a performance result: {", ".join(ins)}.</li></ul>'
-                 if ins else '')
+        extra = ''
         out.append(f'<li data-step="{i}"><strong>{html.escape(st["label"])}</strong> (command {st["command"]}). '
                    + ' '.join(parts) + extra + '</li>')
     out.append('</ol>')

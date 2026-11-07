@@ -1,8 +1,8 @@
-Perch gives a Soroban grant one meaning across nested calls, rule selection and
-recovery: the account decides each authorization with a pure evaluator linked
-into its contract, before authenticating any signer, and a completed recovery
-ends every earlier grant by advancing one counter. The evaluator's properties are
-proved in Lean over its translation; recovery invalidation is proved in an
-account model, tested, executed and recorded on testnet; the shell, binary and
-host are tested or trusted. What remains is to merge the stack, complete an
-external audit, and measure both designs on the remaining workloads.
+Perch decides each authorization with a pure evaluator linked into the account,
+and a completed recovery stops every earlier grant from authorizing by advancing
+one counter. The evaluator is proved in Lean over its translation and recovery
+invalidation in an account model; the shell, binary and host are tested or
+trusted. Against oz-policy-builder, the designs differ in where a limit over time
+lives, how a rule is written, and the kind of evidence behind each. What remains
+is to merge the stack, complete an external audit, and measure both designs with
+exact metering.

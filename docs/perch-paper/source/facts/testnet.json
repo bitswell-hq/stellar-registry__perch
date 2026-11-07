@@ -9,11 +9,13 @@
  },
  "preview-account-wasm": {
   "value": "0bdbdd142c953976056196cc837f84667e0fb64e731b007cc45d8b852c4ce844",
-  "source": "r1 blockchain-accounts H3, fetched from testnet (C)"
+  "source": "r1 blockchain-accounts H3, fetched from testnet (C)",
+  "anon": "[withheld; in the artifact]"
  },
  "preview-account-wasm-short": {
   "value": "0bdbdd14…",
-  "source": "same (C)"
+  "source": "same (C)",
+  "anon": "[withheld; in the artifact]"
  },
  "preview-account-bytes": {
   "value": "106,584",

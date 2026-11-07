@@ -9,13 +9,13 @@
 <li>A translated value <em>denotes</em> the model value it stands for: the theorems relate the two through these denotation functions.</li>
 </ul></aside>
 {{statements}}
-<p>The proved functions run on chain: the account calls the translated <code>lower</code> and <code>lower_scoped</code> on install and <code>rule_eval::authorize</code> in <code>__check_auth</code>. Tests connect them to the shell. Perch's integration suite runs rule-core's {{fact:lean-doc-traces}} Lean-generated document traces through the account's real <code>apply_doc</code>, <code>apply_scope</code> and <code>__check_auth</code>, with the real Ed25519 verifier under enforcing authorization, and checks the stored rules against the lowering and every verdict and spending record against the model. Perch's CI also replays rule-core's conformance vectors. The cap theorem is stated over one fixed slice of rules, while the shell rebuilds local slices and indices for each authorization, so carrying the theorem through rule selection is an argued and tested obligation (O2), not a theorem.</p>
+<p>The proved functions run on chain: the account calls the Rust <code>lower</code> and <code>lower_scoped</code>, whose translations the theorems cover, on install, and <code>rule_eval::authorize</code> in <code>__check_auth</code>. Tests connect them to the shell. Perch's integration suite runs rule-core's {{fact:lean-doc-traces}} Lean-generated document traces through natively compiled <code>apply_doc</code>, <code>apply_scope</code> and Perch's <code>check_auth</code>, with the real Ed25519 verifier, enforcing authorization and the generation set from each trace, and checks the stored rules against the lowering and every verdict and spending record against the model. Perch's CI also replays rule-core's conformance vectors. The cap theorem is stated over one fixed slice of rules, while the shell rebuilds local slices and indices for each authorization, so carrying the theorem through rule selection is an argued and tested obligation (O2), not a theorem.</p>
 <p>{{ref:fig:fig-proof-paths}} shows the two paths from one source: the path the proofs follow and the path that ships. With JavaScript, choosing a statement highlights the object it is about and the trusted parts it assumes.</p>
 {{fig:fig-proof-paths}}
 <h3 id="obligations">What the account must do for the theorems to apply</h3>
 <p>The theorems hold for the evaluator. The account shell has obligations that carry them to the deployed account; each is tested or argued, not proved.</p>
 {{table:tab-obligations|unnumbered}}
-<p>Together, <a href="#stmt-total-equivalence-of-the-evaluator">T1</a>, <a href="#stmt-acceptance-implies-permission">T2</a>, <a href="#stmt-the-containment-chain">T9</a> and <a href="#stmt-recovery-invalidation">T10</a> and obligations O1 to O6 give an argument, not a mechanized proof, that an authorization the account accepts under a grant is allowed by the grant's source document, calls neither the account nor its excluded set, and is refused after a completed recovery.</p>
+<p>Together, <a href="#stmt-total-equivalence-of-the-evaluator">T1</a> with <code>RuleSet.authorize_chosen</code>, the per-rule forms of <a href="#stmt-grant-target-containment">T8</a> and <a href="#stmt-the-containment-chain">T9</a>, and <code>authorize_generation</code> (<a href="#stmt-recovery-invalidation">T10</a>), with obligations O1 to O8, give an argument, not a mechanized proof, that each context whose selected rule belongs to a grant is allowed by the grant's source document, calls neither the account nor its excluded set, and is refused after a completed recovery.</p>
 <aside class="box" aria-labelledby="trust-base"><p class="box-title" id="trust-base">What the proofs trust</p><ul>
 <li>Lean's kernel and its three standard axioms.</li>
 <li>Charon <code>{{fact:charon-rev}}</code>, Aeneas <code>{{fact:aeneas-rev}}</code>, and Aeneas's Lean library, which models Rust's primitives.</li>
@@ -23,5 +23,6 @@
 <li>The specification: the denotation functions, and the document meaning <code>Doc.allows</code>, written from Perch's earlier account at <code>{{fact:doc-allows-source}}</code>.</li>
 <li>The host models, tested against {{fact:host-model-tested-versions}}.</li>
 <li>rustc {{fact:rustc-perch}} and its WebAssembly back end, which build the deployed contract.</li>
+<li>The document compiler, which turns grant JSON into the model the account lowers.</li>
 <li>The account shell, verifiers and recovery controller, which are tested, and soroban-env-host.</li>
 </ul></aside>

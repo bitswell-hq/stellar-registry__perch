@@ -17,5 +17,5 @@ The Soroban host calls \code{\_\allowbreak{}\_\allowbreak{}check\_\allowbreak{}a
 9 & Store each changed capped spending record. Authorized. & -- & tested \\
 \bottomrule
 \end{tabularx}
-\caption{\textbf{One authorization through \code{\_\_check\_auth} at the pinned build.} Step 7, the evaluator, is covered by the theorems; the other steps are tested account-shell code. Each exit names the account's error and its number, which a wallet finds in the diagnostic events of the host's \code{Error(Auth,\allowbreak{} InvalidAction)}. No exit leaves a write. A recovery completion leaves at step 4 and is decided by the recovery controller.}\label{fig:fig-check-auth}
+\caption{\textbf{One authorization through \code{\_\_check\_auth} at the pinned build.} Step 7, the evaluator, is covered by the theorems; the other steps are tested account-shell code. Each exit except a verifier trap names the account's error and its number, which a wallet finds in the diagnostic events of the host's \code{Error(Auth,\allowbreak{} InvalidAction)}; a verifier that traps fails in the host's signature check. No exit leaves a write. A recovery completion leaves at step 4 and is decided by the recovery controller.}\label{fig:fig-check-auth}
 \end{figure}

@@ -50,6 +50,12 @@
    "Context conversion is correct",
    "tested",
    "`crates/perch-rule-eval/src/convert.rs`"
+  ],
+  [
+   "O8",
+   "The shell installs exactly the lowered rules, and ordinary authorization cannot select the recovery rule",
+   "tested; rule-core lists it as unproven",
+   "rule-core `claims.yaml:2940`"
   ]
  ],
  "editions": [

@@ -1,6 +1,6 @@
 {
  "title": "Glossary.",
- "caption": "Four terms mean different things in the two projects: interpreter, `execute`, recovery and expiry.",
+ "caption": "Eight words mean different things in the two systems: grant, scope, policy, interpreter, `execute`, recovery, cap and expiry; the last column gives the meaning in OpenZeppelin's account or in oz-policy-builder.",
  "columns": [
   "Term",
   "In Perch",
@@ -57,13 +57,13 @@
    "External signer",
    "Key material plus a verifier contract that checks evidence for it (Ed25519, WebAuthn passkey)",
    "`Signer::External`",
-   "Same kind; refused on rules the interpreter polices (error {{fact:opb-error-external-signer}})"
+   "Same enum case; refused on rules the interpreter polices (error {{fact:opb-error-external-signer}})"
   ],
   [
    "Delegated signer",
-   "Another Soroban address that approves through the host (CAP-0071)",
+   "Another Soroban address that approves through the host; in Perch through CAP-0071, inside the account's own authorization entry",
    "`Signer::Delegated`",
-   "Same kind; the only kind on policed rules"
+   "Same enum case; approves in an authorization entry of its own, binding the rule IDs; the only kind on policed rules"
   ],
   [
    "Verifier",
@@ -78,6 +78,12 @@
    "Off chain: the policy synthesiser"
   ],
   [
+   "`perch/verifiers`",
+   "A registry contract that publishes verifier Wasm as name@version and deploys it at an address derived from its hash",
+   "`perch-constructorless-registry`",
+   "—"
+  ],
+  [
    "Account shell",
    "The account code around the evaluator: installs documents, authenticates signers, stores state, admits recovery completion; tested, not proved",
    "`perch-smart-account`",
@@ -88,6 +94,18 @@
    "The pure function that decides an authorization and returns the next spending records",
    "`rule_eval::authorize`",
    "The interpreter's `enforce`, per policy"
+  ],
+  [
+   "Lowering",
+   "Turning a compiled document's model into the rules the account stores, under the account's address, its excluded set and the current grant generation",
+   "`lower`, `lower_scoped`",
+   "—"
+  ],
+  [
+   "rule-core",
+   "The library that holds the evaluator, its Lean model, the translation and the proofs",
+   "`soroban-rule-core`",
+   "—"
   ],
   [
    "Attenuation",
@@ -105,7 +123,7 @@
    "Cap and window",
    "At most *limit* charged over the last *P* ledgers: the window at ledger *L* is (*L* − *P*, *L*]",
    "`cap`, `period-ledgers`",
-   "`spending_limit` uses the same window boundary"
+   "`spending_limit` uses the same window boundary. In an oz-policy-builder Intent, `cap` bounds one call (`lte`)"
   ],
   [
    "Grant generation",
@@ -157,7 +175,7 @@
   ],
   [
    "Context",
-   "One call (contract, function, arguments) in the invocation tree the host passes to `__check_auth`",
+   "One call or contract creation in the invocation tree the host passes to `__check_auth`",
    "`Context`",
    "The same; a context rule matches it"
   ],
@@ -228,6 +246,12 @@
    "—"
   ],
   [
+   "Recovery controller",
+   "A separate contract the account document adopts; it runs recovery attempts and decides completions",
+   "`perch_recovery`",
+   "—"
+  ],
+  [
    "Guardian",
    "An address whose approval counts toward the recovery condition",
    "`guardians`",
@@ -235,7 +259,7 @@
   ],
   [
    "Nullifier",
-   "A value spent at completion so one zero-knowledge proof cannot complete two recoveries",
+   "A value fixed by the account, enrollment ID and secret; a completion spends it, after which every proof from that secret is refused",
    "`nullifier`",
    "—"
   ],

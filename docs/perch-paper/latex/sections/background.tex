@@ -1,31 +1,30 @@
 \paragraph{Soroban authorization.} A contract that needs an address's approval
 calls \code{require\_auth}; for a contract account, the host calls the account's
 \code{\_\_check\_auth}~\cite{cap-0046-11,stellar-custom-account}. A transaction
-carries one authorization entry per approving address. The entry's signature
-payload hashes the network ID, a nonce, a signature-expiration ledger and the
-entry's invocation tree. The host passes the account the payload, the
-signatures and the entry's \emph{contexts}: every call and contract creation in
-the tree, in preorder, root first. The account must decide every context. The
-nonce is consumed only when the transaction succeeds, so a refused entry stays
-usable until its expiration ledger: a capped transfer refused now can be
-resubmitted and succeed once the window has room. CAP-0071 adds delegated
-signers, whose approval of an address-bound payload \code{\_\_check\_auth}
-requires through \code{delegate\_auth}~\cite{cap-0071}. Recording simulation
-does not call \code{\_\_check\_auth}, so a wallet learns a verdict only from
-enforcing simulation, for Perch and OpenZeppelin accounts alike.
+carries one authorization entry per approving address, except CAP-0071
+delegates~\cite{cap-0071}, whose approval rides in the account's entry through
+\code{delegate\_auth}. The entry's signature payload hashes the network ID, a
+nonce, a signature-expiration ledger and the entry's invocation tree. The host
+passes the account the payload, the signatures and the entry's \emph{contexts}:
+every call and contract creation in the tree, in preorder, root first. The
+account must decide every context. The nonce is consumed only when the
+transaction succeeds, so a refused entry stays usable until its expiration
+ledger. A lost guess gives two contexts, \code{game.guess} and the
+\code{xlm.transfer} it makes from the account, each decided by its own selected
+rule (Fig.~\ref{fig:fig-contexts}).
 
 \paragraph{OpenZeppelin accounts.} OpenZeppelin's Soroban
-library~\cite{oz-stellar-accounts}, on which both compared systems build, stores
-\emph{context rules}: a scope (\code{Default}, \code{CallContract} or
-\code{CreateContract}), a name, an optional \code{valid\_until} ledger, signers
-and policies. A signer is \emph{external} (a verifier contract and key material)
-or \emph{delegated} (another address). A \emph{policy} is a contract with
+library~\cite{oz-stellar-accounts}, which oz-policy-builder builds on and whose
+authorization types Perch reproduces, stores \emph{context rules}: a scope
+(\code{Default}, \code{CallContract} or a contract-creation scope), a name, an
+optional \code{valid\_until} ledger, signers and policies. A signer is
+\emph{external} (a verifier contract and key material) or \emph{delegated}
+(another address). OpenZeppelin \fact{oz-v080-tag} checks a delegated signer with
+\code{require\_auth\_for\_args}, in an entry of its own; Perch checks one through
+CAP-0071, inside the account's entry. A \emph{policy} is a contract with
 \code{enforce}, \code{install} and \code{uninstall} hooks. The payload names one
-rule per context (\code{AuthPayload.context\_rule\_ids}). At \fact{oz-v080-tag},
-\code{\_\_check\_auth} validates the selected rules, authenticates the signers,
-and then calls each policy's \code{enforce}, in the order of the policies'
-contract addresses. Perch uses the same field and the same two signer kinds; it
-differs in what decides. Figure~\ref{fig:fig-contexts} shows the game's
-authorizations from the account's side.
-
-\perchfigure{fig-contexts}
+rule per context (\code{AuthPayload.context\_rule\_ids}). \code{\_\_check\_auth}
+validates the selected rules, refuses a signer on none of them, authenticates the
+signers and calls each policy's \code{enforce} in the rule's stored order: address
+order for the policies it was created with, then any added later. Perch uses the
+same payload field; it differs in what decides.

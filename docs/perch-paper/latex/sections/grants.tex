@@ -15,17 +15,10 @@ installs it, abbreviated:
 \end{Verbatim}
 \code{scope} is the rule target and \code{principals} the signer condition;
 \code{cap.limit} is \fact{grant1-cap-xlm}~XLM in stroops, charged against the
-amount argument of \code{transfer(from, to, amount)}, and only a rule whose
-function list is exactly \code{["transfer"]} may carry a cap. The game grant
-installed by the testnet preview of \fact{wallet-name} adds an
-\code{address-eq} condition making the game the only recipient, a
-\code{not-after-ledger} expiry, a cap of \fact{preview-game-cap-xlm}~XLM per
-\fact{preview-game-period-ledgers} ledgers and a passkey signer
-(\S\ref{sec:compare}).
-
-\paragraph{What a rule can say.} A rule names one target contract, a function
-list, argument conditions and a threshold over listed signers, and optionally an
-expiry and a cap. Its \fact{doc-conditions-count} kinds of argument condition,
+amount argument of \code{transfer(from, to, amount)}, the only function a capped
+rule may list. A rule names one target contract, a function list, argument
+conditions and a threshold over listed signers, and optionally an expiry and a
+cap. Its \fact{doc-conditions-count} kinds of argument condition,
 \fact{doc-conditions}, are conjunctive, and a document has no negation. A
 document cannot bound a single call's amount: a capped rule gets only a type
 guard that argument~2 is an \code{i128}.
@@ -34,40 +27,30 @@ guard that argument~2 is an \code{i128}.
 \code{apply\_scope}; Table~\ref{tab:tab-api}). The stateless document compiler
 validates the JSON, resolves verifier names through the \code{perch/verifiers}
 registry and returns canonical bytes, their hash \code{doc\_hash} and a model.
-The account refuses (\code{ScopeEscalation}) a grant that configures recovery or
-contains a self-administration rule; lowers the model with rule-core's
-\code{lower\_scoped} under its address, its excluded set and the current
-generation, the step the lowering and containment theorems cover; refuses
-non-normal documents, rules with no signer, and credentials that recovery
-revoked or a stale grant named; drops the records of removed or changed rules;
-and stores the grant. Grant lowering refuses a document that configures
-recovery, and any rule whose target is the account, its adopted recovery
-controller, or the zero-knowledge adapter and pool of its recovery
-configuration. A client can rebuild the grant's JSON from chain state and check
-it against \code{doc\_hash}, the SHA-256 of its CANON~v1 bytes, a restriction of
-RFC~8785~\cite{rfc8785} (Appendix~\ref{sec:formal-appendix}).
+The account lowers the model with rule-core's \code{lower\_scoped} under its
+address, its excluded set and the current generation, the step the lowering and
+containment theorems cover. Grant lowering refuses (\code{ScopeEscalation}) a
+document that configures recovery, and any rule whose target is the account, its
+adopted recovery controller, or the zero-knowledge adapter and pool of its
+recovery configuration. The account also refuses non-normal documents, rules with
+no signer, and credentials that recovery revoked or a stale grant named, then
+stores the grant; a client can rebuild its JSON from chain state and check it
+against \code{doc\_hash} (Appendix~\ref{sec:formal-appendix}).
 
 \paragraph{Rule semantics.} A rule set denotes the union of its rules'
 permissions, but the account does not search it: the transaction names one rule
 per context, which must itself allow the context, be unexpired and, if it
 carries a generation, be current. A supplied signer in no chosen rule is
-refused. rule-core's \fact{attenuation-steps} attenuation steps
-(Table~\ref{tab:tab-attenuation}) each return a rule set allowing nothing the
-original does not (\ref{stmt:attenuation-narrows-authority},
-\ref{stmt:trace-inclusion}). These are model results: no account entry point
-installs an attenuated grant at the pin, and no theorem bounds the combined
-spending of a grant and grants derived from it.
+refused. rule-core's \fact{attenuation-steps} attenuation steps each return a rule
+set allowing nothing the original does not (\ref{stmt:attenuation-narrows-authority},
+\ref{stmt:trace-inclusion}; Appendix~\ref{sec:formal-appendix}); no account entry
+point installs an attenuated grant at the pin.
 
 \paragraph{Sliding windows.} For period $P$, the window at ledger $L$ holds the
 charges made after $L-P$ and through $L$ (Fig.~\ref{fig:fig-cap-window}). The
-evaluator filters the rule's history to the window, checks the new total and
-returns a new record; contexts selecting one rule in one authorization see each
-other's charges, and malformed amounts, overflow, a ledger before the newest
-charge and a full history fail closed. On chain a record of
-\fact{spend-record-base-bytes} bytes plus \fact{spend-record-per-spend-bytes} per
-spend fits \fact{spends-per-window} spends in the
-\fact{ledger-entry-limit-bytes}-byte entry limit, fewer than the evaluator's
-\fact{evaluator-history-bound}, so a grantee can exhaust its own window with
-small transfers.
-
-\perchfigure{fig-cap-window}
+evaluator checks the new total against the window and returns a new record;
+contexts selecting one rule in one authorization see each other's charges, and a
+negative or malformed amount, overflow, a ledger before the newest charge and a
+full history fail closed. The \fact{ledger-entry-limit-bytes}-byte entry limit
+holds \fact{spends-per-window} spends per record, so a grantee can exhaust its
+own window with small transfers.

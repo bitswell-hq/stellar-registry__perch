@@ -1,6 +1,6 @@
 {
  "title": "Perch and oz-policy-builder, side by side.",
- "caption": "Twelve of the twenty dimensions; every cell is read from source at Perch {{fact:perch-pin-short}}, oz-policy-builder {{fact:opb-pin-short}} and OpenZeppelin `stellar-contracts` {{fact:oz-v080-tag}}, and nothing is measured. Sources for each cell are in the full comparison table.",
+ "caption": "Twelve of the twenty dimensions; every cell is read from source at Perch {{fact:perch-pin-short}}, oz-policy-builder {{fact:opb-pin-short}} and OpenZeppelin `stellar-contracts` {{fact:oz-v080-tag}}. The full comparison table gives a source for each cell.",
  "columns": [
   "Dimension",
   "Perch {{fact:perch-pin-short}}",
@@ -16,7 +16,7 @@
   [
    "Order of checks",
    "Decide (caps included), then authenticate",
-   "Select and check expiry, authenticate, then run each policy in contract-address order"
+   "Select rules (existence, scope, expiry) and refuse unlisted signers, authenticate, then run each policy in the rule's stored order"
   ],
   [
    "Where decision state lives",
@@ -40,8 +40,8 @@
   ],
   [
    "Rolling spending cap",
-   "In the evaluator, window (L − P, L], proved",
-   "OpenZeppelin `spending_limit` beside the interpreter, same window boundary"
+   "In the evaluator, window (L − P, L]; proved for the evaluator from empty records",
+   "Not in the interpreter; OpenZeppelin's optional `spending_limit` beside it, on `transfer` only, same window boundary"
   ],
   [
    "Threshold and signer kinds",
@@ -56,17 +56,18 @@
   [
    "Ending authority in bulk",
    "One counter makes every earlier grant refuse at recovery",
-   "Rules removed one at a time"
+   "Rules removed one at a time; a policed rule is pinned to its exact signer set"
   ],
   [
    "Assurance",
-   "Kernel-checked proofs of the evaluator; shell tested; no audit completed",
-   "Tests on the shipped Wasm, threat model; external audit {{fact:opb-audit-status}}"
+   "Kernel-checked proofs about the evaluator's Lean translation, not its Wasm; shell tested, partly on Wasm; no audit completed",
+   "Tests, partly on the shipped Wasm; STRIDE register; external audit {{fact:opb-audit-status}}"
   ],
   [
    "Deployment",
    "Testnet preview (earlier design on mainnet)",
    "Interpreter on testnet; no mainnet pin"
   ]
- ]
+ ],
+ "latex_section": "compare-appendix"
 }

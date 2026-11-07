@@ -8,17 +8,4 @@ decides with a fork of OpenZeppelin's account library and two Perch policy
 contracts, and its accounts cannot be upgraded in place to this design. This
 paper's contracts run on a separate testnet deployment, where a preview of
 \fact{wallet-name} creates accounts. No external audit of either Perch build has
-been completed (Table~\ref{tab:tab-status}).
-
-\perchtable{tab-status}
-
-\paragraph{One property, four levels of evidence.} That a completed recovery ends
-every earlier grant's authority to authorize through the account, in the
-completion transaction, is \emph{proved} in rule-core's account model
-(\ref{stmt:recovery-invalidation}); \emph{tested} by Perch's integration tests,
-which also check that anyone can then collect the grants; \emph{executed} in the
-reference run, where grant~1 is refused with \code{StaleScope} after completion
-although its cap has room; and \emph{recorded on testnet}, where completion
-transaction \fact{completion-tx-short} (ledger \fact{completion-ledger}) emitted
-\fact{completion-event} from account \fact{completion-account-short}. Allowances
-a grant created survive recovery (\S\ref{sec:limits}).
+been completed. Table~\ref{tab:tab-status} gives the status of each component.

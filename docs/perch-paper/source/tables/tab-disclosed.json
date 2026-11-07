@@ -1,6 +1,6 @@
 {
  "title": "Disclosed open items in both systems.",
- "caption": "Items each project documents about itself. H-1/E-36 and E-38 arise from features Perch lacks; their absence in Perch is not a security property of Perch.",
+ "caption": "Items each project documents about itself. oz-policy-builder rates its items in a STRIDE register; Perch keeps none, so its rows give the status its documents state. H-1/E-36 and E-38 arise from features Perch lacks; their absence in Perch is not a security property of Perch.",
  "columns": [
   "System",
   "Item",
@@ -40,6 +40,12 @@
    "`lib.rs:1000-1006`"
   ],
   [
+   "Perch",
+   "One key is admin and manager of `perch/verifiers` on testnet and mainnet; the admin can replace the registry's code at once",
+   "deployment fact",
+   "`deployments/*.json:22-23`"
+  ],
+  [
    "oz-policy-builder",
    "H-1/E-36: a keyed door on a no-gate adapter without the grants pin",
    "High, residual Medium; tooling-only guard",
@@ -55,13 +61,13 @@
    "oz-policy-builder",
    "T-05: same-transaction read manipulation",
    "High where a rule uses `read`",
-   "`stride-threat-model.md:395`"
+   "`stride-threat-model.md:397`"
   ],
   [
    "oz-policy-builder",
    "T-19: the review reaches the owner through the agent",
    "High until the owner side runs it",
-   "`stride-threat-model.md:396`"
+   "`stride-threat-model.md:398`"
   ]
  ],
  "editions": [

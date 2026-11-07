@@ -1,47 +1,31 @@
-The account document's recovery profile fixes what recovery defends against.
+The account document's recovery profile states the threat recovery must handle.
 \emph{Loss} assumes the owner's key may be lost, not stolen: activity continues
 during an attempt, and the owner, or a thief holding the key, can cancel it.
 \emph{Protected} assumes theft: once the recovery condition authorizes an
 attempt, the account refuses everything but its completion, and changing
-recovery or upgrading needs the condition's evidence. The condition is
-a guardian quorum, a zero-knowledge proof, or both (modes \fact{recovery-modes}).
+recovery or upgrading needs the condition's evidence. A Protected configuration
+may enroll a baseline, the hash of an approved document; a compromise recovery
+restores it and revokes every credential added since. The condition is a guardian
+quorum, a zero-knowledge proof, or both (modes \fact{recovery-modes};
+Appendix~\ref{sec:formal-appendix}).
 
-The reference run uses \fact{recovery-profile-demo} with
-\fact{recovery-guardians-demo} guardians, a \fact{recovery-delay-ledgers}-ledger
-delay and a \fact{recovery-window-ledgers}-ledger window. Anyone may open an
-attempt naming replacement credentials; the controller derives the target
-document on chain, so nobody chooses a target hash. Each guardian approves the
-SHA-256 digest of a \fact{recovery-statement-bytes}-byte statement binding the
-network, account, controller, configuration, timing, attempt and the hashes of
-source, target and replacement set. The second approval authorizes the attempt
-at ledger $A$; completion is allowed in \fact{recovery-window}. Completion is
-one transaction: the controller's \code{rcv\_complete} confirms the approved bytes
-and the window, and \code{rcv\_sync} marks the attempt completed, spends any
-nullifier and advances the controller's epoch. The account applies the target,
-advances the grant generation (refusing on overflow), permanently revokes the
-administrative credentials the target replaced or removed, lifts any freeze,
-drops any pending upgrade, and advances its recovery generation and revision
-(Fig.~\ref{fig:fig-recovery}).
-
-\perchfigure{fig-recovery}
+Anyone may open an attempt naming replacement credentials; the controller derives
+the target document on chain, so nobody chooses a target hash. Each guardian
+approves the SHA-256 digest of a statement binding the network, account,
+controller, configuration, timing, attempt and the hashes of source, target and
+replacement set. With the reference run's \fact{recovery-guardians-demo}
+guardians, the second approval authorizes the attempt at ledger $A$, and
+completion is allowed in \fact{recovery-window}. Completion is one transaction:
+the controller's \code{rcv\_complete} confirms the approved bytes and the window,
+and \code{rcv\_sync} marks the attempt completed, spends any nullifier and
+advances the controller's epoch. The account applies the target, advances the
+grant generation (refusing on overflow), permanently revokes the administrative
+credentials the target replaced or removed, lifts any freeze and drops any pending
+upgrade (Fig.~\ref{fig:fig-recovery}).
 
 \paragraph{Ending authority.} Each earlier grant keeps its earlier generation, so
 it refuses every nonempty authorization while its rules remain stored. A
 credential index refuses (\code{WipedCredential}) any later document naming a
 credential an earlier grant named, except the recovery target, which may keep it
-until rotated; replaced administrative credentials go into a separate, permanent
-revoked set. Table~\ref{tab:tab-ending} separates invalidation, a policy event,
-from collection, a storage operation, and archival, which is neither;
-Table~\ref{tab:tab-counters} (Appendix~\ref{sec:formal-appendix}) lists the
-account's four counters.
-
-
-
-\paragraph{Zero-knowledge factor.} It proves knowledge of a secret enrolled as a
-Poseidon2 commitment in a depth-\fact{zk-pool-depth} pool; its UltraHonk proof's
-public inputs include Poseidon2 over the account, the enrollment ID and the
-statement digest, so in combined mode both factors approve one statement. The
-commitment is public, so the secret must be a uniform field element with at
-least \fact{zk-secret-entropy-bits} bits of entropy. The factor works over BN254,
-so, like Ed25519 guardians, it is not post-quantum, and its zero-knowledge
-verifier has not been audited.
+until rotated. Table~\ref{tab:tab-ending} separates invalidation, a policy event,
+from collection, a storage operation, and archival, which is neither.

@@ -47,10 +47,10 @@
    "No theorem at {{fact:rule-core-pin-short}}"
   ],
   [
-   "External audit of the account, compiler and recovery controller",
+   "External audit of the Perch contracts (account, compiler, recovery controller, verifiers, ZK pool and adapter, registry) and of rule-core's evaluator",
    "{{badge:notdone:NOT DONE}}",
    "—",
-   "—"
+   "Only the vendored UltraHonk base verifier, from Nethermind, has one (by OpenZeppelin); Perch's zero-knowledge additions have none"
   ],
   [
    "Contract exports under this paper's names",
@@ -64,5 +64,6 @@
    "{{ref:sec:agents}}",
    "Not implemented"
   ]
- ]
+ ],
+ "latex_section": "repro"
 }

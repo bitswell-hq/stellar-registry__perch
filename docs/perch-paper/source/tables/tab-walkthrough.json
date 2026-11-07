@@ -1,6 +1,6 @@
 {
  "title": "One task in both designs, run in the walkthrough.",
- "caption": "The task: {{fact:wt-task}}. Both designs run in one soroban-sim session per design ({{fact:wt-host}}): the OpenZeppelin {{fact:oz-v080-tag}} account {{fact:wt-oz-account-build}}, oz-policy-builder's interpreter {{fact:opb-interpreter-wasm-short}} and OpenZeppelin's `spending_limit` {{fact:wt-oz-spending-limit-build}}, with the rule policy-synth synthesises; and Perch {{fact:perch-pin-short}} with one grant. Instruction counts come from the recording-mode host, not exact metering, and measure two different contract stacks; they are not a performance result. Every refusal is an enforcing simulation that left the ledger unchanged.",
+ "caption": "The task: {{fact:wt-task}}. One soroban-sim session per design ({{fact:wt-host}}), so `__check_auth` ran: the OpenZeppelin {{fact:oz-v080-tag}} account {{fact:wt-oz-account-build}} with oz-policy-builder's interpreter {{fact:opb-interpreter-wasm-short}} and OpenZeppelin's `spending_limit` {{fact:wt-oz-spending-limit-build}}, carrying the rule policy-synth synthesises; and Perch {{fact:perch-pin-short}} with one grant. Signers: a delegated Stellar account on the OpenZeppelin side, as oz-policy-builder requires; an Ed25519 key checked by a verifier contract on the Perch side. Each refusal is an enforcing simulation that left the ledger unchanged.",
  "columns": [
   "Step",
   "Request",
@@ -12,14 +12,14 @@
   [
    "1",
    "The owner installs the rule",
-   "Applied ({{fact:wt-cpu-install-oz}} instructions)",
-   "Applied ({{fact:wt-cpu-install-perch}})"
+   "Applied",
+   "Applied"
   ],
   [
    "2",
    "The app pays the shop 6 XLM",
-   "Applied ({{fact:wt-cpu-pay-oz}})",
-   "Applied ({{fact:wt-cpu-pay-perch}})"
+   "Applied",
+   "Applied"
   ],
   [
    "3",
@@ -48,8 +48,8 @@
   [
    "7",
    "100 ledgers later, 5 XLM",
-   "Applied ({{fact:wt-cpu-pay2-oz}})",
-   "Applied ({{fact:wt-cpu-pay2-perch}})"
+   "Applied",
+   "Applied"
   ]
  ]
 }

@@ -1,7 +1,8 @@
 {
  "deployed-account-wasm": {
   "value": "2c976bfd98678f3b6fcf5514420a81ef5e5b9fc1c5b6c60ec6f2dd64448479d5",
-  "source": "`P:deployments/mainnet.json:107` (V)"
+  "source": "`P:deployments/mainnet.json:107` (V)",
+  "anon": "[withheld; in the artifact]"
  },
  "deployed-account-bytes": {
   "value": "70,702",
@@ -9,7 +10,8 @@
  },
  "deployed-policy-1-wasm": {
   "value": "f884913eba4a9491f8bcf89d1a687381c7c0699b148f98f8dc344e9a6223b26e",
-  "source": "`…/mainnet.json:44` (V)"
+  "source": "`…/mainnet.json:44` (V)",
+  "anon": "[withheld; in the artifact]"
  },
  "deployed-policy-1-bytes": {
   "value": "17,999",
@@ -17,7 +19,8 @@
  },
  "deployed-policy-2-wasm": {
   "value": "8c043dcc24f944d7c3e349fb5fd83cedba4a9124b5791b625bd76b520b0f4a80",
-  "source": "`…/mainnet.json:53` (V)"
+  "source": "`…/mainnet.json:53` (V)",
+  "anon": "[withheld; in the artifact]"
  },
  "deployed-policy-2-bytes": {
   "value": "12,923",

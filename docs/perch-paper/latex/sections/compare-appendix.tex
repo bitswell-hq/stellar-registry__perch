@@ -1,11 +1,40 @@
-Table~\ref{tab:tab-compare-full} gives all twenty dimensions of the comparison.
-Each cell cites its source at the pins: Perch \fact{perch-pin-short} unless
-marked, rule-core \fact{rule-core-pin-short}, oz-policy-builder
-\fact{opb-pin-short} (\facthash{opb-pin}, \fact{opb-pin-date}), and OpenZeppelin
+\perchfigure{fig-contexts}
+\perchfigure{fig-same-task}
+\perchfigure{fig-two-paths}
+\perchfigure{fig-two-spellings}
+
+Figure~\ref{fig:fig-same-task} replays the walkthrough's recorded calls; one of
+its panels is the per-call run of \S\ref{sec:compare-over-time}.
+Figure~\ref{fig:fig-two-paths} follows one guarded call through both accounts,
+phase by phase, as read from source. Figure~\ref{fig:fig-two-spellings} spells, in
+both systems, the game grant that the testnet preview of \fact{wallet-name}
+installed, not grant~3; its marks are: \callout{1}~both select one rule per
+context, so a transfer to the game is allowed without a \code{guess};
+\callout{2}~Perch keeps the window in the rule, while OZ-PB turns the Intent's
+\code{cap} into a per-call \code{lte} and attaches \code{spending\_limit};
+\callout{3}~Perch installs both rules in one transaction, OZ-PB one rule per
+\code{install\_policy} call; \callout{4}~Perch's rule holds a passkey as an
+external signer, while OZ-PB writes every rule signer as delegated, and the
+interpreter refuses external signers (error \fact{opb-error-external-signer});
+\callout{5}~in Perch, \fact{perch-expiry-semantics}, while OpenZeppelin's
+\code{valid\_until} authorizes through itself. Terms differ between the systems:
+\emph{scope} is a rule's target or an installed grant in Perch and a context
+rule's kind in OpenZeppelin; Perch has no \emph{policy} contracts, and its earlier
+build's \emph{interpreter} is a Perch \fact{perch-deployed-account-version} policy
+contract; \emph{execute} is Perch's owner call-through and OZ-PB's adapter entry
+point; \emph{recovery} replaces credentials in Perch and moves custody funds in
+OZ-PB's Prime.
+
+Table~\ref{tab:tab-compare-full} gives all twenty dimensions. Each cell cites its
+source at the pins: Perch \fact{perch-pin-short} unless marked, rule-core
+\fact{rule-core-pin-short}, oz-policy-builder \fact{opb-pin-short}
+(\facthash{opb-pin}, \fact{opb-pin-date}), and OpenZeppelin
 \code{stellar-contracts} \fact{oz-v080-tag} (\fact{oz-v080-commit}) and
 \fact{oz-v072-tag} (\fact{oz-v072-commit}). The mark records how a cell was
-checked: V, re-read in source at the pin by the paper's editor; R, cited and
-checked by a reviewer; U, not verified.
+checked: V, checked in source at the pin by the authors; R, cited from source by
+an internal reader and not re-read by the authors; U, not verified.
+
+\perchtable{tab-compare}
 
 \perchtable{tab-compare-full}
 
@@ -29,16 +58,18 @@ mismatch), \fact{opb-error-nonce-replay} (an install nonce that is not the next)
 \fact{opb-error-external-signer} (an external signer) and
 \fact{opb-error-default-context} (a rule that reaches the account's
 administration). An install's authorization window is
-\fact{opb-install-auth-window} ledgers.
+\fact{opb-install-auth-window} ledgers. Its mutation testing killed
+\fact{opb-mutants} mutants on one path.
 
 \perchtable{tab-disclosed}
 
-\paragraph{Comparative method.} Table~\ref{tab:tab-walkthrough} runs one
-workload, W1, a capped transfer, in both designs in one soroban-sim harness
-(\fact{wt-host}). We propose, and have not run, the rest under the same harness
-with one host version and Ed25519 signers, reporting CPU instructions, memory,
-ledger I/O entries and bytes, fees, and cross-contract calls counted from
-diagnostic events: W2, a losing guess, a root and its child; W3, one grant
-install; W4, ending authority over $k$ grants, one recovery completion against
-$k$ calls to \code{remove\_context\_rule}; and W5, storage after $n$ transfers.
-Until these run on both systems we report no comparative cost.
+\paragraph{Comparative method.} Table~\ref{tab:tab-walkthrough} runs one task in
+both designs in one soroban-sim harness, without exact metering, with Ed25519 keys
+(a delegated Stellar account on the OpenZeppelin side); it is not workload W1.
+We propose, and have not run, five workloads under one harness with exact
+metering and one host version, reporting CPU instructions, memory, ledger I/O
+entries and bytes, fees, and cross-contract calls counted from diagnostic events:
+W1, one capped transfer; W2, a losing guess, a root and its child; W3, one grant
+install; W4, ending authority over $k$ grants, one recovery completion against $k$
+calls to \code{remove\_context\_rule}; and W5, storage after $n$ transfers. Beyond
+Table~\ref{tab:tab-walkthrough}'s results, we report no comparative cost.

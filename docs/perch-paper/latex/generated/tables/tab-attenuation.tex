@@ -1,7 +1,7 @@
 % Generated from source/tables/tab-attenuation.json; edit that.
 \begin{table}[tbp]
 \centering
-\caption{\textbf{The ten attenuation steps (\code{crates/\allowbreak{}rule-\allowbreak{}eval/\allowbreak{}src/\allowbreak{}attenuate.\allowbreak{}rs} in rule-core).} Nothing else is an attenuation step. Document conditions lower to these rule-core conditions: \code{is-self}, \code{address-eq} and \code{u32-eq} to \code{ArgEq}, \code{string-in} to \code{ArgIn}, \code{string-prefix} to \code{ArgStrPrefix}. \code{ArgI128AtMost} appears in a lowered document only as the type check on a capped transfer's amount, with the largest \code{i128} as its bound, so a document cannot bound one call's amount; only an attenuation step can add a lower bound (rule-core \code{lowering.rs}).}\label{tab:tab-attenuation}
+\caption{\textbf{The ten attenuation steps (\code{crates/\allowbreak{}rule-\allowbreak{}eval/\allowbreak{}src/\allowbreak{}attenuate.\allowbreak{}rs} in rule-core).} Nothing else is an attenuation step. Document conditions lower to these rule-core conditions: \code{is-self}, \code{address-eq} and \code{u32-eq} to \code{ArgEq}, \code{string-in} to \code{ArgIn}, \code{string-prefix} to \code{ArgStrPrefix}. \code{ArgI128AtMost} appears in a lowered document only as the type check on a capped transfer's amount, with the largest \code{i128} as its bound, so a document cannot bound one call's amount; only an attenuation step can set a smaller maximum (rule-core \code{lowering.rs}).}\label{tab:tab-attenuation}
 \scriptsize\begin{tabularx}{\linewidth}{@{}LLL@{}}
 \toprule
 \textbf{Rule part} & \textbf{Steps that may narrow it} & \textbf{Refused} \\
