@@ -1,4 +1,113 @@
-% placeholder: LaTeX author writes this section
+oz-policy-builder~\cite{oz-policy-builder} (OZ-PB) adds rules to OpenZeppelin
+accounts through a shared on-chain interpreter; Perch decides inside the
+account. We compare them at Perch \fact{perch-pin-short}, OZ-PB
+\fact{opb-pin-short} (release \fact{opb-release}) and OpenZeppelin
+\code{stellar-contracts} \fact{oz-v080-tag}, reading every comparator claim from
+source at those pins, except the runs reported with
+Table~\ref{tab:tab-walkthrough}.\footnote{Terms differ: \emph{scope} is a rule's
+target or an installed grant in Perch and a context rule's kind in OpenZeppelin;
+Perch has no \emph{policy} contracts, and its earlier build's \emph{interpreter}
+is here a Perch \fact{perch-deployed-account-version} policy contract;
+\emph{execute} is Perch's owner call-through and OZ-PB's adapter entry point;
+\emph{recovery} replaces credentials in Perch and moves custody funds in OZ-PB's
+Prime; \emph{expiry} differs by one ledger (item~\callout{5}).}
+
+\subsubsection{Two places to decide.}\label{sec:compare-architectures} Off
+chain, \fact{opb-synth-package} records a transaction or takes a declared
+Intent, writes a predicate in the interpreter's wire form, dry-runs it with
+\code{check}, renders a review and returns an unsigned install transaction; a
+CLI and an MCP server expose its \fact{opb-tools-count} tools. On chain, one
+shared \code{policy-interpreter}, attached to an OpenZeppelin context rule as a
+policy, evaluates the stored predicate in \code{enforce} on every guarded call.
+Perch's deployed build \fact{perch-deployed-source-short} used this
+attached-policy shape on a fork of OpenZeppelin's library; the design here moves
+the decision into the account (Fig.~\ref{fig:fig-two-paths}). Most of
+OZ-PB's documentation describes Prime, a custody product built on it; only the
+interpreter and the synthesiser correspond to Perch's engine.
+
 \perchfigure{fig-two-paths}
+
+\subsubsection{Two ways to say the same thing.}\label{sec:compare-example}
+Figure~\ref{fig:fig-two-spellings} spells, in both systems, the game grant that
+the testnet preview of \fact{wallet-name} installed (\S\ref{sec:grants}), not
+grant~3.
+\begin{enumerate}[label=\callout{\arabic*},nosep,leftmargin=*]
+\item Both select one rule per context, and each rule sees only its own context,
+  so in both a transfer to the game is allowed without a \code{guess}
+  (Fig.~\ref{fig:fig-contexts}(c)).
+\item In Perch the window cap is part of the rule. OZ-PB's builder requires a
+  per-call bound (\code{lte}, an upper bound only) unless the owners override it,
+  and attaches OpenZeppelin's \code{spending\_limit} for the window, because the
+  interpreter keeps no totals. A Perch document cannot bound a single call.
+\item Perch installs both rules in one transaction; OZ-PB builds one
+  \code{add\_context\_rule} per \code{install\_policy} call.
+\item Perch's rule holds a passkey as an external signer. OZ-PB writes every
+  rule signer as delegated and the interpreter refuses external signers (error
+  \fact{opb-error-external-signer}), so an OZ-PB app signs as a Stellar or
+  contract address.
+\item In Perch, \fact{perch-expiry-semantics}; OpenZeppelin's \code{valid\_until}
+  authorizes through itself, so \code{validUntilLedger}~$N-1$ names the same last
+  ledger.
+\item Only OZ-PB can consult live state, for example a \code{read} of a registry
+  before permitting a recipient. Only Perch ends the grant when the account
+  recovers.
+\end{enumerate}
+
 \perchfigure{fig-two-spellings}
+
+\subsubsection{Dimensions and one measured task.}\label{sec:compare-table}
+Table~\ref{tab:tab-compare} gives twelve dimensions; Table~\ref{tab:tab-compare-full}
+(Appendix~\ref{sec:compare-appendix}) gives twenty, each cell with its source.
+We ran OZ-PB at \fact{opb-pin-short}: it builds, its \fact{opb-rust-test-runs}
+Rust test runs and \fact{opb-ts-tests} TypeScript tests pass, and its record,
+synthesise, verify and install flow against an OpenZeppelin \fact{oz-v080-tag}
+account on \fact{opb-local-network} refused every out-of-rule call with its
+documented code. Table~\ref{tab:tab-walkthrough} runs one capped-payment task
+(workload W1) in both designs in one harness. Per payment the OpenZeppelin
+account made \fact{wt-calls-oz} contract calls inside \code{\_\_check\_auth} and
+used \fact{wt-entries-oz} authorization entries, since its delegated signer
+approves through an entry of its own; Perch made \fact{wt-calls-perch}, to its
+verifier, and used \fact{wt-entries-perch}. Policies ran in contract-address
+order, here \code{spending\_limit} first, which refused the over-cap payment
+without calling the interpreter. The counts come from a recording-mode host and
+two different contract stacks; they are not a performance result.
+
 \perchtable{tab-compare}
+
+\perchtable{tab-walkthrough}
+
+\subsubsection{What each does that the other does not.}\label{sec:compare-each}
+OZ-PB with an OpenZeppelin account has, and Perch does not: disjunction,
+ordering, quantifiers and arithmetic in a predicate, and ledger-time conditions;
+cross-contract reads of oracles and registries; predicates over a whole
+execution-adapter batch; per-call amount bounds; keyless rules bound to an
+executor; rules that follow another account's rule; a separate policy-admin
+role; an install nonce; specific deny codes; binding of rule IDs for delegated
+signers; synthesis from a recorded transaction, with minimality checks, an
+overlap scan and an owner-side review of unsigned bytes; and an external audit in
+progress. Perch has, and OZ-PB does not: a windowed cap inside the decision; the
+decision before authentication; all decision state in one contract; invalidation
+of every grant by one counter at recovery; account-key recovery; passkey
+(external) signers on grant rules; one install for a grant that spans contracts;
+an attenuation model; and kernel-checked proofs of the evaluator.
+
+\subsubsection{Assurance and status.}\label{sec:compare-assurance} Neither
+external audit is complete: OZ-PB's audit of \fact{opb-release} has been in
+progress since \fact{opb-audit-start} (scope: \fact{opb-audit-scope}), and Perch
+has none. OZ-PB tests the shipped Wasm (\fact{opb-tests-against-oz08} of
+its \fact{opb-interpreter-tests} interpreter tests run against OpenZeppelin's
+\fact{oz-v080-tag} account), measures worst cases on it, runs mutation testing
+on one path (\fact{opb-mutants}) and keeps a STRIDE register; we found no formal
+model in its tree, by search, not proof of absence. Perch's kernel-checked
+theorems do not reach the Wasm, and its \fact{lean-doc-traces} traces run
+natively registered contracts. Table~\ref{tab:tab-disclosed} lists
+the open items each project discloses; OZ-PB's H-1/E-36 and E-38 arise from
+features Perch lacks, and their absence in Perch is not a security property of
+Perch.
+
+\subsubsection{What this comparison does not show.}\label{sec:compare-limits}
+Beyond the runs reported above, no comparator behaviour was executed by us. The
+\fact{oz-v072-tag}-line account build OZ-PB signs for
+(\fact{oz-v072-line-account-build}) has no recorded source. We claim nothing
+about relative cost or code size; workloads W2--W5
+(Appendix~\ref{sec:compare-appendix}) are proposed, not run.

@@ -1,3 +1,39 @@
-% placeholder: LaTeX author writes this section
+\paragraph{Sources.} This paper describes Perch at revision
+\facthash{perch-pin}~\selfcite{perch-src} and rule-core at
+\facthash{rule-core-pin}~\selfcite{rule-core}. The reference run uses soroban-sim
+at \facthash{soroban-sim-pin} and the Guess the Number fixture at
+\facthash{guess-the-number-pin}~\selfcite{guess-the-number}.
+
+\paragraph{Proofs.} The proofs reproduce from rule-core with Charon
+\fact{charon-rev}, Aeneas \fact{aeneas-rev} and Lean \fact{lean-rule-core}:
+\code{tools/extract.sh -{}-check} regenerates the translation and fails on any
+difference, and \code{lake build} in \code{formal/} checks the theorems;
+rule-core's README gives the full commands. Perch's canonical-encoding package
+uses Lean \fact{lean-perch-canon}.
+
+\paragraph{Reference run.} The HTML edition embeds a source bundle with the Rust
+JSON-command driver, its native entry point, a
+\fact{wasi-imports-count}-function WASI shim, the browser worker, dependency
+locks, the contract build script, the reference command sequence and a
+comparison checker; \code{projects/perch-browser/README.md} in the bundle gives
+the pinned build commands and regression checks. The embedded contracts are built
+from the unmodified pinned source, but, like Perch's own release build, the build
+rewrites the account's infrastructure pin files with the hashes of the contracts
+built in the same run, so the embedded account (\fact{embedded-account-short})
+differs from the testnet preview's (\fact{preview-account-wasm-short}). The
+account still pins the Perch \fact{perch-deployed-account-version} policy
+contracts and reports them through \code{infra()}, but never calls them. The
+demo's driver calls the names this paper uses and maps them at its call boundary
+to the pinned exports of Table~\ref{tab:tab-api}; it does not rename contract
+bytes or change their interface. Table~\ref{tab:tab-artifacts} lists the
+artifacts. An executable walkthrough of the task in
+Table~\ref{tab:tab-walkthrough}, in both designs, accompanies the HTML edition.
+
+\paragraph{This paper.} \code{python3 docs/perch-paper/build/paper.py} renders
+both editions from shared sources, and \code{docs/perch-paper/latex/build.sh}
+builds this PDF with a pinned Tectonic.
+
 \perchtable{tab-api}
+
 \perchtable{tab-artifacts}
+\perchtable{tab-ending}

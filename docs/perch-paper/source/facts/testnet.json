@@ -34,7 +34,8 @@
  },
  "completion-tx-short": {
   "value": "161cd968…17ba",
-  "source": "same (C)"
+  "source": "same (C)",
+  "anon": "[withheld; in the artifact]"
  },
  "completion-ledger": {
   "value": "5,578,777",
@@ -47,7 +48,8 @@
  },
  "completion-account-short": {
   "value": "CBOUTD6X…INLZM",
-  "source": "same (C)"
+  "source": "same (C)",
+  "anon": "[withheld; in the artifact]"
  },
  "completion-event": {
   "value": "scopes_wiped {gen: 1}",

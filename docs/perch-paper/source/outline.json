@@ -74,9 +74,7 @@
    "figures": [
     "fig-recovery"
    ],
-   "tables": [
-    "tab-ending"
-   ]
+   "tables": []
   },
   {
    "id": "compare",
@@ -152,7 +150,8 @@
    "appendix": true,
    "tables": [
     "tab-api",
-    "tab-artifacts"
+    "tab-artifacts",
+    "tab-ending"
    ]
   },
   {
@@ -214,7 +213,7 @@
   },
   "fig-contexts": {
    "title": "One authorization, several contexts, using grant 3.",
-   "caption": "The signer names one installed rule per context. (a) A lost guess: the game's `guess` and the transfer it makes from the account; the capped rule charges the transfer. (b) A win authorizes only the root, and the game pays from its own balance. (c) A direct transfer within the cap, with no game call, is also allowed, because each context is checked alone. Draft Perch #69 would let a rule require its entry's root ({{ref:sec:status}})."
+   "caption": "The signer names one installed rule per context. (a) A lost guess: the game's `guess` and the transfer it makes from the account; the capped rule charges the transfer. (b) A win authorizes only the root, and the game pays from its own balance. (c) A direct transfer within the cap, with no game call, is also allowed, because each context is checked alone. Draft changes after the pinned build ({{fact:exact-roots-prs}}) would let a rule require its entry's root ({{ref:sec:status}})."
   },
   "fig-cap-window": {
    "title": "Grant 1's cap, {{fact:grant1-cap-xlm}} XLM per {{fact:grant1-period-ledgers}} ledgers, on illustrative ledgers.",
@@ -239,7 +238,7 @@
   },
   "fig-two-spellings": {
    "title": "One intent, two spellings.",
-   "caption": "The intent: the app key may call `guess` on the game, and may send XLM only to the game, at most 2 XLM per {{fact:preview-game-period-ledgers}} ledgers, through ledger *N* − 1. (a) Perch: one grant document, installed by one `apply_scope` call. (b) oz-policy-builder: an Intent, lowered to one predicate per contract. (c) The XLM rule's predicate in wire form, and the `install_policy` arguments that attach OpenZeppelin's `spending_limit`; a second call installs the game rule. Read from source; the oz-policy-builder installs were not run.",
+   "caption": "The intent: the app key may call `guess` on the game, and may send XLM only to the game, at most 2 XLM per {{fact:preview-game-period-ledgers}} ledgers, through ledger *N* − 1. (a) Perch: one grant document, installed by one `apply_scope` call. (b) oz-policy-builder: an Intent, lowered to one predicate per contract. (c) The XLM rule's predicate in wire form, and the `install_policy` arguments that attach OpenZeppelin's `spending_limit`; a second call installs the game rule. Read from source; these two oz-policy-builder installs were not run.",
    "kind": "code",
    "panels": [
     {

@@ -69,8 +69,19 @@ class Paper:
     def in_edition(self, item, ed):
         return ed in item.get('editions', ['html', 'latex'])
 
+    def placed(self, ed, kind):
+        # Exhibit ids per section for one edition, after latex_section overrides.
+        items = self.figures if kind == 'figures' else self.tables
+        out = {s['id']: [] for s in self.sections}
+        for s in self.sections:
+            for x in s.get(kind, []):
+                target = items[x].get('latex_section', s['id']) if ed == 'latex' else s['id']
+                out[target].append(x)
+        return out
+
     def _number(self, ed):
         nums, fig, tab, main, app = {}, 0, 0, 0, 0
+        figs, tabs = self.placed(ed, 'figures'), self.placed(ed, 'tables')
         for s in self.sections:
             if not self.in_edition(s, ed):
                 continue
@@ -82,11 +93,11 @@ class Paper:
             else:
                 main += 1
                 nums['sec:' + s['id']] = f'{main:02d}' if ed == 'html' else str(main)
-            for f in s.get('figures', []):
+            for f in figs[s['id']]:
                 if self.in_edition(self.figures[f], ed):
                     fig += 1
                     nums['fig:' + f] = str(fig)
-            for t in s.get('tables', []):
+            for t in tabs[s['id']]:
                 if self.in_edition(self.tables[t], ed):
                     tab += 1
                     nums['tab:' + t] = str(tab)
@@ -120,7 +131,7 @@ def _directive(p, body, ed, ctx):
         if arg not in p.facts:
             fail(f'unknown fact {arg!r} in {ctx}')
             return '??'
-        return fact_value(p, arg, ed)
+        return r'\fact{' + arg + '}' if ed == 'latex' else fact_value(p, arg, ed)
     if kind == 'ref':
         if arg not in p.numbers[ed] and not (arg.startswith('sec:') and arg[4:] in p.sec_ids):
             fail(f'unknown or excluded reference {arg!r} in {ctx} ({ed})')
@@ -166,8 +177,14 @@ def render(p, s, ed, ctx=''):
             continue
         if part.startswith('`') and part.endswith('`') and len(part) > 1:
             inner = part[1:-1]
-            out.append(r'\code{' + tex_code(inner) + '}' if ed == 'latex'
-                       else '<code>' + html.escape(inner, quote=False) + '</code>')
+            if ed == 'latex':
+                bits = re.split(r'(\{\{fact:[^}]+\}\})', inner)
+                body = ''.join(r'\fact{' + b[7:-2] + '}' if b.startswith('{{fact:') and b[7:-2] in p.facts
+                               else tex_code(b) for b in bits)
+                out.append(r'\code{' + body + '}')
+            else:
+                inner = re.sub(r'\{\{fact:([^}]+)\}\}', lambda m: plain_fact(p, m.group(1), ctx), inner)
+                out.append('<code>' + html.escape(inner, quote=False) + '</code>')
         elif part.startswith('**') and part.endswith('**'):
             inner = render(p, part[2:-2], ed, ctx)
             out.append(r'\textbf{' + inner + '}' if ed == 'latex' else f'<strong>{inner}</strong>')
@@ -177,13 +194,27 @@ def render(p, s, ed, ctx=''):
         elif part.startswith('[') and part.endswith(')') and '](' in part:
             text, url = part[1:-1].split('](', 1)
             inner = render(p, text, ed, ctx)
-            out.append(r'\href{' + url.replace('%', r'\%').replace('#', r'\#') + '}{' + inner + '}' if ed == 'latex'
-                       else f'<a href="{html.escape(url)}">{inner}</a>')
+            if ed == 'latex':
+                cmd = r'\repolink' if SELF_REPOS.match(url) else r'\href'
+                out.append(cmd + '{' + url.replace('%', r'\%').replace('#', r'\#') + '}{' + inner + '}')
+            else:
+                out.append(f'<a href="{html.escape(url)}">{inner}</a>')
         elif part.startswith('{{') and part.endswith('}}'):
             out.append(_directive(p, part[2:-2], ed, ctx))
         else:
             out.append(svg2tikz.tex_escape(part) if ed == 'latex' else html.escape(part, quote=False))
     return ''.join(out)
+
+
+def plain_fact(p, key, ctx):
+    if key not in p.facts:
+        fail(f'unknown fact {key!r} in {ctx}')
+        return '??'
+    f = p.facts[key]
+    return f['value'] if isinstance(f, dict) else f
+
+
+SELF_REPOS = re.compile(r'https://github\.com/(bitswell|bitswell-hq|theahaco|nidohq)/')
 
 
 def tex_code(s):
@@ -548,7 +579,7 @@ def latex_tabular(p, t, tid):
     # Default: every column wraps (ragged right) across the text width. A table
     # may give `latex_colspec` in tabularx terms, using L for a wrapping column.
     spec = t.get('latex_colspec') or ('@{}' + 'L' * len(t['columns']) + '@{}')
-    size = t.get('latex_size', 'footnotesize')
+    size = t.get('latex_size', 'scriptsize')
     head = ' & '.join(r'\textbf{' + render(p, c, 'latex', tid) + '}' for c in t['columns']) + r' \\'
     rows = '\n'.join(' & '.join(render(p, c, 'latex', tid) for c in r) + r' \\' for r in t['rows'])
     return (f'\\{size}\\begin{{tabularx}}{{\\linewidth}}{{{spec}}}\n\\toprule\n{head}\n\\midrule\n{rows}\n'
@@ -653,8 +684,9 @@ def build_latex(p):
     for extra in ('abstract.tex',):
         if (LATEX / 'sections' / extra).exists():
             used_facts |= set(re.findall(r'\\fact\{([^}]+)\}', read(LATEX / 'sections' / extra)))
-    want_f = [f for s in p.sections if p.in_edition(s, 'latex') for f in s.get('figures', []) if p.in_edition(p.figures[f], 'latex')]
-    want_t = [t for s in p.sections if p.in_edition(s, 'latex') for t in s.get('tables', []) if p.in_edition(p.tables[t], 'latex')]
+    figs, tabs = p.placed('latex', 'figures'), p.placed('latex', 'tables')
+    want_f = [f for s in p.sections if p.in_edition(s, 'latex') for f in figs[s['id']] if p.in_edition(p.figures[f], 'latex')]
+    want_t = [t for s in p.sections if p.in_edition(s, 'latex') for t in tabs[s['id']] if p.in_edition(p.tables[t], 'latex')]
     if seen_f != want_f:
         fail(f'LaTeX figure order {seen_f} != outline {want_f}')
     if seen_t != want_t:

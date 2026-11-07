@@ -1,1 +1,39 @@
-% placeholder: LaTeX author writes this section
+\paragraph{Capabilities and delegation.} A grant addresses a form of the
+confused-deputy problem~\cite{confused-deputy}; the deputies are the account's
+callees and the owner's \code{execute}, which runs with the account as invoker.
+SPKI/SDSI~\cite{spki} narrows authority by intersecting tags, and
+macaroons~\cite{macaroons}, Biscuit~\cite{biscuit} and UCAN~\cite{ucan} attenuate
+bearer tokens offline with caveats. Perch's grants are state installed in the
+account, not tokens a holder carries, and attenuation is not on chain at the pin.
+A windowed cap needs past spending, which a bearer token cannot carry without an
+external store; in Schneider's terms~\cite{schneider-enforceable} a cap makes the
+evaluator a stateful execution monitor, while an OZ-PB \code{read} makes a
+decision depend on external mutable state, outside his history-only setting.
+
+\paragraph{EVM account abstraction.} ERC-4337~\cite{erc4337} accounts validate
+in \code{validateUserOp}; ERC-7579~\cite{erc7579} validators and hooks are the EVM
+counterpart of OpenZeppelin policies; ERC-7710~\cite{erc7710} redeems
+delegations, and ERC-7715~\cite{erc7715} lets an application request permissions
+from a wallet. Zodiac Roles~\cite{zodiac-roles} scopes a role to targets,
+functions and parameter conditions with refilling allowances, close to Perch's
+targets, conditions and caps. Perch charges caps in the account's own decision;
+OpenZeppelin accounts charge them in a policy contract called from
+\code{\_\_check\_auth}.
+
+\paragraph{Policy languages and synthesis.} Cedar~\cite{cedar} pairs a policy
+language with formal models, and links a Lean model to its Rust implementation by
+differential testing~\cite{cedar-vgd}; Perch instead proves a functional
+translation of its Rust evaluator equivalent to a model, which still leaves the
+compiled code trusted. All three systems deny by default: Cedar adds
+\code{forbid}, Perch has no negation, and oz-policy-builder has \code{ne} and
+\code{nin}, which deny when an operand does not resolve. In XACML
+terms~\cite{xacml3}, a Perch account is enforcement and decision point with no
+information point beyond its storage, whereas with OZ-PB the interpreter decides
+and \code{read} targets are information points. OZ-PB's synthesis from a
+recorded transaction relates to policy mining~\cite{xu-stoller-mining}.
+
+\paragraph{Soroban verification.} Certora Sunbeam~\cite{sunbeam} checks
+specifications against compiled Wasm, and Komet~\cite{komet} reasons about Wasm
+with K semantics; Perch's Komet specifications check its earlier
+\code{perch\_program::rpn::eval}, not \code{rule\_eval}. Both complement a proof
+of a pure evaluator, whose shell, binary and host remain separate targets.

@@ -1,1 +1,8 @@
-placeholder
+{ "calls": [
+  { "contract": "C...GAME", "fn": "guess" },
+  { "contract": "C...XLM", "fn": "transfer", <1>
+    "where": [
+      { "constraint": "pin", "at": [1],
+        "to": "C...GAME" },
+      { "constraint": "cap", "at": [2],      <2>
+        "max": "20000000" } ] } ] }

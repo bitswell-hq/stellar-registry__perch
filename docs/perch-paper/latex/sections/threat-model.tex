@@ -1,2 +1,27 @@
-% placeholder: LaTeX author writes this section
+Table~\ref{tab:tab-adversaries} lists the adversaries, A1 to A5, what each can
+do and what Perch claims against each; its caption lists the trusted parties.
+The account is a reference monitor~\cite{saltzer-schroeder} only for actions
+whose authority passes through \code{require\_auth} on the account: mediation is
+complete on those paths and on no others.
+
 \perchtable{tab-adversaries}
+
+\paragraph{Goals.} \emph{G1, containment}: no grant rule allows a call to the
+account or its excluded set; proved for lowering
+(\ref{stmt:grant-target-containment}, \ref{stmt:the-containment-chain}), runtime
+recheck tested. \emph{G2, permission soundness}: an accepted authorization is
+allowed by the rules it selects; proved for the evaluator
+(\ref{stmt:acceptance-implies-permission}), signer authentication tested.
+\emph{G3, window safety}: no capped rule's window exceeds its limit; proved from
+empty records (\ref{stmt:cap-window-safety}), with an on-chain bound of
+\fact{spends-per-window} spends per window. \emph{G4, recovery invalidation}: a
+completed recovery ends every earlier grant in the completion transaction;
+proved in the account model (\ref{stmt:recovery-invalidation}), tested, executed
+and recorded on testnet. \emph{G5, signature binding}: an external signer's
+signature authorizes only the account, entry and rule IDs it was made for;
+tested, with a paper lemma in Appendix~\ref{sec:formal-appendix}; delegated
+signers excluded. \emph{G6, fail-closed refusal}: a refusal writes nothing;
+tested, and in the model a refusal yields no next state. \emph{Non-goals}:
+budgets across grants; effects outside authorization (allowances, the owner's
+\code{execute}, funds held by other contracts); confidentiality; verifier
+correctness; and what a wallet displays.

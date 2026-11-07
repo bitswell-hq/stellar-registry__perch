@@ -22,7 +22,7 @@
  {
   "id": "acceptance-implies-permission",
   "title": "Acceptance implies permission.",
-  "text": "If evaluation accepts, the selected rule set allows every supplied context for the signer list it was given. The theorem takes that list as an input; authenticating it is the shell's obligation (§06).",
+  "text": "If evaluation accepts, the selected rule set allows every supplied context for the signer list it was given. The theorem takes that list as an input; authenticating it is the shell's obligation ({{ref:sec:authorization}}).",
   "evidence": "[Extracted.authorize_allows_all](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/ExtractedAuthorize.lean) and [Chain.RuleSet.authorize_allowsAll](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/Chain.lean) · {{obj:PROVED · MODEL + TRANSLATION}}",
   "label": "T2",
   "latex_body": true,
@@ -62,7 +62,7 @@
  {
   "id": "attenuation-narrows-authority",
   "title": "Attenuation narrows authority.",
-  "text": "Successful attenuation by the ten steps of Table 2 yields a rule set narrower than its parent: under any signers, every action the child allows, the parent allows. Repeated derivation preserves this relationship.",
+  "text": "Successful attenuation by the ten attenuation steps yields a rule set narrower than its parent: under any signers, every action the child allows, the parent allows. Repeated derivation preserves this relationship.",
   "evidence": "[RuleSet.Derives.narrower](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/Attenuation.lean); [Extracted.Derives.narrower](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/Extracted.lean) · {{obj:PROVED · MODEL + TRANSLATION}}",
   "label": "T4",
   "latex_body": true,
@@ -82,7 +82,7 @@
  {
   "id": "trace-inclusion",
   "title": "Trace inclusion.",
-  "text": "For a single successful derivation lineage, every accepted child history from empty records is accepted by the parent from empty records, with rule choices renumbered past dropped rules. Sibling histories are not covered (§04).",
+  "text": "For a single successful derivation lineage, every accepted child history from empty records is accepted by the parent from empty records, with rule choices renumbered past dropped rules. Sibling histories are not covered ({{ref:sec:grants}}).",
   "evidence": "[Chain.RuleSet.attenuateAll_traceNarrower](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/Chain.lean); [Extracted.DerivesAlong.traceNarrower](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/ExtractedAuthorize.lean) · {{obj:PROVED · MODEL + TRANSLATION}}",
   "label": "T5",
   "latex_body": false,
@@ -142,7 +142,7 @@
  {
   "id": "grant-target-containment",
   "title": "Grant target containment.",
-  "text": "A document lowered with account address A, excluded set X and generation g allows no call to A or to an element of X, and attenuation preserves this. In the account, X is the adopted recovery controller and the zero-knowledge adapter and pool of its recovery configuration (§04).",
+  "text": "A document lowered with account address A, excluded set X and generation g allows no call to A or to an element of X, and attenuation preserves this. In the account, X is the adopted recovery controller and the zero-knowledge adapter and pool of its recovery configuration ({{ref:sec:grants}}).",
   "evidence": "[Document.Doc.lowerScoped_allows_excluded](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/Scoped.lean); [Extracted.lower_scoped_allows_excluded; derives_allows_excluded](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/ExtractedLowering.lean) · {{obj:PROVED · MODEL + TRANSLATION}}",
   "label": "T8",
   "latex_body": false,
@@ -220,7 +220,7 @@
  {
   "id": "lowering-equivalence",
   "title": "Lowering equivalence.",
-  "text": "Translated `lower` returns the model's lowering when the document leaves room in its bounded vectors (`LowerRoom`), and translated `lower_scoped` does, refusals included, under the weaker `ArgsRoom`. For a valid document the lowered rules allow exactly what the document allows plus, when recovery is configured, every `apply_account_doc` call (`apply_doc` at the pin) through the recovery rule, which ordinary authorization never selects (§06).",
+  "text": "Translated `lower` returns the model's lowering when the document leaves room in its bounded vectors (`LowerRoom`), and translated `lower_scoped` does, refusals included, under the weaker `ArgsRoom`. For a valid document the lowered rules allow exactly what the document allows plus, when recovery is configured, every `apply_account_doc` call (`apply_doc` at the pin) through the recovery rule, which ordinary authorization never selects ({{ref:sec:authorization}}).",
   "evidence": "[Equiv.lower_eq; lower_scoped_eq](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Equiv/Lowering.lean#L602) · {{obj:PROVED · TRANSLATION}}; [Extracted.lower_allows; lower_authorize](https://github.com/bitswell/soroban-rule-core/blob/cbabe594ae2df408991e825e56ddd618ea29541b/formal/RuleCore/Theorems/ExtractedLowering.lean) · {{obj:PROVED · MODEL + TRANSLATION}}",
   "label": "T12",
   "latex_body": false,

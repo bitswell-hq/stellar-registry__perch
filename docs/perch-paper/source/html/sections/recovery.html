@@ -5,7 +5,7 @@
 <p>{{ref:fig:fig-recovery}} follows the reference run through a recovery, one command at a time. With JavaScript, the step buttons move through the commands, and each step names the experiment control that runs it.</p>
 {{fig:fig-recovery}}
 <p>Each earlier grant keeps its earlier generation, so it refuses every nonempty authorization while its rules remain stored, and anyone may then collect it ({{ref:tab:tab-ending}}). The <dfn><a href="#glossary">credential index</a></dfn> refuses, with <code>WipedCredential</code>, any later document that names a credential an earlier grant named, except the recovery target itself, which may keep it until the owner rotates it out. Administrative credentials the target replaced or removed go into a separate, permanent revoked set.</p>
-{{table:tab-ending}}
+
 <details><summary>The account's counters and the controller's epoch</summary><p>Recovery touches several counters, and each has its own trigger. The grant generation is the one that ends grants.</p>{{table:tab-counters|unnumbered}}</details>
 <h3 id="factors">The zero-knowledge factor</h3>
 <p>The zero-knowledge factor proves knowledge of a secret enrolled as a commitment in a depth-{{fact:zk-pool-depth}} membership pool. The proof's public inputs include a Poseidon2 hash (a hash designed for proof circuits) over the account, the enrollment ID and the statement digest the guardians sign, so in <code>combined</code> mode both factors approve one statement. The commitment is public, so the secret must be a uniform field element with at least {{fact:zk-secret-entropy-bits}} bits of entropy.</p>

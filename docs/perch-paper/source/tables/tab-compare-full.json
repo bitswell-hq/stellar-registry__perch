@@ -37,7 +37,7 @@
   ],
   [
    "Relating calls in one transaction",
-   "None: each context is checked alone against its rule ({{ref:fig:fig-contexts}}(c)); draft #69 adds entry roots",
+   "None: each context is checked alone against its rule ({{ref:fig:fig-contexts}}(c)); draft changes after the pinned build ({{fact:exact-roots-prs}}) add entry roots",
    "One predicate over the execution adapter's batch argument can relate its calls (`docs/stellar.md:350-352`; `policy-interpreter/README.md:390-397`)",
    "V"
   ],

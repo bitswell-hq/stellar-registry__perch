@@ -1,1 +1,14 @@
-% placeholder: LaTeX author writes this section
+Everything here is proposed and none of it is implemented. We propose applying
+the same separation to an agent runtime: a pure engine decides whether an action
+is permitted and computes its accounting effect, and a host mediates the action
+and commits state. The rule model is generic in context and signer types, so
+chain, file, network and signing permissions could share one policy model. A root
+agent would hold a Perch grant and derive child grants with delegation-tree
+budgets (\ref{stmt:delegation-tree-budgets} is their model result), which need a
+host that keeps the tree and mediates every spend; agents would hold no signing
+keys, and x402 payments on Stellar would be one integration. File and network
+rules need their own semantics, and process isolation stays a separate
+obligation. We also propose exact entry roots (\fact{exact-roots-prs}), an
+account entry point for attenuated grants, Cedar as an authoring language for a
+Perch fragment, checking the \fact{inpage-theorems} theorems rule-core's claims
+cite inside the HTML edition, a Lean lemma for O2, and workloads W2--W5.

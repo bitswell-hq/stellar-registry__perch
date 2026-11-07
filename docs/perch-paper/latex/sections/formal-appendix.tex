@@ -1,4 +1,177 @@
-% placeholder: LaTeX author writes this section
+\subsection{Further definitions}
+
+\begin{perchdefinition}{D5}{narrowing and derivation}\label{def:d5}
+Narrowing $R' \sqsubseteq R$ is as in D2. $\mathit{Derives}(R_0, R)$ holds when
+$R$ is reached from $R_0$ by zero or more successful attenuation steps
+(Table~\ref{tab:tab-attenuation}). $\mathit{TraceNarrower}(R', R, f)$ holds when
+every run that $R'$ accepts from empty records, $R$ accepts from its own empty
+records with each choice $j$ renumbered to $f(j)$; a step that drops rule $i$
+renumbers every later index down by one.
+\leannames{\lean{RuleSet.Derives}, \lean{RuleSet.TraceNarrower}}
+\end{perchdefinition}
+
+\begin{perchdefinition}{D6}{documents and lowering}\label{def:d6}
+For a document $d$ on account $A$, $\mathit{Doc.allows}(d, A, c, S)$ holds when
+some rule of $d$ covers $c$'s contract and function, its argument constraints
+hold and its principals are signed by $S$; no rule allows a creation.
+$\mathit{Doc.Valid}(d)$ holds when every rule that requires all its signers names
+distinct signers, fewer than $2^{32}$ of them, and no rule has a not-after ledger
+of~0. $\mathit{lower}(d, A)$ is the rules of an account document, followed by the
+recovery rule when $d$ configures recovery. With
+$X = \mathit{excluded}(d_{\mathrm{admin}}, A)$, which is $A$, the adopted
+controller and, if configured, the zero-knowledge adapter and pool,
+$\mathit{lowerScoped}(d, A, X, g)$ refuses a document that configures recovery
+or has a rule whose target is $A$, a member of $X$ or the account's
+self-administration, and otherwise lowers $d$'s rules stamped with generation
+$g$. rule-core's conditions, \fact{rule-core-conditions}
+(Table~\ref{tab:tab-attenuation}), are an equality, a set membership, a string
+prefix and a signed upper bound. \code{is-self} and \code{address-eq} lower to an
+address equality, \code{u32-eq} to an equality on the argument's encoding,
+\code{string-in} to a membership and \code{string-prefix} to a prefix; a cap adds
+the upper bound of the largest \code{i128} on argument~2, which is a type
+guard.
+\leannames{\lean{Doc.allows}, \lean{Doc.Valid}, \lean{Doc.lower}, \lean{Doc.lowerScoped}}
+\end{perchdefinition}
+
+\begin{perchdefinition}{D7}{account events}\label{def:d7}
+An account state is $s = (A, d_{\mathrm{admin}}, g)$. The event
+$\mathsf{applyDoc}(d)$ sets $d_{\mathrm{admin}} := d$; the event
+$\mathsf{completeRecovery}(t)$ sets $d_{\mathrm{admin}} := t$ and $g := g + 1$,
+and is refused when $g$ is the largest \code{u64}. A run applies events in
+order, a refused one leaving $s$ unchanged. A grant document $d$ is
+\emph{issued} in $s$ as $\mathit{lowerScoped}(d, A,
+\mathit{excluded}(d_{\mathrm{admin}}, A), g)$.
+\leannames{\lean{Account.step}, \lean{Account.run}, \lean{Account.issue}}
+\end{perchdefinition}
+
+\begin{perchdefinition}{D8}{host run}\label{def:d8}
+A model of soroban-env-host running a transaction of contract calls under
+enforcing authorization. Every call is a frame that a failure rolls back.
+\code{require\_auth} of an address holds when the frame's direct caller is that
+address (invoker authority), or when an authorization entry of the address
+matches; on its first match the address's \code{\_\_check\_auth} runs on the
+entry's contexts in preorder, then the expiration is checked and the nonce
+consumed. Stellar-account signers, \code{require\_auth} inside
+\code{\_\_check\_auth}, \code{require\_auth\_for\_args},
+\code{authorize\_as\_current\_contract}, contract creation as a call and
+source-account credentials are outside the model.
+\leannames{\lean{Soroban.Tx.run}}
+\end{perchdefinition}
+
+\begin{perchdefinition}{D9}{denotation}\label{def:d9}
+$\llbracket\cdot\rrbracket$ maps the translation's values (byte vectors,
+\code{u32} and \code{u64} scalars, rules, caps, records, contexts, signers and
+outcomes) to the model's. \ref{stmt:total-equivalence-of-the-evaluator} and
+\ref{stmt:lowering-equivalence} are stated through it: for every input $x$ there
+is a result $y$ with $\mathit{authorize}_{\mathrm{T}}(x) = \mathsf{ok}(y)$ and
+$\llbracket y\rrbracket = \mathit{authorize}(\llbracket x\rrbracket)$.
+\leannames{\lean{Equiv.Denote}}
+\end{perchdefinition}
+
+\paragraph{Ending authority.} A grant is \emph{invalidated} when the account's
+generation passes the generation it was stamped with; it stays stored and refuses
+every nonempty batch. \emph{Removal} (\code{remove\_grant}, by the owner) deletes
+a grant's rules, tags and spending records. \emph{Collection}
+(\code{gc\_grant}, by anyone) deletes the storage of an invalidated grant and
+keeps the credential index. \emph{Archival} is a lapse of an entry's time to
+live: the entry is unavailable until restored, not absent.
+
+\paragraph{The period window at ledger 0.} The second form of
+\ref{stmt:cap-window-safety} assumes every authorization is at ledger~1 or later.
+At ledger~0 the eviction cutoff $0 \mathbin{\dot-} P$ saturates to~0 and evicts
+entries at ledger~0, so each spend at ledger~0 is checked alone: rule-core's
+\lean{Cap.period\_ledger\_zero} records two spends of the whole limit at ledger~0,
+and the $P$ ledgers from~0 then hold twice the limit. Stellar's ledgers start
+at~1.
+
+\subsection{Statements in the appendix}
+
+\input{generated/statements-appendix}
+
 \perchtable{tab-attenuation}
+
 \perchtable{tab-counters}
+
 \perchtable{tab-obligations}
+
+\subsection{Canonical identity and signature binding}
+
+\paragraph{CANON v1.} \code{doc\_hash} is the SHA-256 of a document's CANON~v1
+bytes. The CANON version is not part of the hashed bytes, so a \code{doc\_hash}
+is read under the identity the account reports
+(\code{capabilities().doc\_identity}, which is \code{canon\_v1}).
+\ref{stmt:canonical-identity} proves the encoding injective on the modeled
+document type; \lean{configPreimage\_ne\_emitDoc} is the one proven domain
+separation, between the recovery-configuration preimage and an emitted document.
+
+\paragraph{Binding.} Let $P$, $B$ and $D$ be as in \S\ref{sec:authorization}.
+The following is a paper proof, not mechanized.
+
+\begin{lemma}[binding]\label{lem:binding}
+Assume the external signer's signature scheme is existentially unforgeable under
+chosen-message attack and $H$ is collision resistant. If a verifier accepts a
+signature on $D$, then, except with negligible probability, the signer signed
+$D$ for exactly one tuple $(A, \mathit{nid}, \mathit{nonce}, \mathit{exp},
+\mathit{inv}, \rho)$, and the signature authorizes no other account, network,
+nonce, expiration ledger, invocation tree or list of rule IDs.
+\end{lemma}
+
+\begin{proof}
+The map from the tuple to $D$ composes injective encodings with $H$. The XDR
+preimage of $P$ is self-delimiting; $\tau$ is a constant, and $\mathit{id}_A$ and
+$P$ have fixed lengths, so $(A, P) \mapsto \tau \| \mathit{id}_A \| P$ is
+injective; $B$ has a fixed length and the XDR of $\rho$ is self-delimiting, so
+$(B, \rho) \mapsto B \| \mathrm{XDR}(\rho)$ is injective. Two distinct tuples
+with one $D$ therefore give a collision of $H$ at one of its three applications.
+Otherwise an accepted signature on $D$ for a tuple the signer did not sign is a
+forgery on a message the signer never signed. \qed
+\end{proof}
+
+\begin{proposition}[non-binding]\label{prop:non-binding}
+$D$ does not depend on the contents of the rules $\rho$ names, on the account's
+revision, on the other entries of the transaction or on its fee payer. For a
+delegated signer, the payload the host has it approve depends on the account but
+not on $\rho$.
+\end{proposition}
+
+\noindent This follows from the preimages: none of these values enters $P$, $B$
+or $D$, and the delegated payload is the host's address-bound preimage.
+
+\paragraph{Addresses.} A Soroban contract ID commits to its deployer and salt,
+not to its code. The claim that an account calls fixed infrastructure code
+therefore assumes that the registry deploys each pinned Wasm hash at the salt
+derived from it and that the deployed infrastructure contracts cannot replace
+their code.
+
+\subsection{Cryptographic assumptions and domain tags}
+
+\paragraph{Schemes.} Ed25519~\cite{rfc8032} signatures are checked with strict
+verification. P-256 signatures are ECDSA with low $S$ enforced; the WebAuthn
+verifier~\cite{webauthn2} checks neither the relying-party ID nor the origin.
+\fact{mldsa-verifier} is pure FIPS~204~\cite{fips204} with a fixed context
+string, the key being the hash of the public key. The zero-knowledge factor
+uses Poseidon2 (width~4) and an UltraHonk proof with KZG commitments over BN254
+against a fixed setup point, and Fiat--Shamir with Keccak; \code{docs/zk/} does
+not name the setup ceremony. BN254 and Ed25519 are not post-quantum, so an
+\fact{mldsa-verifier} signer protects only what its rule alone can authorize.
+
+\paragraph{Domain tags.} Perch separates its hash domains with the tags
+\code{\fact{auth-domain-tag}} (the account-bound payload $B$, scheme
+\fact{auth-scheme-name}), \fact{domain-tag-rule} (one rule's bytes),
+\fact{domain-tags-recovery} (recovery statements, configurations, credentials
+and replacement sets), and, as Poseidon2 constants, \fact{domain-tags-zk}. CANON
+document hashes carry no tag. For comparison, oz-policy-builder uses
+\fact{opb-domain-tags}.
+
+\paragraph{Recovery statement.} The \fact{recovery-statement-bytes}-byte
+statement a guardian approves consists of \fact{recovery-statement-layout}. Its
+digest is the SHA-256 of these bytes; the action byte precedes the subject and
+selects its layout, so the encoding is injective without length prefixes.
+
+\subsection{The claims ledger}
+
+rule-core's ledger records \fact{claims-unproven} unproven claims,
+\fact{claims-unproven-ids}, and \fact{claims-assumed} assumed ones,
+\fact{claims-assumed-ids}. The assumed claims are hypotheses of the model
+(bounded room, the empty batch, no creation vocabulary, ledgers from~1) and the
+trusted items of the trust base in \S\ref{sec:proofs}.

@@ -9,7 +9,7 @@
   "0.7.2-line external",
   "0.7.2-line delegated"
  ],
- "latex_colspec": "@{}Lccccc@{}",
+ "latex_colspec": "@{}L*{5}{>{\\centering\\arraybackslash}p{0.105\\linewidth}}@{}",
  "rows": [
   [
    "Network, nonce, signature-expiration ledger",

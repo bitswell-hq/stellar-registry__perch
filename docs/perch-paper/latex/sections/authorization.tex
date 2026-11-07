@@ -1,3 +1,69 @@
-% placeholder: LaTeX author writes this section
+The account decides with rule-core's
+\begin{Verbatim}[fontsize=\small,xleftmargin=1em]
+rule_eval::authorize(rules, records, contexts, choices,
+                     signers, ledger, generation)
+    -> Result<Vec<SpendRecord>, Refusal>
+\end{Verbatim}
+over the selected rules, their records, the converted contexts, one local rule
+index per context, the claimed signers, the ledger and the grant generation. It
+returns the next records or a \code{Refusal}, and neither searches for rules nor
+verifies signatures.
+
+\paragraph{The path.} Figure~\ref{fig:fig-check-auth} lists the steps of
+\code{\_\_check\_auth}. Four guards run before any rule is read: reserved names,
+the classification of a recovery completion, the Protected freeze and a scope
+recheck. A recovery completion leaves at step~4 for the recovery controller, so a
+recovery completion never depends on the evaluator; enrollment and
+reconfiguration are document writes the evaluator decides. Otherwise the account binds
+the payload, resolves the selected rule IDs, runs the evaluator, authenticates
+every claimed signer and stores each changed record, so a refused batch calls no
+verifier. A stale grant refuses with \code{StaleScope} (auth error
+\fact{auth-error-stale-scope}) and any other evaluator refusal with
+\code{RuleEvalRefused} (\fact{auth-error-rule-eval-refused}), inside
+\fact{host-auth-error}; a wallet re-runs the evaluator off chain for the reason.
+A deployed verifier that rejects a signature traps in the host's check
+(\fact{verifier-trap-error} for Ed25519). Because a controller can be adopted
+after a grant is installed, the recheck tests each selected grant rule against
+the current excluded set (\code{ScopeEscalation},
+\fact{auth-error-scope-escalation}); the install-time property is proved
+(\ref{stmt:grant-target-containment}), the recheck tested. Infrastructure
+addresses derive from a Wasm hash and registry path fixed at build time, so a
+later registry publication cannot change the code an account calls.
+
 \perchfigure{fig-check-auth}
+
+\paragraph{What a signature binds.} With $H$ = SHA-256, the host's payload $P$
+for an address credential does not name the account. Perch binds it to the
+account's \fact{contract-id-bytes}-byte ID $\mathit{id}_A$ under the tag $\tau$ =
+\code{\fact{auth-domain-tag}} and appends the selected rule IDs $\rho$:
+\begin{align*}
+  P &= H\bigl(\mathrm{XDR}(\mathtt{HashIdPreimage::SorobanAuthorization}\{\mathit{nid}, \mathit{nonce}, \mathit{exp}, \mathit{inv}\})\bigr),\\
+  B &= H(\tau \,\|\, \mathit{id}_A \,\|\, P), \qquad
+  D = H\bigl(B \,\|\, \mathrm{XDR}(\mathtt{Vec}\langle\mathtt{u32}\rangle\ \rho)\bigr).
+\end{align*}
+An external signer signs $D$; a delegated signer approves the host's
+address-bound payload, which omits $\rho$. OpenZeppelin \fact{oz-v080-tag} signs
+$H(\mathrm{XDR}(\mathtt{AuthDigestPreimage}\{A, P, \rho\}))$ for both kinds,
+and its \fact{oz-v072-tag} line $H(P \,\|\, \mathrm{XDR}(\rho))$, without the
+account (Table~\ref{tab:tab-binding}). A credential's authority is the union of
+every live rule that names it; binding the rule IDs stops a relayer, not the
+signer, from choosing among those rules. A rule edited in place between signing
+and inclusion decides under its new contents, and \code{apply\_grant} takes no
+expected version, so two pre-signed installs for one grant ID can land in either
+order before they expire.
+
 \perchtable{tab-binding}
+
+\paragraph{Verifiers and hooks.} An external signer pairs key material with a
+verifier contract implementing \code{verify(digest, key, signature)}.
+Ed25519~\cite{rfc8032} and WebAuthn~\cite{webauthn2} verifiers are deployed; an
+\fact{mldsa-verifier}~\cite{fips204} verifier is built and tested. Keys must be in
+canonical form, so a threshold, which counts distinct identities, cannot count
+one key twice. The WebAuthn verifier does not check the relying-party ID or
+origin. An account document names verifiers through the registry; a verified
+name denotes provenance its manager admitted, not a proof or an audit. A grant
+may name a verifier by address alone; each such verifier may supply at most one
+signer per rule, so it cannot cast several threshold votes in one rule, though
+it can cast its one vote at will. Before any rule is read, the account refuses
+calls on any contract to \fact{reserved-hook-count} reserved names,
+\fact{reserved-hook-names}; the first three are OpenZeppelin's policy hooks.
