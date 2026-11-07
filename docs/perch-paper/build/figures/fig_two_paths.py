@@ -75,7 +75,7 @@ def wide():
             draw_cell(s, x, y, CW, h, ph[side], size, lh)
         s.close()
         y += h + 10
-    s.text(2, y + 14, 'Cross and bar: where a guess over the cap is refused. Dashed: no such phase in that design.', 'm', 14)
+    s.text(2, y + 14, 'Cross and bar: where a guess over the cap is refused. Dashed: no such phase, or not reached in this scenario.', 'm', 14)
     s.h = y + 22
     return s
 
@@ -96,7 +96,7 @@ def narrow():
             y += h + 8
         s.close()
         y += 10
-    lines = wrap('Cross and bar: where a guess over the cap is refused. Dashed: no such phase in that design.', 336, 14)
+    lines = wrap('Cross and bar: where a guess over the cap is refused. Dashed: no such phase, or not reached in this scenario.', 336, 14)
     s.lines(2, y + 6, lines, 'm', 14, lh=18)
     s.h = y + 6 + 18 * len(lines) - 6
     return s

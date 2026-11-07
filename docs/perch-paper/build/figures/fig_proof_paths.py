@@ -3,7 +3,7 @@ from figlib import SVG, FIGDIR, fact, num, wrap
 
 FID = 'fig-proof-paths'
 LABELS = {
-    'model': 'the evaluator model', 'translation': 'the Lean translation', 'account-model': 'the account event model',
+    'rustc-nightly': 'nightly rustc', 'model': 'the evaluator model', 'translation': 'the Lean translation', 'account-model': 'the account event model',
     'host-model': 'the host model', 'canon': "Perch's canon package", 'kernel': "Lean's kernel", 'charon': 'Charon',
     'aeneas': 'Aeneas', 'aeneas-lib': "Aeneas's Lean library", 'denotations': 'the denotations',
     'doc-allows': 'the document meaning Doc.allows', 'host-models': 'the host models matching the host',
@@ -23,7 +23,7 @@ def wide():
     C = [(124, 150), (288, 124), (426, 174), (614, 144)]
     s.text(124, 14, 'PROOF PATH', 't tag', 14)
     r1, h1 = 22, 72
-    node(s, None, C[0][0], r1, C[0][1], [('nightly rustc → MIR', 't'), (f'`{fact("rustc-mir-nightly").replace("nightly-", "")}`', 'x')], 'trusted', minh=h1)
+    node(s, 'rustc-nightly', C[0][0], r1, C[0][1], [('nightly rustc → MIR', 't'), (f'`{fact("rustc-mir-nightly").replace("nightly-", "")}`', 'x')], 'trusted', minh=h1)
     node(s, 'charon', C[1][0], r1, C[1][1], [('Charon → LLBC', 't'), (f'`{fact("charon-rev")}`', 'x')], 'trusted', minh=h1)
     node(s, 'aeneas', C[2][0], r1, C[2][1], [('Aeneas → Lean', 't'), (f'`{fact("aeneas-rev")}`', 'x')], 'trusted', minh=h1)
     node(s, 'aeneas-lib', C[3][0], r1, C[3][1], [("Aeneas's Lean library", 't')], 'trusted', minh=h1)
@@ -36,15 +36,15 @@ def wide():
     s.text(130, ry + 22, 'PROVED IN LEAN', 'g tag', 14)
     s.path(f'M{C[2][0] + 40} {r1 + h1}V{ry + 34}', 'fl', marker_end='url(#perch-ah)')
     ya = ry + 36
-    node(s, 'model', C[0][0], ya, C[0][1], [('Evaluator model', 't'), ('readable Lean', 'm')], 'key', pad=8)
+    node(s, 'model', C[0][0], ya, C[0][1], [('Evaluator model', 't'), ('readable Lean', 'm')], 'proved', pad=10)
     node(s, 'translation', C[2][0], ya, C[2][1], [('Lean translation', 't'),
-                                                (f'{fact("extracted-lean-lines")} lines', 'm')], 'key', pad=8)
+                                                (f'{fact("extracted-lean-lines")} lines', 'm')], 'proved', pad=10)
     ey = ya + 25
     s.path(f'M{C[0][0] + C[0][1]} {ey}H{C[2][0] - 2}', 'fl-g', marker_start='url(#perch-ah-g)', marker_end='url(#perch-ah-g)')
     s.text((C[0][0] + C[0][1] + C[2][0]) / 2, ey - 8, 'equivalence', 'g', 14, 'middle')
     yb = ya + 58
-    node(s, 'account-model', C[0][0], yb, C[0][1], [('Account event model', 't')], 'key', pad=8, minh=50)
-    node(s, 'host-model', C[1][0], yb, C[1][1], [('Soroban host model', 't')], 'key', pad=8, minh=50)
+    node(s, 'account-model', C[0][0], yb, C[0][1], [('Account event model', 't')], 'proved', pad=10, minh=50)
+    node(s, 'host-model', C[1][0], yb, C[1][1], [('Soroban host model', 't')], 'proved', pad=10, minh=50)
     s.text(C[2][0] + 4, yb + 20, f'{fact("exported-theorems")} exported theorems,', 'g', 14)
     s.text(C[2][0] + 4, yb + 38, 'standard axioms only', 'g', 14)
     # trusted specification under the region
@@ -67,12 +67,14 @@ def wide():
     s.cross(C[2][0] + 16, gy + 22, 5)
     s.lines(C[2][0] + 30, gy + 18, ['Nothing checks this Wasm against', 'the translation.'], 'x', 14, lh=17)
     s.close()
-    sy = gy + 52
-    for bx, label, ly in ((281, f'{fact("lean-doc-traces")} Lean traces', gy + 18), (419, 'rule-core vectors', gy + 36)):
-        s.path(f'M{bx} {rb}V{sy - 2}', 'fl-m dash', marker_end='url(#perch-ah-m)')
-        s.text(bx - 6, ly, label, 'm', 14, 'end')
+    sy = gy + 64
+    # The bridging tests run a natively built account, not the shipped Wasm.
+    node(s, None, C[0][0], gy, 412 - C[0][0], [('Natively built account, in tests:', 't'),
+                                              (f'{fact("lean-doc-traces")} Lean traces; rule-core vectors', 'm')], 'tested', minh=44, pad=6)
+    s.path(f'M281 {rb}V{gy - 2}', 'fl-m dash', marker_end='url(#perch-ah-m)')
+    s.path(f'M419 {rb}V{gy + 22}H414', 'fl-m dash', marker_end='url(#perch-ah-m)')
     # shipping path
-    s.text(124, sy - 10, 'SHIPPING PATH', 't tag', 14)
+    s.text(124, sy - 7, 'SHIPPING PATH', 't tag', 14)
     hs = 66
     node(s, None, C[0][0], sy, 134, [(f'rustc `{fact("rustc-perch")}` → Wasm', 't')], 'trusted', minh=hs, pad=8)
     node(s, None, 270, sy, 600 - 270, [('`perch_account.wasm`: the shell around linked `authorize`, `lower`, '
@@ -97,7 +99,7 @@ def narrow():
     y += h + 26
     s.text(40, y - 8, 'PROOF PATH', 't tag', 14)
     s.path(f'M30 {y - 26}V{y - 2}', 'fl', marker_end='url(#perch-ah)')
-    for nid, items in ((None, [('nightly rustc → MIR', 't'), (f'`{fact("rustc-mir-nightly")}`', 'x')]),
+    for nid, items in (('rustc-nightly', [('nightly rustc → MIR', 't'), (f'`{fact("rustc-mir-nightly")}`', 'x')]),
                        ('charon', [('Charon → LLBC', 't'), (f'`{fact("charon-rev")}`', 'x')]),
                        ('aeneas', [('Aeneas → Lean', 't'), (f'`{fact("aeneas-rev")}`', 'x')]),
                        ('aeneas-lib', [("Aeneas's Lean library", 't')])):
@@ -107,11 +109,11 @@ def narrow():
     top = y
     ix, iw = 14, 312
     y += 32
-    for nid, items, kind in (('translation', [('Lean translation', 't'), (f'{fact("extracted-lean-lines")} lines; CI regenerates', 'm')], 'key'),
+    for nid, items, kind in (('translation', [('Lean translation', 't'), (f'{fact("extracted-lean-lines")} lines; CI regenerates', 'm')], 'proved'),
                              (None, [('equivalence', 'g')], None),
-                             ('model', [('Evaluator model (readable Lean)', 't')], 'key'),
-                             ('account-model', [('Account event model', 't')], 'key'),
-                             ('host-model', [('Soroban host model', 't')], 'key'),
+                             ('model', [('Evaluator model (readable Lean)', 't')], 'proved'),
+                             ('account-model', [('Account event model', 't')], 'proved'),
+                             ('host-model', [('Soroban host model', 't')], 'proved'),
                              (None, [(f'{fact("exported-theorems")} exported theorems, standard axioms only', 'g')], None),
                              ('denotations', [('Denotations', 'x')], 'trusted'),
                              ('doc-allows', [('`Doc.allows`', 'x')], 'trusted'),
@@ -152,17 +154,18 @@ def narrow():
     s.lines(50, y + 18, ['Nothing checks this Wasm', 'against the translation.'], 'x', 14, lh=17)
     s.close()
     y += 54
+    h = node(s, None, 20, y, 318, [('Natively built account, in tests:', 't'),
+                                   (f'{fact("lean-doc-traces")} Lean traces; rule-core vectors', 'm')], 'tested')
+    s.path(f'M10 {region_bottom}V{y + 22}H18', 'fl-m dash', marker_end='url(#perch-ah-m)')
+    y += h + 14
     s.text(20, y + 12, 'SHIPPING PATH', 't tag', 14)
-    s.lines(170, y + 12, [f'Dashed: {fact("lean-doc-traces")} Lean', 'traces, rule-core vectors'], 'm', 14, lh=17)
-    y += 44
+    y += 24
     rustc_y = y
     for items, kind in (([(f'rustc `{fact("rustc-perch")}` → `wasm32v1-none`', 't'), ('from the same source', 'm')], 'trusted'),
                         ([('`perch_account.wasm`: the shell around linked `authorize`, `lower`, `lower_scoped`', 'x'),
                           ('TESTED', 'm tag')], 'tested'),
                         ([('Simulator and testnet runs', 'x'), ('TESTED', 'm tag')], 'tested')):
         h = node(s, None, 20, y, 318, items, kind)
-        if kind == 'tested' and 'perch_account' in items[0][0]:
-            s.path(f'M10 {region_bottom}V{y + 22}H18', 'fl-m dash', marker_end='url(#perch-ah-m)')
         y += h + 8
     s.h = y - 6
     return s

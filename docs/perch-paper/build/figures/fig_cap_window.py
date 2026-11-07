@@ -102,7 +102,7 @@ def make(narrow):
     s.add(f'<g data-print="no" data-live="window"><text x="{num(xl(0))}" y="{num(cy + 50)}" class="k" font-size="{size}"></text>'
           f'<path class="fl-k" d=""/><path class="fl-k" d=""/><path class="fl-k" d=""/></g>')
     s.add(f'<g data-print="no" data-live="cursor" data-left="{num(x0)}"><line x1="{num(xl(STATIC_L))}" y1="{num(yv(11.6))}" x2="{num(xl(STATIC_L))}" '
-          f'y2="{num(cy + 30)}" class="fl-k dash"/></g>')
+          f'y2="{num(y0)}" class="fl-k dash"/></g>')
     # event list
     ey = wy + 6
     for ev, at in EVENTS:

@@ -67,7 +67,7 @@
     "io": "reads the rule set, scope tags, freeze and spending records"
    },
    "oz": {
-    "text": "Each rule must exist, be unexpired and match its context's contract. Signer checks wait for the policies.",
+    "text": "Each rule must exist, be unexpired and match its context's contract; a signer on no selected rule is refused (3016).",
     "src": [
      [
       "oz8",
@@ -75,10 +75,10 @@
      ],
      [
       "oz8",
-      "smart_account/storage.rs:639-648"
+      "smart_account/storage.rs:639-671"
      ]
     ],
-    "io": "reads each selected context rule"
+    "io": "reads each selected context rule; checks each payload signer against the selected rules' signers"
    }
   },
   {
@@ -201,8 +201,8 @@
     ]
    },
    "oz": {
-    "text": "Each rule's policies run `enforce`, in contract-address order: the interpreter on the `guess`; on the transfer, `spending_limit`, then the interpreter.",
-    "direct": "On the transfer, `spending_limit`, then the interpreter, run `enforce`, in contract-address order.",
+    "text": "Each rule's policies run `enforce` in stored order: the interpreter on the `guess`; on the transfer, `spending_limit` first, then the interpreter.",
+    "direct": "On the transfer, the policies run `enforce` in stored order: `spending_limit` first, then the interpreter.",
     "src": [
      [
       "oz8",
@@ -213,6 +213,10 @@
       "smart_account/storage.rs:830"
      ],
      [
+      "oz8",
+      "smart_account/storage.rs:1304"
+     ],
+     [
       "opb",
       "contracts/stellar/policy-interpreter/src/lib.rs:192-277"
      ],
@@ -221,12 +225,12 @@
       "policies/spending_limit.rs:233-298"
      ]
     ],
-    "io": "calls out of the account: each attached policy",
+    "io": "calls out of the account: each attached policy, in stored order (address order at rule creation; add_policy appends)",
     "refusal": {
      "scenario": "overcap",
      "code": "SpendingLimitExceeded",
      "fact": "oz-spending-limit-exceeded",
-     "note": "The OpenZeppelin account refuses here, in `spending_limit`, after the signer was authenticated and the interpreter permitted the `guess`; the transfer's interpreter call does not run."
+     "note": "The OpenZeppelin account refuses here, in `spending_limit`, after the signer was authenticated and the interpreter permitted the `guess`; with `spending_limit` stored first, the transfer's interpreter call does not run."
     }
    }
   },
