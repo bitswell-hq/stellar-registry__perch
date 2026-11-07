@@ -84,7 +84,7 @@
     const { head: hd, bar, live } = head(fig);
     let pick = null;
     if (scenarios.length) {
-      pick = el('select', { 'aria-label': 'Scenario' });
+      pick = el('select', { 'aria-label': 'Scenario', name: `${fig.id}-scenario` });
       pick.append(el('option', { value: '' }, 'Every scenario (as printed)'));
       for (const [id, label] of scenarios) pick.append(el('option', { value: id }, label));
       bar.append(pick);
@@ -173,7 +173,7 @@
     const lo = Math.min(...[...at.values()]) - 1;
     const hi = Math.max(...[...at.values()]) + 1;
     const label = el('label', { class: 'fig-range' }, 'Ledger L ');
-    const range = el('input', { type: 'range', min: lo, max: hi, step: 1, value: root.dataset.static });
+    const range = el('input', { type: 'range', name: `${fig.id}-ledger`, min: lo, max: hi, step: 1, value: root.dataset.static });
     label.append(range);
     b.append(label);
     const evs = el('span', { class: 'fig-events', role: 'group', 'aria-label': 'Scripted events' });
@@ -251,7 +251,7 @@
     const name = (id) => (nodes.find((n) => n.dataset.node === id) || {}).dataset?.label || id;
     const list = (ids) => ids.map(name).join(', ');
     const { bar, live } = head(fig);
-    const pick = el('select', { 'aria-label': 'Statement' });
+    const pick = el('select', { 'aria-label': 'Statement', name: `${fig.id}-statement` });
     pick.append(el('option', { value: '' }, 'Every statement'));
     // Statements about the same objects share a group.
     const groups = new Map();
