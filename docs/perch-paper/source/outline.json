@@ -88,7 +88,8 @@
     "fig-two-spellings"
    ],
    "tables": [
-    "tab-compare"
+    "tab-compare",
+    "tab-walkthrough"
    ]
   },
   {
@@ -232,7 +233,7 @@
   },
   "fig-two-paths": {
    "title": "One guarded call in two accounts.",
-   "caption": "A lost guess under Perch (left) and under an OpenZeppelin account whose rules carry oz-policy-builder's `policy-interpreter` and OpenZeppelin's `spending_limit` (right). Rows are phases of one `__check_auth`. The Perch signer is a passkey checked by a verifier contract. oz-policy-builder's rules accept only delegated signers; here the signer is a Stellar account checked by the host. A cross marks where each design refuses a guess over the cap: Perch before any signer is authenticated, the OpenZeppelin account in `spending_limit` after authentication and the interpreter. Read from source at Perch {{fact:perch-pin-short}}, OpenZeppelin `stellar-contracts` {{fact:oz-v080-tag}} and oz-policy-builder {{fact:opb-pin-short}}; nothing in this figure is measured.",
+   "caption": "A lost guess under Perch (left) and under an OpenZeppelin account whose rules carry oz-policy-builder's `policy-interpreter` and OpenZeppelin's `spending_limit` (right). Rows are phases of one `__check_auth`. The Perch signer is a passkey checked by a verifier contract. oz-policy-builder's rules accept only delegated signers; here the signer is a Stellar account whose own authorization entry the host checks. The OpenZeppelin account runs a rule's policies in the order of their contract addresses. A cross marks where each design refuses a guess over the cap: Perch before any signer is authenticated, the OpenZeppelin account in `spending_limit` after authentication. Read from source at Perch {{fact:perch-pin-short}}, OpenZeppelin `stellar-contracts` {{fact:oz-v080-tag}} and oz-policy-builder {{fact:opb-pin-short}}; {{ref:tab:tab-walkthrough}} gives the measured run of a related task.",
    "interactive": "stepper",
    "scenarios": "lost:Lost guess|overcap:Guess over the cap|direct:Direct transfer"
   },

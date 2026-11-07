@@ -16,7 +16,7 @@
   [
    "Order of checks",
    "Decide (caps included), then authenticate",
-   "Select and check expiry, authenticate, then run policies"
+   "Select and check expiry, authenticate, then run each policy in contract-address order"
   ],
   [
    "Where decision state lives",

@@ -20,7 +20,7 @@
   [
    "Order of checks",
    "Whole rule decision, caps included, before authentication; a refused batch calls no verifier (`gate.rs:93-113`)",
-   "Rule existence, scope and expiry before authentication; predicate, spending total and threshold after it (OZ `storage.rs:639-687`)",
+   "Rule existence, scope and expiry, then the signer filter, before authentication; then each attached policy's `enforce` (predicate, spending total, threshold) in the order of the policies' contract addresses (OZ `storage.rs:629-689, 830`; run in the walkthrough)",
    "V"
   ],
   [
