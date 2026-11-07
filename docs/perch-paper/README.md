@@ -41,8 +41,10 @@ docs/perch-paper/latex/build.sh                  # PDF; needs Tectonic 0.17.0 on
 ```
 
 `build.sh` pins the TeX bundle, fails on any undefined or changed reference
-or citation, and writes the PDF to `latex/out/`. `build/paper.py` uses only the
-Python standard library.
+or citation or a glyph the fonts lack, and writes the PDF to `latex/out/`.
+`ANONYMOUS=1` builds the double-blind edition as
+`latex/out/perch-paper-anonymous.pdf`. `build/paper.py` needs Python 3.12 or
+later and uses only the standard library.
 
 `index.html` keeps four blocks that the embedded source bundle's
 `projects/perch-browser/build-page.mjs` refreshes in place (`MEASUREMENTS`,
