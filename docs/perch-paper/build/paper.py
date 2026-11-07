@@ -206,10 +206,43 @@ def html_figure(p, fid):
     if cp.exists():
         controls = read(cp).strip()
     text_p = SRC / 'figures' / f'{fid}.text.html'
-    alt = (f'<details class="fig-text" id="{fid}-text"><summary>Figure {n} as text</summary>{read(text_p).strip()}</details>'
-           if text_p.exists() else '')
+    steps = load_steps(fid)
+    alt_body = html_steps(p, fid, steps) if steps else (read(text_p).strip() if text_p.exists() else '')
+    alt = (f'<details class="fig-text" id="{fid}-text"><summary>Figure {n} as text</summary>{alt_body}</details>'
+           if alt_body else '')
     return (f'<figure class="{cls}" id="{fid}"{attrs}>{controls}{wide}{narrow}'
             f'<figcaption><span class="figure-title" id="{fid}-title">Figure {n}. {title}</span> {cap}</figcaption>{alt}</figure>')
+
+
+def load_steps(fid):
+    sp = SRC / 'figures' / f'{fid}.steps.json'
+    return json.loads(read(sp)) if sp.exists() else None
+
+
+def html_steps(p, fid, st):
+    def item(x):
+        scen = f' data-scenario="{x["scenario"]}"' if x.get('scenario') else ''
+        exits = ''.join(f'<br>→ {render(p, e, "html", fid)}' for e in x.get('exits', []))
+        return f'<li data-step="{x["n"]}"{scen}>{render(p, x["text"], "html", fid)}{exits}</li>'
+    intro = f'<p>{render(p, st["intro"], "html", fid)}</p>' if st.get('intro') else ''
+    outro = f'<p>{render(p, st["outro"], "html", fid)}</p>' if st.get('outro') else ''
+    return intro + '<ol>' + ''.join(item(x) for x in st['steps']) + '</ol>' + outro
+
+
+def latex_steps(p, fid, st):
+    out = []
+    if st.get('intro'):
+        out.append(render(p, st['intro'], 'latex', fid) + r'\par\smallskip')
+    out.append(r'\begin{enumerate}[leftmargin=*,itemsep=1pt,topsep=2pt]')
+    for x in st['steps']:
+        if x.get('latex') is False:
+            continue
+        exits = ''.join(r'\newline\hspace*{1em}$\rightarrow$ ' + render(p, e, 'latex', fid) for e in x.get('exits', []))
+        out.append(r'\item[' + str(x['n']) + '.] ' + render(p, x['text'], 'latex', fid) + exits)
+    out.append(r'\end{enumerate}')
+    if st.get('outro'):
+        out.append(r'\smallskip' + render(p, st['outro'], 'latex', fid))
+    return r'\begin{minipage}{\linewidth}\small' + '\n' + '\n'.join(out) + '\n' + r'\end{minipage}'
 
 
 def html_table_body(p, t, tid):
@@ -369,6 +402,12 @@ def latex_figure(p, fid):
     cap = r'\textbf{' + render(p, f['title'], 'latex', fid) + '} ' + render(p, f.get('caption', ''), 'latex', fid)
     if f.get('kind') == 'table':
         body = latex_tabular(p, p.tables[f['table']], f['table'])
+    elif f.get('latex_form') == 'steps':
+        st = load_steps(fid)
+        if not st:
+            fail(f'{fid}: latex_form steps needs source/figures/{fid}.steps.json')
+            return ''
+        body = latex_steps(p, fid, st)
     else:
         tikz, w, h = svg2tikz.convert(read(SRC / 'figures' / f'{fid}.svg'))
         maxh = f.get('latex_max_height', '0.8\\textheight')
