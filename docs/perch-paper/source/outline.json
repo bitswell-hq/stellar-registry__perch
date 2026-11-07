@@ -217,7 +217,7 @@
   },
   "fig-cap-window": {
    "title": "Grant 1's cap, {{fact:grant1-cap-xlm}} XLM per {{fact:grant1-period-ledgers}} ledgers, on illustrative ledgers.",
-   "caption": "At ledger *L* the window holds charges made after *L* − 100 and through *L*. Filled marks are inside the window; hollow marks are outside it. A refused transfer leaves the spending record unchanged. A charge stops counting exactly 100 ledgers after it was made.",
+   "caption": "At ledger *L* the window holds charges made after *L* − 100 and through *L*. Charges inside the window have solid borders; charges outside it are dashed. A refused transfer leaves the spending record unchanged. A charge stops counting exactly 100 ledgers after it was made.",
    "interactive": "cap-window"
   },
   "fig-check-auth": {
@@ -247,11 +247,13 @@
     },
     {
      "file": "b",
-     "title": "(b) oz-policy-builder Intent"
+     "title": "(b) oz-policy-builder Intent",
+     "latex_width": 0.49
     },
     {
      "file": "c",
-     "title": "(c) XLM rule: wire predicate and install arguments"
+     "title": "(c) XLM rule: wire predicate and install arguments",
+     "latex_width": 0.49
     }
    ]
   },

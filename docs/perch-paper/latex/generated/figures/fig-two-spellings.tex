@@ -3,18 +3,59 @@
 \centering
 \begin{minipage}[t]{1\linewidth}\footnotesize\textbf{(a) Perch grant document}
 \begin{Verbatim}[fontsize=\scriptsize,frame=single,framesep=1.5mm]
-placeholder
+{
+  "version": 1,
+  "network": "Test SDF Network ; September 2015",
+  "signers": [
+    { "id": "app", "verifier": "C...WEBAUTHN", "key": "...65-byte passkey key, hex..." } <4>
+  ],
+  "rules": [                                                                             <3>
+    { "name": "guess",
+      "scope": { "type": "contract", "address": "C...GAME" },
+      "principals": { "type": "all", "signers": ["app"] },
+      "functions": ["guess"],
+      "not-after-ledger": N },                                                           <5>
+    { "name": "guess-xlm",                                                               <1>
+      "scope": { "type": "contract", "address": "C...XLM" },
+      "principals": { "type": "all", "signers": ["app"] },
+      "functions": ["transfer"],
+      "args": [ { "index": 1, "pred": { "type": "address-eq", "address": "C...GAME" } } ],
+      "cap": { "limit": "20000000", "period-ledgers": 17280 },                           <2>
+      "not-after-ledger": N }                                                            <5>
+  ]
+}
 \end{Verbatim}
 \end{minipage}\par\medskip
-\begin{minipage}[t]{1\linewidth}\footnotesize\textbf{(b) oz-policy-builder Intent}
+\begin{minipage}[t]{0.49\linewidth}\footnotesize\textbf{(b) oz-policy-builder Intent}
 \begin{Verbatim}[fontsize=\scriptsize,frame=single,framesep=1.5mm]
-placeholder
+{ "calls": [
+  { "contract": "C...GAME", "fn": "guess" },
+  { "contract": "C...XLM", "fn": "transfer", <1>
+    "where": [
+      { "constraint": "pin", "at": [1],
+        "to": "C...GAME" },
+      { "constraint": "cap", "at": [2],      <2>
+        "max": "20000000" } ] } ] }
 \end{Verbatim}
-\end{minipage}\par\medskip
-\begin{minipage}[t]{1\linewidth}\footnotesize\textbf{(c) XLM rule: wire predicate and install arguments}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\linewidth}\footnotesize\textbf{(c) XLM rule: wire predicate and install arguments}
 \begin{Verbatim}[fontsize=\scriptsize,frame=single,framesep=1.5mm]
-placeholder
+["and", [["eq", ["call_contract"], "C...XLM"],
+         ["eq", ["call_fn"], "transfer"],
+         ["eq", ["call_arg", 1], "C...GAME"],
+         ["lte", ["call_arg", 2],          <2>
+                 {"i128": "20000000"}]]]
+
+{ "network": "testnet",
+  "smartAccount": "C...ACCOUNT",
+  "sourceAccount": "G...OWNER",
+  "intent": { "...": "(b)" },
+  "contract": "C...XLM",                   <3>
+  "signers": ["G...APP"],                  <4>
+  "validUntilLedger": N - 1,               <5>
+  "spendingLimit": { "amount": "20000000", <2>
+                     "periodLedgers": 17280 } }
 \end{Verbatim}
 \end{minipage}
-\caption{\textbf{One intent, two spellings.} The intent: the app key may call \code{guess} on the game, and may send XLM only to the game, at most 2 XLM per 17,280 ledgers, through ledger \emph{N} \ensuremath{-} 1. (a) Perch: one grant document, installed by one \code{apply\_scope} call. (b) oz-policy-builder: an Intent, lowered to one predicate per contract. (c) The XLM rule's predicate in wire form, and the \code{install\_policy} arguments that attach OpenZeppelin's \code{spending\_limit}; a second call installs the game rule. Read from source; the oz-policy-builder installs were not run.}\label{fig:fig-two-spellings}
+\caption{\textbf{One intent, two spellings.} The intent: the app key may call \code{guess} on the game, and may send XLM only to the game, at most 2 XLM per \fact{preview-game-period-ledgers} ledgers, through ledger \emph{N} \ensuremath{-} 1. (a) Perch: one grant document, installed by one \code{apply\_scope} call. (b) oz-policy-builder: an Intent, lowered to one predicate per contract. (c) The XLM rule's predicate in wire form, and the \code{install\_policy} arguments that attach OpenZeppelin's \code{spending\_limit}; a second call installs the game rule. Read from source; these two oz-policy-builder installs were not run.}\label{fig:fig-two-spellings}
 \end{figure}

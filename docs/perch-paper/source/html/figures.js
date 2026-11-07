@@ -183,6 +183,7 @@
     if (document.getElementById('cap-input')) b.append(el('a', { href: '#cap-input' }, 'Try your own amounts'));
     const live = liveRegion(fig);
     for (const n of fig.querySelectorAll('svg [data-static]')) n.classList.add('off');
+    let touched = false;
     function draw(event) {
       const L = Number(range.value);
       const from = L - period;
@@ -204,7 +205,7 @@
           g.querySelector('text').setAttribute('class', inside ? 'x' : 'm');
         }
         for (const g of svg.querySelectorAll('g[data-event][data-at]')) {
-          g.classList.toggle('hot', event ? g.dataset.event === String(event) : Number(g.dataset.at) === L);
+          g.classList.toggle('hot', touched && (event ? g.dataset.event === String(event) : Number(g.dataset.at) === L));
         }
         const w = svg.querySelector('[data-live=window]');
         const [t, line, open, close] = [w.querySelector('text'), ...w.querySelectorAll('path')];
@@ -219,8 +220,22 @@
         close.setAttribute('d', `M${xb - 5} ${y - 8}H${xb}V${y + 8}H${xb - 5}`);
       }
     }
-    range.addEventListener('input', () => draw());
+    range.addEventListener('input', () => { touched = true; draw(); });
+    for (const btn of buttons) btn.addEventListener('click', () => { touched = true; }, { capture: true });
     draw();
+    // Print the static figure, then restore the reader's ledger.
+    let kept = null;
+    window.addEventListener('beforeprint', () => {
+      kept = [range.value, touched];
+      range.value = root.dataset.static;
+      touched = false;
+      draw();
+    });
+    window.addEventListener('afterprint', () => {
+      if (!kept) return;
+      [range.value, touched] = kept;
+      draw();
+    });
   };
 
   // fig-proof-paths: pick a statement; the boxes for the objects it is about and the

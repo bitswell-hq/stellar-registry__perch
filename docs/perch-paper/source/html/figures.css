@@ -17,17 +17,20 @@
 .fig-events{display:inline-flex;gap:.35rem;flex-wrap:wrap}
 .fig-live,.fig-detail{min-height:1.5em;margin:.5rem 0;font-size:.9rem;color:var(--em);border-left:3px solid var(--amber);padding-left:.6rem;overflow-wrap:anywhere}
 .fig-detail{border-left-color:var(--key)}
+.fig-live:empty,.fig-detail:empty{border-left-color:transparent}
+.fig-text li li{margin:.25rem 0}
+.fig [data-detail]{cursor:pointer}
+/* Step, scenario and selection states are screen-only: print shows the static figure. */
+@media screen{
 .fig [data-state=future] .bx,.fig [data-state=future] .pill,.fig .unreached .bx,.fig .unreached .pill{stroke-dasharray:5 4}
 .fig [data-state=future] text,.fig .unreached text{fill:var(--muted)}
 .fig [data-state=current] .bx,.fig [data-state=current] .pill:not(.pill-d){stroke:var(--amber);stroke-width:3.5}
 .fig [data-state=current] text{font-weight:650}
-.fig [data-detail]{cursor:pointer}
 .fig .hot .bx,.fig .hot.bx{stroke:var(--key);stroke-width:3}
 .fig .sel-obj .bx{stroke:var(--amber);stroke-width:5}
 .fig .sel-tr .bx{stroke:var(--key);stroke-width:4}
 .fig .sel-obj text,.fig .sel-tr text{font-weight:650}
-.fig-text li li{margin:.25rem 0}
-@media(prefers-reduced-motion:no-preference){.fig [data-step] .bx,.fig [data-step] .pill,.fig [data-node] .bx{transition:stroke .12s,stroke-width .12s}}
-@media(forced-colors:active){.fig [data-state=current] .bx,.fig .sel-obj .bx{stroke-width:6}.fig .sel-tr .bx{stroke-width:4}}
+}
+@media screen and (prefers-reduced-motion:no-preference){.fig [data-step] .bx,.fig [data-step] .pill,.fig [data-node] .bx{transition:stroke .12s,stroke-width .12s}}
+@media screen and (forced-colors:active){.fig [data-state=current] .bx,.fig .sel-obj .bx{stroke-width:6}.fig .sel-tr .bx{stroke-width:4}}
 @media print{.fig-bar,.fig-live,.fig-detail{display:none}.fig [data-print=no]{display:none!important}.fig .off:not([data-print=no]){display:revert!important}}
-.fig-live:empty,.fig-detail:empty{border-left-color:transparent}

@@ -317,7 +317,9 @@ def html_steps(p, fid, st):
         return f'<li data-step="{x["n"]}"{scen}>{render(p, x["text"], "html", fid)}{exits}</li>'
     intro = f'<p>{render(p, st["intro"], "html", fid)}</p>' if st.get('intro') else ''
     outro = f'<p>{render(p, st["outro"], "html", fid)}</p>' if st.get('outro') else ''
-    return intro + '<ol>' + ''.join(item(x) for x in st['steps']) + '</ol>' + outro
+    first = str(st['steps'][0]['n']) if st['steps'] else '1'
+    start = f' start="{first}"' if first.isdigit() and first != '1' else ''
+    return intro + f'<ol{start}>' + ''.join(item(x) for x in st['steps']) + '</ol>' + outro
 
 
 def latex_steps(p, fid, st):
@@ -724,6 +726,10 @@ def main(argv):
     known = {GEN / r for r in latex}
     orphans = [q for q in GEN.rglob('*') if q.is_file() and q not in known] if GEN.exists() else []
     if check:
+        import subprocess
+        figs = subprocess.run([sys.executable, str(Path(__file__).resolve().parent / 'figures' / 'make.py'), '--check'])
+        if figs.returncode:
+            return 1
         if stale or orphans:
             print('stale generated files (run python3 docs/perch-paper/build/paper.py):', file=sys.stderr)
             for s in stale + [str(o.relative_to(ROOT.parent.parent)) for o in orphans]:

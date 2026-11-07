@@ -1,12 +1,17 @@
 % Generated from source/tables/tab-artifacts.json; edit that.
 \begin{table}[tbp]
 \centering
-\caption{\textbf{Placeholder.} }\label{tab:tab-artifacts}
-\footnotesize\begin{tabularx}{\linewidth}{@{}LLLL@{}}
+\caption{\textbf{Deployed artifacts this paper cites.} Testnet is reset periodically. Manifests: \code{deployments/\allowbreak{}testnet.\allowbreak{}json}, \code{mainnet.json} at \code{\fact{perch-pin-short}}. The embedded build's artifacts and their hashes are listed with the source revisions in the reproducibility material.}\label{tab:tab-artifacts}
+\scriptsize\begin{tabularx}{\linewidth}{@{}p{0.33\linewidth}p{0.14\linewidth}L@{}}
 \toprule
-\textbf{Artifact} & \textbf{Network or build} & \textbf{Bytes} & \textbf{Identifier} \\
+\textbf{Artifact} & \textbf{Network} & \textbf{Identifier} \\
 \midrule
-
+Perch \fact{perch-deployed-account-version} account (\code{\fact{perch-deployed-source-short}}), \fact{deployed-account-bytes} B & testnet, mainnet & Wasm \code{\fact{deployed-account-wasm}} \\
+Perch \fact{perch-deployed-account-version} policy contracts, \fact{deployed-policy-1-bytes} B and \fact{deployed-policy-2-bytes} B & testnet, mainnet & Wasm \code{\fact{deployed-policy-1-wasm}}; \code{\fact{deployed-policy-2-wasm}} \\
+This paper's account, preview deployment, \fact{preview-account-bytes} B & testnet & Wasm \code{\fact{preview-account-wasm}} \\
+\fact{wallet-name} preview account; completion transaction & testnet & \code{\fact{completion-account}}; \code{\fact{completion-tx}} \\
+Storage-census account (fresh preview account holding the game grant) & testnet & \code{\fact{census-account}} \\
+Smoke-test account; 1-stroop passkey transfer through a grant rule & testnet & \code{\fact{smoke-account}}; \code{\fact{smoke-tx}} \\
 \bottomrule
 \end{tabularx}
 \end{table}

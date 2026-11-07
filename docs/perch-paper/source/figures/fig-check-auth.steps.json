@@ -1,9 +1,9 @@
 {
- "intro": "The Soroban host calls `__check_auth(signature_payload, auth payload, contexts)`; the auth payload carries `context_rule_ids` and the claimed signers. Steps 1 to 6, 8 and 9 are the tested account shell.",
+ "intro": "The Soroban host calls `__check_auth(signature_payload, auth payload, contexts)`; the auth payload carries `context_rule_ids` and the claimed signers.",
  "steps": [
   {
    "n": "1",
-   "text": "Refuse if any context calls a reserved hook name on any contract: {{fact:reserved-hook-names}}.",
+   "text": "Refuse if any context calls a reserved hook name ({{fact:reserved-hook-names}}) on any contract.",
    "exits": [
     "`ReservedFunction` ({{fact:auth-error-reserved-function}})"
    ],
@@ -11,13 +11,13 @@
   },
   {
    "n": "2",
-   "text": "Classify a recovery completion: exactly one `apply_account_doc` context (exported `apply_doc`) on this account that selects the recovery rule. Classification only.",
+   "text": "Classify a recovery completion: one `apply_account_doc` context (exported `apply_doc`) on this account, selecting the recovery rule.",
    "exits": [],
    "assurance": "tested"
   },
   {
    "n": "3",
-   "text": "Refuse while an authorized `Protected` attempt holds the account frozen, unless this is its completion.",
+   "text": "Refuse while an authorized `Protected` attempt freezes the account, unless this is its completion.",
    "exits": [
     "`AccountFrozen` ({{fact:auth-error-account-frozen}})"
    ],
@@ -25,22 +25,22 @@
   },
   {
    "n": "4",
-   "text": "Refuse if a selected grant rule calls the recovery controller or its zero-knowledge adapter or pool. A recovery completion leaves here: the controller's `rcv_complete` checks the exact approved document bytes and the completion window.",
+   "text": "Refuse a selected grant rule that calls the recovery controller or its zero-knowledge adapter or pool. A completion leaves here: the controller's `rcv_complete` checks the approved document bytes and the completion window.",
    "exits": [
     "`ScopeEscalation` ({{fact:auth-error-scope-escalation}})",
-    "a completion: authorized with no signatures, or refused, by the recovery controller"
+    "a completion: decided by the recovery controller"
    ],
    "assurance": "tested"
   },
   {
    "n": "5",
-   "text": "Compute the account-bound hash bound = SHA-256(domain ‖ account ‖ signature payload), with domain {{fact:auth-domain-tag}}.",
+   "text": "bound = SHA-256(domain ‖ account ‖ signature payload), with domain {{fact:auth-domain-tag}}.",
    "exits": [],
    "assurance": "tested"
   },
   {
    "n": "6",
-   "text": "Resolve the selected rule IDs to stored rules and spending records, and convert the contexts.",
+   "text": "Resolve the selected rule IDs to stored rules and spending records; convert the contexts.",
    "exits": [
     "`ContextRuleNotFound` ({{fact:oz-error-context-rule-not-found}})",
     "`RuleEvalRefused` ({{fact:auth-error-rule-eval-refused}})"
@@ -49,25 +49,24 @@
   },
   {
    "n": "7",
-   "text": "Run `rule_eval::authorize` over the rules, records, contexts, choices, signers, ledger and generation; it returns the next records. It reads no storage and checks no signature.",
+   "text": "`rule_eval::authorize` maps rules, records, contexts, choices, signers, ledger and generation to the next records. It reads no storage and checks no signature.",
    "exits": [
-    "a stale grant: `StaleScope` ({{fact:auth-error-stale-scope}})",
-    "any other refusal: `RuleEvalRefused` ({{fact:auth-error-rule-eval-refused}})"
+    "stale grant: `StaleScope` ({{fact:auth-error-stale-scope}})",
+    "otherwise `RuleEvalRefused` ({{fact:auth-error-rule-eval-refused}})"
    ],
    "assurance": "proved"
   },
   {
    "n": "8",
-   "text": "Compute digest = SHA-256(bound ‖ XDR(selected rule IDs)) and authenticate each claimed signer: an external signer through its verifier contract's `verify(digest)`, a delegated signer (CAP-0071) through the host's `delegate_auth`, which does not bind the rule IDs.",
+   "text": "digest = SHA-256(bound ‖ XDR(rule IDs)). Authenticate each signer: an external one through its verifier contract's `verify(digest)` (trusted), a delegated one (CAP-0071) through the host's `delegate_auth`, which does not bind the rule IDs. A verifier that returns false gives `ExternalVerificationFailed` ({{fact:oz-error-external-verification-failed}}).",
    "exits": [
-    "a bad signature: the verifier traps (Ed25519: {{fact:verifier-trap-error}}) and the host reverts the transaction",
-    "`ExternalVerificationFailed` ({{fact:oz-error-external-verification-failed}}) only for a verifier that returns false"
+    "bad signature: the verifier traps ({{fact:verifier-trap-error}} for Ed25519); the host reverts"
    ],
-   "assurance": "tested; verifier trusted"
+   "assurance": "tested"
   },
   {
    "n": "9",
-   "text": "Store each capped spending record that changed. Authorized.",
+   "text": "Store each changed capped spending record. Authorized.",
    "exits": [],
    "assurance": "tested"
   }
