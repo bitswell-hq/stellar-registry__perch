@@ -170,7 +170,12 @@ MATH_INLINE = re.compile(r'\\\((.+?)\\\)', re.S)
 MATH_DISPLAY = re.compile(r'\\\[(.+?)\\\]', re.S)
 
 
+WIDE_MATH = 38  # glyphs in one display row; wider rows likely overflow a 360 px column
+
+
 def mathml(tex, display, ctx):
+    if display and texmath.width_estimate(tex) > WIDE_MATH:
+        LINT.append(f'math in {ctx} may overflow a phone column; break it with \\\\ into rows: {tex[:60]!r}')
     try:
         return texmath.to_mathml(tex.strip(), display)
     except texmath.TexError as e:

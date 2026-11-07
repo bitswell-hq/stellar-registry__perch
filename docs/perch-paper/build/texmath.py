@@ -215,12 +215,54 @@ def _row(items):
     return items[0] if len(items) == 1 else '<mrow>' + ''.join(items) + '</mrow>'
 
 
-def to_mathml(tex, display=False):
+def _split_rows(tex):
+    """Split display math at top-level \\\\ (outside braces) into rows."""
+    rows, depth, cur, i = [], 0, [], 0
+    while i < len(tex):
+        c = tex[i]
+        if c == '\\' and tex[i + 1:i + 2] == '\\' and depth == 0:
+            rows.append(''.join(cur))
+            cur, i = [], i + 2
+            continue
+        if c == '\\':
+            cur.append(tex[i:i + 2])
+            i += 2
+            continue
+        depth += c == '{'
+        depth -= c == '}'
+        cur.append(c)
+        i += 1
+    rows.append(''.join(cur))
+    return [r for r in rows if r.strip()]
+
+
+def _parse(tex):
     store = []
     p = _Parser(_tokens(tex, store), store)
     body = _row(p.seq())
     if p.peek() is not None:
         raise TexError('unbalanced }')
+    return body
+
+
+def width_estimate(tex):
+    """Rough glyph count of the widest row, to flag formulas likely to overflow a phone column."""
+    def glyphs(row):
+        row = re.sub(r'\\(text|mathrm|mathit|mathsf|mathtt|operatorname)\{([^{}]*)\}', lambda m: m.group(2), row)
+        row = re.sub(r'\\[A-Za-z]+', 'x', row)
+        return len(re.sub(r'[\s{}_^]', '', row))
+    return max(glyphs(r) for r in _split_rows(tex)) if tex.strip() else 0
+
+
+def to_mathml(tex, display=False):
+    rows = _split_rows(tex) if display else [tex]
+    if not display and '\\\\' in tex:
+        raise TexError('a line break needs display math')
+    if len(rows) > 1:
+        body = ('<mtable columnalign="left" displaystyle="true">'
+                + ''.join(f'<mtr><mtd>{_parse(r)}</mtd></mtr>' for r in rows) + '</mtable>')
+    else:
+        body = _parse(tex)
     attrs = ' display="block"' if display else ''
     annotation = f'<annotation encoding="application/x-tex">{html.escape(tex)}</annotation>'
     return f'<math{attrs}><semantics>{body}{annotation}</semantics></math>'
