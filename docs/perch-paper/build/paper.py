@@ -380,11 +380,14 @@ def latex_figure(p, fid):
 
 
 def latex_tabular(p, t, tid):
-    spec = t.get('latex_colspec') or ('@{}' + 'l' * len(t['columns']) + '@{}')
+    # Default: every column wraps (ragged right) across the text width. A table
+    # may give `latex_colspec` in tabularx terms, using L for a wrapping column.
+    spec = t.get('latex_colspec') or ('@{}' + 'L' * len(t['columns']) + '@{}')
     size = t.get('latex_size', 'footnotesize')
     head = ' & '.join(r'\textbf{' + render(p, c, 'latex', tid) + '}' for c in t['columns']) + r' \\'
     rows = '\n'.join(' & '.join(render(p, c, 'latex', tid) for c in r) + r' \\' for r in t['rows'])
-    return (f'\\{size}\\begin{{tabular}}{{{spec}}}\n\\toprule\n{head}\n\\midrule\n{rows}\n\\bottomrule\n\\end{{tabular}}')
+    return (f'\\{size}\\begin{{tabularx}}{{\\linewidth}}{{{spec}}}\n\\toprule\n{head}\n\\midrule\n{rows}\n'
+            f'\\bottomrule\n\\end{{tabularx}}')
 
 
 def latex_table(p, tid):

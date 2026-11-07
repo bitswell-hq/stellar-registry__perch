@@ -2,7 +2,7 @@
 \begin{table}[tbp]
 \centering
 \caption{\textbf{Two designs with one document format.} Rows other than the last are read from source at the named commits; sizes are the deployed Wasm. Contract code is uploaded once per network and shared by every account.}\label{tab:tab-6}
-\footnotesize\begin{tabular}{@{}lll@{}}
+\footnotesize\begin{tabularx}{\linewidth}{@{}LLL@{}}
 \toprule
 \textbf{} & \textbf{Conventional: Perch \code{c135aca} (deployed)} & \textbf{Perch \code{f0275f4} (this paper)} \\
 \midrule
@@ -16,5 +16,5 @@ Completed recovery and app authority & The target is the current document with d
 What is proven & A Lean model of the interpreter's evaluation and lowering, tied to the Rust by shared test vectors; the spending limit is not modeled & The Rust evaluator translated to Lean and proven equal to a model; the shell is tested \\
 Deployed account Wasm & 70,702 B (soroban-sdk 27.0.6), plus shared policy contracts of 17,999 B and 12,923 B & 106,584 B (soroban-sdk 29.0.1), 81\% of the 131,072-byte contract-size limit \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table}

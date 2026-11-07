@@ -2,7 +2,7 @@
 \begin{table}[tbp]
 \centering
 \caption{\textbf{Ending authority.} Invalidation is a policy event, collection a storage operation, and archival neither. Only a completed recovery moves the grant generation; otherwise the owner revokes grants one at a time.}\label{tab:tab-4}
-\footnotesize\begin{tabular}{@{}lllll@{}}
+\footnotesize\begin{tabularx}{\linewidth}{@{}LLLLL@{}}
 \toprule
 \textbf{Mechanism} & \textbf{Triggered by} & \textbf{Stops authorizing} & \textbf{Removes storage} & \textbf{Bars the credential later} \\
 \midrule
@@ -12,5 +12,5 @@ Completed recovery & The controller's approved completion & Every earlier grant 
 \code{gc\_grant} & Anyone, only for a grant whose generation is older; an expired but current grant is not collectable & Nothing new & Rules, tags, spending records; the credential index is kept & Unchanged \\
 Archival (TTL lapse) & Rent not paid & Nothing; the entry is unavailable, never absent, until restored & No & No \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table}

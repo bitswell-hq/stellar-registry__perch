@@ -2,7 +2,7 @@
 \begin{table}[tbp]
 \centering
 \caption{\textbf{The ten attenuation steps (\code{crates/rule-eval/src/attenuate.rs} in rule-core).} Nothing else is an attenuation step.}\label{tab:tab-2}
-\footnotesize\begin{tabular}{@{}lll@{}}
+\footnotesize\begin{tabularx}{\linewidth}{@{}LLL@{}}
 \toprule
 \textbf{Rule part} & \textbf{Steps that may narrow it} & \textbf{Refused} \\
 \midrule
@@ -14,5 +14,5 @@ Cap & \code{add\_cap} to an uncapped rule, \code{lower\_cap\_limit}, \code{lengt
 Expiry & \code{lower\_valid\_until} (add an expiry or move it earlier) & a later expiry \\
 Target, generation & no step & none \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table}

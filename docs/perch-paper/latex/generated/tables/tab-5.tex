@@ -2,7 +2,7 @@
 \begin{table}[tbp]
 \centering
 \caption{\textbf{Four counters, each with its own trigger; Figure 8 shows the first two in \S{}10's run.} }\label{tab:tab-5}
-\footnotesize\begin{tabular}{@{}llll@{}}
+\footnotesize\begin{tabularx}{\linewidth}{@{}LLLL@{}}
 \toprule
 \textbf{Counter} & \textbf{Lives in} & \textbf{Advances on} & \textbf{Used for} \\
 \midrule
@@ -11,5 +11,5 @@ Recovery generation & Account & Every recovery-configuration change (enrollment,
 Revision & Account & Every \code{apply\_account\_doc} and executed upgrade & The optional expected-revision check on account-document writes \\
 Epoch & Recovery controller & Every configuration change, completed recovery and executed account upgrade & Invalidating older evidence and attempts \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table}

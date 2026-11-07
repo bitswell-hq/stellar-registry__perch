@@ -2,7 +2,7 @@
 \begin{table}[tbp]
 \centering
 \caption{\textbf{Terms.} In the artifacts, \emph{scope} has two meanings: a rule's target in document JSON, and an installed grant in the contract. This paper uses neither.}\label{tab:tab-1}
-\footnotesize\begin{tabular}{@{}lll@{}}
+\footnotesize\begin{tabularx}{\linewidth}{@{}LLL@{}}
 \toprule
 \textbf{Term} & \textbf{Meaning in this paper} & \textbf{Name in the artifacts} \\
 \midrule
@@ -15,5 +15,5 @@ Attenuated grant & A rule set derived from a grant by the steps of Table 2; mode
 Spending record & A capped rule's charged amounts and their ledgers, used to check a moving window. & \code{SpendRecord} \\
 Grant generation & A counter on the account, 0 at creation, advanced only by each completed recovery. & \code{scope\_generation} \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table}
