@@ -1,10 +1,72 @@
 {
- "title": "Placeholder.",
- "caption": "",
+ "title": "Perch and oz-policy-builder, side by side.",
+ "caption": "Twelve of the twenty dimensions; every cell is read from source at Perch {{fact:perch-pin-short}}, oz-policy-builder {{fact:opb-pin-short}} and OpenZeppelin `stellar-contracts` {{fact:oz-v080-tag}}, and nothing is measured. Sources for each cell are in the full comparison table.",
  "columns": [
   "Dimension",
-  "Perch",
-  "oz-policy-builder on an OpenZeppelin account"
+  "Perch {{fact:perch-pin-short}}",
+  "oz-policy-builder {{fact:opb-pin-short}} on an OpenZeppelin account"
  ],
- "rows": []
+ "latex_colspec": "@{}p{0.2\\linewidth}LL@{}",
+ "rows": [
+  [
+   "Where the decision runs",
+   "Inside the account: the linked evaluator decides",
+   "In attached policy contracts, called by the account after authentication"
+  ],
+  [
+   "Order of checks",
+   "Decide (caps included), then authenticate",
+   "Select and check expiry, authenticate, then run policies"
+  ],
+  [
+   "Where decision state lives",
+   "The account only",
+   "The account, the interpreter and `spending_limit`, each keyed by (account, rule)"
+  ],
+  [
+   "Conditions on one call",
+   "Target, functions, {{fact:doc-conditions-count}} conjunctive argument conditions, threshold, expiry",
+   "A predicate language with and/or, comparisons, quantifiers, arithmetic, time and reads"
+  ],
+  [
+   "Relating calls in one transaction",
+   "Each context alone",
+   "One predicate can relate the calls of an adapter batch"
+  ],
+  [
+   "External state in the decision",
+   "None",
+   "Up to {{fact:opb-interpreter-max-reads}} cross-contract reads per `enforce`"
+  ],
+  [
+   "Rolling spending cap",
+   "In the evaluator, window (L − P, L], proved",
+   "OpenZeppelin `spending_limit` beside the interpreter, same window boundary"
+  ],
+  [
+   "Threshold and signer kinds",
+   "Threshold in the rule; external (passkey, Ed25519) and delegated signers",
+   "Threshold through an attached policy; delegated signers only on policed rules"
+  ],
+  [
+   "What a signature binds",
+   "External: account and rule IDs; delegated: account only",
+   "v0.8.0: account and rule IDs for both kinds"
+  ],
+  [
+   "Ending authority in bulk",
+   "One counter makes every earlier grant refuse at recovery",
+   "Rules removed one at a time"
+  ],
+  [
+   "Assurance",
+   "Kernel-checked proofs of the evaluator; shell tested; no audit completed",
+   "Tests on the shipped Wasm, threat model; external audit {{fact:opb-audit-status}}"
+  ],
+  [
+   "Deployment",
+   "Testnet preview (earlier design on mainnet)",
+   "Interpreter on testnet; no mainnet pin"
+  ]
+ ]
 }

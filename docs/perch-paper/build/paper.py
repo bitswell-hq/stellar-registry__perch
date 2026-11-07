@@ -165,7 +165,7 @@ def render(p, s, ed, ctx=''):
             continue
         if part.startswith('`') and part.endswith('`') and len(part) > 1:
             inner = part[1:-1]
-            out.append(r'\code{' + svg2tikz.tex_escape(inner) + '}' if ed == 'latex'
+            out.append(r'\code{' + tex_code(inner) + '}' if ed == 'latex'
                        else '<code>' + html.escape(inner, quote=False) + '</code>')
         elif part.startswith('**') and part.endswith('**'):
             inner = render(p, part[2:-2], ed, ctx)
@@ -185,6 +185,16 @@ def render(p, s, ed, ctx=''):
     return ''.join(out)
 
 
+def tex_code(s):
+    # Inline code in LaTeX: escaped, with break points after path and hash separators in
+    # long spans, since \texttt does not hyphenate and table columns are narrow.
+    out = svg2tikz.tex_escape(s)
+    if len(s) > 16:
+        out = re.sub(r'(/|\\_|\.|:|-|,)', r'\1\\allowbreak{}', out)
+        out = re.sub(r'([0-9a-f]{8})(?=[0-9a-f]{8})', r'\1\\allowbreak{}', out)
+    return out
+
+
 def fact_value(p, key, ed, anon=False):
     f = p.facts[key]
     if not isinstance(f, dict):
@@ -193,8 +203,7 @@ def fact_value(p, key, ed, anon=False):
     if f.get('markup'):
         return render(p, v, ed, key)
     if ed == 'latex':
-        v = svg2tikz.tex_escape(v)
-        return r'\code{' + v + '}' if f.get('code') else v
+        return r'\code{' + tex_code(v) + '}' if f.get('code') else svg2tikz.tex_escape(v)
     v = html.escape(v, quote=False)
     return f'<code>{v}</code>' if f.get('code') else v
 
@@ -517,8 +526,17 @@ def latex_tabular(p, t, tid):
 
 def latex_table(p, tid):
     t = p.tables[tid]
-    env = "table*" if t.get("latex_span") == "full" else "table"
     cap = r'\textbf{' + render(p, t['title'], 'latex', tid) + '} ' + render(p, t.get('caption', ''), 'latex', tid)
+    if t.get('latex_long'):
+        # A table that may break across pages (xltabular): not a float.
+        spec = t.get('latex_colspec') or ('@{}' + 'L' * len(t['columns']) + '@{}')
+        head = ' & '.join(r'\textbf{' + render(p, c, 'latex', tid) + '}' for c in t['columns']) + r' \\'
+        rows = '\n'.join(' & '.join(render(p, c, 'latex', tid) for c in r) + r' \\' for r in t['rows'])
+        return (f'% Generated from source/tables/{tid}.json; edit that.\n'
+                f'{{\\{t.get("latex_size", "scriptsize")}\n\\begin{{xltabular}}{{\\linewidth}}{{{spec}}}\n'
+                f'\\caption{{{cap}}}\\label{{tab:{tid}}}\\\\\n\\toprule\n{head}\n\\midrule\n\\endfirsthead\n'
+                f'\\toprule\n{head}\n\\midrule\n\\endhead\n\\bottomrule\n\\endlastfoot\n{rows}\n\\end{{xltabular}}}}\n')
+    env = "table*" if t.get("latex_span") == "full" else "table"
     return (f'% Generated from source/tables/{tid}.json; edit that.\n'
             f'\\begin{{{env}}}[{t.get("latex_place", "tbp")}]\n\\centering\n'
             f'\\caption{{{cap}}}\\label{{tab:{tid}}}\n{latex_tabular(p, t, tid)}\n\\end{{{env}}}\n')

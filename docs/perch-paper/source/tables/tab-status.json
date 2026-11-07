@@ -1,61 +1,68 @@
 {
+ "title": "Status on {{fact:paper-date}}.",
+ "caption": "*Deployed*: recorded in Perch's deployment manifests and present on the network. *Preview*: a separate testnet deployment outside those manifests. *Merged*: on a main branch, not deployed. *Open PR*: unmerged code. *Proposed*: not implemented. *Not done*: not started or not complete.",
  "columns": [
   "Component",
   "Status",
   "Where",
   "Evidence"
  ],
+ "html_class": "status",
+ "latex_colspec": "@{}LlLL@{}",
  "rows": [
   [
-   "Conventional account (OpenZeppelin library fork, interpreter, spending limit), compiler, recovery controller, Ed25519 and WebAuthn verifiers, ZK pool and adapter",
-   "{{badge:plain:DEPLOYED}}",
-   "Perch `c135aca`: testnet 2026-10-22, mainnet 2026-10-26",
+   "Perch 0.5.1 (earlier design: an OpenZeppelin account-library fork with two Perch policy contracts), document compiler, recovery controller, Ed25519 and WebAuthn verifiers, ZK pool and adapter",
+   "{{badge:deployed:DEPLOYED}}",
+   "Perch `{{fact:perch-deployed-source-short}}`: testnet {{fact:perch-deployed-testnet-date}}, mainnet {{fact:perch-deployed-mainnet-date}}",
    "`deployments/testnet.json`, `mainnet.json`"
   ],
   [
-   "The same contract source on testnet",
-   "{{badge:plain:PREVIEW}}",
-   "Separate deployment, 2026-11-05, ledger 5,577,521; account Wasm `0bdbdd14…` (106,584 B)",
-   "Built from `a410123`, whose contract sources equal the pin's"
-  ],
-  [
-   "Nido wallet on that deployment",
-   "{{badge:plain:PREVIEW}}",
-   "Draft `nidohq/nido#356`, `356.test.nido.fyi`",
-   "11 testnet transactions (§10)"
-  ],
-  [
-   "rule-core evaluator, model and proofs",
-   "{{badge:plain:MERGED}}",
-   "rule-core `cbabe59`, on its main branch",
-   "CI regenerates the translation, builds the proofs and checks the claims ledger"
-  ],
-  [
-   "The account deciding with `rule_eval`; installed grants; credential index; named verifiers; rebuilt recovery hooks",
-   "{{badge:plain:OPEN PR}}",
-   "Perch `f0275f4`, head of the open stack ending at #68",
+   "This paper's account (deciding with `rule_eval`; installed grants; credential index; named verifiers; rebuilt recovery hooks)",
+   "{{badge:open:OPEN PR}}",
+   "Perch {{fact:perch-pin-short}}, head of the open stack ending at {{fact:perch-pr-stack-head}}",
    "Unmerged"
   ],
   [
+   "The same contract source on testnet",
+   "{{badge:preview:PREVIEW}}",
+   "Separate deployment, {{fact:preview-deploy-date}}, ledger {{fact:preview-deploy-ledger}}; account Wasm {{fact:preview-account-wasm-short}} ({{fact:preview-account-bytes}} B)",
+   "Built from {{fact:perch-preview-source}}, whose contract sources equal the pin's"
+  ],
+  [
+   "{{fact:wallet-name}} wallet on that deployment",
+   "{{badge:preview:PREVIEW}}",
+   "Draft {{fact:nido-preview-pr}}",
+   "{{fact:nido-run-transactions}} testnet transactions ({{ref:sec:evaluation}})"
+  ],
+  [
+   "rule-core evaluator, model and proofs",
+   "{{badge:merged:MERGED}}",
+   "rule-core {{fact:rule-core-pin-short}}",
+   "CI regenerates the translation, builds the proofs and checks the claims ledger"
+  ],
+  [
    "Exact authorization-entry roots",
-   "{{badge:plain:OPEN PR}}",
-   "Perch #69 and rule-core #17, drafts after the pin",
-   "No theorem at `cbabe59`"
+   "{{badge:open:OPEN PR}}",
+   "{{fact:exact-roots-prs}}",
+   "No theorem at {{fact:rule-core-pin-short}}"
+  ],
+  [
+   "External audit of the account, compiler and recovery controller",
+   "{{badge:notdone:NOT DONE}}",
+   "—",
+   "—"
   ],
   [
    "Contract exports under this paper's names",
-   "{{badge:plain:PROPOSED}}",
-   "§05",
+   "{{badge:proposed:PROPOSED}}",
+   "{{ref:tab:tab-api}}",
    "Exports unchanged"
   ],
   [
-   "In-page proof check; agent runtime; x402 payments; Cedar authoring; shared-budget runtime",
-   "{{badge:plain:PROPOSED}}",
-   "Appendix A, §13, §04",
+   "Agent runtime; x402 payments; Cedar authoring; delegation-tree budget runtime; account entry point for attenuated grants; in-page proof check",
+   "{{badge:proposed:PROPOSED}}",
+   "{{ref:sec:agents}}",
    "Not implemented"
   ]
- ],
- "html_class": "status",
- "title": "Status on {{fact:paper-date}}.",
- "caption": "*Deployed*: recorded in Perch's deployment manifests and present on the network. *Preview*: a separate testnet deployment outside those manifests. *Merged*: on a main branch, not deployed. *Open PR*: unmerged code. *Proposed*: not implemented. *Not done*: not started or not complete."
+ ]
 }
