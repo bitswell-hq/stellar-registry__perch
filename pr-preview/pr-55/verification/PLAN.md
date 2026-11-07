@@ -92,7 +92,9 @@ the release-stack suite, and the testnet exercise cover them.
   `remove_scope`, and `gc_scope`; the scoped-document guards (no recovery
   member, no rule scoped to the account, its recovery controller, or its
   ZK adapter or pool, checked at apply and, for a controller or ZK factor
-  applied later, in `__check_auth`); the scope generation gate in
+  applied later, in `__check_auth`; no guardian approval at any
+  controller, refused at apply for a rule's `functions` and in
+  `__check_auth` for every scoped rule); the scope generation gate in
   `__check_auth` (`StaleScope`) with its tags' TTL; the wipe every recovery
   completion makes; and the credential index (`WipedCredential`). Tested,
   not proved:
@@ -100,6 +102,12 @@ the release-stack suite, and the testnet exercise cover them.
     guards, the wipe after lost-key and compromise completions, `gc_scope`,
     archived tags, the freeze, the `Loss` window, and the credential index
     across completions;
+  - under enforcing authorization by `scoped_guardian_approvals.rs`: no
+    scoped rule casts a guardian approval at an unadopted controller, a
+    second controller deployment, or the adopted one, for both entry
+    points, with listed or unrestricted functions, or from a scope applied
+    before the controller was adopted, while the admin document's rules
+    still do;
   - by `rule_core_documents.rs`: rule-core's scoped document traces, whose
     lowering, verdicts and records its Lean model computed, through the
     real `apply_scope` and `__check_auth`: every refusal of the scoped
