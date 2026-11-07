@@ -40,8 +40,9 @@ python3 docs/perch-paper/build/paper.py --check  # CI: fail if either is stale
 docs/perch-paper/latex/build.sh                  # PDF; needs Tectonic 0.17.0 on PATH or in $TECTONIC
 ```
 
-`build.sh` pins the TeX bundle and fails on any undefined or changed reference
-or citation. `build/paper.py` uses only the Python standard library.
+`build.sh` pins the TeX bundle, fails on any undefined or changed reference
+or citation, and writes the PDF to `latex/out/`. `build/paper.py` uses only the
+Python standard library.
 
 `index.html` keeps four blocks that the embedded source bundle's
 `projects/perch-browser/build-page.mjs` refreshes in place (`MEASUREMENTS`,

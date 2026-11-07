@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build perch-paper.pdf with a pinned Tectonic and TeX bundle, and fail on
+# Build out/perch-paper.pdf with a pinned Tectonic and TeX bundle, and fail on
 # undefined or changed references, undefined citations and BibTeX warnings.
 # CI installs the binary it names (TECTONIC_VERSION); locally, put that
 # version on PATH or set TECTONIC to its path.
@@ -17,7 +17,7 @@ fi
 if [ "${SKIP_CHECK:-0}" != 1 ]; then python3 ../build/paper.py --check; fi
 rm -rf out && mkdir out
 # ANONYMOUS=1 builds the double-blind edition (author names, affiliation and
-# the authors' repository links withheld) as perch-paper-anonymous.pdf.
+# the authors' repository links withheld) as out/perch-paper-anonymous.pdf.
 main=perch-paper
 if [ "${ANONYMOUS:-0}" = 1 ]; then
   main=perch-paper-anonymous
@@ -42,5 +42,4 @@ if [ "$status" -ne 0 ]; then
   echo "build.sh: unresolved references or citations, or missing glyphs (see above)" >&2
   exit 1
 fi
-cp out/$main.pdf $main.pdf
-echo "build.sh: wrote $(pwd)/$main.pdf"
+echo "build.sh: wrote $(pwd)/out/$main.pdf"
