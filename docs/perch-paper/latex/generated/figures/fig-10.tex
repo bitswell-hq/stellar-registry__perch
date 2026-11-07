@@ -1,0 +1,90 @@
+% Generated from source/outline.json and source/figures/fig-10.svg; edit those.
+\begin{figure}[tbp]
+\centering
+\begin{adjustbox}{max width=\linewidth,max totalheight=0.8\textheight}%
+\begin{tikzpicture}[x=1pt,y=-1pt,line join=round,line cap=round]
+\useasboundingbox (0,0) rectangle (760,1163);
+\path[fill=cfig-fill, draw=cfig-stroke, line width=1.5pt, rounded corners=6pt] (2,2) rectangle (758,83);
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily\bfseries] at (14,27) {One source};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (14,47) {{\ttfamily crates/rule-eval}: about 2,400 lines of Rust, {\ttfamily no\_std}, no dependencies,};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (14,67) {{\ttfamily forbid(unsafe\_code)}};
+\path[draw=camber, line width=2pt, {}-{Triangle[length=8pt,width=8pt,color=camber,fill=camber,line width=0pt]}] (32,83) -- (32,135);
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{13}{15.6}\selectfont\sffamily\bfseries] at (46,123) {PROOF PATH};
+\path[fill=cfig-fill, draw=cfig-stroke, line width=1.5pt, rounded corners=6pt] (2,133) rectangle (442,194);
+\path[pattern=north east lines, pattern color=cfig-stroke] (3,134) rectangle (13,193);
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (26,158) {rustc {\ttfamily nightly-2026-09-17} \ensuremath{\rightarrow} MIR};
+\node[anchor=base west, inner sep=0, text=cmuted, font=\fontsize{13}{15.6}\selectfont\sffamily\bfseries] at (26,178) {TRUSTED};
+\path[draw=camber, line width=2pt, {}-{Triangle[length=8pt,width=8pt,color=camber,fill=camber,line width=0pt]}] (32,194) -- (32,212);
+\path[fill=cfig-fill, draw=cfig-stroke, line width=1.5pt, rounded corners=6pt] (2,214) rectangle (442,275);
+\path[pattern=north east lines, pattern color=cfig-stroke] (3,215) rectangle (13,274);
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (26,239) {Charon {\ttfamily 7b462d9} \ensuremath{\rightarrow} LLBC};
+\node[anchor=base west, inner sep=0, text=cmuted, font=\fontsize{13}{15.6}\selectfont\sffamily\bfseries] at (26,259) {TRUSTED};
+\path[draw=camber, line width=2pt, {}-{Triangle[length=8pt,width=8pt,color=camber,fill=camber,line width=0pt]}] (32,275) -- (32,293);
+\path[fill=cfig-fill, draw=cfig-stroke, line width=1.5pt, rounded corners=6pt] (2,295) rectangle (442,376);
+\path[pattern=north east lines, pattern color=cfig-stroke] (3,296) rectangle (13,375);
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (26,320) {Aeneas {\ttfamily ab34bd2} \ensuremath{\rightarrow} {\ttfamily RuleEval.lean}: 3,653};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (26,340) {generated lines, regenerated and diffed in CI};
+\node[anchor=base west, inner sep=0, text=cmuted, font=\fontsize{13}{15.6}\selectfont\sffamily\bfseries] at (26,360) {TRUSTED};
+\path[draw=camber, line width=2pt, {}-{Triangle[length=8pt,width=8pt,color=camber,fill=camber,line width=0pt]}] (32,376) -- (32,394);
+\path[fill=cfig-proved, draw=cgreen, line width=2.5pt, rounded corners=8pt] (2,396) rectangle (442,727);
+\path[fill=cfig-fill, draw=cfig-stroke, line width=1.5pt, rounded corners=6pt] (14,408) rectangle (430,509);
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (26,433) {Equivalence: {\ttfamily authorize\_eq}, {\ttfamily lower\_eq},};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (26,453) {{\ttfamily lower\_scoped\_eq} relate the translation to the};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (26,473) {readable model.};
+\node[anchor=base west, inner sep=0, text=cgreen, font=\fontsize{13}{15.6}\selectfont\sffamily\bfseries] at (26,493) {PROVED \ensuremath{\cdot} TRANSLATION \ensuremath{\leftrightarrow} MODEL};
+\path[fill=cfig-fill, draw=cfig-stroke, line width=1.5pt, rounded corners=6pt] (14,519) rectangle (430,600);
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (26,544) {Containment, narrowing, trace inclusion, cap};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (26,564) {window, budgets};
+\node[anchor=base west, inner sep=0, text=cgreen, font=\fontsize{13}{15.6}\selectfont\sffamily\bfseries] at (26,584) {PROVED \ensuremath{\cdot} MODEL + TRANSLATION};
+\path[fill=cfig-fill, draw=cfig-stroke, line width=1.5pt, rounded corners=6pt] (14,610) rectangle (430,671);
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (26,635) {Account event model: recovery invalidation};
+\node[anchor=base west, inner sep=0, text=cgreen, font=\fontsize{13}{15.6}\selectfont\sffamily\bfseries] at (26,655) {PROVED \ensuremath{\cdot} ACCOUNT MODEL};
+\node[anchor=base west, inner sep=0, text=cgreen, font=\fontsize{14}{16.8}\selectfont\sffamily] at (14,696) {Lean v4.35.0 kernel. 940 exported theorems; axioms};
+\node[anchor=base west, inner sep=0, text=cgreen, font=\fontsize{14}{16.8}\selectfont\sffamily] at (14,715) {within propext, Quot.sound, Classical.choice.};
+\path[fill=cfig-fill, draw=cfig-stroke, line width=1.5pt, rounded corners=6pt] (2,745) rectangle (442,846);
+\path[pattern=north east lines, pattern color=cfig-stroke] (3,746) rectangle (13,845);
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (26,770) {Denotations, the document meaning {\ttfamily Doc.allows}};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (26,790) {(written from Perch {\ttfamily dff2a73}), and the Soroban};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (26,810) {host models};
+\node[anchor=base west, inner sep=0, text=cmuted, font=\fontsize{13}{15.6}\selectfont\sffamily\bfseries] at (26,830) {TRUSTED SPECIFICATION};
+\path[draw=cfig-stroke, line width=1.5pt, {}-{Triangle[length=8pt,width=8pt,color=cfig-stroke,fill=cfig-stroke,line width=0pt]}] (412,745) -- (412,729);
+\path[fill=cfig-fill, draw=cfig-stroke, line width=1.5pt, rounded corners=6pt] (2,860) rectangle (442,941);
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (14,885) {Theorems about a Soroban host model; the model is};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (14,905) {tested against soroban-env-host 29.0.1 and 30.0.0};
+\node[anchor=base west, inner sep=0, text=cgreen, font=\fontsize{13}{15.6}\selectfont\sffamily\bfseries] at (14,925) {PROVED \ensuremath{\cdot} HOST MODEL};
+\path[fill=cfig-fill, draw=cfig-stroke, line width=1.5pt, rounded corners=6pt] (2,955) rectangle (442,1036);
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (14,980) {Perch {\ttfamily formal/} (Lean v4.33.0): CANON v1 encoding};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (14,1000) {is injective};
+\node[anchor=base west, inner sep=0, text=cgreen, font=\fontsize{13}{15.6}\selectfont\sffamily\bfseries] at (14,1020) {PROVED \ensuremath{\cdot} PERCH CANON PACKAGE};
+\path[draw=camber, line width=2pt, {}-{Triangle[length=8pt,width=8pt,color=camber,fill=camber,line width=0pt]}] (522,83) -- (522,135);
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{13}{15.6}\selectfont\sffamily\bfseries] at (536,123) {SHIPPING PATH};
+\path[fill=cfig-fill, draw=cfig-stroke, line width=1.5pt, rounded corners=6pt] (492,133) rectangle (758,214);
+\path[pattern=north east lines, pattern color=cfig-stroke] (493,134) rectangle (503,213);
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (516,158) {rustc 1.97.1 \ensuremath{\rightarrow}};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (516,178) {{\ttfamily wasm32v1-none}};
+\node[anchor=base west, inner sep=0, text=cmuted, font=\fontsize{13}{15.6}\selectfont\sffamily\bfseries] at (516,198) {TRUSTED};
+\path[draw=camber, line width=2pt, {}-{Triangle[length=8pt,width=8pt,color=camber,fill=camber,line width=0pt]}] (522,214) -- (522,232);
+\path[fill=cfig-fill, draw=cfig-stroke, line width=1.5pt, rounded corners=6pt] (492,234) rectangle (758,355);
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (504,259) {Linked into};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (504,279) {{\ttfamily perch\_account.wasm}: {\ttfamily lower}};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (504,299) {and {\ttfamily lower\_scoped} on};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (504,319) {install, {\ttfamily authorize} in};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (504,339) {{\ttfamily \_\_check\_auth}};
+\path[draw=camber, line width=2pt, {}-{Triangle[length=8pt,width=8pt,color=camber,fill=camber,line width=0pt]}] (522,355) -- (522,373);
+\path[fill=cfig-fill, draw=cfig-stroke, line width=1.5pt, rounded corners=6pt] (492,375) rectangle (758,436);
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (504,400) {Account shell around it};
+\node[anchor=base west, inner sep=0, text=cmuted, font=\fontsize{13}{15.6}\selectfont\sffamily\bfseries] at (504,420) {TESTED};
+\path[fill=cfig-deny, draw=cdeny, line width=2pt, dash pattern=on 6pt off 4pt, rounded corners=6pt] (492,454) rectangle (758,515);
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (504,479) {Nothing checks this Wasm};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (504,499) {against the translation.};
+\path[draw=cdeny, line width=2.2pt] (732,470) -- (742,480);
+\path[draw=cdeny, line width=2.2pt] (742,470) -- (732,480);
+\path[fill=cfig-fill, draw=cfig-stroke, line width=1.5pt, rounded corners=6pt] (2,1058) rectangle (758,1159);
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (14,1083) {Bridge: 57 Lean-generated document traces run through the account's {\ttfamily apply\_doc},};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (14,1103) {{\ttfamily apply\_scope} and {\ttfamily \_\_check\_auth} (native contracts, enforcing authorization, the real};
+\node[anchor=base west, inner sep=0, text=ctext, font=\fontsize{15}{18}\selectfont\sffamily] at (14,1123) {Ed25519 verifier). Rule-core's vectors are replayed in Perch CI.};
+\node[anchor=base west, inner sep=0, text=cmuted, font=\fontsize{13}{15.6}\selectfont\sffamily\bfseries] at (14,1143) {TESTED};
+\end{tikzpicture}%
+\end{adjustbox}
+\caption{\textbf{One source, two paths.} Lean's kernel checks theorems about the Aeneas translation of the MIR that nightly rustc produces; the account ships Wasm from rustc 1.97.1, and nothing checks one against the other. The translators, compiler back ends and specification are trusted, and tests connect the shipped shell to the model. Green: PROVED; plain: TESTED; hatched: TRUSTED.}\label{fig:fig-10}
+\end{figure}

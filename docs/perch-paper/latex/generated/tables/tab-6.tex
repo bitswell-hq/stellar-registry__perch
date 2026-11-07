@@ -1,0 +1,20 @@
+% Generated from source/tables/tab-6.json; edit that.
+\begin{table}[tbp]
+\centering
+\caption{\textbf{Two designs with one document format.} Rows other than the last are read from source at the named commits; sizes are the deployed Wasm. Contract code is uploaded once per network and shared by every account.}\label{tab:tab-6}
+\footnotesize\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{} & \textbf{Conventional: Perch \code{c135aca} (deployed)} & \textbf{Perch \code{f0275f4} (this paper)} \\
+\midrule
+Rule selection & Signer names one rule ID per context; OpenZeppelin library code in the account checks it & The same field and digest construction; the account checks it \\
+Where the decision runs & OpenZeppelin's check in the account, then the interpreter and spending-limit contracts for the selected rule & \code{rule\_eval::check\_auth} (pinned \code{authorize}), inside the account \\
+Order & Authenticate signers, then run policies & Decide, then authenticate; a refused batch calls no verifier \\
+Cross-contract calls for one capped transfer with one external signer & 3: verifier, interpreter, spending limit & 1: verifier \\
+Policy state & The account plus two shared contracts that key programs and spending windows by (account, rule) & The account only \\
+App permissions & Rules in the account document; no separate grant API & Installed grants: removable by the owner, collectable by anyone once stale \\
+Completed recovery and app authority & The target is the current document with declared replacements; app rules it does not touch stay installed and keep authorizing & One generation increment makes every installed grant refuse; their credentials are barred from every later document except the recovery target \\
+What is proven & A Lean model of the interpreter's evaluation and lowering, tied to the Rust by shared test vectors; the spending limit is not modeled & The Rust evaluator translated to Lean and proven equal to a model; the shell is tested \\
+Deployed account Wasm & 70,702 B (soroban-sdk 27.0.6), plus shared policy contracts of 17,999 B and 12,923 B & 106,584 B (soroban-sdk 29.0.1), 81\% of the 131,072-byte contract-size limit \\
+\bottomrule
+\end{tabular}
+\end{table}

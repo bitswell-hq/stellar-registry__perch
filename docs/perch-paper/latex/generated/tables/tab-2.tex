@@ -1,0 +1,18 @@
+% Generated from source/tables/tab-2.json; edit that.
+\begin{table}[tbp]
+\centering
+\caption{\textbf{The ten attenuation steps (\code{crates/rule-eval/src/attenuate.rs} in rule-core).} Nothing else is an attenuation step.}\label{tab:tab-2}
+\footnotesize\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Rule part} & \textbf{Steps that may narrow it} & \textbf{Refused} \\
+\midrule
+Rule set & \code{drop\_rule} (later rule indices shift down) & none \\
+Functions & \code{remove\_functions}, \code{restrict\_functions} & none \\
+Arguments & \code{add\_cond} (\code{ArgEq}, \code{ArgIn}, \code{ArgStrPrefix}, \code{ArgI128AtMost}) & none \\
+Signers & \code{remove\_signers} (threshold kept), \code{raise\_threshold} & a lower threshold \\
+Cap & \code{add\_cap} to an uncapped rule, \code{lower\_cap\_limit}, \code{lengthen\_cap\_period} & a second cap, a non-positive limit, a zero period, a higher limit, a shorter period \\
+Expiry & \code{lower\_valid\_until} (add an expiry or move it earlier) & a later expiry \\
+Target, generation & no step & none \\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -396,6 +396,25 @@ jobs:
           CARGO_TARGET_DIR=target/zk-d24 zk_wasm --features tree-depth-24
           cargo test -q -p perch-zk-adapter --test costs -- --ignored --nocapture --test-threads 1
 
+  # The Perch paper: both editions come from docs/perch-paper/source, so the
+  # committed index.html and latex/generated/ must match it (paper.py --check),
+  # and the LaTeX edition must build with no undefined reference or citation.
+  paper:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-tectonic
+      - run: docs/perch-paper/latex/build.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: perch-paper-pdf
+          path: docs/perch-paper/latex/perch-paper.pdf
+          if-no-files-found: error
+
   zizmor:
     runs-on: ubuntu-latest
     permissions:

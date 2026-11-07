@@ -1,0 +1,19 @@
+% Generated from source/tables/tab-1.json; edit that.
+\begin{table}[tbp]
+\centering
+\caption{\textbf{Terms.} In the artifacts, \emph{scope} has two meanings: a rule's target in document JSON, and an installed grant in the contract. This paper uses neither.}\label{tab:tab-1}
+\footnotesize\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Term} & \textbf{Meaning in this paper} & \textbf{Name in the artifacts} \\
+\midrule
+Rule & One target contract, function policy, argument conditions and signer threshold, with optional expiry, cap and generation. & \code{Rule} \\
+Rule target & The contract whose function a rule lets be called. No rule authorizes a contract creation; the account refuses any batch that contains one. & JSON \code{"scope"} \\
+Signer condition & Which listed signers must approve, as a threshold over distinct identities. & JSON \code{"principals"} \\
+Signer & An identity whose evidence is authenticated: an \emph{external} signer pairs a verifier contract with key material; a \emph{delegated} signer is another Soroban address approving through the host (CAP-0071). & \code{Signer::External}, \code{Signer::Delegated} \\
+Installed grant & A generation-stamped set of rules stored under a grant ID, with its document hash and reconstruction metadata. & ``scope'': \code{apply\_scope}, \code{StaleScope} \\
+Attenuated grant & A rule set derived from a grant by the steps of Table 2; modeled and proven in rule-core, with no account entry point. & rule-core \code{attenuate} \\
+Spending record & A capped rule's charged amounts and their ledgers, used to check a moving window. & \code{SpendRecord} \\
+Grant generation & A counter on the account, 0 at creation, advanced only by each completed recovery. & \code{scope\_generation} \\
+\bottomrule
+\end{tabular}
+\end{table}

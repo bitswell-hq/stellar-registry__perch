@@ -1,0 +1,185 @@
+{
+ "nav_note": "A research paper with an executable example.<br>Second iteration · November 2026",
+ "sections": [
+  {
+   "id": "motivation",
+   "title_html": "What did the owner authorize?",
+   "figures": [
+    "fig-1",
+    "fig-2"
+   ],
+   "tables": [],
+   "nav": "Motivation"
+  },
+  {
+   "id": "status",
+   "title_html": "What is built, deployed and proposed",
+   "figures": [
+    "fig-3"
+   ],
+   "tables": [],
+   "nav": "Status"
+  },
+  {
+   "id": "model",
+   "title_html": "Documents describe; installed grants persist",
+   "figures": [
+    "fig-4"
+   ],
+   "tables": [
+    "tab-1"
+   ],
+   "nav": "Model"
+  },
+  {
+   "id": "authority",
+   "title_html": "Authority is a set of actions and a state transition",
+   "figures": [
+    "fig-5"
+   ],
+   "tables": [
+    "tab-2"
+   ],
+   "nav": "Authority"
+  },
+  {
+   "id": "api",
+   "title_html": "The API makes the transition explicit",
+   "figures": [],
+   "tables": [
+    "tab-3"
+   ],
+   "nav": "API"
+  },
+  {
+   "id": "gate",
+   "title_html": "The account composes policy with authentication",
+   "figures": [
+    "fig-6",
+    "fig-7"
+   ],
+   "tables": [],
+   "nav": "Authorization"
+  },
+  {
+   "id": "recovery",
+   "title_html": "Recovery ends authority before collection",
+   "figures": [
+    "fig-8"
+   ],
+   "tables": [
+    "tab-4",
+    "tab-5"
+   ],
+   "nav": "Recovery"
+  },
+  {
+   "id": "compare",
+   "title_html": "Comparison with a conventional smart account",
+   "figures": [
+    "fig-9"
+   ],
+   "tables": [
+    "tab-6"
+   ],
+   "nav": "Comparison"
+  },
+  {
+   "id": "proofs",
+   "title_html": "Formal statements and their boundaries",
+   "figures": [
+    "fig-10"
+   ],
+   "tables": [],
+   "nav": "Formal results"
+  },
+  {
+   "id": "evaluation",
+   "title_html": "Run the account, then change the inputs",
+   "figures": [],
+   "tables": [],
+   "nav": "Live evaluation"
+  },
+  {
+   "id": "related",
+   "title_html": "Related work",
+   "figures": [],
+   "tables": [],
+   "nav": "Related work"
+  },
+  {
+   "id": "limits",
+   "title_html": "Trust boundary and limitations",
+   "figures": [],
+   "tables": [],
+   "nav": "Trust boundary"
+  },
+  {
+   "id": "agents",
+   "title_html": "We propose a shared policy engine for agent actions",
+   "figures": [],
+   "tables": [],
+   "nav": "Agent runtime"
+  },
+  {
+   "id": "repro",
+   "title_html": "Reproducibility and technical provenance",
+   "figures": [],
+   "tables": [],
+   "appendix": true,
+   "nav": "Reproducibility"
+  },
+  {
+   "id": "references",
+   "title_html": "References and artifact index",
+   "figures": [],
+   "tables": [],
+   "appendix": true,
+   "nav": "References"
+  }
+ ],
+ "figures": {
+  "fig-1": {
+   "title": "The parts of a Perch account at the pinned build.",
+   "caption": "Green: covered by the evaluator theorems; plain: tested; hatched: trusted."
+  },
+  "fig-2": {
+   "title": "One authorization, several contexts, using the game's grant 3.",
+   "caption": "The payload names one installed rule per context. A lost guess includes a transfer that the capped rule charges; a win authorizes only the root, and the payout is the game's own transfer. Grant 3's transfer rule checks each call alone, so a direct transfer within the cap is also allowed."
+  },
+  "fig-3": {
+   "title": "Status on 7 November 2026.",
+   "caption": "*Deployed*: recorded in Perch's deployment manifests and present on the network. *Preview*: a separate testnet deployment outside those manifests. *Merged*: on a main branch, not deployed. *Open PR*: unmerged code. *Proposed*: not implemented.",
+   "kind": "table",
+   "table": "status"
+  },
+  "fig-4": {
+   "title": "Installing a grant.",
+   "caption": "The compiler describes the document; the account lowers it with `lower_scoped` under its address A, excluded set X and generation g, checks normal form and the credential index, and stores it. Spending records are separate entries that only authorization writes."
+  },
+  "fig-5": {
+   "title": "Grant 1's cap, 10 XLM per 100 ledgers, on illustrative ledgers.",
+   "caption": "At ledger L the window holds charges made after L − 100 and through L. A refused transfer leaves the spending record unchanged; a charge stops counting exactly 100 ledgers after it was made."
+  },
+  "fig-6": {
+   "title": "One authorization through __check_auth at the pinned build.",
+   "caption": "Steps other than 7 are tested account-shell code. Each exit names the account's error and number, which a wallet finds in the diagnostic events of the host's `Error(Auth, InvalidAction)`. No exit leaves a write: the evaluator returns a refusal, and a failed signature check traps, failing the authorization."
+  },
+  "fig-7": {
+   "title": "What a signer approves.",
+   "caption": "An external signer's digest binds the network, nonce, expiry, calls, this account and the selected rule IDs, but not the rules' contents or the account's revision. A delegated signer approves the host's address-bound payload, which omits the rule IDs."
+  },
+  "fig-8": {
+   "title": "Recovery in the reference run, commands 5–18.",
+   "caption": "Completion (command 12) advances the grant generation and revokes the replaced owner key. Grant 1 stops authorizing there but stays stored until anyone collects it (command 18); its key stays barred afterwards. Commands are numbered as in Table 7 and Appendix A."
+  },
+  "fig-9": {
+   "title": "Where the decision and its state live, for one capped transfer with one external signer.",
+   "caption": "(a) Our earlier release calls two shared policy contracts that keep programs and spending windows per account and rule. (b) The pinned build decides inside the account and keeps rules and spending records there. Both call an external verifier."
+  },
+  "fig-10": {
+   "title": "One source, two paths.",
+   "caption": "Lean's kernel checks theorems about the Aeneas translation of the MIR that nightly rustc produces; the account ships Wasm from rustc 1.97.1, and nothing checks one against the other. The translators, compiler back ends and specification are trusted, and tests connect the shipped shell to the model. Green: PROVED; plain: TESTED; hatched: TRUSTED."
+  }
+ }
+}

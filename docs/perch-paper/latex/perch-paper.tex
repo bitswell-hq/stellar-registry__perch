@@ -1,0 +1,77 @@
+% Perch: the academic edition of the paper. Build with ./build.sh (pinned
+% Tectonic). Section order, titles, figures, tables, facts, formal statements
+% and references come from ../source via ../build/paper.py, which writes
+% generated/; prose lives in sections/. See ../README.md.
+% Pass \def\anonymous{} before \input (or build with ANONYMOUS=1) for a
+% double-blind submission: author names and repository links are withheld.
+\documentclass[runningheads]{llncs}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[scaled=0.92]{inconsolata}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs,array,tabularx}
+\usepackage{xcolor,graphicx,adjustbox}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,patterns}
+\usepackage{newunicodechar}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xurl}
+\usepackage{caption}
+\captionsetup{font=small,labelfont=bf}
+
+\input{generated/colors}
+
+% Unicode the shared sources use.
+\newunicodechar{→}{\ensuremath{\rightarrow}}
+\newunicodechar{←}{\ensuremath{\leftarrow}}
+\newunicodechar{↔}{\ensuremath{\leftrightarrow}}
+\newunicodechar{≤}{\ensuremath{\le}}
+\newunicodechar{≥}{\ensuremath{\ge}}
+\newunicodechar{−}{\ensuremath{-}}
+\newunicodechar{×}{\ensuremath{\times}}
+\newunicodechar{·}{\ensuremath{\cdot}}
+\newunicodechar{…}{\ldots}
+\newunicodechar{‖}{\ensuremath{\|}}
+\newunicodechar{∪}{\ensuremath{\cup}}
+\newunicodechar{≠}{\ensuremath{\neq}}
+\newunicodechar{∈}{\ensuremath{\in}}
+\newunicodechar{✓}{\checkmark}
+
+% Shared-source hooks used by generated/ and sections/.
+\makeatletter
+\newcommand\fact[1]{\@ifundefined{perchfact@#1}%
+  {\PackageError{perch}{Undefined fact `#1'}{Add it to source/facts.json}}%
+  {\csname perchfact@#1\endcsname}}
+\makeatother
+\newcommand\code[1]{\texttt{#1}}
+\newcommand\lean[1]{\texttt{#1}}
+\newcommand\statusobj[1]{\textsc{\MakeLowercase{#1}}}
+\newcommand\badge[1]{\textsc{\MakeLowercase{#1}}}
+\newcommand\perchfigure[1]{\input{generated/figures/#1}}
+\newcommand\perchtable[1]{\input{generated/tables/#1}}
+\spnewtheorem{statement}{Statement}{\bfseries}{\itshape}
+\newcommand\statementevidence[1]{\par\smallskip\noindent{\footnotesize Evidence: #1}}
+\input{generated/facts}
+
+\title{Perch: Programmable, Recoverable Authority\\for Soroban Smart Accounts}
+\titlerunning{Perch}
+\ifdefined\anonymous
+\author{Anonymous authors}
+\institute{Anonymous institution}
+\newcommand\repolink[2]{#2}
+\else
+\author{Willem Wyndham \and Elizabeth Engelman}
+\authorrunning{W. Wyndham and E. Engelman}
+\institute{The Aha Company}
+\newcommand\repolink[2]{\href{#1}{#2}}
+\fi
+
+\begin{document}
+\maketitle
+\input{sections/abstract}
+\input{generated/body}
+\bibliographystyle{splncs04}
+\bibliography{generated/refs}
+\end{document}

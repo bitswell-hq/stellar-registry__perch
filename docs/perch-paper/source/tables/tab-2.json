@@ -1,0 +1,46 @@
+{
+ "columns": [
+  "Rule part",
+  "Steps that may narrow it",
+  "Refused"
+ ],
+ "rows": [
+  [
+   "Rule set",
+   "`drop_rule` (later rule indices shift down)",
+   "none"
+  ],
+  [
+   "Functions",
+   "`remove_functions`, `restrict_functions`",
+   "none"
+  ],
+  [
+   "Arguments",
+   "`add_cond` (`ArgEq`, `ArgIn`, `ArgStrPrefix`, `ArgI128AtMost`)",
+   "none"
+  ],
+  [
+   "Signers",
+   "`remove_signers` (threshold kept), `raise_threshold`",
+   "a lower threshold"
+  ],
+  [
+   "Cap",
+   "`add_cap` to an uncapped rule, `lower_cap_limit`, `lengthen_cap_period`",
+   "a second cap, a non-positive limit, a zero period, a higher limit, a shorter period"
+  ],
+  [
+   "Expiry",
+   "`lower_valid_until` (add an expiry or move it earlier)",
+   "a later expiry"
+  ],
+  [
+   "Target, generation",
+   "no step",
+   "none"
+  ]
+ ],
+ "title": "The ten attenuation steps (`crates/rule-eval/src/attenuate.rs` in rule-core).",
+ "caption": "Nothing else is an attenuation step."
+}

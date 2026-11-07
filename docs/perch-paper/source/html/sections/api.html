@@ -1,0 +1,27 @@
+<p>Two functions in the artifacts are named <code>check_auth</code>: Soroban's <code>__check_auth</code> entry point, and the shell function <code>perch_smart_account::check_auth</code> that it calls, which runs the guards of §06 and then the evaluator. This paper calls the evaluator itself <code>rule_eval::check_auth</code>; at the pin it is <code>rule_eval::authorize(rules, records, contexts, choices, authenticated, now, generation) -&gt; Result&lt;Vec&lt;SpendRecord&gt;, Refusal&gt;</code> in rule-core <code>cbabe59</code>, called from the account's <code>gate.rs</code>. The first listing below is this paper's illustrative interface, which groups the seven arguments as <code>EvaluationInput</code>; it is not a function in the artifacts, and a wrapper with that signature would need its own correspondence argument. The second is the pinned call. The evaluator returns <code>next_records</code>, aligned with the input rules, or a <code>Refusal</code>; it neither searches for rules nor verifies signatures.</p><div class="code-surface" data-name="check_auth.rs" data-lang="rust"><pre class="fallback">// This paper's illustrative interface; pinned symbol: rule_eval::authorize (seven arguments)
+let evaluated = rule_eval::check_auth(EvaluationInput {
+    rules: &amp;selected_rules,
+    spend_records: &amp;before,
+    contexts: &amp;contexts,
+    rule_indices: &amp;indices, // local indices, not installed IDs
+    signer_identities: &amp;claimed_signers,
+    ledger: current_ledger,
+    generation: grant_generation,
+})?;
+
+// Account-shell responsibilities:
+authenticate_bound_payload(&amp;payload)?;
+store_selected_records(&amp;installed_rule_ids, evaluated.next_records);</pre></div><div class="code-surface" data-name="gate.rs · pinned" data-lang="rust"><pre class="fallback">// Pinned build: perch-smart-account/src/gate.rs, calling rule-core cbabe59
+let after = rule_eval::authorize(
+    &amp;rules,                 // the selected rules, each once
+    &amp;records,               // their spending records
+    &amp;contexts,              // host contexts, converted
+    &amp;choices,               // one local rule index per context
+    &amp;signers,               // claimed signer identities
+    e.ledger().sequence(),
+    scope_generation(e),    // the grant generation
+)
+.map_err(|r| match r {
+    rule_eval::Refusal::StaleGeneration =&gt; PerchAuthError::StaleScope.into(),
+    _ =&gt; refused(),         // RuleEvalRefused
+})?;</pre></div><p>The engine refuses misaligned inputs, an expired, stale or non-matching rule, an unused signer, or a failed charge, each as a distinct <code>Refusal</code>. The account keeps one distinction: a stale grant becomes <code>StaleScope</code> (auth error 3) and every other refusal <code>RuleEvalRefused</code> (auth error 5), <code>__check_auth</code> codes that the host reports inside <code>Error(Auth, InvalidAction)</code> and logs in its diagnostic events; a wallet that needs the reason re-runs the evaluator off chain. The engine accepts an empty batch vacuously, but the host never passes zero contexts (§09), so the stale-grant statements are stated for nonempty batches.</p>{{table:tab-3}}
