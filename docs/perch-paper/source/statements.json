@@ -241,7 +241,7 @@
  {
   "id": "canonical-identity",
   "title": "Canonical identity.",
-  "text": "Perch's canonical encoding is injective on the modeled document type, so hash identity holds up to SHA-256 collisions. The theorem is about a Lean emitter written to match Perch's Rust `canon.rs` and linked to it by golden fixtures and fuzzing, not extraction; JSON parsing and compiler correctness need separate assurance, and no theorem connects this encoding to rule-core's document type. The CANON version is not part of the hashed bytes, so a `doc_hash` is read under the identity the account reports (`capabilities().doc_identity`); `configPreimage_ne_emitDoc` is the one proven domain separation.",
+  "text": "Perch's canonical encoding is injective on the modeled document type, so hash identity holds up to SHA-256 collisions. The theorem is about a Lean emitter written to match Perch's Rust `canon.rs` and linked to it by golden fixtures and fuzzing, not extraction; JSON parsing and compiler correctness need separate assurance, and no theorem connects this encoding to rule-core's document type. The CANON version is not part of the hashed bytes, so a `doc_hash` is read under the identity the account reports (`capabilities().doc_identity`); three domain separations are proven: `configPreimage_ne_emitDoc`, `rulePreimage_ne_configPreimage` and `rulePreimage_ne_emitDoc` (rule, recovery-configuration and document preimages are pairwise distinct).",
   "evidence": "[PerchFormal.Canon.emitDoc_injective; canonical_bytes_identity](https://github.com/bitswell-hq/stellar-registry__perch/blob/f0275f41c5ab47c903bbfe9986b4bf3239c01b11/formal/PerchFormal/CanonProofs.lean) · {{obj:PROVED · PERCH CANON PACKAGE}}",
   "label": "T13",
   "latex_body": false,
