@@ -71,6 +71,8 @@
 \makeatother
 \newcommand\statementhypotheses[1]{\par\smallskip\noindent{\upshape\footnotesize Hypotheses: #1}}
 \newcommand\statementevidence[1]{\par\smallskip\noindent{\upshape\footnotesize Evidence: #1}}
+% A companion paper: its title, and its address unless the build is anonymous.
+\newcommand\companion[2]{\emph{#2}\ifdefined\anonymous\else\footnote{\url{#1}}\fi}
 \input{generated/facts}
 
 % LaTeX-edition helpers.
