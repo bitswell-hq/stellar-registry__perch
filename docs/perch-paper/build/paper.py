@@ -4,8 +4,10 @@
     python3 docs/perch-paper/build/paper.py          # write index.html and latex/generated/
     python3 docs/perch-paper/build/paper.py --check  # fail if either is stale or inconsistent
 
-One outline (source/outline.json) orders the sections, figures and tables of
-both editions. Facts, tables, formal statements, references and figure SVG are
+Several documents share the data: the main paper and its companion papers,
+listed in source/documents.json, each with its own outline, prose folder,
+HTML page and (optionally) LaTeX folder. One outline per document orders the
+sections, figures and tables of both of its editions. Facts, tables, formal statements, references and figure SVG are
 shared data, rendered into the HTML edition and into LaTeX includes. Prose is
 per edition: source/html/sections/<id>.html and latex/sections/<id>.tex.
 
@@ -16,12 +18,14 @@ two tools can run in either order. Standard library only.
 """
 import html
 import json
+import os
 import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import svg2tikz  # noqa: E402
+import texmath  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / 'source'
@@ -30,7 +34,37 @@ GEN = LATEX / 'generated'
 INDEX = ROOT / 'index.html'
 WALKTHROUGH = ROOT.parent / 'oz-walkthrough' / 'index.html'
 CARRIED = ('MEASUREMENTS', 'MANIFEST_TABLE', 'GOLDEN', 'EMBEDDED_ASSETS')
+SHARED_HTML = SRC / 'html'
+SITE = 'https://bitswell-hq.github.io/stellar-registry__perch/perch-paper/'
 ERRORS = []
+DOC = {}
+HTMLDIR = SHARED_HTML
+DEPTH = 0
+
+
+def documents():
+    path = SRC / 'documents.json'
+    if path.exists():
+        return json.loads(path.read_text(encoding='utf-8'))
+    return [{'id': 'main', 'title': 'Perch', 'outline': 'outline.json', 'html_dir': 'html',
+             'html_out': 'index.html', 'latex': 'latex', 'carried': True}]
+
+
+def use_doc(d):
+    """Point the module at one document: its outline, prose, page and LaTeX folder."""
+    global DOC, HTMLDIR, INDEX, LATEX, GEN, DEPTH
+    DOC = d
+    HTMLDIR = SRC / d['html_dir']
+    INDEX = ROOT / d['html_out']
+    LATEX = ROOT / d['latex'] if d.get('latex') else None
+    GEN = LATEX / 'generated' if LATEX else None
+    DEPTH = len(Path(d['html_out']).parts) - 1
+
+
+def html_file(name):
+    """A document's own copy of a page part, else the shared one."""
+    own = HTMLDIR / name
+    return own if own.exists() else SHARED_HTML / name
 
 
 def fail(msg):
@@ -45,7 +79,7 @@ def read(p):
 
 class Paper:
     def __init__(self):
-        self.outline = json.loads(read(SRC / 'outline.json'))
+        self.outline = json.loads(read(SRC / DOC['outline']))
         self.facts = {}
         for fp in sorted((SRC / 'facts').glob('*.json')):
             for k, v in json.loads(read(fp)).items():
@@ -53,14 +87,23 @@ class Paper:
                     fail(f'fact {k!r} defined twice (second in facts/{fp.name})')
                 self.facts[k] = v
         self.tables = {p.stem: json.loads(read(p)) for p in sorted((SRC / 'tables').glob('*.json'))}
-        self.statements = json.loads(read(SRC / 'statements.json'))
+        self.all_statements = json.loads(read(SRC / 'statements.json'))
+        # A statement may list the documents it appears in ("docs"); otherwise every document has it.
+        self.statements = [x for x in self.all_statements if DOC['id'] in x.get('docs', [DOC['id']])]
+        dp = SRC / 'definitions.json'
+        self.definitions = [x for x in (json.loads(read(dp)) if dp.exists() else [])
+                            if DOC['id'] in x.get('docs', [DOC['id']])]
         self.bib = parse_bib(read(SRC / 'refs.bib'))
         self.sections = self.outline['sections']
-        self.figures = self.outline['figures']
+        fp = SRC / 'figures.json'
+        self.figures = dict(json.loads(read(fp)) if fp.exists() else {})
+        self.figures.update(self.outline.get('figures', {}))
         self.sec_ids = [s['id'] for s in self.sections]
-        for f in self.figures:
-            if f not in [x for s in self.sections for x in s.get('figures', [])]:
-                fail(f'figure {f} is in no section')
+        used = [x for s in self.sections for x in s.get('figures', [])]
+        for f in used:
+            if f not in self.figures:
+                fail(f'{DOC["id"]}: figure {f} has no entry in figures.json or the outline')
+        self.figures = {f: self.figures[f] for f in used if f in self.figures}
         for s in self.sections:
             if s.get('editions') and set(s['editions']) != {'html', 'latex'} and not (s.get('unnumbered') or s.get('appendix')):
                 fail(f'section {s["id"]} is in one edition only, so it must be unnumbered or an appendix')
@@ -122,7 +165,17 @@ def parse_bib(text):
 # `code`, **strong**, *em*, [text](url), and {{fact:k}} {{ref:fig:id}}
 # {{ref:tab:id}} {{ref:sec:id}} {{cite:key}} {{badge:kind:LABEL}}.
 
-TOKEN = re.compile(r'(`[^`]+`|\*\*.+?\*\*|\*[^*\s][^*]*?\*|\[[^\]]+\]\([^)\s]+\)|\{\{[^}]+\}\})')
+TOKEN = re.compile(r'(\\\(.+?\\\)|`[^`]+`|\*\*.+?\*\*|\*[^*\s][^*]*?\*|\[[^\]]+\]\([^)\s]+\)|\{\{[^}]+\}\})')
+MATH_INLINE = re.compile(r'\\\((.+?)\\\)', re.S)
+MATH_DISPLAY = re.compile(r'\\\[(.+?)\\\]', re.S)
+
+
+def mathml(tex, display, ctx):
+    try:
+        return texmath.to_mathml(tex.strip(), display)
+    except texmath.TexError as e:
+        fail(f'math in {ctx}: {e}: {tex!r}')
+        return html.escape(tex)
 
 
 def _directive(p, body, ed, ctx):
@@ -157,6 +210,17 @@ def _directive(p, body, ed, ctx):
         if ed == 'latex':
             return r'\cite{' + ','.join(keys) + '}'
         return '[' + ', '.join(f'<a class="cite" href="#ref-{k}">{p.cite_number(k)}</a>' for k in keys) + ']'
+    if kind == 'root':
+        return '../' * DEPTH if ed == 'html' else ''
+    if kind == 'doc':
+        target = next((d for d in documents() if d['id'] == arg), None)
+        if not target:
+            fail(f'unknown document {arg!r} in {ctx}')
+            return '??'
+        if ed == 'latex':
+            return r'\companion{' + SITE + target['html_out'].replace('index.html', '') + '}{' + svg2tikz.tex_escape(target['title']) + '}'
+        rel = os.path.relpath(ROOT / target['html_out'], (ROOT / DOC['html_out']).parent)
+        return html.escape(rel)
     if kind == 'obj':
         if ed == 'latex':
             return r'\statusobj{' + svg2tikz.tex_escape(arg) + '}'
@@ -175,7 +239,9 @@ def render(p, s, ed, ctx=''):
     for part in TOKEN.split(s):
         if not part:
             continue
-        if part.startswith('`') and part.endswith('`') and len(part) > 1:
+        if part.startswith('\\(') and part.endswith('\\)'):
+            out.append(part if ed == 'latex' else mathml(part[2:-2], False, ctx))
+        elif part.startswith('`') and part.endswith('`') and len(part) > 1:
             inner = part[1:-1]
             if ed == 'latex':
                 bits = re.split(r'(\{\{fact:[^}]+\}\})', inner)
@@ -358,15 +424,42 @@ def html_table(p, tid, numbered=True):
     return body.replace('</tbody></table>', f'</tbody>{cap}</table>', 1).replace('<table', f'<table id="{tid}"', 1)
 
 
-def html_statements(p):
+def pick(items, arg):
+    """All items, or those whose label or id is listed (comma-separated)."""
+    if not arg:
+        return items
+    want = [a.strip() for a in arg.split(',')]
+    out = [x for w in want for x in items if w in (x.get('label'), x['id'])]
+    if len(out) != len(want):
+        fail(f'unknown statement or definition in {arg!r}')
+    return out
+
+
+def html_statements(p, arg=''):
     def item(st):
         data = ''.join(f' data-{k}="{html.escape(" ".join(st[k]))}"' for k in ('objects', 'assumes') if st.get(k))
         label = f'{st["label"]} · ' if st.get('label') else ''
-        return (f'<li id="stmt-{st["id"]}"{data}><strong>{label}{render(p, st["title"], "html", st["id"])}</strong>'
-                f'<p>{render(p, st["text"], "html", st["id"])}</p>'
-                + (f'<p class="hyp">Hypotheses: {render(p, st["hypotheses"], "html", st["id"])}</p>' if st.get('hypotheses') else '')
-                + f'<div class="artifact">{render(p, st["evidence"], "html", st["id"])}</div></li>')
-    return '<ol class="proof-list">' + ''.join(item(st) for st in p.statements) + '</ol>'
+        ctx = st['id']
+        math = f'<div class="thm-math">{mathml(st["math"], True, ctx)}</div>' if st.get('math') else ''
+        reading = (f'<p class="thm-reading"><span class="thm-tag">In words</span> {render(p, st["reading"], "html", ctx)}</p>'
+                   if st.get('reading') else '')
+        instance = (f'<div class="thm-instance" data-instance="{html.escape(st["instance"])}" data-statement="{ctx}"></div>'
+                    if st.get('instance') else '')
+        hyp = (f'<p class="hyp">Hypotheses: {render(p, st["hypotheses"], "html", ctx)}</p>' if st.get('hypotheses') else '')
+        return (f'<li id="stmt-{ctx}" class="thm"{data}><strong>{label}{render(p, st["title"], "html", ctx)}</strong>'
+                f'{math}<p>{render(p, st["text"], "html", ctx)}</p>{reading}{instance}{hyp}'
+                f'<div class="artifact">{render(p, st["evidence"], "html", ctx)}</div></li>')
+    return '<ol class="proof-list">' + ''.join(item(st) for st in pick(p.statements, arg)) + '</ol>'
+
+
+def html_definitions(p, arg=''):
+    def item(d):
+        ctx = d['id']
+        math = f'<div class="thm-math">{mathml(d["math"], True, ctx)}</div>' if d.get('math') else ''
+        lean = f' <span class="obj">{render(p, d["lean"], "html", ctx)}</span>' if d.get('lean') else ''
+        return (f'<li id="def-{ctx}" class="defn"><strong>Definition {d["label"]} · {render(p, d["title"], "html", ctx)}</strong>'
+                f'{math}<p>{render(p, d["text"], "html", ctx)}{lean}</p></li>')
+    return '<ol class="def-list">' + ''.join(item(d) for d in pick(p.definitions, arg)) + '</ol>'
 
 
 def html_references(p):
@@ -424,18 +517,22 @@ def expand_html(p, text, ctx, blocks, seen):
             seen['tab'].append(tid)
             return html_table(p, tid)
         if kind == 'if-walkthrough':
-            return expand_html(p, read(SRC / 'html' / arg), arg, blocks, seen) if WALKTHROUGH.exists() else ''
+            return expand_html(p, read(html_file(arg)), arg, blocks, seen) if WALKTHROUGH.exists() else ''
         if kind == 'statements':
-            return html_statements(p)
+            return html_statements(p, arg)
+        if kind == 'definitions':
+            return html_definitions(p, arg)
         if kind == 'block':
             if arg not in blocks:
                 fail(f'missing carried block {arg}')
             return blocks.get(arg, '')
         if kind == 'include':
-            return expand_html(p, read(SRC / 'html' / arg), arg, blocks, seen)
+            return expand_html(p, read(html_file(arg)), arg, blocks, seen)
         if kind == 'references':
             return html_references(p)
         return render(p, m.group(0), 'html', ctx)
+    text = MATH_DISPLAY.sub(lambda m: mathml(m.group(1), True, ctx), text)
+    text = MATH_INLINE.sub(lambda m: mathml(m.group(1), False, ctx), text)
     return DIRECTIVE.sub(sub, text)
 
 
@@ -446,7 +543,7 @@ def build_html(p, blocks):
     order = []
     for s in p.sections:
         if p.in_edition(s, 'html'):
-            for k in re.findall(r'\{\{cite:([^}]+)\}\}', read(SRC / 'html' / 'sections' / f'{s["id"]}.html')):
+            for k in re.findall(r'\{\{cite:([^}]+)\}\}', read(HTMLDIR / 'sections' / f'{s["id"]}.html')):
                 for kk in k.split(','):
                     if kk not in order:
                         order.append(kk)
@@ -461,26 +558,27 @@ def build_html(p, blocks):
             label = f'{n} · {s["nav"]}' if n and n.isdigit() else s['nav']
             nav.append(f'<a href="#{s["id"]}">{html.escape(label)}</a>')
     nav.append(f'</div><small>{o["nav_note"]}</small></nav>')
-    css = '\n'.join(read(SRC / 'html' / n).strip() for n in ('style.css', 'page.css', 'figures.css')
-                    if (SRC / 'html' / n).exists())
-    head = read(SRC / 'html' / 'head.html').replace('{{style}}', css)
+    css = '\n'.join(read(SHARED_HTML / n).strip() for n in ('style.css', 'page.css', 'figures.css')
+                    if (SHARED_HTML / n).exists())
+    head = read(html_file('head.html')).replace('{{style}}', css)
     parts = [expand_html(p, head, 'head', blocks, seen).strip(), ''.join(nav), '']
-    wt = ' data-walkthrough="../oz-walkthrough/index.html"' if WALKTHROUGH.exists() else ''
-    parts.append(f'<main id="main"{wt}>' + read(SRC / 'html' / 'sprite.svg').strip()
-                 + expand_html(p, read(SRC / 'html' / 'header.html'), 'header', blocks, seen).strip())
-    parts.append(expand_html(p, read(SRC / 'html' / 'abstract.html'), 'abstract', blocks, seen).strip())
+    wt = f' data-walkthrough="{"../" * (DEPTH + 1)}oz-walkthrough/index.html"' if WALKTHROUGH.exists() else ''
+    parts.append(f'<main id="main"{wt}>' + read(SHARED_HTML / 'sprite.svg').strip()
+                 + expand_html(p, read(html_file('header.html')), 'header', blocks, seen).strip())
+    parts.append(expand_html(p, read(html_file('abstract.html')), 'abstract', blocks, seen).strip())
     for s in p.sections:
         if not p.in_edition(s, 'html'):
             continue
         n = p.numbers['html'].get('sec:' + s['id'])
-        body = expand_html(p, read(SRC / 'html' / 'sections' / f'{s["id"]}.html'), s['id'], blocks, seen).strip()
+        body = expand_html(p, read(HTMLDIR / 'sections' / f'{s["id"]}.html'), s['id'], blocks, seen).strip()
         head = f'<h2><span class="n">{n}</span>{html.escape(s["title_html"])}</h2>' if n else f'<h2>{html.escape(s["title_html"])}</h2>'
         alias = ''.join(f'<span class="alias" id="{a}"></span>' for a in s.get('aliases', []))
         parts.append(f'<section id="{s["id"]}">{alias}{head}{body}</section>')
-    parts.append(expand_html(p, read(SRC / 'html' / 'footer.html'), 'footer', blocks, seen).strip())
+    parts.append(expand_html(p, read(html_file('footer.html')), 'footer', blocks, seen).strip())
     parts.append('</main></div>')
-    parts.append(blocks['EMBEDDED_ASSETS'])
-    parts.append('<script>' + read(SRC / 'html' / 'figures.js').strip() + '</script>')
+    if DOC.get('carried'):
+        parts.append(blocks['EMBEDDED_ASSETS'])
+    parts.append('<script>' + read(SHARED_HTML / 'figures.js').strip() + '</script>')
     parts.append('</body></html>\n')
     want_f = [f for s in p.sections if p.in_edition(s, 'html') for f in s.get('figures', []) if p.in_edition(p.figures[f], 'html')]
     want_t = [t for s in p.sections if p.in_edition(s, 'html') for t in s.get('tables', []) if p.in_edition(p.tables[t], 'html')]
@@ -489,10 +587,14 @@ def build_html(p, blocks):
     if seen['tab'] != want_t:
         fail(f'HTML table order {seen["tab"]} != outline {want_t}')
     page = link_glossary(p, '\n'.join(parts))
-    # build-page.mjs refreshes these blocks in place, so each must survive a rebuild.
+    # build-page.mjs refreshes these blocks in place, so each must survive a rebuild in
+    # the document that carries the live experiment, and appear in no other.
     for name in CARRIED:
-        if page.count(f'<!-- {name}_START -->') != 1:
-            fail(f'the {name} block must appear exactly once in the HTML edition (place {{{{block:{name}}}}})')
+        n = page.count(f'<!-- {name}_START -->')
+        if DOC.get('carried') and n != 1:
+            fail(f'{DOC["id"]}: the {name} block must appear exactly once (place {{{{block:{name}}}}})')
+        if not DOC.get('carried') and n:
+            fail(f'{DOC["id"]}: the {name} block belongs only to the document with "carried": true')
     return page
 
 
@@ -616,12 +718,24 @@ def latex_statements(p, body):
         if bool(st.get('latex_body')) != body:
             continue
         text = st.get('latex') or render(p, st['text'], 'latex', st['id'])
+        if st.get('math'):
+            text = '\\[' + st['math'] + '\\]\n' + text
         hyp = ''
         if st.get('hypotheses'):
             hyp = '\\statementhypotheses{' + render(p, st['hypotheses'], 'latex', st['id']) + '}\n'
         out.append(f'\\begin{{perchstatement}}{{{st.get("label", "")}}}{{{render(p, st["title"], "latex", st["id"])}}}\\label{{stmt:{st["id"]}}}\n'
                    f'{text}\n{hyp}\\statementevidence{{{render(p, st["evidence"], "latex", st["id"])}}}\n'
                    '\\end{perchstatement}')
+    return '\n'.join(out) + '\n'
+
+
+def latex_definitions(p):
+    out = ['% Generated from source/definitions.json; edit that.']
+    for d in p.definitions:
+        math = '\\[' + d['math'] + '\\]\n' if d.get('math') else ''
+        lean = ' ' + render(p, d['lean'], 'latex', d['id']) if d.get('lean') else ''
+        out.append(f'\\begin{{perchdefinition}}{{{d["label"]}}}{{{render(p, d["title"], "latex", d["id"])}}}\\label{{def:{d["id"]}}}\n'
+                   f'{math}{render(p, d["text"], "latex", d["id"])}{lean}\n\\end{{perchdefinition}}')
     return '\n'.join(out) + '\n'
 
 
@@ -663,9 +777,10 @@ def build_latex(p):
     files = {'body.tex': latex_body(p), 'facts.tex': latex_facts(p),
              'colors.tex': '% Generated from build/svg2tikz.py (the page\'s light theme).\n' + svg2tikz.color_definitions() + '\n',
              'statements-body.tex': latex_statements(p, True),
-             'statements-appendix.tex': latex_statements(p, False), 'refs.bib': latex_bib(p)}
+             'statements-appendix.tex': latex_statements(p, False), 'refs.bib': latex_bib(p),
+             'definitions.tex': latex_definitions(p)}
     for f in p.figures:
-        if p.figures[f].get('kind') not in ('table', 'code'):
+        if p.figures[f].get('kind') not in ('table', 'code', 'html'):
             lint_svg(f, p.figures[f])
         if p.in_edition(p.figures[f], 'latex'):
             files[f'figures/{f}.tex'] = latex_figure(p, f)
@@ -702,15 +817,41 @@ def build_latex(p):
 
 # ---------------------------------------------------------------- main
 
-def main(argv):
-    check = '--check' in argv
+def doc_blocks(d):
+    """The blocks build-page.mjs refreshes: from this document's page, or (first build
+    after they move) from whichever document's page holds them now."""
+    if not d.get('carried'):
+        return {}
+    pages = [ROOT / d['html_out']] + [ROOT / x['html_out'] for x in documents() if x is not d]
+    for page in pages:
+        if page.exists() and '<!-- EMBEDDED_ASSETS_START -->' in read(page):
+            return carried_blocks(read(page))
+    fail(f'{d["id"]}: no page holds the carried blocks')
+    return {}
+
+
+def build_doc(d, check):
+    use_doc(d)
     p = Paper()
-    current = read(INDEX)
-    blocks = carried_blocks(current)
+    current = read(INDEX) if INDEX.exists() else ''
+    blocks = doc_blocks(d)
     if 'MEASUREMENTS' in blocks:
         check_measurements(p, blocks['MEASUREMENTS'])
     page = build_html(p, blocks) if not ERRORS else ''
-    latex = build_latex(p)
+    latex = build_latex(p) if LATEX else {}
+    out = {INDEX: page}
+    out.update({GEN / rel: text for rel, text in latex.items()})
+    orphans = ([q for q in GEN.rglob('*') if q.is_file() and q not in out] if GEN and GEN.exists() else [])
+    return out, orphans
+
+
+def main(argv):
+    check = '--check' in argv
+    files, orphans = {}, []
+    for d in documents():
+        out, orph = build_doc(d, check)
+        files.update(out)
+        orphans += orph
     if LINT:
         print('\n'.join(('error: ' if check else 'warning: ') + 'figure lint: ' + e for e in LINT), file=sys.stderr)
         if check:
@@ -718,15 +859,8 @@ def main(argv):
     if ERRORS:
         print('\n'.join('error: ' + e for e in ERRORS if e not in LINT), file=sys.stderr)
         return 1
-    stale = []
-    if page != current:
-        stale.append(str(INDEX.relative_to(ROOT.parent.parent)))
-    for rel, text in latex.items():
-        path = GEN / rel
-        if not path.exists() or read(path) != text:
-            stale.append(str(path.relative_to(ROOT.parent.parent)))
-    known = {GEN / r for r in latex}
-    orphans = [q for q in GEN.rglob('*') if q.is_file() and q not in known] if GEN.exists() else []
+    top = ROOT.parent.parent
+    stale = [str(f.relative_to(top)) for f, text in files.items() if not f.exists() or read(f) != text]
     if check:
         import subprocess
         figs = subprocess.run([sys.executable, str(Path(__file__).resolve().parent / 'figures' / 'make.py'), '--check'])
@@ -734,18 +868,19 @@ def main(argv):
             return 1
         if stale or orphans:
             print('stale generated files (run python3 docs/perch-paper/build/paper.py):', file=sys.stderr)
-            for s in stale + [str(o.relative_to(ROOT.parent.parent)) for o in orphans]:
+            for s in stale + [str(o.relative_to(top)) for o in orphans]:
                 print('  ' + s, file=sys.stderr)
             return 1
         print('paper sources and generated files agree')
         return 0
-    INDEX.write_text(page, encoding='utf-8')
-    for rel, text in latex.items():
-        (GEN / rel).parent.mkdir(parents=True, exist_ok=True)
-        (GEN / rel).write_text(text, encoding='utf-8')
+    for f, text in files.items():
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(text, encoding='utf-8')
     for o in orphans:
         o.unlink()
-    print(f'wrote {INDEX.relative_to(ROOT.parent.parent)} ({len(page.encode()):,} bytes) and {len(latex)} LaTeX includes')
+    pages = [f for f in files if f.suffix == '.html']
+    print(f'wrote {len(pages)} pages ({", ".join(str(f.relative_to(top)) for f in pages)}) '
+          f'and {len(files) - len(pages)} LaTeX includes')
     return 0
 
 
