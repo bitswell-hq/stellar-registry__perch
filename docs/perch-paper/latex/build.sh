@@ -15,12 +15,14 @@ if [ "$version" != "Tectonic $TECTONIC_VERSION" ]; then
 fi
 # SKIP_CHECK=1 skips the source/generated consistency check for local drafting; CI never sets it.
 if [ "${SKIP_CHECK:-0}" != 1 ]; then python3 ../build/paper.py --check; fi
-rm -rf out && mkdir out
 # ANONYMOUS=1 builds the double-blind edition (author names, affiliation and
 # the authors' repository links withheld) as out/perch-paper-anonymous.pdf.
 main=perch-paper
-if [ "${ANONYMOUS:-0}" = 1 ]; then
-  main=perch-paper-anonymous
+[ "${ANONYMOUS:-0}" = 1 ] && main=perch-paper-anonymous
+mkdir -p out
+rm -f out/$main.*
+if [ "$main" = perch-paper-anonymous ]; then
+  rm -rf out/perch-paper.tex out/sections out/generated
   printf '\\def\\anonymous{}\\input{perch-paper}\n' > out/$main.tex
   cp -R perch-paper.tex sections generated out/
 fi
