@@ -31,11 +31,15 @@ status=0
 if grep -nE "LaTeX Warning: (Reference|Citation) .* undefined|There were undefined references|Label\(s\) may have changed|multiply defined|Package perch Error" out/$main.log; then
   status=1
 fi
+# A glyph the fonts lack is dropped silently from the PDF; refuse that too.
+if grep -n "Missing character: There is no" out/$main.log; then
+  status=1
+fi
 if [ -f out/$main.blg ] && grep -nE "^Warning--|error message" out/$main.blg; then
   status=1
 fi
 if [ "$status" -ne 0 ]; then
-  echo "build.sh: unresolved references or citations (see above)" >&2
+  echo "build.sh: unresolved references or citations, or missing glyphs (see above)" >&2
   exit 1
 fi
 cp out/$main.pdf $main.pdf
