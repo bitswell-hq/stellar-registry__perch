@@ -25,16 +25,19 @@
 //! The admin document holds the account's own rules, recovery, and
 //! everything a recovery restores. App grants can instead live in scoped
 //! documents, one per scope id, each compiled the same way, reconciled
-//! against its own records, and refused if it reaches the account itself or
-//! its recovery. A recovery completion wipes every scope at once by
-//! advancing a generation that `__check_auth` checks
-//! (`docs/recovery/spec.md` §7.6).
+//! against its own records, and refused if it reaches the account itself,
+//! its recovery, or its guardian approvals at any controller. A recovery
+//! completion wipes every scope at once by advancing a generation that
+//! `__check_auth` checks (`docs/recovery/spec.md` §7.6).
 #![no_std]
 
 use perch_doc_compiler::{
-    admin_survives, CompiledDoc, CompiledZkFactor, DocCompilerClient, DocCompilerError, RuleScope,
+    admin_survives, CompiledDoc, CompiledRule, CompiledZkFactor, DocCompilerClient,
+    DocCompilerError, RuleScope,
 };
-use perch_recovery_interface::account::{is_frozen, is_reserved_invoker_only, UpgradeReadiness};
+use perch_recovery_interface::account::{
+    is_frozen, is_guardian_approval, is_reserved_invoker_only, UpgradeReadiness,
+};
 use perch_recovery_interface::config::{leaf_to_insert, zk_factor_transition_ok};
 use perch_recovery_interface::controller::{
     RecoveryError, RecoveryHooksClient, SyncOutcome, UpgradeStep,
@@ -46,7 +49,7 @@ use soroban_sdk::{
     auth::{Context, ContractContext, CustomAccountInterface},
     contractevent, contracttrait, contracttype,
     crypto::Hash,
-    Address, Bytes, BytesN, ContractExecutable, Env, Map, String, Symbol, Val, Vec,
+    Address, Bytes, BytesN, ContractExecutable, Env, Map, String, Symbol, TryFromVal, Val, Vec,
 };
 use soroban_sdk_tools::{contractstorage, scerr, InstanceItem, PersistentItem, PersistentMap};
 use stellar_accounts::smart_account::{
@@ -137,9 +140,9 @@ pub enum PerchAccountError {
     /// `u64::MAX`.
     GenerationExhausted,
     /// `apply_scope` was given a document a scoped document may not be: it
-    /// has a `recovery` member, a `self-admin` rule, or a rule scoped to
-    /// the account itself, its recovery controller, or its ZK adapter or
-    /// pool (spec §7.6).
+    /// has a `recovery` member, a `self-admin` rule, a rule scoped to the
+    /// account itself, its recovery controller, or its ZK adapter or pool,
+    /// or a rule whose `functions` names a guardian approval (spec §7.6).
     ScopeEscalation,
     /// No scoped document has this scope id.
     UnknownScope,
@@ -166,7 +169,8 @@ pub enum PerchAuthError {
     StaleScope,
     /// A selected scoped rule's context calls the recovery controller or
     /// the ZK adapter or pool of the applied recovery member, any of which
-    /// may have been adopted after the scope was applied (spec §7.6).
+    /// may have been adopted after the scope was applied, or casts a
+    /// guardian approval on any contract (spec §7.6).
     ScopeEscalation,
 }
 
@@ -930,9 +934,10 @@ pub trait PerchSmartAccount: CustomAccountInterface + SmartAccount {
     /// Apply a scoped document under `scope`, an id the owner chooses (one
     /// per app grant, say), and return its `doc_hash` (spec §7.6). Owner
     /// authorization. Refuses (`ScopeEscalation`) a `recovery` member, a
-    /// `self-admin` rule, or a rule scoped to the account, its recovery
-    /// controller, or its ZK adapter or pool, so no scoped document reaches
-    /// the admin document's rules, recovery, or upgrades. Refuses
+    /// `self-admin` rule, a rule scoped to the account, its recovery
+    /// controller, or its ZK adapter or pool, or a rule whose `functions`
+    /// names a guardian approval, so no scoped document reaches the admin
+    /// document's rules, recovery, upgrades, or guardian approvals. Refuses
     /// (`WipedCredential`) a credential a scoped document named before the
     /// last completed recovery, and records every credential it names under
     /// the current scope generation. Compiled under the same caps as any
@@ -1014,8 +1019,9 @@ pub trait PerchSmartAccount: CustomAccountInterface + SmartAccount {
 ///   account's contexts.
 /// - A selected rule a scoped document installed under another scope
 ///   generation is refused (`StaleScope`), and so is one selected for a
-///   call on the current recovery controller, ZK adapter or pool
-///   (`ScopeEscalation`), on every path the same way.
+///   call on the current recovery controller, ZK adapter or pool, or for a
+///   guardian approval on any contract (`ScopeEscalation`), on every path
+///   the same way.
 pub fn check_auth(
     e: &Env,
     signature_payload: &Hash<32>,
@@ -1038,18 +1044,20 @@ pub fn check_auth(
     }
     // A scoped rule authorizes only under the scope generation it was
     // installed in; a recovery completion advances the generation (spec
-    // §7.6). An admin document's rule has no tag. A tag is extended on
-    // read as OZ extends the rule entry it gates, so the two live together.
+    // §7.6). It never casts a guardian approval, at whatever controller
+    // (§2). An admin document's rule has no tag. A tag is extended on read
+    // as OZ extends the rule entry it gates, so the two live together.
     let gen = scope_generation(e);
     for (i, id) in signatures.context_rule_ids.iter().enumerate() {
         if let Some(tag) = PerchStorage::get_scope_tags(e, &id) {
             if tag.gen != gen {
                 return Err(PerchAuthError::StaleScope.into());
             }
-            if let Some(Context::Contract(ContractContext { contract, .. })) =
-                auth_contexts.get(i as u32)
+            if let Some(Context::Contract(ContractContext {
+                contract, fn_name, ..
+            })) = auth_contexts.get(i as u32)
             {
-                if excluded_contract(e, &contract) {
+                if excluded_contract(e, &contract) || is_guardian_approval(e, &fn_name) {
                     return Err(PerchAuthError::ScopeEscalation.into());
                 }
             }
@@ -1215,9 +1223,12 @@ fn apply_scope_doc(e: &Env, scope: u32, doc_json: Bytes) -> Result<BytesN<32>, P
 }
 
 /// Refuse a compiled document that would reach past a scope: a recovery
-/// member, or a rule scoped to the account itself (every `self-admin` rule)
+/// member, a rule scoped to the account itself (every `self-admin` rule)
 /// or to a contract of the excluded set (spec §7.6; the compiler checks the
-/// ZK adapter and pool only within one document, spec §15 rule 3).
+/// ZK adapter and pool only within one document, spec §15 rule 3), or a
+/// rule whose `functions` names a guardian approval (§2). A rule that
+/// leaves its functions unrestricted is refused a guardian approval in
+/// `__check_auth` instead.
 fn check_scoped(e: &Env, me: &Address, compiled: &CompiledDoc) -> Result<(), PerchAccountError> {
     if !compiled.recovery.is_empty() {
         return Err(PerchAccountError::ScopeEscalation);
@@ -1226,11 +1237,33 @@ fn check_scoped(e: &Env, me: &Address, compiled: &CompiledDoc) -> Result<(), Per
         let RuleScope::Contract(target) = &rule.scope else {
             return Err(PerchAccountError::ScopeEscalation);
         };
-        if target == me || excluded_contract(e, target) {
+        if target == me || excluded_contract(e, target) || names_guardian_approval(e, &rule) {
             return Err(PerchAccountError::ScopeEscalation);
         }
     }
     Ok(())
+}
+
+/// Whether a compiled rule's function list (the interpreter program's
+/// `Op::FnIn`, which a rule's `functions` lowers to) names a guardian
+/// approval. Each op is read as its raw `[variant, fields..]` value rather
+/// than decoded as an `Op`, which would link every variant's conversion
+/// into the account for this one check.
+fn names_guardian_approval(e: &Env, rule: &CompiledRule) -> bool {
+    let fn_in = Symbol::new(e, "FnIn");
+    rule.install.iter().any(|params| {
+        params.program.ops.to_vals().iter().any(|op| {
+            let Ok(op) = Vec::<Val>::try_from_val(e, &op) else {
+                return false;
+            };
+            op.get(0)
+                .is_some_and(|tag| Symbol::try_from_val(e, &tag).is_ok_and(|tag| tag == fn_in))
+                && op.get(1).is_some_and(|names| {
+                    Vec::<Symbol>::try_from_val(e, &names)
+                        .is_ok_and(|names| names.iter().any(|name| is_guardian_approval(e, &name)))
+                })
+        })
+    })
 }
 
 /// Whether `contract` is in the applied admin document's excluded set,
