@@ -16,17 +16,27 @@ fi
 # SKIP_CHECK=1 skips the source/generated consistency check for local drafting; CI never sets it.
 if [ "${SKIP_CHECK:-0}" != 1 ]; then python3 ../build/paper.py --check; fi
 rm -rf out && mkdir out
-"$TECTONIC" -X compile --bundle "$BUNDLE" --keep-logs --keep-intermediates --outdir out perch-paper.tex
+# ANONYMOUS=1 builds the double-blind edition (author names, affiliation and
+# the authors' repository links withheld) as perch-paper-anonymous.pdf.
+main=perch-paper
+if [ "${ANONYMOUS:-0}" = 1 ]; then
+  main=perch-paper-anonymous
+  printf '\\def\\anonymous{}\\input{perch-paper}\n' > out/$main.tex
+  cp -R perch-paper.tex sections generated out/
+fi
+src=perch-paper.tex
+[ "$main" = perch-paper ] || src=out/$main.tex
+"$TECTONIC" -X compile --bundle "$BUNDLE" --keep-logs --keep-intermediates --outdir out "$src"
 status=0
-if grep -nE "LaTeX Warning: (Reference|Citation) .* undefined|There were undefined references|Label\(s\) may have changed|multiply defined|Package perch Error" out/perch-paper.log; then
+if grep -nE "LaTeX Warning: (Reference|Citation) .* undefined|There were undefined references|Label\(s\) may have changed|multiply defined|Package perch Error" out/$main.log; then
   status=1
 fi
-if [ -f out/perch-paper.blg ] && grep -nE "^Warning--|error message" out/perch-paper.blg; then
+if [ -f out/$main.blg ] && grep -nE "^Warning--|error message" out/$main.blg; then
   status=1
 fi
 if [ "$status" -ne 0 ]; then
   echo "build.sh: unresolved references or citations (see above)" >&2
   exit 1
 fi
-cp out/perch-paper.pdf perch-paper.pdf
-echo "build.sh: wrote $(pwd)/perch-paper.pdf"
+cp out/$main.pdf $main.pdf
+echo "build.sh: wrote $(pwd)/$main.pdf"

@@ -29,9 +29,9 @@
    "Built from {{fact:perch-preview-source}}, whose contract sources equal the pin's"
   ],
   [
-   "{{fact:wallet-name}} wallet on that deployment",
+   "Wallet on that deployment ({{fact:wallet-name}})",
    "{{badge:preview:PREVIEW}}",
-   "Draft {{fact:nido-preview-pr}}",
+   "{{fact:nido-preview-pr}} (draft)",
    "{{fact:nido-run-transactions}} testnet transactions ({{ref:sec:evaluation}})"
   ],
   [
