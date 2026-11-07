@@ -90,6 +90,12 @@
    "The interpreter's `enforce`, per policy"
   ],
   [
+   "Attenuation",
+   "Deriving from a grant a rule set that allows nothing the original does not, by the ten steps of rule-core's attenuation; modeled and proved, with no account entry point at the pinned build",
+   "rule-core `attenuate`",
+   "—"
+  ],
+  [
    "Spending record",
    "A capped rule's charged amounts and their ledgers",
    "`SpendRecord`",
@@ -123,6 +129,12 @@
    "Epoch",
    "The recovery controller's counter; it invalidates older evidence and attempts",
    "`epoch`",
+   "—"
+  ],
+  [
+   "Credential index",
+   "The account's record of the credentials grants have named; after a recovery it refuses (`WipedCredential`) any later document naming a credential an earlier grant named, except the recovery target itself",
+   "credential index, `WipedCredential`",
    "—"
   ],
   [
@@ -257,5 +269,6 @@
    "—",
    "—"
   ]
- ]
+ ],
+ "row_ids": "gloss"
 }

@@ -125,16 +125,17 @@ def _directive(p, body, ed, ctx):
         if arg not in p.numbers[ed] and not (arg.startswith('sec:') and arg[4:] in p.sec_ids):
             fail(f'unknown or excluded reference {arg!r} in {ctx} ({ed})')
             return '??'
+        appendix = arg.startswith('sec:') and any(x['id'] == arg[4:] and x.get('appendix') for x in p.sections)
         if ed == 'latex':
             if arg.startswith('sec:') and arg not in p.numbers['latex']:
                 fail(f'reference {arg!r} in {ctx} names a section that has no number in the LaTeX edition')
-            pre = {'sec': r'\S', 'fig': r'Figure~', 'tab': r'Table~'}[arg[:3]]
+            pre = 'Appendix~' if appendix else {'sec': r'\S', 'fig': r'Figure~', 'tab': r'Table~'}[arg[:3]]
             return pre + r'\ref{' + arg + '}'
         n = p.numbers['html'].get(arg)
         if n is None and arg.startswith('sec:'):
             sec = next(x for x in p.sections if x['id'] == arg[4:])
             return f'<a href="#{arg[4:]}">{html.escape(sec["title_html"])}</a>'
-        label = {'sec': '§', 'fig': 'Figure ', 'tab': 'Table '}[arg[:3]] + (n or '??')
+        label = ('Appendix ' if appendix else {'sec': '§', 'fig': 'Figure ', 'tab': 'Table '}[arg[:3]]) + (n or '??')
         target = arg[4:]
         return f'<a href="#{target}">{label}</a>'
     if kind == 'cite':
@@ -246,6 +247,33 @@ def html_figure(p, fid):
             f'<figcaption><span class="figure-title" id="{fid}-title">Figure {n}. {title}</span> {cap}</figcaption>{alt}</figure>')
 
 
+def slug(text):
+    return re.sub(r'[^a-z0-9]+', '-', re.sub(r'`', '', text).lower()).strip('-')
+
+
+GLOSS_LINK = re.compile(r'<dfn><a href="#glossary">(.*?)</a></dfn>')
+
+
+def link_glossary(p, page):
+    # Point each <dfn> link at its glossary row: exact term, a plural, or one name of a "A, B" row.
+    t = p.tables.get('tab-glossary')
+    if not t:
+        return page
+    names = {}
+    for r in t['rows']:
+        for name in [r[0]] + [x.strip() for x in re.split(r',| and ', r[0])]:
+            names.setdefault(slug(name), slug(r[0]))
+
+    def sub(m):
+        key = slug(re.sub(r'<[^>]+>', '', m.group(1)))
+        for k in (key, key[:-1] if key.endswith('s') else key, key[:-2] if key.endswith('es') else key):
+            if k in names:
+                return f'<dfn><a href="#{t["row_ids"]}-{names[k]}">{m.group(1)}</a></dfn>'
+        fail(f'glossary link {m.group(1)!r} matches no glossary row')
+        return m.group(0)
+    return GLOSS_LINK.sub(sub, page)
+
+
 def load_steps(fid):
     sp = SRC / 'figures' / f'{fid}.steps.json'
     return json.loads(read(sp)) if sp.exists() else None
@@ -279,7 +307,10 @@ def latex_steps(p, fid, st):
 
 def html_table_body(p, t, tid):
     head = ''.join(f'<th>{render(p, c, "html", tid)}</th>' for c in t['columns'])
-    rows = ''.join('<tr>' + ''.join(f'<td>{render(p, c, "html", tid)}</td>' for c in r) + '</tr>' for r in t['rows'])
+    def tr(r):
+        rid = f' id="{t["row_ids"]}-{slug(r[0])}"' if t.get('row_ids') else ''
+        return f'<tr{rid}>' + ''.join(f'<td>{render(p, c, "html", tid)}</td>' for c in r) + '</tr>'
+    rows = ''.join(tr(r) for r in t['rows'])
     cls = f' class="{t["html_class"]}"' if t.get('html_class') else ''
     return f'<div class="table-wrap"><table{cls}><thead><tr>{head}</tr></thead><tbody>{rows}</tbody></table></div>'
 
@@ -422,7 +453,7 @@ def build_html(p, blocks):
         fail(f'HTML figure order {seen["fig"]} != outline {want_f}')
     if seen['tab'] != want_t:
         fail(f'HTML table order {seen["tab"]} != outline {want_t}')
-    page = '\n'.join(parts)
+    page = link_glossary(p, '\n'.join(parts))
     # build-page.mjs refreshes these blocks in place, so each must survive a rebuild.
     for name in CARRIED:
         if page.count(f'<!-- {name}_START -->') != 1:
