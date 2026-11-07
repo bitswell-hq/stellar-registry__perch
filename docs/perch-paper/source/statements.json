@@ -12,6 +12,7 @@
   ],
   "assumes": [
    "kernel",
+   "rustc-nightly",
    "charon",
    "aeneas",
    "aeneas-lib",
@@ -32,6 +33,7 @@
   ],
   "assumes": [
    "kernel",
+   "rustc-nightly",
    "charon",
    "aeneas",
    "aeneas-lib",
@@ -52,6 +54,7 @@
   ],
   "assumes": [
    "kernel",
+   "rustc-nightly",
    "charon",
    "aeneas",
    "aeneas-lib",
@@ -72,6 +75,7 @@
   ],
   "assumes": [
    "kernel",
+   "rustc-nightly",
    "charon",
    "aeneas",
    "aeneas-lib",
@@ -92,6 +96,7 @@
   ],
   "assumes": [
    "kernel",
+   "rustc-nightly",
    "charon",
    "aeneas",
    "aeneas-lib",
@@ -112,6 +117,7 @@
   ],
   "assumes": [
    "kernel",
+   "rustc-nightly",
    "charon",
    "aeneas",
    "aeneas-lib",
@@ -132,6 +138,7 @@
   ],
   "assumes": [
    "kernel",
+   "rustc-nightly",
    "charon",
    "aeneas",
    "aeneas-lib",
@@ -152,6 +159,7 @@
   ],
   "assumes": [
    "kernel",
+   "rustc-nightly",
    "charon",
    "aeneas",
    "aeneas-lib",
@@ -173,6 +181,7 @@
   ],
   "assumes": [
    "kernel",
+   "rustc-nightly",
    "charon",
    "aeneas",
    "aeneas-lib",
@@ -194,6 +203,7 @@
   ],
   "assumes": [
    "kernel",
+   "rustc-nightly",
    "charon",
    "aeneas",
    "aeneas-lib",
@@ -230,6 +240,7 @@
   ],
   "assumes": [
    "kernel",
+   "rustc-nightly",
    "charon",
    "aeneas",
    "aeneas-lib",

@@ -82,6 +82,7 @@
    "title_latex": "Comparison with oz-policy-builder",
    "nav": "Comparison",
    "figures": [
+    "fig-same-task",
     "fig-two-paths",
     "fig-two-spellings"
    ],
@@ -261,6 +262,11 @@
    "title": "One source, two paths.",
    "caption": "Lean's kernel checks theorems about the Aeneas translation of the MIR that nightly rustc produces. The account ships WebAssembly from rustc {{fact:rustc-perch}}, and nothing checks one against the other. Double border: proved. Single border: tested. Hatched: trusted. Dashed connectors are the tests that bridge the two paths.",
    "interactive": "proof-paths"
+  },
+  "fig-same-task": {
+   "title": "One task, both designs, replayed from the recorded run.",
+   "caption": "Each row is one request from the walkthrough ({{ref:tab:tab-walkthrough}}); each column lists, in order, the contracts called while the account authorized it and where it was refused. Bottom: repeated in-rule payments under a per-call bound alone (an OpenZeppelin account whose rule carries only the policy-interpreter, run on a local network) and under a window (OpenZeppelin's `spending_limit`, and a Perch grant, from the walkthrough). Contract calls and codes are recorded, not drawn from source; instruction counts are not a performance result.",
+   "interactive": "same-task"
   }
  }
 }
