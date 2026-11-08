@@ -1,7 +1,6 @@
-\paragraph{The proofs and the binary.} The theorems are about the translation of
-the MIR of rustc \fact{rustc-mir-nightly}; Perch builds its contracts with rustc
-\fact{rustc-perch}, and nothing checks the Wasm against the translation
-(Fig.~\ref{fig:fig-proof-paths}). Release builds keep overflow checks and abort on
+\paragraph{The proofs and the binary.} Nothing checks the Wasm, built by rustc
+\fact{rustc-perch}, against the translation (Fig.~\ref{fig:fig-proof-paths}).
+Release builds keep overflow checks and abort on
 panic, and allocation failure and stack exhaustion, which the model omits, also
 trap, so each fails the transaction. The specification is trusted, including
 \code{Doc.allows}, written from Perch's earlier account (\fact{doc-allows-source},
@@ -24,6 +23,5 @@ Proposition~\ref{stmt:from-the-evaluator-to-the-account} is argued. No external
 audit has been completed.
 
 \paragraph{Proposed.} A Lean lemma for O2, selection and renumbering, would turn
-the proposition's main argued step into a theorem; and Komet~\cite{komet} run
-over \code{rule\_eval}'s Wasm would check the shipping path at the Wasm level.
-Neither has been done.
+the proposition's main argued step into a theorem, and a Wasm-level check
+(\S\ref{sec:related}) would cover the shipping path. Neither has been done.

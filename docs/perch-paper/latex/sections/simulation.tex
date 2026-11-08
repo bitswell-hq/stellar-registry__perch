@@ -1,14 +1,14 @@
 soroban-sim~\selfcite{soroban-sim} runs the contract code of both designs
-offline in one host; the HTML edition embeds it for the reader to drive, and we
-report its recorded reference run.
+offline in one host; the HTML edition\ifdefined\anonymous\else\footnote{\url{https://bitswell-hq.github.io/stellar-registry__perch/perch-paper/sim/}}\fi{}
+embeds it for the reader to drive, and we report its recorded reference run.
 
 \paragraph{What runs.} Each design gets a session on soroban-env-host
-\fact{soroban-env-host-sim}, applying with enforcing authorization in a
+\fact{soroban-env-host-sim} at protocol \fact{sim-protocol}, applying with enforcing authorization in a
 recording-mode build: OpenZeppelin's \fact{oz-v080-tag} account with
 oz-policy-builder's \code{policy-interpreter} and \code{spending\_limit}, or the
 Perch account with its document compiler and an Ed25519 verifier, each beside
-the native XLM contract, all rebuilt to the published or deployed hashes
-(Appendix~\ref{sec:repro}). The OpenZeppelin predicate pins the
+the native XLM contract, rebuilt from the pinned sources (Appendix~\ref{sec:repro}; only the
+OpenZeppelin side matches a deployment). The OpenZeppelin predicate pins the
 recipient and bounds each transfer at \fact{shop-cap-xlm}~XLM, with
 \code{spending\_limit} adding \fact{shop-cap-xlm}~XLM per
 \fact{shop-period-ledgers} ledgers; Perch runs the shop grant. Each request
@@ -35,6 +35,5 @@ later, \fact{sim-late-pay-xlm}~XLM applies in both.
 \perchtable{tab-sim}
 
 \paragraph{Why soroban-sim.} Real contract bytes run offline and
-deterministically; native, WASI and browser runs return byte-identical replies,
-timings removed; every verdict carries an inspectable trace; and one host runs
-both designs on the same requests.
+deterministically, every verdict carries a trace, and native, WASI and browser
+runs return byte-identical replies, timings removed.

@@ -15,5 +15,8 @@ around them tested; fail-closed refusal (G6) is tested; recovery invalidation
 tested and run on testnet. Other goals and adversaries are in the vision
 companion. We trust the Soroban host and validators, the verifiers documents
 name, the adopted recovery controller, the document compiler, rustc
-and the wallet's display. Budgets across grants, effects outside authorization,
+and the wallet's display, and assume unforgeable signature schemes (Ed25519;
+ECDSA P-256 for passkeys) and a collision-resistant SHA-256, under which the
+verification companion proves on paper that an external signature binds the
+account, the entry and the rule IDs. Budgets across grants, effects outside authorization,
 confidentiality and verifier correctness are non-goals.

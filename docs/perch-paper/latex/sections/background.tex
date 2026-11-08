@@ -7,8 +7,9 @@ contract creation in the tree, in preorder, each of which the account must
 decide. A lost guess in a game gives two, the game's \code{guess} and the
 \code{transfer} it makes from the account. The nonce is consumed only on
 success, so a refused entry can be resubmitted until it expires.
-CAP-0071~\cite{cap-0071} adds delegated signers. Recording-mode simulation,
-which builds entries, does not call \code{\_\_check\_auth}.
+CAP-0071~\cite{cap-0071} lets a delegated signer's approval ride in the
+account's own entry. Recording-mode simulation, which builds entries, does not
+call \code{\_\_check\_auth}, so only enforcing simulation predicts a refusal.
 
 \paragraph{OpenZeppelin and oz-policy-builder.} OpenZeppelin's Soroban
 library~\cite{oz-stellar-accounts} stores \emph{context rules} with

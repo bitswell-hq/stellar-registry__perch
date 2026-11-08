@@ -1,5 +1,5 @@
-Perch is ahead in three respects, each with a caveat, and it can end every grant
-at once.
+Perch is ahead in three respects, each with a caveat, and one recovery stops
+every earlier grant.
 
 \paragraph{A limit over time inside the decision.} A Perch rule's window cap is
 charged in the decision that checks the call. The cap theorem (Theorem~6 of
@@ -28,11 +28,11 @@ polices. \emph{Caveat:} one point decides only what the evaluator can express
 (\S\ref{sec:composition}).
 
 \paragraph{A proved core.} The evaluator is about \fact{rule-eval-lines} lines of
-\code{no\_std} Rust in a subset that Charon and Aeneas~\cite{aeneas} translate
+\code{no\_std} Rust in a subset that Charon~\cite{charon} and Aeneas~\cite{aeneas} translate
 into Lean. Kernel-checked theorems state that the translation returns what a
 readable model returns on every input, without panicking or diverging
-(Theorem~1); that acceptance means a selected rule allows every call
-(Theorem~2); that attenuation never widens a grant (Theorem~4); the window bound
+(Theorem~1); that when the decision function accepts,
+each call is allowed by some rule it was given (Theorem~2); that attenuation never widens the calls a grant allows (Theorem~4); the window bound
 above (Theorem~6); and that no installed grant, nor one derived from it, allows a
 call to the account or its adopted recovery contracts (Theorem~8). We
 found no formal model in oz-policy-builder's tree (a search, not a proof of
@@ -41,7 +41,7 @@ absence); its evidence is testing, partly on the shipped Wasm.
 shell is tested, not proved; attenuation cannot yet be installed; and nothing in
 Perch has been audited.
 
-\paragraph{Ending every grant at once.} A completed recovery advances the grant
+\paragraph{Stopping every earlier grant.} A completed recovery advances the grant
 generation, after which no earlier grant, nor one derived from it, accepts a
 nonempty authorization (Theorem~10). \emph{Caveat:} this is a theorem about an
 account model with no Rust counterpart; the shell's part is tested (O3).

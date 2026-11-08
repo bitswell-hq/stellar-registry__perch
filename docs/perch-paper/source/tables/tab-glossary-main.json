@@ -79,6 +79,12 @@
    "The interpreter's `enforce`, per policy"
   ],
   [
+   "Account shell",
+   "The account code around the decision function: guards, rule lookup, signature checks and storage; tested, not proved",
+   "`perch-smart-account`",
+   "—"
+  ],
+  [
    "Lowering",
    "Turning a compiled document's model into the rules the account stores, under the account's address, its excluded set and the current grant generation",
    "`lower`, `lower_scoped`",
@@ -89,6 +95,12 @@
    "A capped rule's charged amounts and their ledgers",
    "`SpendRecord`",
    "History in OpenZeppelin's `spending_limit`"
+  ],
+  [
+   "Stroop",
+   "The smallest unit of XLM: {{fact:stroops-per-xlm}} stroops make one XLM",
+   "—",
+   "—"
   ],
   [
    "Cap and window",
@@ -121,6 +133,24 @@
    "The same"
   ],
   [
+   "`__check_auth`",
+   "The account function the host calls to approve an authorization entry; it receives the payload hash, the auth payload and the contexts",
+   "`__check_auth(signature_payload, signatures, auth_contexts)`",
+   "The same entry point"
+  ],
+  [
+   "Auth payload",
+   "The argument of `__check_auth` whose shape the account defines: the signatures and the rule chosen for each context",
+   "`AuthPayload`, `context_rule_ids`",
+   "The same field, `context_rule_ids`"
+  ],
+  [
+   "Enforcing simulation",
+   "A simulation that runs `__check_auth`, so it predicts a refusal; recording simulation, which discovers which entries a transaction needs, does not",
+   "—",
+   "—"
+  ],
+  [
    "Context rule",
    "—",
    "—",
@@ -140,7 +170,7 @@
   ],
   [
    "Interpreter",
-   "Perch {{fact:perch-deployed-account-version}}'s policy contract; its address is still pinned and reported, never called",
+   "No counterpart: Perch decides in the account. The policy contract of Perch's earlier design ({{fact:perch-deployed-account-version}}) is still pinned by the account and never called (the vision paper)",
    "`perch_interpreter`",
    "oz-policy-builder's `policy-interpreter`, the shared predicate evaluator"
   ],

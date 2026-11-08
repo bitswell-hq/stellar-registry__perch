@@ -1,6 +1,7 @@
 \paragraph{Pins.} \ifdefined\anonymous The revisions of Perch, rule-core and
 soroban-sim are withheld for review and given in the artifact.\else Perch
-\facthash{perch-pin}~\selfcite{perch-src}; rule-core
+\facthash{perch-pin}~\selfcite{perch-src}, with the earlier design on mainnet at
+\facthash{perch-deployed-source}; rule-core
 \facthash{rule-core-pin}~\selfcite{rule-core}; soroban-sim
 \facthash{soroban-sim-pin} (soroban-env-host
 \fact{soroban-env-host-sim}).\fi{} OpenZeppelin stellar-contracts
@@ -8,7 +9,7 @@ soroban-sim are withheld for review and given in the artifact.\else Perch
 \facthash{opb-pin}.
 
 \paragraph{The simulation.} SHA-256 of the page, \facthash{sim-page-sha256}; of
-the golden native run, \facthash{sim-golden-sha256}; and of the reference
+the native reference run, \facthash{sim-golden-sha256}; and of the reference
 replies minus wall-clock timings, which the native run, the WASI build and the
 browser share, \facthash{sim-replies-sha256}. Contract Wasm, SHA-256:
 {\footnotesize
@@ -20,9 +21,16 @@ browser share, \facthash{sim-replies-sha256}. Contract Wasm, SHA-256:
 \item OpenZeppelin \code{spending\_limit} \facthash{sim-wasm-oz-spending-limit}
 \item \code{policy-interpreter} \facthash{sim-wasm-policy-interpreter}
 \end{itemize}}
-\noindent The page also loads Perch's earlier policy contracts, which its
-account pins but never calls, and a verifier-registry stub; their hashes are in
-\nolinkurl{sim/README.md}. The page carries its build sources, whose
+\noindent The Perch session also loads two contracts its account pins but never
+calls, Perch's earlier interpreter (\facthash{sim-wasm-perch-interpreter}) and
+spending limit (\facthash{sim-wasm-perch-spending-limit}). The Perch account is
+built with its committed infrastructure pins rewritten to the compiler,
+interpreter and spending-limit builds of the same run, so its bytes differ
+from a committed-pin build and from the testnet preview's. The three
+OpenZeppelin-side hashes equal oz-policy-builder's testnet records; built with
+stellar-cli 27.0.0, the account and \code{spending\_limit} match after
+\code{normalize-oz.py} sets the CLI version string in their metadata to
+27.1.0's. The page carries its build sources, whose
 \code{BUILD.md} fetches the pinned trees by commit and rebuilds the contracts,
 the driver (native and \code{wasm32-wasip1}), the reference run and the page.
 
@@ -36,7 +44,10 @@ vision companion.
 \section{Formal Definitions and Two Theorems}\label{sec:formal-defs}
 These are the definitions that the theorems of \S\ref{sec:proofs} use, and the
 two of its five theorems that the body states in words only; the verification
-companion gives all nine definitions and thirteen theorems.
+companion gives all nine definitions and thirteen theorems. A subscript
+$\mathrm{T}$ marks the Lean translation of a Rust function, and
+$\llbracket\cdot\rrbracket$ maps the translation's values to the model's
+(Definition~9 of the verification companion).
 
 \input{generated/definitions}
 \input{generated/statements/T1}

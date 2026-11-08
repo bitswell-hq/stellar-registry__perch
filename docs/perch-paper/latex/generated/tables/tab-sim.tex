@@ -1,8 +1,8 @@
 % Generated from source/tables/tab-sim.json; edit that.
 \begin{table}[tbp]
 \centering
-\caption{\textbf{The recorded run, one command a row.} Recorded by soroban-sim's native run of the simulation page. OpenZeppelin requests carried 2 authorization entries, Perch requests 1. The window is the Perch grant's record, or \code{spending\_limit}'s history (none while it is removed). Every refusal was an enforcing simulation that left the ledger unchanged. Payments go to the shop unless noted.}\label{tab:tab-sim}
-\scriptsize\begin{tabularx}{\linewidth}{@{}LLLL@{}}
+\caption{\textbf{The recorded run, one command a row.} Recorded by soroban-sim's native run of the simulation page. OpenZeppelin requests carried 2 authorization entries, Perch requests 1. The window is the Perch grant's record, or \code{spending\_limit}'s history (none while it is removed). Every refusal was an enforcing simulation that left the ledger unchanged. Payments go to the shop unless noted. The window column is the stored record; spends 100 or more ledgers old leave it at the next charge.}\label{tab:tab-sim}
+\scriptsize\begin{tabularx}{\linewidth}{@{}r>{\raggedright\arraybackslash}p{0.17\linewidth}LL@{}}
 \toprule
 \textbf{Step} & \textbf{Request} & \textbf{OpenZeppelin account} & \textbf{Perch account} \\
 \midrule
@@ -19,7 +19,7 @@
 10 & pay 1 XLM elsewhere & refused, 100 in the interpreter \ensuremath{\cdot} window 1 of 10 & refused, 5 in the account \ensuremath{\cdot} window 7 of 10 \\
 11 & pay 1 XLM, another key as the app & refused, Error(Crypto, InvalidInput) in the account \ensuremath{\cdot} window 1 of 10 & refused, Error(Crypto, InvalidInput) in the verifier \ensuremath{\cdot} window 7 of 10 \\
 12 & pay 1 XLM, key not on the rule & refused, 3016 in the account \ensuremath{\cdot} window 1 of 10 & refused, 5 in the account \ensuremath{\cdot} window 7 of 10 \\
-13 & close 100 ledgers & 100 ledgers closed \ensuremath{\cdot} window 1 of 10 & 100 ledgers closed \ensuremath{\cdot} window 7 of 10 \\
+13 & close 100 ledgers & 100 ledgers closed \ensuremath{\cdot} record 1 XLM, outside the window & 100 ledgers closed \ensuremath{\cdot} record 7 XLM, outside the window \\
 14 & pay 5 XLM & applied \ensuremath{\cdot} window 5 of 10 & applied \ensuremath{\cdot} window 5 of 10 \\
 \bottomrule
 \end{tabularx}

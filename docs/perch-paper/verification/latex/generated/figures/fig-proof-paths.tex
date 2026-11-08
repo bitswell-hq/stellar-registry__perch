@@ -107,5 +107,5 @@
 \path[draw=camber, line width=2pt, {}-{Triangle[length=8pt,width=8pt,color=camber,fill=camber,line width=0pt]}] (40,231) -- (40,401) -- (122,401);
 \end{tikzpicture}%
 \end{adjustbox}
-\caption{\textbf{One source, two paths.} Lean's kernel checks theorems about the Aeneas translation of the MIR that nightly rustc produces. The account ships WebAssembly from rustc \fact{rustc-perch}, and nothing checks one against the other. Double border: proved. Single border: tested. Hatched: trusted. Inside the double border are the objects the theorems are about; that each model matches its subject is trusted (hatched row). Dashed connectors are the tests that bridge the two paths.}\label{fig:fig-proof-paths}
+\caption{\textbf{One source, two paths.} Lean's kernel checks theorems about the Aeneas translation of the MIR that nightly rustc produces; the account ships WebAssembly from rustc \fact{rustc-perch}, and nothing checks one against the other. Double border: proved, around the objects the theorems are about. Single border: tested. Hatched: trusted, including that each model matches its subject. Dashed connectors: the tests that bridge the two paths.}\label{fig:fig-proof-paths}
 \end{figure}

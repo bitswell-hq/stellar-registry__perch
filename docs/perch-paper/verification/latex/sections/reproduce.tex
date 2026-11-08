@@ -23,6 +23,14 @@ Theorem~\ref{stmt:canonical-identity} reproduces from Perch~\cite{perch-src} at
 cd formal && lake build             # checks all proofs
 lake env lean CheckAxioms.lean      # audits their axioms
 \end{Verbatim}
-This paper is built from shared sources with
+\paragraph{The claims ledger.} rule-core records \fact{claims-unproven} claims
+as unproven, \fact{claims-unproven-ids}, and \fact{claims-assumed} as assumed,
+\fact{claims-assumed-ids}: hypotheses of the model (bounded room, the empty
+batch, no creation vocabulary, ledgers from~1) and the trusted items of
+\S\ref{sec:trust}.
+
+\noindent This paper is built from shared sources with
 \code{python3} \srcpath{docs/perch-paper/build/paper.py} and
 \srcpath{docs/perch-paper/latex/build.sh} in the Perch repository.
+
+\perchtable{tab-binding}

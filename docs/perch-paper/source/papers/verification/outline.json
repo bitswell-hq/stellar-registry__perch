@@ -38,6 +38,12 @@
    ]
   },
   {
+   "id": "spending",
+   "title_html": "Spending limits",
+   "title_latex": "Spending Limits",
+   "nav": "Spending limits"
+  },
+  {
    "id": "documents",
    "title_html": "Documents, lowering and containment",
    "title_latex": "Documents, Lowering and Containment",
@@ -76,6 +82,18 @@
    "title_html": "What is not proved",
    "title_latex": "Limitations",
    "nav": "Not proved"
+  },
+  {
+   "id": "related",
+   "title_html": "Related work",
+   "title_latex": "Related Work",
+   "nav": "Related work"
+  },
+  {
+   "id": "conclusion",
+   "title_html": "Conclusion",
+   "title_latex": "Conclusion",
+   "nav": "Conclusion"
   },
   {
    "id": "reproduce",

@@ -1,8 +1,7 @@
-\paragraph{What was run.} Every comparator claim is read from source and public
-documentation at the pins, except the results of our runs (\S\ref{sec:overview}).
-Both runs of the task are one task, on soroban-sim's recording-mode host build
-without exact metering, with different signer kinds on the two sides; they show
-verdicts and call structure, not cost.
+\paragraph{What was run.} Both runs of the task (\S\ref{sec:same-task}) are one
+task, on soroban-sim's recording-mode host build without exact metering, with
+different signer kinds on the two sides; they show verdicts and call structure,
+not cost.
 
 \paragraph{Proposed measurement.} We propose, and have not run, five workloads
 under one harness with exact metering, one host version and Ed25519 signers on
@@ -13,10 +12,8 @@ transfer it makes; W3, one grant install; W4, ending authority over $k$ grants
 after $n$ transfers.
 
 \paragraph{What we do not claim.} Until W1--W5 run, we claim no difference in
-calls, cost, speed or size, and compare no code sizes. We do not claim that Perch
-binds more in general, or that oz-policy-builder is unproven (we found no formal
-model in its tree) or runs on mainnet (OpenZeppelin's \fact{oz-v072-tag} policies
-do). We do not claim that \code{spending\_limit} and Perch's cap behave alike
-beyond their shared eviction boundary. Items oz-policy-builder discloses about
-features Perch lacks (Table~\ref{tab:tab-disclosed}) are not security properties
-of Perch.
+calls, cost, speed or code size. We do not claim that Perch
+binds more in general, or that oz-policy-builder is unproven or runs on mainnet
+(OpenZeppelin's \fact{oz-v072-tag} policies do). We do not claim that \code{spending\_limit} and Perch's cap behave alike
+beyond their shared eviction boundary, or that Perch lacking the features
+behind Table~\ref{tab:tab-disclosed}'s oz-policy-builder rows is a security property.

@@ -109,7 +109,7 @@
   ],
   [
    "Attenuation",
-   "Deriving from a grant a rule set that allows nothing the original does not, by the ten steps of rule-core's attenuation; modeled and proved, with no account entry point at the pinned build",
+   "Deriving from a grant a rule set that allows no call the original does not, by the ten steps of rule-core's attenuation; modeled and proved, with no account entry point at the pinned build",
    "rule-core `attenuate`",
    "—"
   ],
@@ -217,7 +217,7 @@
   ],
   [
    "Interpreter",
-   "Perch {{fact:perch-deployed-account-version}}'s policy contract; its address is still pinned and reported, never called",
+   "The policy contract of Perch's earlier design ({{fact:perch-deployed-account-version}}); its address is still pinned and reported, never called",
    "`perch_interpreter`",
    "oz-policy-builder's `policy-interpreter`, the shared predicate evaluator"
   ],

@@ -1,15 +1,17 @@
 <p class="lede"><strong>The function that decides is translated into Lean and proved about; the code around it is tested.</strong> Theorem numbers are shared with the verification paper, which lists all thirteen.</p>
 <aside class="box five-lines" id="five-lines" data-path="5" aria-labelledby="five-lines-title"><p class="box-title" id="five-lines-title">What is proved, in five lines</p><ol>
 <li>{{ref:stmt:total-equivalence-of-the-evaluator}}: the Lean translation returns what the model returns, on every input, without panicking or looping.</li>
-<li>{{ref:stmt:acceptance-implies-permission}}: acceptance means an installed rule allows every call.</li>
-<li>{{ref:stmt:attenuation-narrows-authority}}: attenuation never widens a grant (modelled; not installable yet).</li>
+<li>{{ref:stmt:acceptance-implies-permission}}: when the decision function accepts, each call is allowed by some rule it was given.</li>
+<li>{{ref:stmt:attenuation-narrows-authority}}: attenuation never widens the calls a grant allows (modelled; not installable yet).</li>
 <li>{{ref:stmt:cap-window-safety}}: from an empty record, no window of \(P\) ledgers holds more than the limit.</li>
 <li>{{ref:stmt:grant-target-containment}}: no installed grant, nor one derived from it, allows a call to the account or its adopted recovery contracts.</li>
 </ol><p>Not covered: the compiled Wasm, the account code around the function (tested), the host, and effects outside authorization. There is no external audit.</p></aside>
 <h3 id="translation">The evaluator and its translation</h3>
-<p>The evaluator is about {{fact:rule-eval-lines}} lines of <code>no_std</code> Rust, written in a subset that the Aeneas toolchain can translate. Charon reads the compiler's mid-level representation (MIR) from rustc <code>{{fact:rustc-mir-nightly}}</code>, and Aeneas {{cite:aeneas}} translates it into a pure Lean program; theorems relate that translation to a readable model written by hand. rule-core's CI regenerates the translation and fails on any difference, and checks that its {{fact:exported-theorems}} exported theorems use no axioms beyond Lean's standard three. <em>Proved</em> in this paper means checked by Lean's kernel.</p>
+<p>The evaluator is about {{fact:rule-eval-lines}} lines of <code>no_std</code> Rust, written in a subset that the Aeneas toolchain can translate. Charon {{cite:charon}} reads the compiler's mid-level representation (MIR) from rustc <code>{{fact:rustc-mir-nightly}}</code>, and Aeneas {{cite:aeneas}} translates it into a pure Lean {{cite:lean4}} program; theorems relate that translation to a readable model written by hand. rule-core's CI regenerates the translation and fails on any difference, and checks that its {{fact:exported-theorems}} exported theorems use no axioms beyond Lean's standard three. <em>Proved</em> in this paper means checked by Lean's kernel.</p>
+<div data-path="20">
 <h3 id="notation">Notation</h3>
-<p>Lists are written with an arrow: \(\vec c = c_1, \dots, c_n\). \(R\) is a rule set and \(\rho\) its spending records, one per rule; \(r_i = R_{j_i}\) is the rule chosen for context \(c_i\). A rule's last ledger \(u_r\) is \(\infty\), and its generation \(g_r\) is \(\bot\), when absent. \(\varnothing\) is the empty records, one empty record per rule. \(|\cdot|\) is length or cardinality, and ledgers are natural numbers. Each card below gives the formula, a plain reading, the precise statement and the Lean names at rule-core <code>{{fact:rule-core-pin-short}}</code>; a theorem card also gives its hypotheses and, where one exists, an instance to try.</p>
+<p>Lists are written with an arrow: \(\vec c = c_1, \dots, c_n\). \(R\) is a rule set and \(\rho\) its spending records, one per rule; \(r_i = R_{j_i}\) is the rule chosen for context \(c_i\). A rule's last ledger \(u_r\) is \(\infty\), and its generation \(g_r\) is \(\bot\), when absent. \(\varnothing\) is the empty records, one empty record per rule. \(|\cdot|\) is length or cardinality, and ledgers are natural numbers. Each card below gives the formula, a plain reading, the precise statement and the Lean names at rule-core <code>{{fact:rule-core-pin-short}}</code>; a theorem card also gives its hypotheses and, where one exists, an instance to try. A subscript \(\mathrm{T}\) marks the Lean translation of a Rust function, and \(\llbracket\cdot\rrbracket\) maps the translation's values to the model's ({{ref:def:denotation}}).</p>
+</div>
 {{definitions:D1,D2,D3,D4,D5}}
 {{statements:T1}}
 <div data-path="20">{{statements:T2}}</div>
@@ -23,6 +25,6 @@
 <li>Lean's kernel and its three standard axioms.</li>
 <li>Charon <code>{{fact:charon-rev}}</code>, Aeneas <code>{{fact:aeneas-rev}}</code>, and Aeneas's Lean library, which models Rust's primitives.</li>
 <li>The MIR that rustc produces.</li>
-<li>The specification: the model, and the meaning of a grant document, both written by hand.</li>
+<li>The specification, written by hand: the denotations that map the translation's values to the model's, and the meaning of a grant document.</li>
 </ul>
-<p>For the theorems to carry to the deployed account, the account code must meet eight obligations, such as authenticating every claimed signer; each is tested or argued, not proved, and together they support an argued proposition about the whole authorization path. <a href="{{doc:verification}}#obligations">The verification paper</a> lists them.</p>
+<p>For the theorems to carry to the deployed account, the account code must meet eight obligations, such as authenticating every claimed signer. Seven are tested or argued; one, that the compiler emits only valid documents (O5), is unproven. Together they support an argued proposition about each call a grant rule approves. <a href="{{doc:verification}}#obligations">The verification paper</a> lists them.</p>

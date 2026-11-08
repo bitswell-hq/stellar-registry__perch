@@ -65,7 +65,7 @@
   "source": "same (V)"
  },
  "opb-audit-scope": {
-  "value": "the interpreter, custody gate, execution adapter, Prime seat and three TypeScript packages at v5.2.0; the OpenZeppelin account and its policies out of scope",
+  "value": "the interpreter, custody gate, execution adapter, Prime seat and three TypeScript packages at v5.2.0, with the OpenZeppelin account and its policies out of scope",
   "source": "`opb:README.md:166-171`; `docs/audit-overview.md:76-85` (V)"
  },
  "opb-interpreter-tests": {

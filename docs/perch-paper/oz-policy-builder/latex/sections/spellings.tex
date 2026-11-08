@@ -23,7 +23,7 @@ window, because the interpreter keeps no totals (\srcpath{dsl.rs:65-72}).
 oz-policy-builder builds one \code{add\_context\_rule} per \code{install\_policy}
 call (\srcpath{tools.ts:588-590}).
 \item Perch's rule holds a passkey as an external signer. oz-policy-builder writes
-every rule signer as delegated (\srcpath{install.ts:149}) and the interpreter refuses
+every rule signer as delegated (\srcpath{install.ts:148}) and the interpreter refuses
 external signers (error \fact{opb-error-external-signer}), so its app signs as a
 Stellar or contract address; its install is authorized by \code{sourceAccount}, a
 signer of rule~0 (\srcpath{tools.ts:590}). Any account may submit a Perch install

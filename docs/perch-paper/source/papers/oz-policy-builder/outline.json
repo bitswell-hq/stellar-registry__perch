@@ -80,6 +80,18 @@
    "nav": "Limits"
   },
   {
+   "id": "related",
+   "title_html": "Related work",
+   "title_latex": "Related Work",
+   "nav": "Related work"
+  },
+  {
+   "id": "conclusion",
+   "title_html": "Conclusion",
+   "title_latex": "Conclusion",
+   "nav": "Conclusion"
+  },
+  {
    "id": "sources",
    "title_html": "Sources and open items",
    "title_latex": "Sources and Open Items",

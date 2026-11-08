@@ -1,8 +1,6 @@
-The account model (Definition~\ref{def:account-events}) has no Rust counterpart.
-How a recovery is authorized, by guardians or a zero-knowledge proof, is in
-the vision companion; here only the generation matters. The stale-rule refusal
-inside \textit{authorize} is proved for the translation; that the shell passes
-the current generation, advances it only on a completion and refuses on overflow
-is tested (obligation O3).
+The account model (Definition~\ref{def:account-events}) has no Rust
+counterpart, and only the generation matters here. The stale-rule refusal inside
+\textit{authorize} is proved for the translation; the shell's part is tested
+(obligation O3).
 
 \input{generated/statements/T10}

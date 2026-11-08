@@ -1,6 +1,6 @@
 {
  "title": "What a signature binds.",
- "caption": "The first two rows come from the host's signature payload. OpenZeppelin columns are read from `stellar-contracts` {{fact:oz-v080-tag}} and {{fact:oz-v072-tag}} source; the 0.7.2-line build that oz-policy-builder signs for ({{fact:oz-v072-line-account-build}}) has no recorded source, and its digest is taken from oz-policy-builder's documentation. ¹With a legacy `Address` credential; CAP-0071's address-bound credentials add the account to the host's payload. In oz-policy-builder's deployment, external signers are only Prime seats in rule 0, each accepting only its own account's ID as key data, and the interpreter refuses external signers in rules it polices (error {{fact:opb-error-external-signer}}); read in source, not run.",
+ "caption": "The first two rows come from the host's signature payload. OpenZeppelin columns are read from `stellar-contracts` {{fact:oz-v080-tag}} and {{fact:oz-v072-tag}} source; the 0.7.2-line build that oz-policy-builder signs for ({{fact:oz-v072-line-account-build}}) has no recorded source, and its digest is taken from oz-policy-builder's documentation. ¹With a legacy `Address` credential; CAP-0071's address-bound credentials add the account to the host's payload. oz-policy-builder's interpreter refuses external signers in the rules it polices (error {{fact:opb-error-external-signer}}); read in source, not run.",
  "columns": [
   "Bound to",
   "Perch external",
@@ -59,5 +59,6 @@
    "no",
    "no"
   ]
- ]
+ ],
+ "latex_section": "reproduce"
 }

@@ -11,14 +11,18 @@ pins \code{transfer} on a token (\srcpath{packages/policy-synth/src/install.ts:9
 That policy uses Perch's window boundary (\fact{oz-spending-window}) and keeps at
 most \fact{oz-spending-history-max} entries; oz-policy-builder's authors deployed
 the OpenZeppelin policies they pin and state that they did not audit them
-(\srcpath{evidence/README.md:154-157}). Several signers need a threshold policy: a
+(\srcpath{evidence/README.md:154-157}). OpenZeppelin publishes audit reports for
+its library; the \fact{oz-v080-tag} diff audit lists \code{spending\_limit.rs}
+and the smart account's \code{storage.rs} in scope (\code{stellar-contracts}
+\srcpath{audits/}, v0.8.0 report, p.~4). Several signers need a threshold policy: a
 rule with any policy accepts one authenticated signer unless
 \code{simple\_threshold} or \code{weighted\_threshold} is attached, and the
 installer requires one unless the owners set \code{anyOne}
 (\srcpath{README.md:122-125}). Changing and ending a rule are separate steps. The
 interpreter pins a policed rule to its signer set and refuses with error
 \fact{opb-error-signers-changed} once the set changes, so changing who signs means
-adding a rule and removing the old one; rules are removed one at a time; and
+adding a rule and removing the old one, or removing the policy and adding it
+again with its admins (\srcpath{docs/stellar.md:552-554}); rules are removed one at a time; and
 removing a rule with only rule~0's signatures leaves the interpreter's entry for
 it, never read again, until it archives, because the interpreter's
 \code{uninstall} needs the policy admins' own authorization

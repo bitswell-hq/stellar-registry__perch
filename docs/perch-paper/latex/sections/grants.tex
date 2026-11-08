@@ -1,7 +1,3 @@
-A grant is a set of rules, each naming one contract, the functions and
-arguments it allows, who signs, when it ends and how much it may spend in a
-sliding window.
-
 \perchfigure{fig-cap-window}
 
 \paragraph{Installing a grant.} The owner calls \code{apply\_scope} with a grant
@@ -30,12 +26,14 @@ rule starts an empty window. Theorem~\ref{stmt:cap-window-safety} bounds every
 window from empty records.
 
 \paragraph{Attenuation (modelled; not installable).} A grant derived for a helper
-by rule-core's \fact{attenuation-steps} attenuation steps allows nothing its
-parent does not (Theorem~\ref{stmt:attenuation-narrows-authority}); an entry
-point that installs one is proposed.
+by rule-core's \fact{attenuation-steps} attenuation steps allows no call its
+parent does not (Theorem~\ref{stmt:attenuation-narrows-authority}); caps and expiry
+narrow by trace inclusion (Theorem~5 of the verification companion), and
+neither bounds what parent and child spend together. Installing one is
+proposed.
 
-\paragraph{Ending a grant.} A grant ends at its expiry, by one owner call
-(\code{remove\_scope}), or, with every earlier grant, when a recovery completes
-; anyone may then remove a stale grant's storage
-with \code{gc\_scope}.
+\paragraph{Ending a grant.} A grant stops at its expiry, by one owner call
+(\code{remove\_scope}, which deletes its storage), or, with every earlier grant,
+when a recovery completes; anyone may then remove a stale grant's storage with
+\code{gc\_scope}, which refuses a current-generation grant.
 

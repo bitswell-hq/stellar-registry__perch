@@ -1,9 +1,10 @@
 <p class="lede"><strong>A grant lets an app or agent act for an account within limits the account itself enforces.</strong></p>
-<p>On Stellar, a smart account is a contract that holds a user's funds and decides which calls may act in its name; Soroban is the platform that runs such contracts. An app that spends for a user today has two choices: ask the user to approve every call, or hold a key that can do anything the account can. Neither suits an agent that pays a service many times an hour. Perch adds a third. The owner installs a <dfn><a href="#glossary">grant</a></dfn>, a written and bounded permission, and the account checks every call the app makes against it. {{ref:fig:fig-overview}} shows who does what.</p>
+<p>On Stellar, a smart account is a contract that holds a user's funds and decides which calls may act in its name; Soroban is the platform that runs such contracts. An app that spends for a user today has two choices: ask the user to approve every call, or hold a key that can do anything the account can. Neither suits an agent that pays a service many times an hour. Perch adds a third. The owner installs a <dfn><a href="#glossary">grant</a></dfn>, a written and bounded permission, and the account checks against it every call the app makes in the account's name. {{ref:fig:fig-overview}} shows who does what.</p>
 {{fig:fig-overview}}
 <h3 id="shop-grant">The shop grant</h3>
 <p>The running example lets an app send XLM, Stellar's native currency, from the account to one shop, at most {{fact:shop-cap-xlm}} XLM in any {{fact:shop-period-ledgers}} ledgers ({{ref:fig:fig-shop-grant}}). A ledger is one closed block of the network, nominally {{fact:nominal-ledger-seconds}} seconds apart, so {{fact:shop-period-ledgers}} ledgers is {{fact:shop-period-minutes}}. The grant has one <dfn><a href="#glossary">rule</a></dfn>. It names the contract the app may call (the XLM contract), the function (<code>transfer</code>), a condition on the recipient, the key that must sign (the app's), and a <dfn><a href="#glossary">cap</a></dfn>: a limit on the total sent in a sliding window of ledgers. The simulation in {{ref:sec:simulation}} installs this grant.</p>
-{{fig:fig-shop-grant}}
+<div data-path="5">{{fig:fig-shop-grant}}</div>
+<div data-path="5">
 <h3 id="cannot-say">What a grant cannot say</h3>
 <ul>
 <li><strong>A bound on one call's amount.</strong> The cap bounds the total in the window, so one call may spend the whole limit.</li>
@@ -11,21 +12,22 @@
 <li><strong>Reads of other contracts</strong>, such as a price oracle.</li>
 <li><strong>How calls relate.</strong> The account checks each call alone, so a rule meant for a payment a game makes on the user's behalf also allows the same payment made directly ({{ref:sec:background}}, {{ref:fig:fig-contexts}}).</li>
 </ul>
+</div>
 <h3 id="claim">The claim, word by word</h3>
 <p>This paper argues one claim: <em>safe, bounded delegation for apps and agents on Stellar, simple, proved, and testable end to end in soroban-sim.</em> Each word has a narrow meaning here.</p>
 <ul>
-<li><strong>Bounded</strong> means three proved properties, not "audited": an accepted call is allowed by an installed rule ({{ref:stmt:acceptance-implies-permission}}); no window of a capped rule holds more than its limit ({{ref:stmt:cap-window-safety}}); and no grant allows a call to the account itself or its recovery contracts ({{ref:stmt:grant-target-containment}}).</li>
+<li><strong>Safe</strong> and <strong>bounded</strong> mean three properties, proved for the decision function and for lowering, with the account code around them tested; they do not mean audited or ready for real funds. Each call of an accepted request is allowed by some installed rule ({{ref:stmt:acceptance-implies-permission}}); no window of a capped rule holds more than its limit ({{ref:stmt:cap-window-safety}}); and no grant allows a call to the account itself or its adopted recovery contracts ({{ref:stmt:grant-target-containment}}).</li>
 <li><strong>Simple</strong> means one document, one install call (<code>apply_scope</code>) and one decision point. The cost is fewer conditions than oz-policy-builder, a rule builder for OpenZeppelin's Soroban accounts, offers ({{ref:sec:compare}}).</li>
 <li><strong>Proved</strong> applies to the translation of the decision function into <dfn><a href="#glossary">Lean</a></dfn>, a proof assistant whose kernel checks every proof. It does not apply to the compiled contract; the code around the function is tested ({{ref:sec:proofs}}).</li>
 <li><strong>End to end</strong> covers the contract code of both designs, run together in soroban-sim, a portable Soroban host: Perch's account, verifier and document compiler; OpenZeppelin's account and <code>spending_limit</code>; oz-policy-builder's interpreter; and the XLM contract. Wallets, RPC servers, passkeys and fees are outside it.</li>
 </ul>
-<p>Grants also end with the account's recovery: if the owner recovers the account after losing a key, one counter moves and every earlier grant stops in that transaction (<a href="{{doc:vision}}#recovery">the vision paper</a>).</p>
+<p>Grants also end with the account's recovery: if the owner recovers the account after losing a key, one counter moves and every earlier grant stops authorizing through the account in that transaction (<a href="{{doc:vision}}#recovery">the vision paper</a>).</p>
 <h3 id="status-now">Status</h3>
 <ul>
-<li>This design is an unmerged pull-request stack ending at {{fact:perch-pr-stack-head}} (<code>{{fact:perch-pin-short}}</code>).</li>
+<li>This design is an unmerged pull-request stack ending at {{fact:perch-pr-stack-head}}.</li>
 <li>It runs on Stellar testnet as a preview through the {{fact:wallet-name}} wallet {{cite:nido-preview}}.</li>
 <li>No external audit has been done, and we do not recommend it for real funds before one.</li>
-<li>An earlier design (<code>{{fact:perch-deployed-source-short}}</code>) is on mainnet {{cite:perch-deployments}}; it cannot be upgraded in place to this one.</li>
+<li>An earlier design is on mainnet {{cite:perch-deployments}}. {{ref:sec:repro}} gives both revisions.</li>
 </ul>
 <p>soroban-sim, the Soroban host this page runs, is published by The Aha Company (<code>{{fact:soroban-sim-repo}}</code>, {{fact:soroban-sim-license}}), where the authors work.</p>
 <p>Three companion papers carry what this one leaves out. <a href="{{doc:oz-policy-builder}}">Perch and oz-policy-builder</a> compares the two designs dimension by dimension. <a href="{{doc:vision}}">The Perch vision</a> covers the full account, recovery and proposed agent work. <a href="{{doc:verification}}">What Perch proves</a> states every definition and theorem.</p>

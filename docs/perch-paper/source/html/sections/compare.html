@@ -5,16 +5,17 @@
 <h3 id="arrangements">Two arrangements</h3>
 <p>An OpenZeppelin account with oz-policy-builder composes its decision from contracts that can be swapped and audited separately: the account's own checks, then the interpreter, <code>spending_limit</code> and any threshold policy attached to the rule. Its README calls the interpreter "one audit-once engine": every policy is data fed into it, so a new combination of constraints needs no new contract and no re-audit (<a href="https://github.com/{{fact:opb-repo}}/blob/{{fact:opb-pin}}/README.md#L13-L24"><code>README.md:13-24</code></a>). Perch puts one document behind one decision point in the account. Composition buys flexibility; one decision point gives one place to check. {{ref:fig:fig-compose}} models the same five checks both ways.</p>
 <div data-path="5">{{fig:fig-compose}}</div>
-<p>With JavaScript you can attach, detach and reorder the policies in (b) and send the same requests through both arrangements. A live read, such as an oracle price, fits only (b): a Perch rule reads nothing outside the account.</p>
+<p>With JavaScript you can attach, detach and reorder the policies in (b) and send the same requests through both arrangements. A live read, such as an oracle price, and a bound on one call's amount fit only (b): a Perch rule reads nothing outside the account, and its cap bounds a window's total, not a single call.</p>
 <h3 id="over-time">A limit over time</h3>
 <p>oz-policy-builder's interpreter judges each call and keeps no totals. Its documentation says that amount limits over time come from a token allowance and its expiry, or from OpenZeppelin's <code>spending_limit</code> beside the interpreter (<a href="https://github.com/{{fact:opb-repo}}/blob/{{fact:opb-pin}}/docs/stellar.md#L404-L407"><code>docs/stellar.md:404-407</code></a>). <code>spending_limit</code> is a separate, opt-in policy that refuses every function but <code>transfer</code>, so the synthesiser installs it only on a rule pinned to <code>transfer</code> (<a href="https://github.com/{{fact:opb-repo}}/blob/{{fact:opb-pin}}/packages/policy-synth/src/install.ts#L957-L967"><code>install.ts:957-967</code></a>). In Perch the window is part of the rule and is charged in the same decision ({{ref:stmt:cap-window-safety}}). {{ref:sec:simulation}} runs both designs with and without <code>spending_limit</code>.</p>
-<div data-path="5">{{table:tab-choose}}</div>
+<div data-path="20">{{table:tab-choose}}</div>
+<div data-path="5">
 <h3 id="stronger">Where each is stronger</h3>
-<div class="each" data-path="20">
+<div class="each">
 <div><h4>oz-policy-builder</h4><ul>
-<li><strong>Maturity.</strong> Its interpreter is pinned on testnet; an external audit of {{fact:opb-release}} has been in progress since {{fact:opb-audit-start}}; its off-chain packages were hardened after a penetration test (PR {{fact:opb-pentest-pr}}); and a corpus test takes {{fact:opb-corpus-calls}} mainnet contract calls of {{fact:opb-corpus-shapes}} shapes through synthesis to the interpreter. Perch's design is unmerged, a testnet preview, and unaudited.</li>
-<li><strong>Authoring.</strong> Record a transaction or declare an intent; synthesise a minimal predicate; verify it against the deployed interpreter's <code>check</code>; review; install unsigned. A CLI and an MCP server expose the same {{fact:opb-tools-count}} tools to shells and agents. A Perch author writes the grant document.</li>
-<li><strong>Expressiveness and ecosystem fit.</strong> <em>Or</em>, comparisons, quantifiers over lists, ledger-clock windows, slippage floors (a minimum a swap must return) and reads of other contracts; OpenZeppelin's threshold policies and other add-ons; a deny code for each reason; rule IDs bound for delegated signers.</li>
+<li><strong>Maturity.</strong> Its interpreter is pinned on testnet; it is under external audit, was hardened after a penetration test, and is exercised on recorded mainnet transactions ({{ref:tab:tab-choose}}, first three rows). Perch's design is unmerged, a testnet preview, and unaudited.</li>
+<li><strong>Authoring.</strong> Record a transaction or declare an intent; synthesise a predicate that permits it and test that each conjunct is needed; verify it against the deployed interpreter's <code>check</code>; review; install unsigned. A CLI and an MCP server expose the same {{fact:opb-tools-count}} tools to shells and agents. A Perch author writes the grant document.</li>
+<li><strong>Expressiveness and ecosystem fit.</strong> <em>Or</em>, comparisons, quantifiers over lists, ledger-clock windows, slippage floors (a minimum a swap must return), reads of other contracts, and calls of one batch related through its execution adapter; OpenZeppelin's threshold policies and other add-ons; a deny code for each reason; rule IDs bound for delegated signers. It works on existing OpenZeppelin accounts: its installer signs for the 0.7.2-line account build already in use on mainnet and for {{fact:oz-v080-tag}} (<a href="https://github.com/{{fact:opb-repo}}/blob/{{fact:opb-pin}}/packages/policy-synth/README.md#L143"><code>policy-synth/README.md:143</code></a>; <a href="https://github.com/{{fact:opb-repo}}/blob/{{fact:opb-pin}}/deployments/oz-accounts.json#L2"><code>deployments/oz-accounts.json:2</code></a>), while a Perch grant needs a Perch account.</li>
 </ul></div>
 <div><h4>Perch</h4><ul>
 <li><strong>Limits over time.</strong> The window is part of the rule's decision, not an optional policy beside it. Caveat: the bound is proved for the decision function's translation, from empty records; rule selection and storage are tested.</li>
@@ -22,13 +23,14 @@
 <li><strong>A proved core.</strong> Theorems 1, 2, 4, 6 and 8 hold for the Lean translation of the decision function ({{ref:sec:proofs}}). Caveat: the compiled contract is not proved, and nothing is audited.</li>
 </ul></div>
 </div>
+</div>
 <h3 id="lessons">Lessons for Perch</h3>
 <p>We propose five things to take from oz-policy-builder:</p>
 <ol>
 <li><strong>Recording as authoring.</strong> A front end that records a transaction and emits a grant document for the owner to review.</li>
 <li><strong>Simulate before install.</strong> Run the account's own evaluator in enforcing simulation before a grant is installed, as oz-policy-builder verifies a predicate against the deployed <code>check</code>.</li>
-<li><strong>Minimality checks.</strong> Flag rules wider than the recording they came from.</li>
+<li><strong>Minimality and overlap checks.</strong> Flag rules wider than the recording they came from, and refuse a capped rule that a key it names could bypass through another rule, since a Perch key holds the union of every rule naming it; oz-policy-builder's installer refuses such overlaps (<a href="https://github.com/{{fact:opb-repo}}/blob/{{fact:opb-pin}}/packages/policy-synth/README.md#L171"><code>policy-synth/README.md:171</code></a>).</li>
 <li><strong>A corpus of real transactions.</strong> Run recorded mainnet transactions through Perch's lowering and evaluator.</li>
 <li><strong>An audit before claiming maturity.</strong> An external audit before Perch holds real funds.</li>
 </ol>
-<p>This section reads both designs from source and runs one task; it measures no costs. The companion paper <a href="{{doc:oz-policy-builder}}">Perch and oz-policy-builder</a> sets out every dimension with sources, the recorded walkthrough and one intent spelled both ways.</p>
+<p>This section reads both designs from source and runs one task; it measures no costs. The companion paper <a href="{{doc:oz-policy-builder}}">Perch and oz-policy-builder</a> sets out every dimension with sources, the recorded walkthrough and one intent spelled both ways, with fuller accounts of <a href="{{doc:oz-policy-builder}}#opb-stronger">where oz-policy-builder is stronger</a>, <a href="{{doc:oz-policy-builder}}#perch-stronger">where Perch is</a> and <a href="{{doc:oz-policy-builder}}#lessons">the lessons</a>.</p>

@@ -17,24 +17,22 @@ no reads of other contracts, and it checks each call alone.
 
 We present Perch, a Soroban smart account that offers safe, bounded delegation
 for apps and agents: simple, proved, and testable end to end in soroban-sim.
-\emph{Bounded} means three properties, not an audit: an accepted request is
-allowed by an installed rule, no window of a capped rule holds more than its
+\emph{Safe} and \emph{bounded} mean three properties, not an audit: each call of
+an accepted request is allowed by an installed rule, no window of a capped rule holds more than its
 limit, and no grant allows a call to the account or its adopted recovery
 contracts (Theorems~\ref{stmt:acceptance-implies-permission},
 \ref{stmt:cap-window-safety} and~\ref{stmt:grant-target-containment}).
 \emph{Simple} means one document, one install call
 (\code{apply\_scope}) and one decision point, at the cost of fewer conditions.
 \emph{Proved} applies to the Lean translation of the Rust decision function,
-not the deployed Wasm. \emph{End to end} covers both designs' contract Wasm and
+not the deployed Wasm or the tested account code around it, the \emph{shell}. \emph{End to end} covers both designs' contract Wasm and
 the token in one local host, not the wallet, RPC, passkeys or fees. A completed
-recovery moves one counter and ends every earlier grant at once.
+recovery moves one counter, and every earlier grant stops authorizing.
 
 \paragraph{Status.} The design is an unmerged pull-request stack ending at
-\fact{perch-pr-stack-head} (Perch \fact{perch-pin-short}), previewed on testnet
-through \fact{wallet-name}, and not audited; we do not recommend it for real
-funds before an audit. An earlier design
-(\fact{perch-deployed-source-short}) is on mainnet~\selfcite{perch-deployments}
-and cannot be upgraded in place to this one. \ifdefined\anonymous\else
+\fact{perch-pr-stack-head}, previewed on testnet through
+\fact{wallet-name}~\selfcite{nido-preview}, and not audited; we do not recommend it for real
+funds before an audit. An earlier design is on mainnet~\selfcite{perch-deployments}. \ifdefined\anonymous\else
 soroban-sim~\cite{soroban-sim} is published by The Aha Company, where the
 authors work.\fi
 

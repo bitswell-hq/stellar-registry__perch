@@ -23,14 +23,16 @@ neither the relying-party ID nor the origin; \fact{mldsa-verifier} is pure
 FIPS~204~\cite{fips204} with a fixed context string. The compiler refuses a key
 not in its verifier's canonical form, so a threshold cannot count one key twice.
 The deployed Ed25519 and WebAuthn verifiers trap on a bad signature
-(\fact{verifier-trap-error} for Ed25519). Ed25519, P-256 and BN254 are not
+(\fact{verifier-trap-error} for Ed25519). The zero-knowledge recovery factor
+(\perchdoc{vision}) proves knowledge of a secret behind a public Poseidon2
+commitment, using an UltraHonk proof with KZG commitments over BN254 and
+Fiat--Shamir with Keccak; Perch's documents do not name the setup ceremony. The
+secret needs at least \fact{zk-secret-entropy-bits} bits of entropy, and Perch's
+zero-knowledge verifier is unaudited. Ed25519, P-256 and BN254 are not
 post-quantum, so an \fact{mldsa-verifier} signer resists a quantum adversary only
 if every path that can change the account's rules does. A contract ID commits to
-its deployer and salt, not its code, so that an account calls fixed
-infrastructure code assumes the registry deploys each pinned Wasm hash at its
-derived salt.
-
-\paragraph{The claims ledger.} rule-core records \fact{claims-unproven} claims
-as unproven, \fact{claims-unproven-ids}, and \fact{claims-assumed} as assumed,
-\fact{claims-assumed-ids}: hypotheses of the model (bounded room, the empty
-batch, no creation vocabulary, ledgers from~1) and the trusted items above.
+its deployer and salt, not its code, so calling fixed infrastructure code assumes
+that the registry deploys each pinned Wasm hash at the salt derived from it and
+that those contracts cannot replace their code. rule-core's claims ledger lists
+its \fact{claims-assumed} assumed and \fact{claims-unproven} unproven claims
+(Appendix~\ref{sec:reproduce}).

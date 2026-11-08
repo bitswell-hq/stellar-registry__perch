@@ -1,6 +1,6 @@
 {
  "title": "Ending a grant.",
- "caption": "`gc_scope` lets anyone collect a stale grant's storage.",
+ "caption": "`gc_scope` lets anyone collect a stale grant's storage. A stopped grant authorizes nothing more through the account; token allowances it created stay usable.",
  "columns": [
   "Mechanism",
   "Who",
@@ -24,7 +24,7 @@
   [
    "Completed recovery",
    "The recovery controller's approved completion",
-   "Every earlier grant, in that transaction",
+   "Every earlier grant stops authorizing through the account, in that transaction",
    "Proved in an account model (T10, in the verification companion paper); tested; run on testnet"
   ]
  ],

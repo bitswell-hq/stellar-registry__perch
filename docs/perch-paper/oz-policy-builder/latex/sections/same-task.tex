@@ -1,9 +1,10 @@
 The task is the Perch paper's running example: \fact{wt-task}. An executable
-walkthrough that accompanies that paper ran it in one soroban-sim session per
+walkthrough\footnote{\url{https://bitswell-hq.github.io/stellar-registry__perch/oz-walkthrough/}}
+that accompanies that paper ran it in one soroban-sim session per
 design (\fact{wt-host}), so each account's \code{\_\_check\_auth} ran on every
 request. The OpenZeppelin \fact{oz-v080-tag} account's rule carried the predicate
-oz-policy-builder synthesises for the task, a per-call bound and the recipient
-pin, with \code{spending\_limit} beside the interpreter for the window; the Perch
+oz-policy-builder's synthesiser writes from the task's declared Intent, a per-call
+bound and the recipient pin, with \code{spending\_limit} beside the interpreter for the window; the Perch
 account held one grant with a \fact{shop-cap-xlm}-XLM cap per
 \fact{shop-period-ledgers} ledgers (\fact{shop-period-minutes}). The signers
 differ by design: oz-policy-builder's rules accept only delegated signers, so the
@@ -21,8 +22,7 @@ interpreter ran, and Perch refused in its decision. To the wrong recipient,
 rolled the record back with the call. A key signing in the app's name failed the
 host's signature check in both: on the OpenZeppelin side for the delegated
 account's entry, before any policy ran; on the Perch side when the verifier
-trapped, after the evaluator accepted. These are recorded call structures, not
-costs.
+trapped, after the evaluator accepted.
 
 \perchtable{tab-walkthrough}
 
@@ -32,7 +32,7 @@ totals'' (\srcpath{docs/stellar.md:404-407}). Outside the walkthrough, on
 interpreter, with a per-call bound of \fact{opb-per-call-bound-xlm}~XLM, applied
 \fact{opb-per-call-applied-sends} sends within the bound, moving
 \fact{opb-per-call-moved-xlm}~XLM, and refused the one above it
-(error \fact{opb-error-arg-mismatch}), as documented. This run was not archived; the
+(error \fact{opb-error-arg-mismatch}). This run was not archived; the
 lower panel of Fig.~\ref{fig:fig-same-task} repeats it.
 
 \perchfigure{fig-same-task}
@@ -51,4 +51,5 @@ window, while Perch refuses all three because its window already holds
 \fact{sim-pay-xlm}~XLM. Restoring \code{spending\_limit}
 starts an empty history, as replacing a capped Perch rule starts an empty window.
 The difference is a configuration the owner chose: oz-policy-builder documents
-\code{spending\_limit} as the place for totals (\S\ref{sec:composition}).
+limits over time as coming from a token allowance and its expiry, or from
+\code{spending\_limit} beside the interpreter (\S\ref{sec:composition}).
