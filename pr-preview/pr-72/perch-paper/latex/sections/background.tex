@@ -1,30 +1,27 @@
 \paragraph{Soroban authorization.} A contract that needs an address's approval
-calls \code{require\_auth}; for a contract account, the host calls the account's
-\code{\_\_check\_auth}~\cite{cap-0046-11,stellar-custom-account}. A transaction
-carries one authorization entry per approving address, except CAP-0071
-delegates~\cite{cap-0071}, whose approval rides in the account's entry through
-\code{delegate\_auth}. The entry's signature payload hashes the network ID, a
-nonce, a signature-expiration ledger and the entry's invocation tree. The host
-passes the account the payload, the signatures and the entry's \emph{contexts}:
-every call and contract creation in the tree, in preorder, root first. The
-account must decide every context. The nonce is consumed only when the
-transaction succeeds, so a refused entry stays usable until its expiration
-ledger. A lost guess gives two contexts, \code{game.guess} and the
-\code{xlm.transfer} it makes from the account, each decided by its own selected
-rule (Fig.~\ref{fig:fig-contexts}).
+calls \code{require\_auth}; for a contract account, the host then calls the
+account's \code{\_\_check\_auth}~\cite{cap-0046-11,stellar-custom-account} with
+the authorization entry's signed payload (network ID, nonce, expiration ledger,
+invocation tree), its signatures and its \emph{contexts}: every call and
+contract creation in the tree, in preorder, each of which the account must
+decide. A lost guess in a game gives two, the game's \code{guess} and the
+\code{transfer} it makes from the account. The nonce is consumed only on
+success, so a refused entry can be resubmitted until it expires.
+CAP-0071~\cite{cap-0071} lets a delegated signer's approval ride in the
+account's own entry. Recording-mode simulation, which builds entries, does not
+call \code{\_\_check\_auth}, so only enforcing simulation predicts a refusal.
 
-\paragraph{OpenZeppelin accounts.} OpenZeppelin's Soroban
-library~\cite{oz-stellar-accounts}, which oz-policy-builder builds on and whose
-authorization types Perch reproduces, stores \emph{context rules}: a scope
-(\code{Default}, \code{CallContract} or a contract-creation scope), a name, an
-optional \code{valid\_until} ledger, signers and policies. A signer is
-\emph{external} (a verifier contract and key material) or \emph{delegated}
-(another address). OpenZeppelin \fact{oz-v080-tag} checks a delegated signer with
-\code{require\_auth\_for\_args}, in an entry of its own; Perch checks one through
-CAP-0071, inside the account's entry. A \emph{policy} is a contract with
-\code{enforce}, \code{install} and \code{uninstall} hooks. The payload names one
-rule per context (\code{AuthPayload.context\_rule\_ids}). \code{\_\_check\_auth}
-validates the selected rules, refuses a signer on none of them, authenticates the
-signers and calls each policy's \code{enforce} in the rule's stored order: address
-order for the policies it was created with, then any added later. Perch uses the
-same payload field; it differs in what decides.
+\paragraph{OpenZeppelin and oz-policy-builder.} OpenZeppelin's Soroban
+library~\cite{oz-stellar-accounts} stores \emph{context rules} with
+\emph{external} signers (a verifier contract and key), \emph{delegated} signers
+(addresses) and \emph{policies}, contracts with an \code{enforce} hook; the
+payload names one rule per context (\code{context\_rule\_ids}). In
+\fact{oz-v080-tag}, \code{\_\_check\_auth} validates the selected rules,
+authenticates the signers, then calls each policy's \code{enforce}
+(\nolinkurl{storage.rs:629-690}). oz-policy-builder~\cite{oz-policy-builder} has two
+halves (\nolinkurl{README.md:13-24}): off chain, a synthesiser turns a recorded
+transaction or a declared intent into a predicate, verified against the deployed
+interpreter's \code{check}; on chain, a shared \code{policy-interpreter} policy
+evaluates it on each guarded call alone and keeps no totals, which OpenZeppelin's
+\code{spending\_limit} policy keeps (\nolinkurl{docs/stellar.md:404-407}). Perch
+reuses OpenZeppelin's types and payload field; it differs in what decides.

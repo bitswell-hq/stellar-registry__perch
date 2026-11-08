@@ -1,6 +1,6 @@
 {
  "title": "Perch and oz-policy-builder, all twenty dimensions with sources.",
- "caption": "Perch paths are at {{fact:perch-pin-short}}, oz-policy-builder paths at {{fact:opb-pin-short}}, OpenZeppelin (OZ) paths at `stellar-contracts` {{fact:oz-v080-tag}} unless marked. Mark: V checked in source at the pin by the authors; R cited from source by an internal reader and not re-read by the authors; U not verified. Nothing here was measured; the policy order was also observed in the walkthrough.",
+ "caption": "Perch paths are at {{fact:perch-pin-short}}, oz-policy-builder paths at {{fact:opb-pin-short}}, OpenZeppelin (OZ) paths at `stellar-contracts` {{fact:oz-v080-tag}} unless marked. Mark: V checked in source at the pin by the authors; R cited from source by an internal reader and not re-read by the authors; U not verified. Nothing here was measured; the policy order was also observed in the walkthrough. T*n* and O*n* are the theorems and obligations of What Perch proves.",
  "columns": [
   "Dimension",
   "Perch",
@@ -26,7 +26,7 @@
   [
    "Where decision state lives",
    "Account storage only: rules, grants, spending records, generation (`lib.rs:597-636`)",
-   "Account (rules, signers); interpreter, one entry per (account, rule) (`policy-interpreter/src/storage.rs:167-188`); `spending_limit`, history per (account, rule) (OZ `policies/spending_limit.rs`)",
+   "Account (rules, signers); interpreter, one entry per (account, rule) (`policy-interpreter/src/storage.rs:167-188`); `spending_limit`, history per (account, rule) (OZ `spending_limit.rs:143-148`)",
    "V/R"
   ],
   [
@@ -37,20 +37,20 @@
   ],
   [
    "Relating calls in one transaction",
-   "None: each context is checked alone against its rule ({{ref:fig:fig-contexts}}(c)); draft changes after the pinned build ({{fact:exact-roots-prs}}) add entry roots",
+   "None: each context is checked alone against its rule; draft changes after the pinned build ({{fact:exact-roots-prs}}) add entry roots",
    "One predicate over the execution adapter's batch argument can relate its calls (`docs/stellar.md:350-352`; `policy-interpreter/README.md:390-397`)",
    "V"
   ],
   [
    "External state in the decision",
    "None; reads account storage only",
-   "`read` calls other contracts during `enforce`, up to the instance's `max_reads` ({{fact:opb-interpreter-max-reads}} on the testnet pin) (`dsl.rs:409-423`; `config.ts:66-73`); same-transaction manipulation is open at High (T-05, `stride-threat-model.md:397`)",
+   "`read` calls other contracts during `enforce`, up to the instance's `max_reads` ({{fact:opb-interpreter-max-reads}} on the testnet pin) (`dsl.rs:409-423`; `config.ts:66-73`); same-transaction manipulation is open at High, with the safe-list refusal in place (T-05, `stride-threat-model.md:397`)",
    "V"
   ],
   [
    "Rolling spending cap",
    "In the evaluator; window (L − P, L]; proved from empty records (T6); at most {{fact:spends-per-window}} spends per window on chain (`docs/recovery/budgets.md:604-611`)",
-   "Not in the interpreter (`dsl.rs:65-72`). OpenZeppelin `spending_limit` beside it: same window boundary, at most {{fact:oz-spending-history-max}} entries, `transfer` only (OZ `spending_limit.rs:9-12, 169`; `install.ts:957-967`); the oz-policy-builder authors did not audit it (`evidence/README.md:157`)",
+   "Not in the interpreter (`dsl.rs:65-72`). OpenZeppelin `spending_limit` beside it: same window boundary, at most {{fact:oz-spending-history-max}} entries, `transfer` only (OZ `spending_limit.rs:9-12, 169`; `install.ts:957-967`); the oz-policy-builder authors did not audit it (`evidence/README.md:157`); OpenZeppelin's v0.8.0 diff audit lists it in scope (OZ `audits/`, v0.8.0 report, p. 4)",
    "V"
   ],
   [
@@ -68,13 +68,13 @@
   [
    "Ending authority in bulk",
    "A completed recovery advances the grant generation, and every earlier grant refuses in that transaction (T10); otherwise one grant at a time",
-   "Rules are removed one at a time. A policed rule is pinned to its exact signer set (error {{fact:opb-error-signers-changed}} after any change). Removing a rule with only rule 0's signatures leaves the interpreter's entry for it until the entry archives (`docs/stellar.md:548-562`); a rule that follows it keeps enforcing it (policy-synth README, `revoke_policy`)",
+   "Rules are removed one at a time. A policed rule is pinned to its exact signer set (error {{fact:opb-error-signers-changed}} after any change). Removing a rule with only rule 0's signatures leaves the interpreter's entry for it until the entry archives (`docs/stellar.md:548-562`); a rule that follows it keeps enforcing it (policy-synth `README.md:144`)",
    "V"
   ],
   [
    "Assurance",
-   "Lean proofs of the evaluator over its translation ({{ref:sec:proofs}}); shell tested; no external audit completed",
-   "{{fact:opb-interpreter-tests}} interpreter tests ({{fact:opb-tests-against-oz08}} against OpenZeppelin's 0.8.0 Wasm), parity corpus, worst-case suite on Wasm, STRIDE model, mutation testing of one path; no formal model found in the tree (a search, not a proof of absence); pull request {{fact:opb-pentest-pr}} hardened the off-chain packages after an external penetration test; external audit of {{fact:opb-release}} {{fact:opb-audit-status}} since {{fact:opb-audit-start}}, with the OpenZeppelin account and policies out of scope (`README.md:57-59, 166-171`; `audit-overview.md:15-20, 76-85`; `evidence/README.md:23`)",
+   "Lean proofs of the evaluator over its translation (What Perch proves); shell tested; no external audit completed",
+   "{{fact:opb-interpreter-tests}} interpreter tests ({{fact:opb-tests-against-oz08}} against OpenZeppelin's 0.8.0 Wasm), parity corpus, worst-case suite on Wasm, STRIDE model, mutation testing of one path; no formal model found in the tree (a search, not a proof of absence); pull request {{fact:opb-pentest-pr}} hardened the off-chain packages after an external penetration test; external audit of {{fact:opb-release}} {{fact:opb-audit-status}} since {{fact:opb-audit-start}}, with the OpenZeppelin account and policies out of scope, though OpenZeppelin's own v0.8.0 diff audit lists `spending_limit.rs` and the account's `storage.rs` in scope (`README.md:57-59, 166-171`; `audit-overview.md:15-20, 76-85`; `evidence/README.md:23`; OZ `audits/`, v0.8.0 report, p. 4)",
    "V"
   ],
   [
@@ -97,7 +97,7 @@
   ],
   [
    "Account-key recovery",
-   "Guardian or ZK recovery replaces credentials ({{ref:sec:recovery}})",
+   "Guardian or ZK recovery replaces credentials (The Perch vision)",
    "None; Prime's \"recovery\" moves custody funds to a fixed address (`architecture.md:81-94`)",
    "V"
   ],
@@ -131,8 +131,5 @@
    "A specific deny code per reason (`storage.rs:27-86`)",
    "V"
   ]
- ],
- "editions": [
-  "latex"
  ]
 }

@@ -1,4 +1,4 @@
-"""fig-cap-window: grant 1's cap on illustrative ledgers, with hooks for the cap-window controller."""
+"""fig-cap-window: the shop grant's cap on illustrative ledgers, with hooks for the cap-window controller."""
 import json
 import re
 from figlib import SVG, FIGDIR, fact, num, wrap
@@ -75,7 +75,7 @@ def make(narrow):
         s.open(data_event=str(ev), data_at=str(at))
         s.numdot(*pos[ev], ev, r=11, size=14)
         s.close()
-    # charges: solid when inside the window at the static ledger, dashed when outside
+    # charges: amber when inside the window at the static ledger, plain when outside
     cy = y0 + 34
     if not narrow:
         s.text(x0 - 8, cy + 17, 'charges', 'm', size, 'end')
@@ -83,7 +83,8 @@ def make(narrow):
     for v, amt in CHARGES:
         inside = STATIC_L - 100 < v <= STATIC_L
         s.open(data_ledger=str(v), data_amount=str(amt))
-        s.rect(xl(v) - cw / 2, cy, cw, 24, 'bx bx-hi' if inside else 'bx dash', 4)
+        # inside the window: amber; outside: plain. Dashed is kept for refused transfers.
+        s.rect(xl(v) - cw / 2, cy, cw, 24, 'bx bx-hi' if inside else 'bx', 4)
         s.text(xl(v), cy + 17, f'+{amt}', 'x' if inside else 'm', size, 'middle')
         s.close()
     # windows at t + 99 and t + 100 (static form; the controller replaces them with one live window)
@@ -129,7 +130,7 @@ def bracket(s, a, b, y):
 
 def steps():
     st = {
-        'intro': ('Grant 1 caps transfers at {{fact:grant1-cap-xlm}} XLM per {{fact:grant1-period-ledgers}} ledgers; '
+        'intro': ('The shop grant caps transfers at {{fact:grant1-cap-xlm}} XLM per {{fact:grant1-period-ledgers}} ledgers; '
                   '*t* is an illustrative ledger. At ledger *L* the window holds the charges made after *L* − 100 and '
                   'through *L*.'),
         'steps': [{'n': str(ev), 'text': '{{fact:cap-event-%d}}' % ev} for ev, _ in EVENTS],

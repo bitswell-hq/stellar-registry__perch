@@ -9,7 +9,7 @@ HEAD = ('Soroban host → `__check_auth(signature_payload, auth payload, context
 STEPS = [
     (1, 'tested', 'A context calls a reserved hook on any contract: `install`, `uninstall`, `enforce` or an `rcv_*` name?',
      [f'ReservedFunction · {fact("auth-error-reserved-function")}']),
-    (2, 'tested', 'Recovery completion? Exactly one `apply_account_doc` (exported `apply_doc`) context on this account, '
+    (2, 'tested', 'Recovery completion? Exactly one `apply_doc` context on this account, '
      'selecting the recovery rule. Classification only.', []),
     (3, 'tested', 'Frozen by an authorized `Protected` attempt, and this is not its completion?',
      [f'AccountFrozen · {fact("auth-error-account-frozen")}']),
@@ -134,7 +134,7 @@ def steps():
         'steps': [
             {'n': '1', 'text': 'Refuse if any context calls a reserved hook name ({{fact:reserved-hook-names}}) on any contract.',
              'exits': ['`ReservedFunction` ({{fact:auth-error-reserved-function}})'], 'assurance': 'tested'},
-            {'n': '2', 'text': 'Classify a recovery completion: one `apply_account_doc` context (exported `apply_doc`) on '
+            {'n': '2', 'text': 'Classify a recovery completion: one `apply_doc` context on '
              'this account, selecting the recovery rule.', 'exits': [], 'assurance': 'tested'},
             {'n': '3', 'text': 'Refuse while an authorized `Protected` attempt freezes the account, unless this is its completion.',
              'exits': ['`AccountFrozen` ({{fact:auth-error-account-frozen}})'], 'assurance': 'tested'},

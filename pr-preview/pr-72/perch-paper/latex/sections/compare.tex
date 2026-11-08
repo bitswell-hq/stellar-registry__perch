@@ -1,79 +1,36 @@
-oz-policy-builder~\cite{oz-policy-builder} (OZ-PB) adds rules to OpenZeppelin
-accounts: an off-chain synthesiser (\fact{opb-synth-package}) records a
-transaction or takes a declared Intent and writes a predicate, and one shared
-\code{policy-interpreter}, attached to a context rule as a policy, evaluates it in
-\code{enforce} on every guarded call. Perch's deployed build
-\fact{perch-deployed-source-short} used this attached-policy shape; the design
-here moves the decision into the account. We compare at Perch
-\fact{perch-pin-short}, OZ-PB \fact{opb-pin-short} (\fact{opb-release} and
-\fact{opb-commits-after-release} later commits, none under its contracts) and
-OpenZeppelin \fact{oz-v080-tag}, reading comparator design claims from source and
-public documentation. Each claim states what it rests on (source, a run, tests or
-a proof); these are evidence about different objects, and we do not rank them.
-Appendix~\ref{sec:compare-appendix} gives twenty dimensions with sources and the
-figures cited here.
+\paragraph{Shared ground, two arrangements.} We cite oz-policy-builder at
+\fact{opb-pin-short} from its public documentation and source. Both designs build on OpenZeppelin's
+context rules, judge each call alone (\nolinkurl{docs/architecture.md:307-309}) and
+deny by default. OpenZeppelin with oz-policy-builder composes a decision from
+contracts attached to a rule (interpreter, \code{spending\_limit}, a threshold
+policy), each swappable and auditable on its own. Perch puts one document behind one decision
+point that holds every check and its state.
+Composition buys flexibility, such as a check that reads a live price, which a
+Perch rule cannot express; one decision point gives one place to check and to
+keep a limit's state.
 
-\subsubsection{Per-call bounds and limits over time.}\label{sec:compare-over-time}
-The interpreter decides each call alone: it does not see what a transaction
-moved, keep rolling totals or count calls (OZ-PB \code{docs/stellar.md:404-407}).
-The synthesiser writes a per-call bound (\code{lte}); a limit over time comes
-from OpenZeppelin's optional \code{spending\_limit}, attached on \code{transfer}
-only, or from a token allowance. On a local network, an OpenZeppelin account whose
-rule carried only the interpreter, with a \fact{opb-per-call-bound-xlm}-XLM
-per-call bound, applied \fact{opb-per-call-applied-sends} sends that moved
-\fact{opb-per-call-moved-xlm}~XLM, as documented (Fig.~\ref{fig:fig-same-task}).
-In Perch the window is part of the rule, charged in the decision that checks the
-call, and \ref{stmt:cap-window-safety} bounds every window from empty records; a
-document cannot bound a single call's amount.
+\paragraph{A limit over time.} The interpreter ``does not see what a transaction
+moved, keep rolling totals or count calls'' (\nolinkurl{docs/stellar.md:404-407});
+totals come from \code{spending\_limit}, an opt-in policy that accepts
+\code{transfer} alone (\nolinkurl{policy-synth/src/install.ts:957-967}). A
+Perch window is part of the rule's decision (Theorem~\ref{stmt:cap-window-safety}).
 
-\subsubsection{Authoring.}\label{sec:compare-authoring} OZ-PB starts from what an
-app did: it synthesises the least predicate permitting a recorded call or an
-Intent, verifies it by dry-running the deployed interpreter's own \code{check},
-renders a review and returns unsigned install bytes. Perch starts from what the
-owner grants: a declared document, compiled on chain and lowered against the
-account's own authority (\S\ref{sec:grants}). The approaches are complementary;
-a recording front end for Perch is future work (Fig.~\ref{fig:fig-two-spellings}
-spells one intent both ways).
+\perchtable{tab-choose}
 
-\subsubsection{Evidence.}\label{sec:compare-evidence} OZ-PB builds at
-\fact{opb-pin-short}, and its \fact{opb-rust-test-runs} Rust test runs and
-\fact{opb-ts-tests} TypeScript tests pass in our runs. A policy is verified by
-simulating the deployed interpreter, so one evaluator verifies and enforces;
-\fact{opb-tests-against-oz08} of its \fact{opb-interpreter-tests} interpreter tests
-run against OpenZeppelin's \fact{oz-v080-tag} account, and it keeps a STRIDE
-register. An external audit of \fact{opb-release} has been in progress since
-\fact{opb-audit-start}, and its off-chain packages were hardened after an external
-penetration test (pull request \fact{opb-pentest-pr}, branch
-\fact{opb-pentest-branch}). Perch's evaluator is proved in Lean over its Aeneas
-translation, tied to the Rust by extraction and to the account by
-\fact{lean-doc-traces} traces; the theorems do not reach the Wasm, the shell is
-tested, and no audit has been completed.
+\paragraph{Where each is stronger.} oz-policy-builder is ahead in
+\emph{maturity} (Table~\ref{tab:tab-choose}, first three rows),
+\emph{authoring} (record or declare, synthesise a predicate, test that each
+conjunct is needed, and verify it) and \emph{expressiveness and ecosystem}
+(reads of other contracts, quantifiers, clock windows, batches related through
+an execution adapter, threshold policies, a deny code per reason, and rules on
+existing OpenZeppelin accounts, where a grant needs a Perch account). Perch is
+ahead in \emph{limits over time}, \emph{one decision point}, which refuses
+before any verifier runs and installs one grant across contracts, and a
+\emph{proved core}; no formal model was found in oz-policy-builder's tree,
+which is tested, partly on the shipped Wasm.
 
-\subsubsection{Contexts, composition, lifecycle, binding.}\label{sec:compare-rest}
-Both judge each context under its own rule (OZ-PB
-\code{docs/architecture.md:307-309}; Fig.~\ref{fig:fig-contexts}); OZ-PB's
-execution adapter lets one predicate relate the calls of a batch
-(\code{docs/stellar.md:191-195}). An OpenZeppelin account composes a decision from
-the interpreter, a threshold policy and \code{spending\_limit}; with the
-interpreter alone any one authenticated signer suffices (policy-synth README,
-``Threshold''). A Perch grant is one document decided by one evaluator. The
-interpreter pins a policed rule to its exact signer set (error
-\fact{opb-error-signers-changed} after any change), and removing a rule with only
-rule~0's signatures leaves its interpreter entry until it archives
-(\code{docs/stellar.md:548-562}); in Perch a completed recovery stops every earlier
-grant from authorizing (\ref{stmt:recovery-invalidation}). OpenZeppelin \fact{oz-v080-tag} binds the
-account and rule IDs for both signer kinds; Perch's delegated signers do not bind
-rule IDs (Table~\ref{tab:tab-binding}).
-
-\subsubsection{The walkthrough run.}\label{sec:compare-run} In one soroban-sim
-harness both designs gave the same verdict on each of seven requests
-(Table~\ref{tab:tab-walkthrough}). The OpenZeppelin account called
-\code{spending\_limit} and the interpreter, and its delegated signer approved in a
-second authorization entry; Perch called its verifier. The signer kinds differ,
-because OZ-PB takes only delegated signers. Over the cap, \code{spending\_limit},
-first by address here, refused before the interpreter ran; Perch refused before
-any verifier call. This is one task, not a cost comparison; W1--W5 are proposed,
-not run (Appendix~\ref{sec:compare-appendix}), and the \fact{oz-v072-tag}-line
-account build OZ-PB signs for has no recorded source.
-
-\perchtable{tab-walkthrough}
+\paragraph{Lessons for Perch.} We propose five: a front end that records a
+transaction and emits a grant document for review; simulating a grant against
+the account's own decision function before install; minimality checks, and
+overlap checks that refuse a cap another rule naming the same key bypasses; a
+corpus of real transactions; and an audit before any claim of maturity.

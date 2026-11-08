@@ -1,4 +1,4 @@
-"""fig-contexts: one authorization, several contexts, using grant 3."""
+"""fig-contexts: one authorization, several contexts, using the game grant."""
 from figlib import SVG, num, wrap
 
 FID = 'fig-contexts'
@@ -6,15 +6,15 @@ FID = 'fig-contexts'
 PANELS = [
     ('(a) A lost guess',
      ['`game.guess(0, guesser)`', ('`xlm.transfer(account → game,\n1 XLM)`', 1)],
-     [('tested', '[0] `game.guess` → grant 3, rule `guess`: allowed'),
-      ('hi', '[1] `xlm.transfer` → grant 3, rule `spend` (2 XLM per 100 ledgers): allowed, charges 1 XLM')]),
+     [('tested', '[0] `game.guess` → the game grant, rule `guess`: allowed'),
+      ('hi', '[1] `xlm.transfer` → the game grant, rule `spend` (2 XLM per 100 ledgers): allowed, charges 1 XLM')]),
     ('(b) A winning guess',
      ['`game.guess(n, guesser)`'],
-     [('tested', '[0] `game.guess` → grant 3, rule `guess`: allowed'),
-      ('note', 'The game then pays out its balance (3 XLM) under its own authority. Nothing is charged to grant 3.')]),
+     [('tested', '[0] `game.guess` → the game grant, rule `guess`: allowed'),
+      ('note', 'The game then pays out its balance (3 XLM) under its own authority. Nothing is charged to the game grant.')]),
     ('(c) A direct transfer',
      [('`xlm.transfer(account → anyone,\n≤ 2 XLM)`', 0)],
-     [('tested', '[0] `xlm.transfer` → grant 3, rule `spend`: allowed at the pinned build'),
+     [('tested', '[0] `xlm.transfer` → the game grant, rule `spend`: allowed at the pinned build'),
       ('draft', 'A draft that checks exact entry roots would refuse it.')]),
 ]
 

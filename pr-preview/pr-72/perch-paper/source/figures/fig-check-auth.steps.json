@@ -11,7 +11,7 @@
   },
   {
    "n": "2",
-   "text": "Classify a recovery completion: one `apply_account_doc` context (exported `apply_doc`) on this account, selecting the recovery rule.",
+   "text": "Classify a recovery completion: one `apply_doc` context on this account, selecting the recovery rule.",
    "exits": [],
    "assurance": "tested"
   },

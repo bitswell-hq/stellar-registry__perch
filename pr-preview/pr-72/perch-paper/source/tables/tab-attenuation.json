@@ -42,8 +42,5 @@
   ]
  ],
  "title": "The ten attenuation steps (`crates/rule-eval/src/attenuate.rs` in rule-core).",
- "caption": "Nothing else is an attenuation step. Document conditions lower to these rule-core conditions: `is-self`, `address-eq` and `u32-eq` to `ArgEq`, `string-in` to `ArgIn`, `string-prefix` to `ArgStrPrefix`. `ArgI128AtMost` appears in a lowered document only as the type check on a capped transfer's amount, with the largest `i128` as its bound, so a document cannot bound one call's amount; only an attenuation step can set a smaller maximum (rule-core `lowering.rs`).",
- "editions": [
-  "latex"
- ]
+ "caption": "Nothing else is an attenuation step. Document conditions lower to these rule-core conditions: `is-self`, `address-eq` and `u32-eq` to `ArgEq`, `string-in` to `ArgIn`, `string-prefix` to `ArgStrPrefix`. `ArgI128AtMost` appears in a lowered document only as the type check on a capped transfer's amount, with the largest `i128` as its bound, so a document cannot bound one call's amount; only an attenuation step can set a smaller maximum (rule-core `lowering.rs`)."
 }

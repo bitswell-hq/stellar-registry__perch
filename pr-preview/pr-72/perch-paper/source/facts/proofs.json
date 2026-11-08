@@ -117,5 +117,34 @@
  "inpage-check-time": {
   "value": "2.2 s",
   "source": "r2:645 (C)"
+ },
+ "claims-assumed-ids": {
+  "value": "`rule.cond-room`, `rule.functions-room`, `rule.lower-room`, `rule.empty-batch`, `rule.no-creation-vocabulary`, `rule.ledgers-start-at-1`, `trusted.rustc`, `trusted.charon`, `trusted.aeneas`, `trusted.aeneas-result-loop`, `trusted.aeneas-library-items`, `trusted.lean-kernel`, `trusted.denotations`, `trusted.document-meaning`, `trusted.soroban-models`, `trusted.soroban-host`, `trusted.sdk-items`, `trusted.facade-conversion`, `trusted.host-harness`",
+  "markup": true,
+  "source": "`rc:claims.yaml` at cbabe59, every claim with `status: assumed` (19), in file order (V, LaTeX author)"
+ },
+ "claims-unproven-ids": {
+  "value": "`conformance.encoding`, `unproven.narrower-converse`, `unproven.openzeppelin-signer-mapping`, `unproven.openzeppelin-spending-limit`, `unproven.openzeppelin-authorization`, `unproven.openzeppelin-spending-limit-metering`, `unproven.openzeppelin-expiry-and-signers`, `unproven.generation-counter`, `unproven.perch-meaning`, `unproven.perch-validation`, `unproven.lowering-shell`, `unproven.scoped-admin-change`, `unproven.history-bound-on-mainnet`, `unproven.budget-shell`",
+  "markup": true,
+  "source": "`rc:claims.yaml` at cbabe59, every claim with `status: unproven` (14), in file order (V, LaTeX author)"
+ },
+ "recovery-statement-layout": {
+  "value": "a 24-byte domain tag, a version byte and an action byte; the network ID and the account and controller contract IDs (32 bytes each); the configuration epoch (8 bytes) and configuration hash (32 bytes); the delay, expiry and valid-until ledgers (4 bytes each); and, for a lost-key or compromise attempt, the attempt ID (8 bytes) and the hashes of the source document, the target document and the replacement set (32 bytes each)",
+  "source": "`P:docs/recovery/statement.md:32-58` (V, LaTeX author); sums to 278"
+ },
+ "domain-tag-rule": {
+  "value": "perch/rule",
+  "code": true,
+  "source": "`P:crates/perch-recovery-interface/src/fragment.rs:19`; `crates/perch-ir/src/canon.rs:95` (V, LaTeX author)"
+ },
+ "domain-tags-recovery": {
+  "value": "`perch/recovery/statement`, `perch/recovery/config`, `perch/recovery/credential`, `perch/recovery/replacements`",
+  "markup": true,
+  "source": "`P:crates/perch-recovery-interface/src/{statement.rs:27,config.rs:15,credential.rs:18-20}` (V, LaTeX author)"
+ },
+ "domain-tags-zk": {
+  "value": "`perch/recovery/zk/v2/leaf`, `perch/recovery/zk/v2/bind`, `perch/recovery/zk/v2/nullifier`, `perch/recovery/zk/v2/auth`",
+  "markup": true,
+  "source": "`P:crates/perch-recovery-interface/src/zk.rs:40-43`; `docs/zk/circuit.md` (V, LaTeX author)"
  }
 }

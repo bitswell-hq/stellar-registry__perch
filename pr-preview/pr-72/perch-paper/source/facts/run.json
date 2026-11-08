@@ -108,5 +108,9 @@
  "cpu-win": {
   "value": "3,082,877",
   "source": "`GOLDEN` (C)"
+ },
+ "demo-advance-ledgers": {
+  "value": "11",
+  "source": "the live experiment's default `advance-input` value and `GOLDEN` command 11 (`{\"op\": \"advance\", \"ledgers\": 11}`); r2:503 (C)"
  }
 }

@@ -68,7 +68,7 @@ UNICODE = {
     '·': r'\ensuremath{\cdot}', '…': r'\ldots{}', '∪': r'\ensuremath{\cup}',
     '‖': r'\ensuremath{\|}', '└': r'\textbar\_', '≠': r'\ensuremath{\neq}',
     '∈': r'\ensuremath{\in}', '✓': r'\checkmark{}', '—': '---', '–': '--',
-    '“': '``', '”': "''", '‘': '`', '’': "'", '§': r'\S{}',
+    '“': '``', '”': "''", '‘': '`', '’': "'", '§': r'\S{}', '•': r'\textbullet{}',
 }
 
 

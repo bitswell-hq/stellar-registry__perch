@@ -112,5 +112,7 @@
    "{{fact:cpu-win}}"
   ]
  ],
- "latex_section": "repro"
+ "editions": [
+  "html"
+ ]
 }

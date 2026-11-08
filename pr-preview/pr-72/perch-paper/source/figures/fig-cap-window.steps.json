@@ -1,5 +1,5 @@
 {
- "intro": "Grant 1 caps transfers at {{fact:grant1-cap-xlm}} XLM per {{fact:grant1-period-ledgers}} ledgers; *t* is an illustrative ledger. At ledger *L* the window holds the charges made after *L* − 100 and through *L*.",
+ "intro": "The shop grant caps transfers at {{fact:grant1-cap-xlm}} XLM per {{fact:grant1-period-ledgers}} ledgers; *t* is an illustrative ledger. At ledger *L* the window holds the charges made after *L* − 100 and through *L*.",
  "steps": [
   {
    "n": "1",

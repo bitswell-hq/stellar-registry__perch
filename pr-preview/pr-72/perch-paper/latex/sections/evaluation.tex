@@ -1,51 +1,24 @@
-\paragraph{Method.} The reference run executes the built account, compiler,
-Ed25519 verifier and recovery controller as contract Wasm in
-soroban-sim~\selfcite{soroban-sim} with soroban-env-host
-\fact{soroban-env-host-sim} on a local protocol-\fact{sim-protocol} ledger,
-applying with enforcing authorization; setup loads cost and configuration
-entries from a testnet fixture (Appendix~\ref{sec:repro}). Recovery uses real
-guardian signatures; no zero-knowledge or passkey flow runs. After each command
-the driver fingerprints every written entry's key, XDR and live-until value.
+\paragraph{RQ1: enforcement.} Perch's tests run \fact{lean-doc-traces}
+Lean-generated traces through the natively compiled account and check every
+verdict and spending record against the model. In the recorded run
+(\S\ref{sec:simulation}) each Perch verdict is the one the shop grant
+specifies, and the designs agreed except on the \fact{sim-oz-percall-sends}
+sends after the owner removed \code{spending\_limit}.
 
-\paragraph{RQ1: enforcement.} Perch's integration suite runs rule-core's
-\fact{lean-doc-traces} Lean-generated traces through the natively compiled
-account and checks stored rules, verdicts and spending records against the model
-(\S\ref{sec:proofs}). The reference run then exercises the account as Wasm: each
-of its \fact{run-commands} commands (Table~\ref{tab:tab-run}) gave its expected
-result. Between them they submit \fact{run-transactions} transactions: command~1
-submits \fact{run-setup-transactions} for setup, command~19 submits
-\fact{run-game-deploy-transactions} to upload and deploy the game plus one to
-install grant~3, and each other applied command one; \fact{run-refused-in-simulation} more
-are refused in enforcing simulation with the fingerprint unchanged. The final
-balance is \fact{run-final-balance-xlm}~XLM (\fact{run-balance-path}) and the
-grant generation \fact{run-final-generation}: the cap refuses commands~4 and~26,
-the generation command~13 and the credential index command~15
-(Fig.~\ref{fig:fig-recovery}).
+\paragraph{Testnet preview.} On \fact{nido-run-date}, a scripted run of
+\fact{wallet-name}'s preview with virtual passkeys made
+\fact{nido-run-transactions} testnet transactions, among them a game's two-rule
+grant, \fact{nido-run-lost-guesses} lost guesses and a
+\fact{nido-run-guardians}-guardian recovery to completion; the wallet,
+not the chain, declined a third guess over the cap.
 
-On \fact{nido-run-date}, a scripted run of a preview of \fact{wallet-name}, with
-virtual passkeys, made \fact{nido-run-transactions} successful testnet
-transactions: account creation; an account document naming the passkey verifier
-\code{\fact{verifier-name-webauthn}}; the game's two-rule grant; two lost
-guesses; and a one-guardian \emph{Loss} recovery to completion, which moved the
-grant generation to \fact{completion-grant-generation}. The wallet, not the
-chain, declined a third guess that would exceed the cap.
+\paragraph{Cost, Perch only.} A passkey-signed transfer through a grant paid a
+testnet fee of \fact{smoke-fee-stroops} stroops, WebAuthn verification included;
+a fresh preview account holding the game's grant, after two capped transfers
+(\fact{census-bytes} bytes), pays \fact{census-rent-xlm-year}~XLM a year in rent
+at the floor rate.
 
-\paragraph{RQ3: cost, Perch only.} Including \code{\_\_check\_auth} and verifier
-calls, installing grant~1 took \fact{cpu-install-grant} CPU instructions, a
-capped spend \fact{cpu-spend-6} and a recovery completion \fact{cpu-complete},
-against a per-transaction limit of \fact{tx-instruction-limit}; a lost-key
-completion at the document caps, measured in process, uses
-\fact{worst-case-completion-share} of it. On the testnet preview, an account
-holding the game's grant after two capped transfers stores \fact{census-bytes}
-bytes in \fact{census-entries} entries (\fact{census-rent-xlm-year} XLM a year in
-rent), and a passkey-signed transfer through a grant rule declared
-\fact{smoke-cpu} instructions and paid \fact{smoke-fee-stroops} stroops. These
-setups differ, so the figures are not comparable with one another.
-
-\paragraph{Threats to validity.} The host is simulation's recording-mode build,
-not the exact-metering one, so counts can differ from stellar-core's metering,
-and memory and I/O are not reported. Testnet resets periodically, and the testnet
-transactions (Table~\ref{tab:tab-artifacts}) are not yet archived with their
-envelopes. The testnet game ran from a development branch with an uncommitted
-patch. The comparator was run on one task. Local runs use host
-\fact{soroban-env-host-sim}, which the host models were not tested against.
+\paragraph{Threats to validity.} One task; one host version, recording-mode, without
+exact metering; signer kinds that differ by necessity; testnet resets, with
+envelopes not yet archived; and a game run from a branch with an uncommitted
+patch.

@@ -1,38 +1,27 @@
-The account decides with rule-core's \code{rule\_eval::authorize} (D3,
-\S\ref{sec:proofs}), which neither searches for rules nor verifies signatures.
-Figure~\ref{fig:fig-check-auth} lists the steps of \code{\_\_check\_auth}. A
-recovery completion leaves at step~4 for the recovery
-controller, so a recovery completion never depends on the evaluator; enrollment
-and reconfiguration are document writes the evaluator decides. Otherwise the
-account binds the payload, resolves the selected rule IDs, runs the evaluator,
-authenticates every claimed signer and stores each changed record, so a refused
-batch calls no verifier. A stale grant refuses with \code{StaleScope} (auth error
-\fact{auth-error-stale-scope}) and any other evaluator refusal with
-\code{RuleEvalRefused} (\fact{auth-error-rule-eval-refused}), inside
-\fact{host-auth-error}; a wallet re-runs the evaluator off chain for the reason.
-Because a controller can be adopted after a grant is installed, step~4 rechecks
-each selected grant rule against the current excluded set (\code{ScopeEscalation},
-\fact{auth-error-scope-escalation}); the install-time property is proved
-(\ref{stmt:grant-target-containment}), the recheck tested. Infrastructure
-addresses derive from a Wasm hash and registry path fixed at build time; once that
-code is deployed on a network, no registry action changes it
-(Appendix~\ref{sec:formal-appendix}).
+Figure~\ref{fig:fig-auth-path} follows one authorization through six stages:
+the account decides at one point, writes nothing on a refusal, and calls the
+verifier only after the decision accepts.
 
-\perchfigure{fig-check-auth}
+\perchfigure{fig-auth-path}
 
-\paragraph{What a signature binds.} For a legacy \code{Address} credential the
-host's payload $P$ does not name the account; \code{AddressV2} and delegated
-entries hash \code{SorobanAuthorizationWithAddress}, which adds it. Perch binds
-the account either way: an external signer signs
-$D = H(H(\tau \,\|\, \mathit{id}_A \,\|\, P) \,\|\, \mathrm{XDR}(\rho))$, with
-$H$ = SHA-256, the tag $\tau$ = \code{\fact{auth-domain-tag}}, the account's ID
-$\mathit{id}_A$ and the selected rule IDs $\rho$. A delegated signer approves the
-host's address-bound payload, which omits $\rho$, so a submitter may select any
-rule that lists the delegate; OpenZeppelin \fact{oz-v080-tag} binds $\rho$ for
-both signer kinds (Table~\ref{tab:tab-binding}). A credential's authority is the
-union of every live rule that names it; binding the rule IDs stops a relayer, not
-the signer, from choosing among those rules.
+\paragraph{The decision function.} Stage~4 is rule-core's
+\code{rule\_eval::authorize}~\selfcite{rule-core}
+(\nolinkurl{rule-eval/src/authorize.rs:237}):
+\begin{Verbatim}[fontsize=\scriptsize,xleftmargin=1em]
+pub fn authorize(rules: &[Rule], records: &[SpendRecord], contexts: &[Context],
+    choices: &[u32], authenticated: &[Signer], now: u32, generation: u64)
+    -> Result<Vec<SpendRecord>, Refusal>
+\end{Verbatim}
+It returns the next spending records or a \code{Refusal}, reads no storage and
+checks no signature (Definition~\ref{def:authorize-and-runs} is its model). The
+account reports its refusals as auth error \fact{auth-error-stale-scope} (a
+stale grant) or \fact{auth-error-rule-eval-refused} (any other), inside
+\fact{host-auth-error}, beside the other stages' exits in
+Fig.~\ref{fig:fig-auth-path}; a wallet that needs the reason re-runs the
+function off chain.
 
-Ed25519~\cite{rfc8032} and WebAuthn~\cite{webauthn2} verifiers are deployed and
-an \fact{mldsa-verifier}~\cite{fips204} verifier is built and tested
-(Appendix~\ref{sec:formal-appendix}).
+\paragraph{What a signature binds.} An external signer signs a digest of the
+host's payload, this account and the selected rule IDs. A delegated signer
+(CAP-0071) approves the host's payload, which omits the rule IDs, so a submitter
+may select any rule that lists the delegate; OpenZeppelin \fact{oz-v080-tag}
+binds them for both kinds.

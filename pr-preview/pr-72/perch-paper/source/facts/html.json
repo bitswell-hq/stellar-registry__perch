@@ -1,35 +1,18 @@
 {
- "demo-advance-ledgers": {
-  "value": "11",
-  "source": "the live experiment's default `advance-input` value and `GOLDEN` command 11 (`{\"op\": \"advance\", \"ledgers\": 11}`); r2:503 (C)"
+ "perch-js-package": {
+  "value": "@stellar-registry/perch",
+  "source": "`P:packages/perch-js/package.json:2` at f0275f4 (V, E-main r4); `npm view @stellar-registry/perch versions` lists 0.4.1 (V, E-main r4)"
  },
- "opb-per-call-bound-xlm": {
-  "value": "5",
-  "source": "source/figures/fig-same-task.run.json per_call_only.cap_per_call_xlm (examination of oz-policy-builder 43b13ed, local quickstart network)"
+ "perch-js-version": {
+  "value": "0.4.1",
+  "source": "`P:packages/perch-js/package.json:3` at f0275f4 (V, E-main r4); published on npm (V, E-main r4)"
  },
- "opb-per-call-moved-xlm": {
-  "value": "9",
-  "source": "source/figures/fig-same-task.run.json per_call_only.moved_xlm"
+ "nido-run-lost-guesses": {
+  "value": "two",
+  "source": "r2:591 (C): \"two lost guesses\""
  },
- "opb-per-call-applied-sends": {
-  "value": "three",
-  "source": "source/figures/fig-same-task.run.json per_call_only.sends (3, 5 and 1 XLM applied; 5 XLM + 1 stroop refused, code 100)"
- },
- "opb-pentest-pr": {
-  "value": "#78",
-  "source": "oz-policy-builder 43b13ed merge commit message: \"Merge pull request #78 from untangledfinance/fix/hacken-pt-findings\" (V, editor r3); changes under packages/ only"
- },
- "opb-pentest-branch": {
-  "value": "fix/hacken-pt-findings",
-  "code": true,
-  "source": "same (V, editor r3)"
- },
- "opb-commits-after-release": {
-  "value": "17",
-  "source": "`git describe` at 43b13ed: v5.2.0-17-g43b13ed; `git diff v5.2.0 43b13ed -- contracts` is empty (V, editor r3)"
- },
- "cedar-spec-pin-short": {
-  "value": "a4c5a89",
-  "source": "github.com/cedar-policy/cedar-spec a4c5a89cd15637afc1dab39ef0c89baf31c7ebdf, committed 2026-11-06; cedar-lean/lean-toolchain leanprover/lean4:v4.35.0 (V, editor r3, sparse clone)"
+ "nido-run-guardians": {
+  "value": "one",
+  "source": "r2:591 (C): \"a one-guardian Loss recovery through to completion\""
  }
 }

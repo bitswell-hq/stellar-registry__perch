@@ -1,6 +1,6 @@
 {
  "columns": [
-  "Name in this paper",
+  "Proposed name",
   "Pinned export",
   "Inputs → result",
   "Authority and effect"
@@ -10,7 +10,7 @@
    "`apply_account_doc`",
    "`apply_doc`",
    "Document bytes, approval-valid-until ledger, optional expected revision → document hash",
-   "Owner authorization, or the recovery-completion path (§06); installs account policy."
+   "Owner authorization, or the recovery-completion path ({{ref:sec:recovery}}); installs account policy."
   ],
   [
    "`apply_grant`",
@@ -44,5 +44,8 @@
   ]
  ],
  "title": "Account operations.",
- "caption": "The first column is the name this paper uses; the second is the symbol exported at the pin and by the testnet preview. Exporting the first column's names is proposed, not done. *Owner authorization* means an account-document rule that targets the account and whose function policy allows the entry point; a rule with no function list, like the constructor's, allows all of them. [`docs/account-interface.md`](https://github.com/bitswell-hq/stellar-registry__perch/blob/f0275f41c5ab47c903bbfe9986b4bf3239c01b11/docs/account-interface.md) lists the account's other entry points."
+ "caption": "The first column is the descriptive name we propose; the second is the symbol exported at the pin and by the testnet preview, which this paper's prose uses. Exporting the first column's names is proposed, not done. *Owner authorization* means an account-document rule that targets the account and whose function policy allows the entry point; a rule with no function list, like the constructor's, allows all of them. [`docs/account-interface.md`](https://github.com/bitswell-hq/stellar-registry__perch/blob/f0275f41c5ab47c903bbfe9986b4bf3239c01b11/docs/account-interface.md) lists the account's other entry points.",
+ "editions": [
+  "html"
+ ]
 }

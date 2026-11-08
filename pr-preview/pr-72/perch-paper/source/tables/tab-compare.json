@@ -1,6 +1,6 @@
 {
  "title": "Perch and oz-policy-builder, side by side.",
- "caption": "Twelve of the twenty dimensions; every cell is read from source at Perch {{fact:perch-pin-short}}, oz-policy-builder {{fact:opb-pin-short}} and OpenZeppelin `stellar-contracts` {{fact:oz-v080-tag}}. The full comparison table gives a source for each cell.",
+ "caption": "Twelve of the twenty dimensions; every cell is read from source at Perch {{fact:perch-pin-short}}, oz-policy-builder {{fact:opb-pin-short}} and OpenZeppelin `stellar-contracts` {{fact:oz-v080-tag}}. The full comparison table in {{ref:sec:sources}} gives a source for each cell.",
  "columns": [
   "Dimension",
   "Perch {{fact:perch-pin-short}}",
@@ -61,7 +61,7 @@
   [
    "Assurance",
    "Kernel-checked proofs about the evaluator's Lean translation, not its Wasm; shell tested, partly on Wasm; no audit completed",
-   "Tests, partly on the shipped Wasm; STRIDE register; external audit {{fact:opb-audit-status}}"
+   "Tests, partly on the shipped Wasm; STRIDE register; external audit {{fact:opb-audit-status}}; OpenZeppelin's v0.8.0 diff audit lists its account storage and `spending_limit` in scope"
   ],
   [
    "Deployment",
@@ -69,5 +69,8 @@
    "Interpreter on testnet; no mainnet pin"
   ]
  ],
- "latex_section": "compare-appendix"
+ "editions": [
+  "html"
+ ],
+ "short": "the side-by-side table"
 }
