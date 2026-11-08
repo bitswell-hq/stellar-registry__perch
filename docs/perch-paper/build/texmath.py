@@ -196,6 +196,8 @@ class _Parser:
             return f'<mtext{variant}>{html.escape(text)}</mtext>'
         if v == 'frac':
             return f'<mfrac>{self.group()}{self.group()}</mfrac>'
+        if v == 'vec':
+            return f'<mover accent="true">{self.group()}<mo stretchy="false">→</mo></mover>'
         if v == 'overline':
             return f'<mover>{self.group()}<mo>‾</mo></mover>'
         if v in ('left', 'right', 'bigl', 'bigr', 'Bigl', 'Bigr', 'big', 'Big'):

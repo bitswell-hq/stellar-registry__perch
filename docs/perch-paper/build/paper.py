@@ -91,8 +91,8 @@ class Paper:
         # A statement may list the documents it appears in ("docs"); otherwise every document has it.
         self.statements = [x for x in self.all_statements if DOC['id'] in x.get('docs', [DOC['id']])]
         dp = SRC / 'definitions.json'
-        self.definitions = [x for x in (json.loads(read(dp)) if dp.exists() else [])
-                            if DOC['id'] in x.get('docs', [DOC['id']])]
+        self.all_definitions = json.loads(read(dp)) if dp.exists() else []
+        self.definitions = [x for x in self.all_definitions if DOC['id'] in x.get('docs', [DOC['id']])]
         self.bib = parse_bib(read(SRC / 'refs.bib'))
         self.sections = self.outline['sections']
         fp = SRC / 'figures.json'
@@ -190,6 +190,8 @@ def _directive(p, body, ed, ctx):
             fail(f'unknown fact {arg!r} in {ctx}')
             return '??'
         return r'\fact{' + arg + '}' if ed == 'latex' else fact_value(p, arg, ed)
+    if kind == 'ref' and arg.split(':')[0] in ('stmt', 'def'):
+        return formal_ref(p, arg, ed, ctx)
     if kind == 'ref':
         if arg not in p.numbers[ed] and not (arg.startswith('sec:') and arg[4:] in p.sec_ids):
             fail(f'unknown or excluded reference {arg!r} in {ctx} ({ed})')
@@ -277,6 +279,27 @@ def render(p, s, ed, ctx=''):
     return ''.join(out)
 
 
+def number_of(label):
+    """'T6' -> '6', 'D2' -> '2': both editions print the number without its letter."""
+    return re.sub(r'^[A-Za-z]+', '', label or '')
+
+
+def formal_ref(p, arg, ed, ctx):
+    kind, _, ident = arg.partition(':')
+    pool = p.all_statements if kind == 'stmt' else p.all_definitions
+    item = next((x for x in pool if x['id'] == ident), None)
+    if not item:
+        fail(f'unknown {kind} {ident!r} in {ctx}')
+        return '??'
+    word = 'Theorem' if kind == 'stmt' else 'Definition'
+    here = ident in {x['id'] for x in (p.statements if kind == 'stmt' else p.definitions)}
+    n = number_of(item.get('label'))
+    if ed == 'latex':
+        return f'{word}~\\ref{{{kind}:{ident}}}' if here else f'{word}~{n}'
+    href = f'#{kind}-{ident}' if here else _directive(p, 'doc:verification', 'html', ctx) + f'#{kind}-{ident}'
+    return f'<a href="{href}">{word} {n}</a>'
+
+
 def plain_fact(p, key, ctx):
     if key not in p.facts:
         fail(f'unknown fact {key!r} in {ctx}')
@@ -358,9 +381,12 @@ GLOSS_LINK = re.compile(r'<dfn><a href="#glossary">(.*?)</a></dfn>')
 
 def link_glossary(p, page):
     # Point each <dfn> link at its glossary row: exact term, a plural, or one name of a "A, B" row.
-    t = p.tables.get('tab-glossary')
+    own = p.outline.get('glossary')
+    gid = own or next((json.loads(read(SRC / d['outline'])).get('glossary') for d in documents() if d['id'] == 'main'), None)
+    t = p.tables.get(gid) if gid else None
     if not t:
         return page
+    base = '' if own else _directive(p, 'doc:main', 'html', 'glossary')
     names, defs = {}, {}
     for r in t['rows']:
         defs[slug(r[0])] = html.escape(re.sub(r'<[^>]+>', '', render(p, r[1], 'html', 'glossary')))
@@ -371,7 +397,7 @@ def link_glossary(p, page):
         key = slug(re.sub(r'<[^>]+>', '', m.group(1)))
         for k in (key, key[:-1] if key.endswith('s') else key, key[:-2] if key.endswith('es') else key):
             if k in names:
-                return f'<dfn><a href="#{t["row_ids"]}-{names[k]}" title="{defs[names[k]]}">{m.group(1)}</a></dfn>'
+                return f'<dfn><a href="{base}#{t["row_ids"]}-{names[k]}" title="{defs[names[k]]}">{m.group(1)}</a></dfn>'
         fail(f'glossary link {m.group(1)!r} matches no glossary row')
         return m.group(0)
     return GLOSS_LINK.sub(sub, page)
@@ -443,17 +469,24 @@ def pick(items, arg):
 def html_statements(p, arg=''):
     def item(st):
         data = ''.join(f' data-{k}="{html.escape(" ".join(st[k]))}"' for k in ('objects', 'assumes') if st.get(k))
-        label = f'{st["label"]} · ' if st.get('label') else ''
         ctx = st['id']
-        math = f'<div class="thm-math">{mathml(st["math"], True, ctx)}</div>' if st.get('math') else ''
-        reading = (f'<p class="thm-reading"><span class="thm-tag">In words</span> {render(p, st["reading"], "html", ctx)}</p>'
+        argued = st.get('argued')
+        word = 'Proposition' if argued else 'Theorem'
+        tag = '<span class="thm-tag">argued, not mechanized</span>' if argued else ''
+        head = f'<p class="thm-head"><strong>{word} {number_of(st.get("label"))}</strong> ({render(p, st["title"], "html", ctx).rstrip(".")}){tag}</p>'
+        rid = f'stmt-{ctx}-reading'
+        math = (f'<div class="thm-math" aria-describedby="{rid}">{mathml(st["math"], True, ctx)}</div>' if st.get('math') else '')
+        reading = (f'<p class="thm-reading" id="{rid}"><span class="thm-tag">In words</span> {render(p, st["reading"], "html", ctx)}</p>'
                    if st.get('reading') else '')
-        instance = (f'<div class="thm-instance" data-instance="{html.escape(st["instance"])}" data-statement="{ctx}"></div>'
+        precise = f'<p class="thm-text"><span class="thm-tag">Precisely</span> {render(p, st["text"], "html", ctx)}</p>'
+        hyp = (f'<p class="hyp"><span class="thm-tag">Hypotheses</span> {render(p, st["hypotheses"], "html", ctx)}</p>'
+               if st.get('hypotheses') else '')
+        instance = (f'<details class="thm-try"><summary>Try an instance</summary><div class="thm-instance" '
+                    f'data-instance="{html.escape(st["instance"])}" data-statement="{ctx}"></div></details>'
                     if st.get('instance') else '')
-        hyp = (f'<p class="hyp">Hypotheses: {render(p, st["hypotheses"], "html", ctx)}</p>' if st.get('hypotheses') else '')
-        return (f'<li id="stmt-{ctx}" class="thm"{data}><strong>{label}{render(p, st["title"], "html", ctx)}</strong>'
-                f'{math}<p>{render(p, st["text"], "html", ctx)}</p>{reading}{instance}{hyp}'
-                f'<div class="artifact">{render(p, st["evidence"], "html", ctx)}</div></li>')
+        lean = f'<div class="artifact"><span class="thm-tag">Lean</span> {render(p, st["evidence"], "html", ctx)}</div>'
+        cls = 'thm argued' if argued else 'thm'
+        return f'<li id="stmt-{ctx}" class="{cls}"{data}>{head}{math}{reading}{precise}{hyp}{instance}{lean}</li>'
     return '<ol class="proof-list">' + ''.join(item(st) for st in pick(p.statements, arg)) + '</ol>'
 
 
@@ -462,8 +495,8 @@ def html_definitions(p, arg=''):
         ctx = d['id']
         math = f'<div class="thm-math">{mathml(d["math"], True, ctx)}</div>' if d.get('math') else ''
         lean = f' <span class="obj">{render(p, d["lean"], "html", ctx)}</span>' if d.get('lean') else ''
-        return (f'<li id="def-{ctx}" class="defn"><strong>Definition {d["label"]} · {render(p, d["title"], "html", ctx)}</strong>'
-                f'{math}<p>{render(p, d["text"], "html", ctx)}{lean}</p></li>')
+        return (f'<li id="def-{ctx}" class="defn"><p class="thm-head"><strong>Definition {number_of(d["label"])}</strong> '
+                f'({render(p, d["title"], "html", ctx).rstrip(".")})</p>{math}<p>{render(p, d["text"], "html", ctx)}{lean}</p></li>')
     return '<ol class="def-list">' + ''.join(item(d) for d in pick(p.definitions, arg)) + '</ol>'
 
 
@@ -583,7 +616,9 @@ def build_html(p, blocks):
     parts.append('</main></div>')
     if DOC.get('carried'):
         parts.append(blocks['EMBEDDED_ASSETS'])
-    parts.append('<script>' + read(SHARED_HTML / 'figures.js').strip() + '</script>')
+    for js in ('model.js', 'figures.js'):
+        if (SHARED_HTML / js).exists():
+            parts.append('<script>' + read(SHARED_HTML / js).strip() + '</script>')
     parts.append('</body></html>\n')
     want_f = [f for s in p.sections if p.in_edition(s, 'html') for f in s.get('figures', []) if p.in_edition(p.figures[f], 'html')]
     want_t = [t for s in p.sections if p.in_edition(s, 'html') for t in s.get('tables', []) if p.in_edition(p.tables[t], 'html')]
@@ -715,6 +750,26 @@ def latex_table(p, tid):
             f'\\caption{{{cap}}}\\label{{tab:{tid}}}\n{latex_tabular(p, t, tid)}\n\\end{{{env}}}\n')
 
 
+def latex_math(tex):
+    if '\\\\' in tex:
+        rows = [r for r in texmath._split_rows(tex)]
+        return '\\[\\begin{aligned}' + '\\\\\n'.join('&' + r.strip() for r in rows) + '\\end{aligned}\\]\n'
+    return '\\[' + tex + '\\]\n'
+
+
+def latex_statement(p, st):
+    text = st.get('latex') or render(p, st['text'], 'latex', st['id'])
+    if st.get('math'):
+        text = latex_math(st['math']) + text
+    hyp = ''
+    if st.get('hypotheses'):
+        hyp = '\\statementhypotheses{' + render(p, st['hypotheses'], 'latex', st['id']) + '}\n'
+    env = 'perchproposition' if st.get('argued') else 'perchstatement'
+    return (f'\\begin{{{env}}}{{{number_of(st.get("label"))}}}{{{render(p, st["title"], "latex", st["id"])}}}\\label{{stmt:{st["id"]}}}\n'
+            f'{text}\n{hyp}\\statementevidence{{{render(p, st["evidence"], "latex", st["id"])}}}\n'
+            f'\\end{{{env}}}')
+
+
 def latex_statements(p, body):
     # Statements with "latex_body": true go in the body (generated/statements-body.tex);
     # the rest in the formal appendix (generated/statements-appendix.tex).
@@ -722,30 +777,29 @@ def latex_statements(p, body):
     for st in p.statements:
         if bool(st.get('latex_body')) != body:
             continue
-        text = st.get('latex') or render(p, st['text'], 'latex', st['id'])
-        if st.get('math'):
-            text = '\\[' + st['math'] + '\\]\n' + text
-        hyp = ''
-        if st.get('hypotheses'):
-            hyp = '\\statementhypotheses{' + render(p, st['hypotheses'], 'latex', st['id']) + '}\n'
-        out.append(f'\\begin{{perchstatement}}{{{st.get("label", "")}}}{{{render(p, st["title"], "latex", st["id"])}}}\\label{{stmt:{st["id"]}}}\n'
-                   f'{text}\n{hyp}\\statementevidence{{{render(p, st["evidence"], "latex", st["id"])}}}\n'
-                   '\\end{perchstatement}')
+        out.append(latex_statement(p, st))
     return '\n'.join(out) + '\n'
+
+
+def latex_definition(p, d):
+    math = latex_math(d['math']) if d.get('math') else ''
+    lean = '\\leannames{' + render(p, d['lean'], 'latex', d['id']) + '}' if d.get('lean') else ''
+    return (f'\\begin{{perchdefinition}}{{{number_of(d["label"])}}}{{{render(p, d["title"], "latex", d["id"])}}}\\label{{def:{d["id"]}}}\n'
+            f'{math}{render(p, d["text"], "latex", d["id"])}{lean}\n\\end{{perchdefinition}}')
 
 
 def latex_definitions(p):
     out = ['% Generated from source/definitions.json; edit that.']
-    for d in p.definitions:
-        math = '\\[' + d['math'] + '\\]\n' if d.get('math') else ''
-        lean = ' ' + render(p, d['lean'], 'latex', d['id']) if d.get('lean') else ''
-        out.append(f'\\begin{{perchdefinition}}{{{d["label"]}}}{{{render(p, d["title"], "latex", d["id"])}}}\\label{{def:{d["id"]}}}\n'
-                   f'{math}{render(p, d["text"], "latex", d["id"])}{lean}\n\\end{{perchdefinition}}')
+    out += [latex_definition(p, d) for d in p.definitions]
     return '\n'.join(out) + '\n'
 
 
 def latex_facts(p):
-    out = ['% Generated from source/facts.json; edit that.']
+    out = ['% Generated from source/facts.json and source/documents.json; edit those.']
+    for d in documents():
+        url = SITE + d['html_out'].replace('index.html', '')
+        title = svg2tikz.tex_escape(d.get('title_latex') or d['title'])
+        out.append(f'\\expandafter\\def\\csname perchdoc@{d["id"]}\\endcsname{{\\companion{{{url}}}{{{title}}}}}')
     for k in sorted(p.facts):
         v = fact_value(p, k, 'latex')
         f = p.facts[k]
@@ -784,6 +838,12 @@ def build_latex(p):
              'statements-body.tex': latex_statements(p, True),
              'statements-appendix.tex': latex_statements(p, False), 'refs.bib': latex_bib(p),
              'definitions.tex': latex_definitions(p)}
+    # One include per label, so a section can place a single theorem or definition.
+    for st in p.statements:
+        if st.get('label'):
+            files[f'statements/{st["label"]}.tex'] = '% Generated from source/statements.json.\n' + latex_statement(p, st) + '\n'
+    for d in p.definitions:
+        files[f'definitions/{d["label"]}.tex'] = '% Generated from source/definitions.json.\n' + latex_definition(p, d) + '\n'
     for f in p.figures:
         if p.figures[f].get('kind') not in ('table', 'code', 'html'):
             lint_svg(f, p.figures[f])
@@ -822,6 +882,23 @@ def build_latex(p):
 
 # ---------------------------------------------------------------- main
 
+def check_sim_facts(facts):
+    import hashlib
+    run_path = SRC / 'figures' / 'fig-sim.run.json'
+    page = ROOT / 'sim' / 'index.html'
+    if not run_path.exists() or not page.exists():
+        return
+    run = json.loads(read(run_path))
+    actual = {'sim-page-sha256': hashlib.sha256(page.read_bytes()).hexdigest(),
+              'sim-golden-sha256': run.get('golden_sha256'), 'sim-replies-sha256': run.get('replies_sha256')}
+    if run.get('page_sha256') != actual['sim-page-sha256']:
+        fail('fig-sim.run.json page_sha256 does not match docs/perch-paper/sim/index.html')
+    for key, value in actual.items():
+        f = facts.get(key)
+        if f is not None and (f['value'] if isinstance(f, dict) else f) != value:
+            fail(f'fact {key} is not the recorded value {value}')
+
+
 def doc_blocks(d):
     """The blocks build-page.mjs refreshes: from this document's page, or (first build
     after they move) from whichever document's page holds them now."""
@@ -853,6 +930,8 @@ def build_doc(d, check):
 def main(argv):
     check = '--check' in argv
     files, orphans = {}, []
+    use_doc(documents()[0])
+    check_sim_facts(Paper().facts)
     for d in documents():
         out, orph = build_doc(d, check)
         files.update(out)
