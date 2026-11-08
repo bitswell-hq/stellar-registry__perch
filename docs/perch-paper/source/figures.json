@@ -12,6 +12,7 @@
   "title": "The running example: an app may pay the shop at most {{fact:shop-cap-xlm}} XLM in any {{fact:shop-period-ledgers}} ledgers ({{fact:shop-period-minutes}}).",
   "caption": "(a) The grant document as the simulation installs it, with addresses and the key abbreviated: `C...` is a contract, `G...` an account controlled by a key pair. (b) Each marked field in words.",
   "kind": "code",
+  "short": "the shop grant figure",
   "panels": [
    {
     "file": "a",
@@ -36,7 +37,8 @@
  "fig-cap-window": {
   "title": "The shop grant's cap, {{fact:shop-cap-xlm}} XLM per {{fact:shop-period-ledgers}} ledgers, on illustrative ledgers.",
   "caption": "At ledger *L* the window holds charges made after *L* − 100 and through *L*. Charges inside the window at *t* + 100 are highlighted. A refused transfer leaves the spending record unchanged. A charge stops counting exactly 100 ledgers after it was made.",
-  "interactive": "cap-window"
+  "interactive": "cap-window",
+  "short": "the cap-window figure"
  },
  "fig-auth-path": {
   "title": "One authorization in six stages.",

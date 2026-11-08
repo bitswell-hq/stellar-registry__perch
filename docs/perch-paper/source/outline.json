@@ -1,13 +1,6 @@
 {
  "nav_note": "A research paper with a side-by-side simulation.<br>November 2026",
  "glossary": "tab-glossary-main",
- "shorts": {
-  "fig-shop-grant": "the shop grant figure",
-  "fig-cap-window": "the cap-window figure",
-  "fig-auth-path": "the authorization-path figure",
-  "tab-grantee": "the grantee table",
-  "tab-choose": "the comparison table"
- },
  "exhibit_editions": {
   "tab-sim": [
    "latex"
@@ -189,6 +182,5 @@
    "appendix": true,
    "unnumbered": true
   }
- ],
- "captions_html": {}
+ ]
 }

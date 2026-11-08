@@ -244,10 +244,9 @@ def _directive(p, body, ed, ctx):
         target = arg[4:]
         if n == '':
             item = (p.figures if arg.startswith('fig:') else p.tables)[target]
-            short = p.outline.get('shorts', {}).get(target) or item.get('short')
+            short = item.get('short')
             if not short:
-                fail(f'{ctx}: {target} has no number in this edition; give it a "short" name (its entry, or the '
-                     f'outline\'s "shorts") to be cited by')
+                fail(f'{ctx}: {target} has no number in this edition; give its entry a "short" name to be cited by')
             name = render(p, short or target, 'html', ctx)
             return f'<a href="#{target}">{name[:1].upper() + name[1:] if opt == "cap" else name}</a>'
         label = ('Appendix ' if appendix else {'sec': '§', 'fig': 'Figure ', 'tab': 'Table '}[arg[:3]]) + (n or '??')
@@ -397,10 +396,9 @@ def fact_value(p, key, ed, anon=False):
 
 # ---------------------------------------------------------------- HTML edition
 
-def html_caption(p, xid, item):
-    """An exhibit's caption in the HTML edition: the outline's "captions_html", then the entry's "caption_html",
-    then the caption both editions share."""
-    return p.outline.get('captions_html', {}).get(xid) or item.get('caption_html') or item.get('caption', '')
+def html_caption(item):
+    """An exhibit's caption in the HTML edition: the entry's "caption_html", else the caption both editions share."""
+    return item.get('caption_html') or item.get('caption', '')
 
 
 def html_figure(p, fid):
@@ -408,7 +406,7 @@ def html_figure(p, fid):
     n = p.numbers['html']['fig:' + fid]
     lead = f'Figure {n}. ' if n else ''
     title = render(p, f['title'], 'html', fid)
-    cap = render(p, html_caption(p, fid, f), 'html', fid)
+    cap = render(p, html_caption(f), 'html', fid)
     cls = 'fig' + (' interactive' if f.get('interactive') else '')
     attrs = f' data-interactive="{f["interactive"]}"' if f.get('interactive') else ''
     if f.get('scenarios'):
@@ -533,7 +531,7 @@ def html_table(p, tid, numbered=True):
         return ''
     lead = f'Table {p.numbers["html"]["tab:" + tid]}. ' if numbered and p.numbers['html']['tab:' + tid] else ''
     cap = (f'<caption>{lead}{render(p, t["title"], "html", tid)} '
-           f'{render(p, html_caption(p, tid, t), "html", tid)}</caption>')
+           f'{render(p, html_caption(t), "html", tid)}</caption>')
     return body.replace('</tbody></table>', f'</tbody>{cap}</table>', 1).replace('<table', f'<table id="{tid}"', 1)
 
 
