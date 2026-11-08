@@ -139,7 +139,7 @@ States: **Measured** (within budget unless stated; the cell says where);
 | §2 `Protected` reconfiguration, `schedule_upgrade` | Measured: in process (reconfiguration at the caps) and on testnet | Within budget. |
 | §2 `execute_upgrade` | Measured in process only | Within budget. Not run on testnet: the upgrade delay is 120 960 ledgers. |
 | §2 promotion after many collecting attempts | Measured without siblings; bounded by construction | Promotion writes one `invalidate_below` value whatever the number of siblings (spec §6.3 T4); the promoting rows above are within budget. No run with many siblings. |
-| §2 ordinary authorization overhead | Measured on testnet (absolute cost) and in process | Direct authorization and `execute` are within budget ([testnet-exercise.md](../deploy/testnet-exercise.md), "Against the budget"). The scope generation gate adds one footprint entry per selected rule ([Scoped documents](#scoped-documents)). Rule-eval's `authorize` decides an authorization in 5.6M to 6.3M instructions in process, a capped transfer more with a long spending history, up to 47.40M (11.9%) for the longest one window holds ([Rule-eval in `__check_auth`](#rule-eval-in-__check_auth)). |
+| §2 ordinary authorization overhead | Measured on testnet (absolute cost) and in process | Direct authorization and `execute` are within budget ([testnet-exercise.md](../deploy/testnet-exercise.md), "Against the budget"). The scope generation gate adds one footprint entry per selected rule ([Scoped documents](#scoped-documents)). Rule-eval's `authorize` decides an authorization in 5.6M to 6.3M instructions in process, a capped transfer more with a long spending history, up to 47.40M (11.8%) for the longest one window holds ([Rule-eval in `__check_auth`](#rule-eval-in-__check_auth)). |
 | §2 disk read bytes, every row | Required before launch | Neither the release-stack suite nor the testnet exercise reports disk read bytes. |
 | §2 transaction size, every row | Measured on testnet | Within budget. The in-process suite does not meter transaction size. |
 | §2 memory, every row | Measured in process | Within budget. The RPC does not report memory, so testnet rows have none. |
@@ -585,14 +585,14 @@ Instructions, as a share of the 400M limit:
 | Flow | OZ and its policies | Both, OZ first | Rule-eval |
 | --- | --- | --- | --- |
 | Capped transfer through a grant, 1 grant in the admin document | 6.10M (1.5%) | 7.07M (1.8%) | 5.59M (1.4%) |
-| The same, 7 grants | 6.19M (1.5%) | 7.50M (1.9%) | 5.92M (1.5%) |
-| Capped transfer through a scoped grant, 1 scope | 6.15M (1.5%) | 7.19M (1.8%) | 5.70M (1.4%) |
-| Capped transfer through the last of 8 scopes, 65 rules installed (fork) | 6.23M (1.6%) | 7.99M (2.0%) | 6.32M (1.6%) |
-| `execute` through the admin rule, no scopes | 5.54M (1.4%) | 6.26M (1.6%) | 5.85M (1.5%) |
+| The same, 7 grants | 6.19M (1.5%) | 7.49M (1.9%) | 5.92M (1.5%) |
+| Capped transfer through a scoped grant, 1 scope | 6.17M (1.5%) | 7.20M (1.8%) | 5.70M (1.4%) |
+| Capped transfer through the last of 8 scopes, 65 rules installed (fork) | 6.25M (1.6%) | 8.00M (2.0%) | 6.33M (1.6%) |
+| `execute` through the admin rule, no scopes | 5.55M (1.4%) | 6.26M (1.6%) | 5.85M (1.5%) |
 | `execute` through the admin rule, 65 rules installed | 5.99M (1.5%) | 6.71M (1.7%) | 6.17M (1.5%) |
 | Capped transfer after 100 spends in the window (fork) | 6.98M (1.7%) | 12.66M (3.2%) | 10.31M (2.6%) |
 | Capped transfer after 400 spends in the window (fork) | 9.31M (2.3%) | 28.73M (7.2%) | 24.05M (6.0%) |
-| Capped transfer after 906 spends in the window (fork) | not run | not run | 47.40M (11.9%) |
+| Capped transfer after 906 spends in the window (fork) | not run | not run | 47.40M (11.8%) |
 
 - **What an authorization reads and writes.** A capped transfer reads 13
   footprint entries and writes 4, 764 bytes after one spend: the stored
@@ -613,13 +613,13 @@ Instructions, as a share of the 400M limit:
 - **Applies install fewer entries.** Applying or completing a document
   writes no interpreter program, spending-limit window, or policy registry
   entry. The binding fork completion at the caps (the thief kept every name
-  and changed every program) went from 297.10M (74.3%) to 263.54M (65.9%),
+  and changed every program) went from 297.45M (74.4%) to 263.48M (65.9%),
   its footprint from 116 to 100 entries and its memory from 14.7 MB to 10.3
   MB. The costliest budgeted row is now the `Protected` reconfiguration that
-  edits every rule, 266.03M (66.5%). Every budgeted completion and
-  reconfiguration over 200M fell by 2.5M to 35.8M. On the long-lived host
-  the compromise completions at the caps went from 285.52M to 321.63M
-  (71.4% to 80.4%) to 257.05M to 278.34M (64.3% to 69.6%), within 75%
+  edits every rule, 265.93M (66.5%). Every budgeted completion and
+  reconfiguration over 200M fell by 2.5M to 35.4M. On the long-lived host
+  the compromise completions at the caps went from 285.37M to 321.61M
+  (71.3% to 80.4%) to 256.84M to 278.11M (64.2% to 69.5%), within 75%
   unbudgeted too.
 - **Every budgeted row stays within 75%**: `release_stack.rs` passes, 25
   tests. The worst shares of the other limits are memory 37.2%, footprint
@@ -634,7 +634,9 @@ contract spec carries the doc comments of its entry points and contract
 types, so some of those are plain `//` comments. It reads stored rules and
 records from their XDR in one pass and a batch of calls one host value at a
 time, rather than through `#[contracttype]` decoding and soroban-facade's
-context reading, which would add to its code. `apply_doc` and `apply_scope` keep `#[contracttype]` conversion: in
+context reading, which would add to its code; reading a compiled model
+builds its vectors with plain loops rather than iterator adapters, which
+saves another 2 KB. `apply_doc` and `apply_scope` keep `#[contracttype]` conversion: in
 the account's wasm, where a call costs 67 fuel and a short copy is a byte
 loop, reading the model or writing the set as XDR costs the binding
 completion 7M to 9M more instructions than the host's conversion does.
@@ -644,7 +646,7 @@ completion 7M to 9M more instructions than the host's conversion does.
 The account keeps its rule ids, rules and signers in its own records
 (`implementation.md`, "Delta apply"). An apply writes no OZ rule, signer,
 policy or lookup entry, and asks no verifier to canonicalize a key. Source:
-2026-11-04, stacks built with `scripts/build-stack.sh --builder contract`
+2026-11-08, stacks built with `scripts/build-stack.sh --builder contract`
 from the source that made the records the registry, where OZ's registry
 still held the recovery rule's two entries for `do_check_auth`, and from
 the source before it, where OZ's registry held every rule, through
@@ -654,19 +656,19 @@ on both stacks:
 
 | Row (8 signers, 10 rules, 8 per rule) | Instructions | Footprint | Written entries | Memory |
 | --- | --- | --- | --- | --- |
-| Compromise completion on the long-lived host, the thief kept every name and changed every program (3 thief scopes of 8) | 251.17M (62.8%) → 166.02M (41.5%) | 108 → 64 | 85 → 41 | 14.7 → 5.9 MB |
-| The same on the fork | 236.99M → 165.71M (41.4%) | 108 → 64 | 85 → 41 | 9.9 → 5.3 MB |
-| Compromise completion on the long-lived host, the thief renamed every rule | 229.90M → 163.94M (41.0%) | 117 → 64 | 94 → 41 | 15.1 → 6.0 MB |
-| Lost-key completion (`Combined`, ZK rotation, every signer revoked) | 235.47M → 163.17M (40.8%) | 92 → 48 | 77 → 33 | 10.3 → 5.1 MB |
-| `Protected` reconfiguration, every rule edited | 238.42M → 166.60M (41.6%) | 84 → 40 | 60 → 16 | 10.4 → 5.4 MB |
-| `Protected` reconfiguration, every rule replaced | 214.76M → 164.11M (41.0%) | 101 → 48 | 69 → 16 | 10.2 → 5.4 MB |
-| Thief's `apply_doc`, names kept, every program and cap changed | 197.15M → 125.90M (31.5%) | 75 → 33 | 48 → 6 | 8.6 → 3.7 MB |
-| `gc_scope` of a wiped scope (8 grants) | 7.76M → 2.56M | 49 → 25 | 40 → 16 | |
+| Compromise completion on the long-lived host, the thief kept every name and changed every program and cap (3 thief scopes of 8) | 251.26M (62.8%) → 165.81M (41.5%) | 108 → 64 | 85 → 41 | 14.7 → 5.9 MB |
+| The same on the fork | 236.93M → 165.50M (41.4%) | 108 → 64 | 85 → 41 | 9.9 → 5.3 MB |
+| Compromise completion on the long-lived host, the thief renamed every rule | 229.71M → 163.71M (40.9%) | 117 → 64 | 94 → 41 | 15.1 → 6.0 MB |
+| Lost-key completion (`Combined`, ZK rotation, every signer revoked) | 235.77M → 162.97M (40.7%) | 92 → 48 | 77 → 33 | 10.3 → 5.1 MB |
+| `Protected` reconfiguration, every rule edited | 238.09M → 166.37M (41.6%) | 84 → 40 | 60 → 16 | 10.4 → 5.4 MB |
+| `Protected` reconfiguration, every rule replaced | 214.84M → 163.88M (41.0%) | 101 → 48 | 69 → 16 | 10.2 → 5.4 MB |
+| Thief's `apply_doc`, names kept, every program and cap changed | 197.02M → 125.68M (31.4%) | 75 → 33 | 48 → 6 | 8.6 → 3.6 MB |
+| `gc_scope` of a wiped scope (8 grants) | 7.79M → 2.57M | 49 → 25 | 40 → 16 | |
 | Factory `create_passkey` | 2.28M → 1.96M | 11 → 8 | 6 → 3 | |
-| Capped transfer through a grant | 5.58M → 5.55M | 13 → 13 | 4 → 4 | |
+| Capped transfer through a grant | 5.58M → 5.54M | 13 → 13 | 4 → 4 | |
 
 - **Every row is within 75%,** and no row rises on any limit but one row's
-  instructions: the `Combined` cancellation, +0.01M at 29.6%. The
+  instructions: `submit_zk_change` for an upgrade, +0.002M at 29.3%. The
   costliest row is now the `Protected` reconfiguration that edits every
   rule, at 41.6% of the instruction limit, where the costliest was a
   compromise completion at 62.8%. The worst shares of the other limits are
@@ -687,16 +689,16 @@ document's own size, the worst share of each limit:
 
 | Signers | Rules | Canonical bytes | Instructions | Memory | Footprint | Written entries | Write bytes | Events |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| **8** | **10** | **8 192** | **41.7%** | **12.9%** | **16.0%** | **20.5%** | **45.9%** | **20.5%** |
-| 8 | 11 | 8 192 | 41.6% | 12.5% | 16.2% | 20.5% | 46.9% | 20.5% |
-| 8 | 12 | 8 192 | 41.8% | 12.2% | 16.5% | 20.5% | 47.9% | 20.5% |
-| 8 | 14 | 8 192 | 42.1% | 11.8% | 17.0% | 20.5% | 49.8% | 20.5% |
+| **8** | **10** | **8 192** | **41.6%** | **12.9%** | **16.0%** | **20.5%** | **45.9%** | **20.5%** |
+| 8 | 11 | 8 192 | 41.5% | 12.5% | 16.2% | 20.5% | 46.9% | 20.5% |
+| 8 | 12 | 8 192 | 41.7% | 12.2% | 16.5% | 20.5% | 47.9% | 20.5% |
+| 8 | 14 | 8 192 | 42.0% | 11.8% | 17.0% | 20.5% | 49.8% | 20.5% |
 | 8 | 16 | 8 192 | 42.5% | 11.6% | 17.5% | 20.5% | 51.8% | 20.5% |
-| 8 | 20 | 9 216 | 48.0% | 12.4% | 18.5% | 20.5% | 60.6% | 20.5% |
-| 8 | 24 | 11 264 | 58.5% | 14.2% | 19.5% | 20.5% | 74.7% | 20.5% |
+| 8 | 20 | 9 216 | 47.9% | 12.4% | 18.5% | 20.5% | 60.6% | 20.5% |
+| 8 | 24 | 11 264 | 58.4% | 14.2% | 19.5% | 20.5% | 74.7% | 20.5% |
 | 15 | 10 | 8 192 | 43.6% | 13.2% | 21.2% | 27.5% | 53.9% | 31.8% |
-| 15 | 12 | 9 216 | 49.3% | 13.4% | 21.8% | 27.5% | 63.6% | 31.8% |
-| 15 | 16 | 10 240 | 56.2% | 14.4% | 22.8% | 27.5% | **77.3%** | 31.8% |
+| 15 | 12 | 9 216 | 49.2% | 13.4% | 21.8% | 27.5% | 63.6% | 31.8% |
+| 15 | 16 | 10 240 | 56.0% | 14.4% | 22.8% | 27.5% | **77.3%** | 31.8% |
 
 Write bytes now bind in every row, in the fork completion whose thief kept
 every rule: the records and stored sets it rewrites grow with the rules
@@ -706,9 +708,9 @@ are unchanged at 8 signers and 10 rules. At 8 signers, 16 rules fit the
 75% (write bytes 74.7%) if the byte cap rises to 11 264, so
 `MAX_DOC_RULES` could rise to 16 without another cap changing.
 
-That source's account wasm was 109,908 bytes as `stellar contract build`
-builds it (77,641 of code, 25,763 of contract spec, 4,556 of data), 12,191
-fewer than the source before it (122,099).
+That source's account wasm was 107,603 bytes as `stellar contract build`
+builds it (75,274 of code, 25,783 of contract spec, 4,604 of data), 12,231
+fewer than the source before it (119,834).
 
 ### The recovery completion's own check
 
@@ -716,7 +718,7 @@ A recovery completion is decided by the account's `authorize_completion`,
 which calls the controller's `enforce` over the account's record of the
 recovery rule, so a completion reads no entry of OZ's registry and the
 account writes none (`implementation.md`, "Rule-eval in `__check_auth`").
-Source: 2026-11-05, stacks built with `scripts/build-stack.sh --builder
+Source: 2026-11-08, stacks built with `scripts/build-stack.sh --builder
 contract` from this source and from the source before it, where OZ's
 `do_check_auth` decided a completion over two registry entries the account
 kept for the recovery rule, through every `release_stack.rs` flow (26
@@ -725,32 +727,33 @@ Both pass. The completion rows:
 
 | Row | Instructions | Footprint | Written entries | Write bytes |
 | --- | --- | --- | --- | --- |
-| Compromise completion on the long-lived host (8 signers, 10 rules), the worst of its rows | 166.05M → 165.57M (41.4%) | 64 → 61 | 41 → 38 | 60,688 → 60,172 |
-| The same on the fork, the worst of its rows | 165.71M → 165.41M (41.4%) | 64 → 61 | 41 → 38 | 60,688 → 60,172 |
-| Lost-key completion (`Combined`, ZK rotation, every signer revoked; 8 signers, 10 rules) | 163.18M → 162.95M (40.7%) | 48 → 45 | 33 → 30 | 60,088 → 59,572 |
-| Lost-key completion (`Combined`, ZK rotation) | 59.29M → 58.84M | 34 → 31 | 24 → 21 | 10,396 → 9,880 |
-| Lost-key completion (`GuardianOnly`) | 16.22M → 15.99M | 24 → 22 | 14 → 14 | 6,424 → 6,424 |
-| Compromise completion (revokes the stolen and added keys) | 17.50M → 17.30M | 25 → 23 | 14 → 14 | 6,592 → 6,592 |
+| Compromise completion on the long-lived host (8 signers, 10 rules), the worst of its rows | 165.83M → 165.34M (41.3%) | 64 → 61 | 41 → 38 | 60,688 → 60,172 |
+| The same on the fork, the worst of its rows | 165.50M → 165.22M (41.3%) | 64 → 61 | 41 → 38 | 60,688 → 60,172 |
+| Lost-key completion (`Combined`, ZK rotation, every signer revoked; 8 signers, 10 rules) | 162.97M → 162.73M (40.7%) | 48 → 45 | 33 → 30 | 60,088 → 59,572 |
+| Lost-key completion (`Combined`, ZK rotation) | 59.27M → 58.80M | 34 → 31 | 24 → 21 | 10,396 → 9,880 |
+| Lost-key completion (`GuardianOnly`) | 16.19M → 15.98M | 24 → 22 | 14 → 14 | 6,424 → 6,424 |
+| Compromise completion (revokes the stolen and added keys) | 17.49M → 17.28M | 25 → 23 | 14 → 14 | 6,592 → 6,592 |
 
 - **Every completion's** footprint holds OZ's rule and policy entries for
-  the recovery rule no more, and it costs 0.2M to 0.7M fewer instructions.
+  the recovery rule no more, and it costs 0.2M to 0.6M fewer instructions.
   One that installs the recovery rule again under a new id (a ZK rotation)
   also drops the new rule's entry from its footprint and writes three
   entries fewer: the new rule's and the policy's, and the old rule's
   removal.
-- **Every row is within 75%.** Of the 264 metered rows, 261 cost fewer
-  instructions and every row less memory. Three evidence submissions cost
-  more instructions: `submit_guardian` (`Combined`, not promoting) +0.005M,
-  `submit_zk` (promoting, `ZkOnly`) +0.02M at 29.6%, and
-  `submit_zk_change` (`Upgrade`) +0.003M; the cause was not investigated.
-  The worst share of each limit: instructions 41.6% (the `Protected`
-  reconfiguration that edits every rule, unchanged), memory 23.6%, write
-  bytes 50.0%, footprint 16.0% → 15.3%, written entries 20.5% → 19.0%, and
-  events 20.5%.
+- **Every row is within 75%.** Of the 264 metered rows, 256 cost fewer
+  instructions and 263 less memory. Eight cost more instructions, by
+  0.002M to 0.03M: three evidence submissions (`submit_guardian`
+  `Combined` not promoting, `submit_zk` promoting `Combined`, and
+  `submit_zk_change` `Reconfigure`, which also uses 404 more bytes of
+  memory), the `Combined` cancellation, three capped transfers through a
+  scoped grant, and the eighth `apply_scope` on the long-lived host; the largest is `submit_zk` at
+  29.7%. The cause was not investigated. The worst share of each limit:
+  instructions 41.6% → 41.5%, memory 23.6%, write bytes 50.0%, footprint
+  16.0% → 15.2%, written entries 20.5% → 19.0%, and events 20.5%.
 
-The account wasm is 102,319 bytes as `stellar contract build` builds it
-(71,215 of code, 24,771 of contract spec, 4,405 of data), 7,589 fewer than
-the source before it (109,908), and 28,753 under the 131,072-byte limit.
+The account wasm is 99,988 bytes as `stellar contract build` builds it
+(68,822 of code, 24,791 of contract spec, 4,453 of data), 7,615 fewer than
+the source before it (107,603), and 31,084 under the 131,072-byte limit.
 The recovery controller, the doc compiler and every other tier-0 contract
 build byte-identical; the factory changes only in the account hash it pins.
 
@@ -759,7 +762,7 @@ build byte-identical; the factory changes only in the account hash it pins.
 The account calls its recovery controller through Perch's hooks
 `rcv_install` and `rcv_complete`, which take the recovery rule as a
 `RecoveryRule` (its signer count and scope); the controller has no OZ
-`Policy` hooks (`spec.md` §10, T5). Source: 2026-11-05, stacks built with
+`Policy` hooks (`spec.md` §10, T5). Source: 2026-11-07, stacks built with
 `scripts/build-stack.sh --builder contract` from this source and from the
 source before it, where the account called the controller's OZ `install`
 and `enforce`, through every `release_stack.rs` flow (26 tests, `--skip
@@ -768,40 +771,40 @@ The completion rows:
 
 | Row | Instructions | Memory |
 | --- | --- | --- |
-| Compromise completion on the long-lived host (8 signers, 10 rules), the worst of its rows | 165.57M → 165.47M (41.4%) | 5,839,774 → 5,828,203 |
-| The same on the fork, the worst of its rows | 165.42M → 165.30M (41.3%) | 5,273,181 → 5,261,610 |
-| Lost-key completion (`Combined`, ZK rotation, every signer revoked; 8 signers, 10 rules) | 162.95M → 162.85M (40.7%) | 5,074,956 → 5,063,385 |
-| Lost-key completion (`Combined`, ZK rotation) | 58.84M → 58.72M | 2,851,784 → 2,840,213 |
-| Lost-key completion (`GuardianOnly`) | 15.99M → 15.94M | 1,539,423 → 1,532,363 |
-| Compromise completion (revokes the stolen and added keys) | 17.30M → 17.25M | 1,554,918 → 1,547,858 |
+| Compromise completion on the long-lived host (8 signers, 10 rules), the worst of its rows | 165.36M → 165.27M (41.3%) | 5,838,538 → 5,826,967 |
+| The same on the fork, the worst of its rows | 165.22M → 165.13M (41.3%) | 5,271,945 → 5,260,374 |
+| Lost-key completion (`Combined`, ZK rotation, every signer revoked; 8 signers, 10 rules) | 162.73M → 162.64M (40.7%) | 5,073,720 → 5,062,149 |
+| Lost-key completion (`Combined`, ZK rotation) | 58.80M → 58.70M | 2,850,548 → 2,838,977 |
+| Lost-key completion (`GuardianOnly`) | 15.98M → 15.93M | 1,538,187 → 1,531,127 |
+| Compromise completion (revokes the stolen and added keys) | 17.28M → 17.25M | 1,553,682 → 1,546,622 |
 
 - **Footprint, written entries, write bytes and events** are unchanged in
   all 264 metered rows.
 - **Every row that calls the controller costs fewer instructions**: each
-  completion 0.05M to 0.13M fewer and 7 to 12 KB less memory, each
+  completion 0.03M to 0.13M fewer and 7 to 12 KB less memory, each
   enrollment and `Protected` reconfiguration 0.04M to 0.06M fewer.
 - **Rows that only authorize cost more instructions**: the 41 rows of
-  grants, transfers and signer transitions move by −700 to +12,600 (most
-  by about 8,000), and the 10 calls through `execute` by +11,400 to
-  +22,100, because `__check_auth`, and `execute`, refuse ten reserved
-  names instead of eight. The same account built without `rcv_install`
-  and `rcv_complete` in the list costs 3,800 to 15,600 fewer instructions
-  on those 41 rows and 12,700 to 18,300 fewer through `execute`. Rows over
-  scope sweeps and thief scopes move by up to ±0.06M between any two of
-  the three builds, which differ in the account's code and so in where the
-  factory puts each account; the six rows that verify a real ZK proof move
-  by up to ±0.05M between two runs of one stack.
-- **Every row is within 75%.** The worst share of each limit: instructions
-  41.6% → 41.5% (the `Protected` reconfiguration that edits every rule),
-  memory 23.6%, write bytes 50.0%, footprint 15.2%, written entries 19.0%,
-  and events 20.5%, the last five unchanged.
+  grants, transfers and signer transitions 7,600 to 10,600 more, and the
+  10 calls through `execute` 9,700 to 21,100 more, because `__check_auth`,
+  and `execute`, refuse ten reserved names instead of eight. The same
+  account built without `rcv_install` and `rcv_complete` in the list costs
+  3,000 to 17,300 fewer instructions on those 41 rows and 8,800 to 18,900
+  fewer through `execute`. Rows over scope sweeps and thief scopes move by
+  up to ±0.06M between any two of the three builds, which differ in the
+  account's code and so in where the factory puts each account; the six
+  rows that verify a real ZK proof move by up to ±0.05M between two runs
+  of one stack.
+- **Every row is within 75%.** The worst share of each limit, unchanged:
+  instructions 41.5% (the `Protected` reconfiguration that edits every
+  rule), memory 23.6%, write bytes 50.0%, footprint 15.2%, written entries
+  19.0%, and events 20.5%.
 
 The recovery controller wasm is 67,700 bytes as `stellar contract build`
 builds it (32,067 of code, 30,879 of contract spec, 3,374 of data), 2,088
 fewer than the source before it (69,788): its spec names no OZ type or
-hook. The account wasm is 102,450 bytes (71,294 of code, 24,767 of
-contract spec, 4,461 of data), 131 more, for the two reserved names, and
-28,622 under the 131,072-byte limit. The doc compiler, the pool, the ZK
+hook. The account wasm is 100,119 bytes (68,901 of code, 24,787 of
+contract spec, 4,509 of data), 131 more, for the two reserved names, and
+30,953 under the 131,072-byte limit. The doc compiler, the pool, the ZK
 adapter and every other tier-0 contract build byte-identical; the factory
 changes only in the account hash it pins.
 
@@ -836,19 +839,19 @@ row to `pay`, a 1-of-n rule, and to its spending cap in the capped row. In
 `admin`'s) too. Each cost is the whole `apply_doc`, compiling the document
 included. The test asserts that the rule ends with exactly the target
 signers (a joining key acts, a leaving key cannot); it reports the path and
-the costs. Source: 2026-11-04, the stacks of
+the costs. Source: 2026-11-08, the stacks of
 [The account's own rule registry](#the-accounts-own-rule-registry), this
 source's figure first and the source before it in parentheses:
 
 | Transition | Instructions | Memory | Footprint | Written entries | Events (bytes) | Path (rule id, spending window) |
 | --- | ---: | ---: | ---: | ---: | ---: | --- |
-| single addition | 18.79M (21.02M) | 1.34 MB | 16 (22) | 6 (9) | 368 | in place, id kept |
-| several additions | 20.92M (23.51M) | 1.35 MB | 17 (26) | 6 (13) | 368 | in place, id kept |
-| full six-key rotation | 23.44M (30.58M) | 1.36 MB | 18 (44) | 6 (32) | 368 | in place, id kept |
-| one swap in a six-key rule | 23.20M (26.66M) | 1.36 MB | 18 (28) | 6 (11) | 368 | in place, id kept |
-| five swaps in a six-key rule | 23.32M (28.70M) | 1.36 MB | 18 (40) | 6 (27) | 368 | in place, id kept |
-| shared signers | 23.05M (25.86M) | 1.36 MB | 17 (25) | 6 (11) | 368 | in place, id kept |
-| full rotation with an active spending cap | 23.85M (31.01M) | 1.36 MB | 18 (44) | 6 (32) | 368 | in place, id kept, window kept |
+| single addition | 18.76M (21.01M) | 1.34 MB | 16 (22) | 6 (9) | 368 | in place, id kept |
+| several additions | 20.88M (23.49M) | 1.35 MB | 17 (26) | 6 (13) | 368 | in place, id kept |
+| full six-key rotation | 23.39M (30.55M) | 1.36 MB | 18 (44) | 6 (32) | 368 | in place, id kept |
+| one swap in a six-key rule | 23.15M (26.65M) | 1.36 MB | 18 (28) | 6 (11) | 368 | in place, id kept |
+| five swaps in a six-key rule | 23.27M (28.67M) | 1.36 MB | 18 (40) | 6 (27) | 368 | in place, id kept |
+| shared signers | 23.00M (25.84M) | 1.36 MB | 17 (25) | 6 (11) | 368 | in place, id kept |
+| full rotation with an active spending cap | 23.81M (31.01M) | 1.36 MB | 18 (44) | 6 (32) | 368 | in place, id kept, window kept |
 
 A transition writes the admin records, the stored rule set and the
 instance whatever changes, so its written entries no longer grow with the
