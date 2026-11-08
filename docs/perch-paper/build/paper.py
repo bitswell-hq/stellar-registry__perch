@@ -377,12 +377,18 @@ def fact_value(p, key, ed, anon=False):
 
 # ---------------------------------------------------------------- HTML edition
 
+def html_caption(p, xid, item):
+    """An exhibit's caption in the HTML edition: the outline's "captions_html", then the entry's "caption_html",
+    then the caption both editions share."""
+    return p.outline.get('captions_html', {}).get(xid) or item.get('caption_html') or item.get('caption', '')
+
+
 def html_figure(p, fid):
     f = p.figures[fid]
     n = p.numbers['html']['fig:' + fid]
     lead = f'Figure {n}. ' if n else ''
     title = render(p, f['title'], 'html', fid)
-    cap = render(p, f.get('caption', ''), 'html', fid)
+    cap = render(p, html_caption(p, fid, f), 'html', fid)
     cls = 'fig' + (' interactive' if f.get('interactive') else '')
     attrs = f' data-interactive="{f["interactive"]}"' if f.get('interactive') else ''
     if f.get('scenarios'):
@@ -507,7 +513,7 @@ def html_table(p, tid, numbered=True):
         return ''
     lead = f'Table {p.numbers["html"]["tab:" + tid]}. ' if numbered and p.numbers['html']['tab:' + tid] else ''
     cap = (f'<caption>{lead}{render(p, t["title"], "html", tid)} '
-           f'{render(p, t.get("caption", ""), "html", tid)}</caption>')
+           f'{render(p, html_caption(p, tid, t), "html", tid)}</caption>')
     return body.replace('</tbody></table>', f'</tbody>{cap}</table>', 1).replace('<table', f'<table id="{tid}"', 1)
 
 
