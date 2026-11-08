@@ -514,7 +514,7 @@
     const advP = button('+P');
     const undo = button('Undo');
     bar.append(form, adv1, adv10, advP, undo);
-    panel.append(banner('MODEL', 'Computed in the page from the cap’s definition (D3 iii, D4): a transfer is charged only if the window total plus its amount stays within the limit, and a refusal changes nothing. Ledgers are illustrative; t is any ledger.'));
+    panel.append(banner('MODEL', 'Computed in the page from the paper’s definitions of the charge and the window (Definitions 3 and 4): a transfer is charged only if the window total plus its amount stays within the limit, and a refusal changes nothing. Ledgers are illustrative; t is any ledger.'));
     const params = h('details', { class: 'xp-params' }, el('summary'));
     const lam = el('input', { type: 'range', min: 1, max: 20, step: 1, value: 10, name: `${fig.id}-limit` });
     const per = el('input', { type: 'range', min: 10, max: 200, step: 10, value: 100, name: `${fig.id}-period` });
@@ -522,7 +522,7 @@
     const percall = el('input', { type: 'checkbox', name: `${fig.id}-percall` });
     const zero = el('input', { type: 'checkbox', name: `${fig.id}-zero` });
     const replace = button('Replace the rule');
-    const reset = button('Reset to Figure 3’s events');
+    const reset = button('Reset to the figure’s events');
     const clear = button('Clear');
     const toggles = h('div', { class: 'xp-row' },
       h('label', { class: 'xp-check' }, percall, ' Check each call alone'),
@@ -535,7 +535,7 @@
     const history = el('ol', { class: 'xp-log', 'aria-label': 'Transfers, in order' });
     panel.append(params, toggles, plot,
       h('div', { class: 'xp-row' }, h('label', { class: 'xp-field xp-grow' }, h('span', {}, 'Inspect the window at ledger L'), inspect)),
-      inspectOut, fullest, h('p', { class: 'xp-sub' }, 'Every transfer, in order (the plot\u2019s chips: solid accepted, dashed with a bar end refused, amber inside the inspected window):'), history);
+      inspectOut, fullest, h('p', { class: 'xp-sub' }, 'In the plot, as in the figure: a charge inside the inspected window is amber, one outside it is dashed; a refused transfer is red with a bar end and changes nothing.'), h('p', { class: 'xp-sub' }, 'Every transfer, in order:'), history);
 
     function run() {
       const base = st.zero ? 0 : BASE;
@@ -560,6 +560,7 @@
     const sentence = (a, lab) => {
       if (a.replace) return `ledger ${lab(a.ledger)}: the rule is replaced; its window starts empty`;
       const at = `ledger ${lab(a.ledger)}: +${a.amount}`;
+      if (a.ok && a.amount === 0) return `${at}: nothing to charge; the window holds ${a.after}`;
       if (st.percall) {
         return a.ok ? `${at} accepted (${a.amount} ≤ ${st.lambda} for one call); ${a.after} moved in the window`
           : `${at} refused (${a.amount} > ${st.lambda} for one call); nothing changes`;
@@ -689,12 +690,13 @@
       for (const p of pts) {
         const s = lab(p);
         const w = s.length * 7.4;
-        const x = xv(p);
-        if (x - w / 2 < right + 6) continue;
-        t(Math.min(Math.max(x, x0 + w / 2), x1 - w / 2), ty, s, 'm', 'middle');
+        const x = Math.min(Math.max(xv(p), x0 + w / 2), x1 - w / 2);
+        if (x - w / 2 < right + 8) continue;
+        t(x, ty, s, 'm', 'middle');
         right = x + w / 2;
       }
-      // charges as chips, in lanes so none overlap: solid when accepted, dashed with a bar end when refused
+      // charges as chips, in lanes so none overlap, drawn as the figure draws them: amber inside the
+      // inspected window, dashed outside it; a refused transfer red with a bar end
       const lanes = [];
       const cy0 = y0 + 34;
       for (const at of R.attempts) {
@@ -707,12 +709,23 @@
         lanes[lane] = x + w;
         const y = cy0 + lane * 30;
         const inside = at.ok && M.inWindow(at.ledger, L, st.period);
-        const cls = at.ok ? (inside ? 'bx bx-hi' : 'bx') : 'bx-no dash';
+        const cls = at.ok ? (inside ? 'bx bx-hi' : 'bx dash') : 'bx-no';
         out.push(`<rect class="${cls}" x="${n(x)}" y="${y}" width="${n(w)}" height="24" rx="4"/>`);
         if (!at.ok) out.push(`<path class="fl-d" d="M${n(x + w)} ${y - 3}V${y + 27}"/>`);
-        t(x + w / 2, y + 17, s, at.ok ? 'x' : 'd', 'middle');
+        t(x + w / 2, y + 17, s, at.ok ? (inside ? 'x' : 'm') : 'd', 'middle');
       }
       const wy = cy0 + Math.max(1, lanes.length) * 30 + 12;
+      let extra = 0;
+      const pm = periodMax(R.moved);
+      if (st.zero && pm > st.lambda) {
+        // T6's second form fails from ledger 0: the P ledgers from 0 hold more than the limit
+        const za = xv(0);
+        const zb = xv(st.period - 1);
+        const zy = wy + 52;
+        out.push(`<path class="fl-d" d="M${n(za)} ${zy - 8}V${zy + 8}M${n(za)} ${zy}H${n(zb)}M${n(zb)} ${zy - 8}V${zy + 8}"/>`);
+        t(Math.min(za + 4, Wd - 200), zy + 24, `ledgers 0 to ${st.period - 1}: ${pm} > ${st.lambda}`, 'd');
+        extra = 52;
+      }
       out.push(`<path class="fl-k" d="M${n(xa)} ${wy}H${n(xb)}"/>`);
       if (a >= lo) out.push(`<path class="fl-k" d="M${n(xa + 6)} ${wy - 9}L${n(xa + 2)} ${wy - 5}L${n(xa + 1)} ${wy - 1}V${wy + 1}L${n(xa + 2)} ${wy + 5}L${n(xa + 6)} ${wy + 9}"/>`);
       out.push(`<path class="fl-k" d="M${n(xb - 5)} ${wy - 8}H${n(xb)}V${wy + 8}H${n(xb - 5)}"/>`);
@@ -721,7 +734,7 @@
       const wx = Math.min(Math.max(xa, 2), Wd - wl.length * 7.4 - 2);
       t(wx, wy + 26, wl, 'k');
       t(2, 14, st.percall ? 'XLM moved in the window (each call checked alone)' : 'XLM in the window', 'm');
-      const H = wy + 34;
+      const H = wy + 34 + extra;
       return `<svg class="xp-plot" viewBox="0 0 ${Wd} ${H}" aria-hidden="true" focusable="false">${out.join('')}</svg>`;
     }
 
@@ -799,11 +812,40 @@
     if (!rules.length) card.append(h('p', {}, 'No rules: the child allows nothing.'));
     return card;
   }
+  // Why a rule set refuses a probe alone: the rule that gets furthest, and its failing check.
+  function whyRefused(rules, ctx, auth) {
+    let best = null;
+    rules.forEach((r, j) => {
+      const d = M.authorize(rules, rules.map(M.emptyRecord), [ctx], [j], auth, M.E1.ledger, 0);
+      if (!d.ok && (!best || d.trace.length > best.d.trace.length)) best = { d, r };
+    });
+    if (!best) return 'no rule';
+    const { d, r } = best;
+    const name = `\`${r.name}\``;
+    switch (d.check) {
+      case 'target': return rules.some((q) => q.contract === ctx.contract) ? `target of ${name}` : `no rule for ${ctx.contract === 'account' ? 'the account' : ctx.contract === 'game' ? 'the game' : ctx.contract}`;
+      case 'function': return `\`${ctx.fn}\` is not a function of ${name}`;
+      case 'arguments': return `${name}\u2019s argument condition`;
+      case 'threshold': return `${auth.map((s) => `\`${s}\``).join(', ')} is not a signer of ${name}`;
+      case 'unexpired': return `${name} has expired`;
+      case 'amount': return `${name} has a cap, and \`${ctx.fn}\` has no amount to charge`;
+      case 'charge': return `${d.charge.remaining} + ${d.charge.amount} = ${d.charge.total} > ${d.charge.limit}, the cap of ${name}`;
+      case 'signers': return 'a signer on no chosen rule';
+      default: return d.check;
+    }
+  }
   function probeTable(parent, child) {
-    const rows = M.E1.probes.map(([id, label, ctx, auth]) => [id, label, M.accepts(parent, ctx, auth, M.E1.ledger), M.accepts(child, ctx, auth, M.E1.ledger)]);
+    const rows = M.E1.probes.map(([id, label, ctx, auth]) => [id, label, M.accepts(parent, ctx, auth, M.E1.ledger), M.accepts(child, ctx, auth, M.E1.ledger), ctx, auth]);
+    const why = ([, , p, c, ctx, auth]) => {
+      if (c) return '\u2014';
+      const wc = whyRefused(child, ctx, auth);
+      if (p) return `child: ${wc}`;
+      const wp = whyRefused(parent, ctx, auth);
+      return wp === wc ? `both: ${wc}` : `parent: ${wp}; child: ${wc}`;
+    };
     const table = h('table', { class: 'xp-probes' },
-      h('thead', {}, h('tr', {}, h('th', { scope: 'col' }, 'Probe'), h('th', { scope: 'col' }, 'Parent'), h('th', { scope: 'col' }, 'Child'))),
-      h('tbody', {}, rows.map(([id, label, p, c]) => h('tr', { 'data-probe': id }, h('th', { scope: 'row' }, label), h('td', {}, p ? yes() : no()), h('td', {}, c ? yes() : no())))));
+      h('thead', {}, h('tr', {}, h('th', { scope: 'col' }, 'Probe'), h('th', { scope: 'col' }, 'Parent'), h('th', { scope: 'col' }, 'Child'), h('th', { scope: 'col' }, 'Why refused'))),
+      h('tbody', {}, rows.map((r) => h('tr', { 'data-probe': r[0] }, h('th', { scope: 'row' }, r[1]), h('td', {}, r[2] ? yes() : no()), h('td', {}, r[3] ? yes() : no()), h('td', { class: 'xp-why' }, why(r))))));
     const nc = rows.filter((r) => r[3]).length;
     const np = rows.filter((r) => r[2]).length;
     const each = rows.every((r) => !r[3] || r[2]);
@@ -823,10 +865,12 @@
     return { list: h('ol', { class: 'xp-log' }, lines), line: `The child accepted ${ok} of ${childRun.length}. Replayed through the parent from empty records: ${pok} of ${parentRun.length} accepted.${renum}`, all: pok === parentRun.length };
   }
   const MOVES = [
-    ['drop_rule', 'drop_rule: drop a rule'], ['remove_functions', 'remove_functions'], ['restrict_functions', 'restrict_functions'],
-    ['add_cond', 'add_cond: add an argument condition'], ['remove_signers', 'remove_signers'], ['raise_threshold', 'raise_threshold'],
-    ['add_cap', 'add_cap'], ['lower_cap_limit', 'lower_cap_limit'], ['lengthen_cap_period', 'lengthen_cap_period'],
-    ['lower_valid_until', 'lower_valid_until: add or move an expiry earlier'],
+    ['drop_rule', 'Drop a rule (drop_rule)'], ['remove_functions', 'Remove functions (remove_functions)'],
+    ['restrict_functions', 'Restrict to functions (restrict_functions)'], ['add_cond', 'Add an argument condition (add_cond)'],
+    ['remove_signers', 'Remove signers (remove_signers)'], ['raise_threshold', 'Raise the threshold (raise_threshold)'],
+    ['add_cap', 'Add a cap (add_cap)'], ['lower_cap_limit', 'Lower the cap limit (lower_cap_limit)'],
+    ['lengthen_cap_period', 'Lengthen the cap period (lengthen_cap_period)'],
+    ['lower_valid_until', 'Add or move an expiry earlier (lower_valid_until)'],
   ];
   const WIDEN = [['raise_limit', 'Raise the cap limit'], ['shorten_period', 'Shorten the cap period'], ['later_expiry', 'Move the expiry later'],
     ['lower_threshold', 'Lower the threshold'], ['change_target', 'Change the target']];
@@ -858,6 +902,13 @@
     const replayBtn = button('Replay through the parent');
     const replayOut = el('div', { class: 'xp-replay', 'aria-live': 'polite' });
     panel.append(cards, h('p', { class: 'xp-sub' }, 'Steps applied to the parent:'), applied, grid, summary, h('div', { class: 'xp-row' }, replayBtn), replayOut);
+    // The static table hides on screen; keep its caption with the explorable.
+    const staticCap = host.querySelector('.xp-static caption');
+    if (staticCap) {
+      const cap = el('p', { class: 'xp-caption' });
+      for (const n of staticCap.childNodes) cap.append(n.cloneNode(true));
+      panel.append(cap);
+    }
     let val = null;
     function valueControl() {
       const step = stepSel.value;
@@ -980,6 +1031,7 @@
     const ctx = d.i != null ? ctxName(run.contexts[d.i]) : '';
     if (c === 'charge') return `charge: ${d.charge.remaining} + ${d.charge.amount} = ${d.charge.total} > ${d.charge.limit}, the limit of \`${r.name}\``;
     if (c === 'threshold') return `threshold: 0 of the ${r.threshold} listed signer${r.threshold === 1 ? '' : 's'} of \`${r.name}\` signed`;
+    if (c === 'target' && run.contexts[d.i].contract === 'account') return `target: no grant rule may name the account itself (Theorem 8); \`${r.name}\` is for ${r.contract === 'game' ? 'the game' : r.contract}`;
     if (c === 'target') return `target: \`${r.name}\` is for ${r.contract === 'game' ? 'the game' : r.contract}, not for ${ctx}`;
     if (c === 'arguments') return `arguments: \`${r.name}\` requires another recipient than ${ctx}`;
     if (c === 'unexpired') return `unexpired: \`${r.name}\`’s last ledger has passed`;
@@ -1038,8 +1090,10 @@
     bar.append(every, prev, next, end, count);
     const sim = document.getElementById('sim-embed');
     panel.append(banner('MODEL', h('span', {}, 'Computed in the page from the decision function’s definition (D3). The account itself runs in the simulation', sim ? h('span', {}, ' (', h('a', { href: '#sim-embed' }, 'run both accounts'), ').') : '.')));
-    const choices = e3Choices(fig.id, () => start(true));
+    const choices = e3Choices(fig.id, () => play());
     panel.append(choices.wrap);
+    // the stepper follows the choices in the tab order
+    choices.wrap.after(bar.parentElement);
     const result = el('div', { class: 'xp-result-box' });
     const after = el('div', { class: 'xp xp-auth-out' });
     svgs[svgs.length - 1].after(after);
@@ -1090,7 +1144,7 @@
       setOff(end, !run || k >= stopAt());
       count.textContent = run ? `Stage ${k + 1} of ${stopAt() + 1}` : '6 stages';
     }
-    function narrate() {
+    function narrate(quiet) {
       const stage = STAGES[k];
       const d = run.decision;
       const names = run.choices.map((j) => `\`${run.rules[j].name}\``).join(' and ');
@@ -1106,7 +1160,7 @@
           : 'Authenticate: the app’s verifier checks the signature over the digest. Passed.',
         store: `Store: ${(d.charges || []).map((c) => `\`${run.rules[c.j].name}\`’s record now holds ${c.charge.total}`).join('; ') || 'no record changes'}. Accepted.`,
       }[stage];
-      live.textContent = plain(t);
+      if (!quiet) live.textContent = plain(t);
       if (k >= stopAt()) showResult(); else result.replaceChildren();
     }
     function showResult() {
@@ -1117,17 +1171,37 @@
         result.replaceChildren(h('p', { class: 'xp-verdict xp-refused' }, el('span', { class: 'xp-mark', 'aria-hidden': 'true' }, '✕'), ` Refused at the decision: ${refusalWhy(run)}. Nothing written. Verifier called: no.`));
       } else {
         result.replaceChildren(h('p', { class: 'xp-verdict xp-refused' }, el('span', { class: 'xp-mark', 'aria-hidden': 'true' }, '✕'), ' The decision accepts; authentication fails. Nothing written.'),
-          trap ? h('p', { class: 'xp-banner' }, chip('RECORDED'), ` In the reference run (command ${cmd}), the Ed25519 verifier trapped with ${trap} and the host reverted the call.`) : null);
+          ...(trap ? [h('p', { class: 'xp-banner' }, chip('RECORDED'), ` In the reference run (command ${cmd}), the Ed25519 verifier trapped with ${trap} and the host reverted the call.`)] : []));
       }
     }
+    let timer = null;
+    const halt = () => { if (timer) { clearInterval(timer); timer = null; } };
     function start(fromChoice) {
+      halt();
       run = M.E3.run(choices.get.req(), choices.get.signer(), choices.get.grant(), choices.get.named());
       k = fromChoice ? stopAt() : 0;
       paint();
       narrate();
     }
-    const go = (j) => { if (!run) start(false); k = Math.max(0, Math.min(stopAt(), j)); paint(); narrate(); };
-    every.onclick = () => { run = null; k = -1; paint(); result.replaceChildren(); live.textContent = 'Every scenario, as printed: the right column gives where each one stops.'; };
+    // A new choice walks the stages from the host call, one every 400 ms; with reduced motion
+    // it shows where the request stops at once. Either way the stepper can walk it again.
+    function play() {
+      if (reduced()) { start(true); return; }
+      halt();
+      run = M.E3.run(choices.get.req(), choices.get.signer(), choices.get.grant(), choices.get.named());
+      k = 0;
+      paint();
+      narrate(true);
+      timer = setInterval(() => {
+        k += 1;
+        const last = k >= stopAt();
+        paint();
+        narrate(!last);
+        if (last) halt();
+      }, 400);
+    }
+    const go = (j) => { halt(); if (!run) start(false); k = Math.max(0, Math.min(stopAt(), j)); paint(); narrate(); };
+    every.onclick = () => { halt(); run = null; k = -1; paint(); result.replaceChildren(); live.textContent = 'Every scenario, as printed: the right column gives where each one stops.'; };
     prev.onclick = () => { if (!isOff(prev)) go(k - 1); };
     next.onclick = () => { if (!run) { start(false); return; } if (!isOff(next)) go(k + 1); };
     end.onclick = () => { if (!isOff(end)) go(stopAt()); };
@@ -1144,11 +1218,29 @@
   };
 
   // ---------------------------------------------------------------- E4: composition
+  // fig-compose. Opens on the figure's four requests; both columns mark, for the newest request,
+  // the points that ran (solid), the one that refused (red, bar end) and those not run (dashed).
   const E4_NAME = { pin: 'recipient pin', percall: 'per-call bound', window: 'window cap', threshold: 'two signers', live: 'live read', decision: 'decision point' };
+  const E4_A = ['pin', 'percall', 'threshold', 'window'];
+  const E4_SCRIPT = [
+    ['Pay 6 to the shop', { amount: 6, to: 'shop', signers: 'both', price: 'ok' }, null],
+    ['Pay 5 more to the shop', { amount: 5, to: 'shop', signers: 'both', price: 'ok' }, null],
+    ['Pay 1 elsewhere', { amount: 1, to: 'another recipient', signers: 'both', price: 'ok' }, null],
+    ['Detach the window cap in (b); pay 6 to the shop', { amount: 6, to: 'shop', signers: 'both', price: 'ok' }, 'window'],
+  ];
+  const PT_WORD = { ran: 'ran', refused: 'refused', skip: 'not run', off: 'detached' };
+  function ptState(name, ran, refused) {
+    if (name === refused) return 'refused';
+    return ran.includes(name) ? 'ran' : 'skip';
+  }
+  function ptItem(label, state, extra) {
+    return h('li', { class: `xp-pt xp-pt-${state}` }, h('span', { class: 'xp-pname' }, label),
+      state ? h('span', { class: 'xp-ptag' }, PT_WORD[state]) : null, extra || null);
+  }
   CONTROLLERS.compose = (fig) => {
     const panel = mount(fig, 'xp-compose');
     const BASE = 1000;
-    const fresh = () => ({ now: BASE, recA: M.emptyRecord(), recB: M.emptyRecord(), movedA: [], movedB: [], order: ['window', 'pin', 'percall', 'threshold', 'live'], attached: new Set(['window', 'pin', 'percall', 'threshold', 'live']), log: [], last: null });
+    const fresh = () => ({ now: BASE, recA: M.emptyRecord(), recB: M.emptyRecord(), movedA: [], movedB: [], order: ['window', 'pin', 'percall', 'threshold', 'live'], attached: new Set(['window', 'pin', 'percall', 'threshold', 'live']), log: [], last: null, n: 0 });
     let st = fresh();
     const { bar, live } = head(fig, panel);
     bar.setAttribute('aria-label', 'Requests');
@@ -1159,21 +1251,26 @@
     const pay = button('Pay', { class: 'primary' });
     const again = button('Send again');
     const adv = button('Advance 100 ledgers');
-    const reset = button('Reset');
-    bar.append(labelled('Amount', amount), labelled('To', to), labelled('Signed by', signers), labelled('Oracle price', price), pay, again, adv, reset);
-    panel.append(banner('MODEL', 'The same five checks, arranged two ways. A request passes when every point that runs permits it, and writes commit only if it passes. No verdict here names a contract; the simulation runs the real ones.'));
+    const reset = button('Reset to the figure’s requests');
+    const clear = button('Clear');
+    bar.append(labelled('Amount', amount), labelled('To', to), labelled('Signed by', signers), labelled('Oracle price', price), pay, again, adv, reset, clear);
+    panel.append(banner('MODEL', 'This model adds a co-signer and an oracle price floor to the shop grant, to show where each arrangement places a check. A request passes when every point that runs permits it, and writes commit only if it passes. No verdict here names a contract; the simulation runs the real ones.'));
+    const newest = el('div', { class: 'xp-newest' });
     const colA = el('section', { class: 'xp-card' });
     const colB = el('section', { class: 'xp-card' });
-    panel.append(h('div', { class: 'xp-cards' }, colA, colB));
+    panel.append(newest, h('p', { class: 'xp-sub' }, 'For the newest request: solid, the point ran; red with a bar end, it refused; dashed, it did not run.'),
+      h('div', { class: 'xp-cards' }, colA, colB));
     const log = el('ol', { class: 'xp-log xp-log-rev', 'aria-label': 'Requests, newest first' });
-    panel.append(h('p', { class: 'xp-sub' }, 'Requests, newest first:'), log,
+    panel.append(h('p', { class: 'xp-sub' }, 'Every request, newest first:'), log,
       h('p', { class: 'xp-result' }, 'Composition buys flexibility; one decision point gives one place to check.'));
-    const winA = () => M.windowTotal(st.movedA, st.now, 100);
     const winB = () => M.windowTotal(st.movedB, st.now, 100);
     function drawCols() {
+      const last = st.log[0];
+      const aRan = last ? (last.aRes.ok ? E4_A : E4_A.slice(0, E4_A.indexOf(last.aRes.refused))) : [];
+      const aItems = E4_A.map((name) => ptItem(name === 'window' ? `window cap: record ${M.windowTotal(st.recA.history, st.now, 100)} of 10` : E4_NAME[name],
+        last ? ptState(name, aRan, last.aRes.refused) : ''));
       colA.replaceChildren(h('h4', {}, '(a) Shaped like a Perch account'), h('p', { class: 'xp-sub' }, 'One decision point holds every check and the window record.'),
-        h('ul', { class: 'xp-points' }, ['recipient pin', 'per-call bound', 'two signers', `window cap: record ${M.windowTotal(st.recA.history, st.now, 100)} of 10`].map((t) => h('li', {}, t)),
-          h('li', { class: 'xp-slot' }, 'live read: a Perch rule reads nothing outside the account')),
+        h('ol', { class: 'xp-policies xp-checks' }, aItems, h('li', { class: 'xp-slot' }, 'live read: a Perch rule reads nothing outside the account')),
         h('p', { class: 'xp-guarantee' }, 'Window at most 10: holds while the rule exists.'));
       const items = st.order.map((name, i) => {
         const on = st.attached.has(name);
@@ -1191,8 +1288,9 @@
           focusLater(`${on ? 'Attach' : 'Detach'} ${E4_NAME[name]}`);
           live.textContent = `${E4_NAME[name]} ${on ? 'detached' : 'attached'}${name === 'window' ? (on ? '; its record is gone' : '; its record starts empty') : ''}.`;
         };
-        const state = name === 'window' ? (on ? `: record ${M.windowTotal(st.recB.history, st.now, 100)} of 10` : '') : '';
-        return h('li', { class: on ? '' : 'xp-detached' }, h('span', { class: 'xp-pname' }, `${i + 1}. ${E4_NAME[name]}${state}${on ? '' : ' (detached)'}`), h('span', { class: 'xp-pbtns' }, tog, up, down));
+        const state = name === 'window' && on ? `: record ${M.windowTotal(st.recB.history, st.now, 100)} of 10` : '';
+        const mark = !on ? 'off' : last ? ptState(name, last.bRes.ran, last.bRes.refused) : '';
+        return ptItem(`${i + 1}. ${E4_NAME[name]}${state}`, mark, h('span', { class: 'xp-pbtns' }, tog, up, down));
       });
       const winOn = st.attached.has('window');
       const moved = winB();
@@ -1200,13 +1298,14 @@
         h('ol', { class: 'xp-policies' }, items),
         h('p', { class: 'xp-guarantee' }, 'Window at most 10: holds while the window-cap policy is attached.',
           winOn ? '' : ` Detached now: moved in the last 100 ledgers: ${moved}${moved > 10 ? ', over 10' : ''}.`));
+      newest.replaceChildren(...(last ? [h('p', { class: 'xp-sub' }, `Newest request (${last.n}):`), entry(last)] : [h('p', { class: 'xp-sub' }, 'No request yet.')]));
     }
     function focusLater(label) {
       const b = [...colB.querySelectorAll('button')].find((x) => x.getAttribute('aria-label') === label);
       if (b) b.focus();
     }
     const arith = (c) => (c && c.why === 'limit' ? ` (${c.remaining} + ${c.amount} = ${c.total} > ${c.limit})` : '');
-    function request(req) {
+    function request(req, label) {
       req.ledger = st.now;
       const a = M.E4.one(req, st.recA);
       const order = st.order.filter((n) => st.attached.has(n));
@@ -1214,34 +1313,44 @@
       st.recA = a.record;
       if (a.ok) st.movedA.push({ ledger: st.now, amount: req.amount });
       if (b.ok) { st.recB = b.record; st.movedB.push({ ledger: st.now, amount: req.amount }); }
-      const what = `Pay ${req.amount} to ${req.to === 'shop' ? 'the shop' : 'another recipient'}${req.signers === 'app' ? ', the app alone signing' : ''}${req.price === 'low' ? ', price below the floor' : ''}`;
+      const what = label || `Pay ${req.amount} to ${req.to === 'shop' ? 'the shop' : 'another recipient'}${req.signers === 'app' ? ', the app alone signing' : ''}${req.price === 'low' ? ', price below the floor' : ''}`;
       const ta = a.ok ? `(a) decision point: accepted; written: the window record, now ${M.windowTotal(st.recA.history, st.now, 100)} of 10.`
         : `(a) decision point: refused, ${E4_NAME[a.refused]}${arith(a.charge)}; nothing written.`;
       const ran = `ran ${b.ran.length ? b.ran.map((n) => E4_NAME[n]).join(' → ') : 'no policy'}`;
       const tb = b.ok ? `(b) ${ran}: accepted; ${b.written.length ? `written: the window cap’s record, now ${M.windowTotal(b.record.history, st.now, 100)} of 10` : `nothing written; moved in the last 100 ledgers: ${winB()}${winB() > 10 ? ', over 10' : ''}`}.`
         : `(b) ${ran}: refused by the ${E4_NAME[b.refused]}${arith(b.charge)}; ${b.rolledBack.length ? 'the window cap had written: rolled back with the call' : 'nothing written'}.`;
-      st.log.unshift({ what, ta, tb, a: a.ok, b: b.ok });
+      st.n += 1;
+      st.log.unshift({ n: st.n, what, ta, tb, a: a.ok, b: b.ok, aRes: a, bRes: b });
       st.last = { ...req };
-      drawCols();
-      drawLog();
-      live.textContent = `${what}. ${ta} ${tb}`;
+      return `${what}. ${ta} ${tb}`;
     }
+    const entry = (x) => h('p', { class: 'xp-entry' }, h('strong', {}, `${x.n}. ${x.what}`), h('br', {}),
+      h('span', { class: x.a ? 'xp-ok' : 'xp-refused' }, el('span', { class: 'xp-mark', 'aria-hidden': 'true' }, x.a ? '✓' : '✕'), ` ${x.ta}`), h('br', {}),
+      h('span', { class: x.b ? 'xp-ok' : 'xp-refused' }, el('span', { class: 'xp-mark', 'aria-hidden': 'true' }, x.b ? '✓' : '✕'), ` ${x.tb}`));
     function drawLog() {
-      log.replaceChildren(...st.log.map((x) => h('li', {}, h('strong', {}, x.what), h('br', {}),
-        h('span', { class: x.a ? 'xp-ok' : 'xp-refused' }, el('span', { class: 'xp-mark', 'aria-hidden': 'true' }, x.a ? '✓' : '✕'), ` ${x.ta}`), h('br', {}),
-        h('span', { class: x.b ? 'xp-ok' : 'xp-refused' }, el('span', { class: 'xp-mark', 'aria-hidden': 'true' }, x.b ? '✓' : '✕'), ` ${x.tb}`))));
+      log.replaceChildren(...st.log.map((x) => h('li', {}, entry(x))));
       setOff(again, !st.last);
+    }
+    const redraw = (say) => { drawCols(); drawLog(); if (say != null) live.textContent = say; };
+    function script() {
+      st = fresh();
+      E4_SCRIPT.forEach(([label, req, detach], k) => {
+        st.now = BASE + k;
+        if (detach) { st.attached.delete(detach); if (detach === 'window') st.recB = M.emptyRecord(); }
+        request({ ...req }, label);
+      });
     }
     pay.onclick = () => {
       const v = Math.round(Number(amount.value));
       if (!Number.isFinite(v) || v < 0 || v > 100) { live.textContent = 'Enter a whole amount from 0 to 100.'; return; }
-      request({ amount: v, to: to.value === 'shop' ? 'shop' : 'another recipient', signers: signers.value, price: price.value });
+      redraw(request({ amount: v, to: to.value === 'shop' ? 'shop' : 'another recipient', signers: signers.value, price: price.value }));
     };
-    again.onclick = () => { if (!isOff(again)) request({ ...st.last }); };
-    adv.onclick = () => { st.now += 100; drawCols(); live.textContent = `100 ledgers later: (a) window ${winA()} of 10; (b) moved in the window ${winB()}.`; };
-    reset.onclick = () => { st = fresh(); drawCols(); drawLog(); live.textContent = 'Reset: both arrangements empty, every policy attached.'; };
-    drawCols();
-    drawLog();
+    again.onclick = () => { if (!isOff(again)) redraw(request({ ...st.last })); };
+    adv.onclick = () => { st.now += 100; redraw(`100 ledgers later: (a) the window record holds ${M.windowTotal(st.recA.history, st.now, 100)} of 10; (b) moved in the window: ${winB()}.`); };
+    reset.onclick = () => { script(); redraw('Back to the figure’s four requests.'); };
+    clear.onclick = () => { st = fresh(); redraw('Cleared: both arrangements empty, every policy attached.'); };
+    script();
+    redraw();
   };
 
   // ---------------------------------------------------------------- the dual simulation
@@ -1260,29 +1369,61 @@
     const src = embed.dataset.src;
     const full = embed.dataset.full;
     const mb = embed.dataset.mb;
+    const fig = embed.querySelector('figure.fig');
+    const tries = embed.querySelector('.sim-try');
+    // Start, and the full page (the frame links its reference and hash tables).
     const actions = h('div', { class: 'sim-actions' });
     const startBtn = button(`Start the simulation here (${mb ? `${mb} MB, ` : ''}runs offline in this tab)`, { class: 'primary' });
     actions.append(chip('EXECUTED'), startBtn, el('a', { href: full }, 'Open the full page'));
+    const open = embed.querySelector(':scope > .sim-open');
+    if (open) open.replaceWith(actions); else embed.prepend(actions);
     const frameBox = el('div', { class: 'sim-frame' });
-    embed.prepend(actions, frameBox);
-    const fig = embed.querySelector('figure.fig');
-    if (fig && !fig.querySelector('.xp-chip')) {
-      const cap = fig.querySelector('figcaption');
-      if (cap) cap.prepend(chip('RECORDED'), ' ');
+    if (tries) tries.after(frameBox); else actions.after(frameBox);
+    const note = tries && tries.querySelector('.sim-note');
+    if (note) note.textContent = 'Each link runs its scenario here, starting the simulation if it is not running; Ctrl- or Cmd-click opens it on the full page instead. Both accounts run every request, from a fresh ledger with the rule installed.';
+    let fold = null;
+    if (fig) {
+      if (!fig.querySelector('.xp-chip')) {
+        const cap = fig.querySelector('figcaption');
+        if (cap) cap.prepend(chip('RECORDED'), ' ');
+      }
+      // Once the simulation runs, the recorded figure folds away (on screen only) behind a toggle.
+      fold = button('Show the recorded run', { class: 'sim-fold', 'aria-expanded': 'true', 'aria-controls': fig.id, hidden: '' });
+      fig.before(fold);
+      fold.onclick = () => {
+        const shown = embed.classList.toggle('sim-folded') === false;
+        fold.setAttribute('aria-expanded', String(shown));
+        fold.textContent = shown ? 'Hide the recorded run' : 'Show the recorded run';
+      };
     }
     let frame = null;
     let ready = false;
     let pending = null;
     const theme = () => document.documentElement.dataset.theme;
+    // Focus the frame's first request control (same origin), else the frame itself.
+    function focusFrame() {
+      try {
+        const first = frame.contentDocument && frame.contentDocument.getElementById('sim-amount');
+        if (first) { first.focus(); return; }
+      } catch { /* another origin, such as file:// */ }
+      frame.focus();
+    }
+    // autostart=1 sets up both ledgers and installs the rule; a scenario does that, then runs it.
     function start(commands) {
       if (frame) return;
       let url = src;
       if (theme()) url += `${url.includes('?') ? '&' : '?'}theme=${theme()}`;
-      if (commands) url += `${url.includes('?') ? '&' : '?'}scenario=${b64url(JSON.stringify(commands))}`;
+      url += `${url.includes('?') ? '&' : '?'}${commands ? `scenario=${b64url(JSON.stringify(commands))}` : 'autostart=1'}`;
       frame = el('iframe', { src: url, title: 'OpenZeppelin and Perch accounts in soroban-sim', loading: 'eager' });
-      frame.addEventListener('load', () => { ready = true; if (pending) { post(pending); pending = null; } });
+      frame.addEventListener('load', () => {
+        ready = true;
+        if (pending) { post(pending); pending = null; }
+        focusFrame();
+      });
       frameBox.append(frame);
       startBtn.hidden = true;
+      embed.classList.add('sim-started', 'sim-folded');
+      if (fold) { fold.hidden = false; fold.setAttribute('aria-expanded', 'false'); fold.textContent = 'Show the recorded run'; }
       frame.focus();
     }
     function post(commands) { frame.contentWindow.postMessage({ type: 'perch-sim:load', commands }, '*'); }
@@ -1291,19 +1432,19 @@
       const d = e.data;
       if (!d || typeof d !== 'object' || d.type !== 'perch-sim:height') return;
       const hgt = Number(d.height ?? d.h);
-      if (Number.isFinite(hgt) && hgt > 0) frame.style.height = `${Math.min(Math.max(hgt, 240), 6000)}px`;
+      // the frame takes its content's height, so the page scrolls, not the frame
+      if (Number.isFinite(hgt) && hgt > 0) frame.style.height = `${Math.min(Math.max(hgt, 240), 40000)}px`;
     });
     startBtn.onclick = () => start(null);
     for (const a of embed.querySelectorAll('a[data-commands]')) {
       a.addEventListener('click', (e) => {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button) return;
         let commands;
         try { commands = JSON.parse(a.dataset.commands); } catch { return; }
         e.preventDefault();
         if (!frame) start(commands);
-        else if (ready) post(commands);
-        else pending = commands;
-        frame.scrollIntoView({ block: 'nearest', behavior: reduced() ? 'auto' : 'smooth' });
-        frame.focus();
+        else if (ready) { post(commands); focusFrame(); } else pending = commands;
+        frameBox.scrollIntoView({ block: 'start', behavior: reduced() ? 'auto' : 'smooth' });
       });
     }
   }
@@ -1476,11 +1617,11 @@
         const rule = { name, contract: 'XLM', functions: { only: ['transfer'] }, conds: [], signers: ['app'], threshold: 1, cap: null, validUntil: null, generation: g };
         const d = M.authorize([rule], [M.emptyRecord()], [M.transfer('shop', 1)], [0], ['app'], 1000, gen);
         return h('li', {}, `${name}, issued at generation ${g}: `, d.ok ? yes('accepts a transfer') : no(`refuses every nonempty batch (issued at ${g}, current ${gen}); stored until collected`));
-      })), say ? h('p', { class: 'xp-sub' }, say) : null);
+      })), ...(say ? [h('p', { class: 'xp-sub' }, say)] : []));
     };
     complete.onclick = () => { gen++; draw(`A completed recovery moved the generation to ${gen}.`); };
     issue.onclick = () => { grants.push([`grant ${grants.length + 1}`, gen]); draw(`Issued at generation ${gen}.`); };
-    reset.onclick = () => { fresh(); draw(); };
+    reset.onclick = () => { fresh(); draw('Reset: generation 0, two grants.'); };
     draw();
   };
 
@@ -1586,10 +1727,13 @@
   };
 
   // ---------------------------------------------------------------- reading paths
-  // <nav class="reading-paths"> holding anchors with data-reading (or data-path-choice) ="5|20|all" (the no-JS form)
-  // becomes a radio group. Blocks carry data-path="5", "20" or "5 20"; the 5-minute path keeps
-  // blocks tagged 5, the 20-minute path those tagged 5 or 20. A section with nothing kept
-  // collapses to its heading and lede, with a button to expand it. Print shows everything.
+  // <nav class="reading-paths"> holding anchors with data-reading (or data-path-choice)="5|20|all"
+  // (the no-JS form) becomes a radio group. Blocks carry data-path="5", "20" or "5 20"; the
+  // 5-minute path keeps blocks tagged 5, the 20-minute path those tagged 5 or 20. A section with
+  // anything left out keeps its heading and lede and gets an Expand button. A link or a URL hash
+  // into a shortened section expands it and lands on the target. Print shows everything.
+  const RP_KEY = 'perch-reading-path';
+  let rpReveal = () => {};
   function readingPaths(nav) {
     if (nav.dataset.ready || !document.querySelector('[data-path]')) return;
     nav.dataset.ready = '1';
@@ -1601,11 +1745,18 @@
     const sections = [...document.querySelectorAll('main section[id]')];
     const keepAlways = (c) => c.matches('h2, .lede, .alias, .rp-expand');
     const wanted = (v) => (e) => (e.dataset.path || '').split(' ').some((p) => p === '5' || (v === '20' && p === '20'));
+    function expand(s, focus) {
+      for (const c of s.children) c.classList.remove('rp-hide');
+      for (const b of s.querySelectorAll(':scope > .rp-expand')) b.remove();
+      if (focus) {
+        const h2 = s.querySelector(':scope > h2');
+        if (h2) { h2.setAttribute('tabindex', '-1'); h2.focus({ preventScroll: true }); }
+      }
+    }
     function apply(v, say) {
       let collapsed = 0;
       for (const s of sections) {
-        for (const c of s.children) c.classList.remove('rp-hide');
-        for (const b of s.querySelectorAll(':scope > .rp-expand')) b.remove();
+        expand(s, false);
         if (v === 'all') continue;
         const want = wanted(v);
         let hidden = 0;
@@ -1617,15 +1768,24 @@
         if (!hidden) continue;
         collapsed++;
         const more = button('Expand this section', { class: 'rp-expand' });
-        more.onclick = () => { for (const c of s.children) c.classList.remove('rp-hide'); more.remove(); };
+        more.onclick = () => { expand(s, true); live.textContent = `${squash((s.querySelector(':scope > h2') || s).textContent)}: expanded.`; };
         const after = s.querySelector(':scope > .lede') || s.querySelector(':scope > h2');
         if (after) after.after(more); else s.prepend(more);
       }
-      if (say) live.textContent = v === 'all' ? 'Whole paper: every section shown.' : `${v}-minute path: ${collapsed} sections shortened; each keeps its heading, its summary and an Expand button.`;
-      try { localStorage.setItem('perch-reading-path', v); } catch { /* storage unavailable */ }
+      if (say) live.textContent = v === 'all' ? 'Whole paper: every section shown.' : `${v}-minute path: ${collapsed} sections shortened; each keeps its heading, its summary and an Expand button. Links into a shortened section expand it.`;
+      try { sessionStorage.setItem(RP_KEY, v); } catch { /* storage unavailable */ }
     }
+    // Expand the shortened section (and any closed <details>) holding `target`.
+    rpReveal = (target) => {
+      if (!target) return false;
+      const s = target.closest('main section[id]');
+      let changed = false;
+      if (s && target.closest('.rp-hide')) { expand(s, false); changed = true; }
+      for (let d = target.closest('details:not([open])'); d; d = d.parentElement && d.parentElement.closest('details:not([open])')) { d.open = true; changed = true; }
+      return changed;
+    };
     let start = 'all';
-    try { start = localStorage.getItem('perch-reading-path') || 'all'; } catch { /* storage unavailable */ }
+    try { start = sessionStorage.getItem(RP_KEY) || 'all'; } catch { /* storage unavailable */ }
     if (!choices.some(([v]) => v === start)) start = 'all';
     for (const [v, label] of choices) {
       const r = el('input', { type: 'radio', name, value: v, checked: v === start });
@@ -1635,6 +1795,53 @@
     nav.replaceChildren(fs, live);
     apply(start, false);
   }
+  // Theorem and definition cards: the head is a heading for assistive technology (one level
+  // below the section's last heading), and the plain reading describes the <math> itself.
+  function theoremCards() {
+    for (const head of document.querySelectorAll('.thm-head')) {
+      if (/^H[1-6]$/.test(head.tagName)) continue;
+      const sec = head.closest('section');
+      let level = 3;
+      if (sec) {
+        const hs = [...sec.querySelectorAll('h2, h3, h4')].filter((x) => x.compareDocumentPosition(head) & Node.DOCUMENT_POSITION_FOLLOWING);
+        if (hs.length) level = Math.min(6, Number(hs[hs.length - 1].tagName[1]) + 1);
+      }
+      head.setAttribute('role', 'heading');
+      head.setAttribute('aria-level', String(level));
+    }
+    for (const box of document.querySelectorAll('.thm-math[aria-describedby]')) {
+      const m = box.querySelector('math');
+      if (m && !m.hasAttribute('aria-describedby')) m.setAttribute('aria-describedby', box.getAttribute('aria-describedby'));
+      box.removeAttribute('aria-describedby');
+    }
+    // A formula wider than its column scrolls sideways; make that region reachable by keyboard.
+    const boxes = [...document.querySelectorAll('.thm-math')];
+    const mark = () => {
+      for (const box of boxes) {
+        const wide = box.scrollWidth > box.clientWidth + 1;
+        if (wide) { box.setAttribute('tabindex', '0'); box.setAttribute('aria-label', 'Formula; scroll sideways for the rest'); } else { box.removeAttribute('tabindex'); box.removeAttribute('aria-label'); }
+      }
+    };
+    mark();
+    if (boxes.length && 'ResizeObserver' in window) {
+      let w = document.documentElement.clientWidth;
+      new ResizeObserver(() => { if (document.documentElement.clientWidth !== w) { w = document.documentElement.clientWidth; mark(); } }).observe(document.documentElement);
+    }
+  }
+  const hashTarget = (hash) => {
+    if (!hash || hash.length < 2) return null;
+    try { return document.getElementById(decodeURIComponent(hash.slice(1))); } catch { return null; }
+  };
+  // A link into this page: reveal the target before the browser scrolls to it.
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest && e.target.closest('a[href*="#"]');
+    if (!a || a.origin !== location.origin || a.pathname !== location.pathname) return;
+    rpReveal(hashTarget(a.hash));
+  }, true);
+  window.addEventListener('hashchange', () => {
+    const t = hashTarget(location.hash);
+    if (rpReveal(t)) t.scrollIntoView({ behavior: 'instant' });
+  });
 
   function init() {
     for (const nav of document.querySelectorAll('.reading-paths')) {
@@ -1665,6 +1872,10 @@
     for (const div of document.querySelectorAll('.thm-instance[data-instance]')) {
       try { instance(div); } catch (err) { console.error(`instance ${div.dataset.instance}:`, err); }
     }
+    theoremCards();
+    // Arrived with a hash: everything is mounted now, so reveal the target and land on it.
+    const t = hashTarget(location.hash);
+    if (t) { rpReveal(t); requestAnimationFrame(() => t.scrollIntoView({ behavior: 'instant' })); }
   }
   window.PerchFigures = { register: (name, fn) => { CONTROLLERS[name] = fn; }, instances: INSTANCES };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

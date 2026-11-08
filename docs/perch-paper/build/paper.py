@@ -591,6 +591,20 @@ def bib_html(e):
 DIRECTIVE = re.compile(r'\{\{([a-z-]+):?([^}]*)\}\}')
 
 
+def card_heads(body):
+    # A theorem or definition card's head is a heading one level below the last heading before it in
+    # its section (the section's own <h2> comes first), without JavaScript.
+    level = 2
+
+    def sub(m):
+        nonlocal level
+        if m.group(1):
+            level = int(m.group(1))
+            return m.group(0)
+        return f'<p class="thm-head" role="heading" aria-level="{min(6, level + 1)}">'
+    return re.sub(r'<h([2-6])\b|<p class="thm-head">', sub, body)
+
+
 def expand_html(p, text, ctx, blocks, seen):
     # A reference that opens a sentence is marked, so an unnumbered exhibit's short name is capitalized there.
     text = re.sub(r'((?:^|<p>|<p [^>]*>|<li>|[.!?]\s)\s*)\{\{ref:((?:fig|tab):[\w-]+)\}\}', r'\1{{ref:\2|cap}}', text)
@@ -674,7 +688,7 @@ def build_html(p, blocks):
         if not p.in_edition(s, 'html'):
             continue
         n = p.numbers['html'].get('sec:' + s['id'])
-        body = expand_html(p, read(HTMLDIR / 'sections' / f'{s["id"]}.html'), s['id'], blocks, seen).strip()
+        body = card_heads(expand_html(p, read(HTMLDIR / 'sections' / f'{s["id"]}.html'), s['id'], blocks, seen).strip())
         head = f'<h2><span class="n">{n}</span>{html.escape(s["title_html"])}</h2>' if n else f'<h2>{html.escape(s["title_html"])}</h2>'
         alias = ''.join(f'<span class="alias" id="{a}"></span>' for a in s.get('aliases', []))
         parts.append(f'<section id="{s["id"]}">{alias}{head}{body}</section>')

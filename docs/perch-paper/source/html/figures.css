@@ -131,7 +131,7 @@
 .sim-try{margin:.8rem 0}
 .sim-try ul{display:flex;flex-wrap:wrap;gap:.5rem;list-style:none;padding:0;margin:.4rem 0}
 .sim-try li{margin:0}
-.sim-try a{display:inline-flex;align-items:center;min-height:44px;padding:.35rem .8rem;border:1px solid var(--edge);border-radius:6px;background:var(--btn);color:var(--text);text-decoration:none;font-size:.85rem}
+.sim-try a{display:inline-block;min-height:44px;line-height:1.6;padding:.55rem .8rem;border:1px solid var(--edge);border-radius:6px;background:var(--btn);color:var(--text);text-decoration:none;font-size:.85rem}
 .sim-try a:hover{border-color:var(--amber)}
 .sim-note{font-size:.82rem;color:var(--muted)}
 @media screen{
@@ -154,3 +154,34 @@
 .rp-expand{min-height:44px;font:inherit;font-size:.85rem;padding:.4rem .8rem;border:1px solid var(--edge);border-radius:6px;background:var(--btn);color:var(--text)}
 @media screen{.rp-hide{display:none!important}}
 @media print{.rp-expand,.reading-paths{display:none!important}}
+/* r4 panel fixes. Compose: for the newest request, a point that ran is solid, the refusing one is
+   red with a bar end, one that did not run is dashed (the figure's shapes). */
+.xp-policies li.xp-pt-ran{border-style:solid;border-color:var(--text)}
+.xp-policies li.xp-pt-refused{border-color:var(--deny);border-width:2px;border-right-width:6px}
+.xp-policies li.xp-pt-skip{border-style:dashed;color:var(--muted)}
+.xp-policies li.xp-pt-off{border-style:dashed;color:var(--muted)}
+.xp-ptag{font:600 .66rem var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-left:auto}
+.xp-pt-refused .xp-ptag{color:var(--deny)}
+.xp-checks{list-style:none;padding:0}
+.xp-checks .xp-slot{margin-left:0}
+.xp-newest{border-left:3px solid var(--amber);padding-left:.6rem;margin:.4rem 0}
+.xp-newest .xp-entry{margin:.2rem 0}
+.xp-entry{margin:0;overflow-wrap:anywhere}
+.xp-why{font-size:.78rem;color:var(--muted);overflow-wrap:anywhere}
+.xp-caption{font-size:.8rem;line-height:1.6;color:var(--muted);margin-top:.8rem}
+/* Simulation embed: the rule, then Start and the presets above the frame; the recorded figure
+   folds away on screen once the simulation runs (print keeps it). */
+.sim-rule{font-size:.92rem}
+.sim-open{font-size:.88rem}
+.sim-fold{min-height:44px;font:inherit;font-size:.85rem;padding:.4rem .8rem;border:1px solid var(--edge);border-radius:6px;background:var(--btn);color:var(--text);margin:.6rem 0}
+.sim-fold[hidden]{display:none}
+@media screen{.sim-embed.sim-folded>figure.fig{display:none}}
+/* Theorem cards: double border for a theorem, single for a definition, dashed for an argued
+   proposition; a wide formula scrolls sideways with a shadow at the clipped edge. */
+.proof-list>li.thm{border-left:6px double var(--fig-stroke)}
+.proof-list>li.thm.argued{border-left:3px dashed var(--fig-stroke)}
+.def-list>li{border-left:2px solid var(--fig-stroke)}
+.thm-math{max-width:100%;background:linear-gradient(to right,var(--bg) 30%,transparent) left/1.5rem 100% no-repeat local,linear-gradient(to left,var(--bg) 30%,transparent) right/1.5rem 100% no-repeat local,radial-gradient(farthest-side at 0 50%,color-mix(in srgb,var(--text) 35%,transparent),transparent) left/.5rem 100% no-repeat scroll,radial-gradient(farthest-side at 100% 50%,color-mix(in srgb,var(--text) 35%,transparent),transparent) right/.5rem 100% no-repeat scroll}
+.thm-math[tabindex]:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (max-width:480px){.thm-math{font-size:.86rem}}
+@media print{.thm-math{background:none}}
