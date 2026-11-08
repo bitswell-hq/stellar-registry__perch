@@ -37,6 +37,12 @@
    "`spending_limit` uses the same window boundary. In an oz-policy-builder Intent, `cap` bounds one call (`lte`)"
   ],
   [
+   "Attenuation",
+   "Deriving from a grant a narrower one that allows no call the original does not",
+   "rule-core `attenuate`",
+   "—"
+  ],
+  [
    "Spending record",
    "A capped rule's charged amounts and their ledgers",
    "`SpendRecord`",
@@ -104,15 +110,9 @@
   ],
   [
    "Interpreter",
-   "No counterpart: Perch decides in the account. The policy contract of Perch's earlier design ({{fact:perch-deployed-account-version}}) is still pinned by the account and never called (the vision paper)",
-   "`perch_interpreter`",
+   "No counterpart: Perch decides in the account",
+   "—",
    "oz-policy-builder's `policy-interpreter`, the shared predicate evaluator"
-  ],
-  [
-   "`execute`",
-   "The account's owner-authorized call as the account",
-   "`execute(target, function, args)`",
-   "The adapter's batch call `execute(calls, grants, wait)`"
   ],
   [
    "Stroop",

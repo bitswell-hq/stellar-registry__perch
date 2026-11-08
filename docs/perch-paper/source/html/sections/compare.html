@@ -14,9 +14,9 @@
 <div><h4>Perch</h4><ul>
 <li><strong>Limits over time.</strong> Every capped rule's decision includes its window.</li>
 <li><strong>One decision point.</strong> One contract holds the rules and their state, installs one document that covers several contracts, and accepts passkey signers on grant rules.</li>
-<li><strong>Proved decision logic.</strong> Lean proofs cover a translation of the decision function, not the compiled Wasm.</li>
-</ul><p>Perch's design is unmerged, a testnet preview and unaudited, and its grants need a Perch account.</p></div>
+<li><strong>Proved decision logic.</strong> The decision function is proved in Lean to accept only what the rules allow and to keep each window within its cap.</li>
+</ul><p>A Perch grant needs a Perch account.</p></div>
 </div>
-<h3 id="lessons">Perch should borrow five things from oz-policy-builder</h3>
-<p>We propose turning a recorded transaction into a grant document for review; simulating a grant against the account's own decision function before install; refusing a capped rule that the same key could bypass through another rule, as oz-policy-builder's installer does (<a href="https://github.com/{{fact:opb-repo}}/blob/{{fact:opb-pin}}/packages/policy-synth/README.md#L171"><code>policy-synth/README.md:171</code></a>); testing against a corpus of real mainnet transactions; and an external audit before Perch holds real funds.</p>
+<h3 id="lessons">Future work borrows four ideas from oz-policy-builder</h3>
+<p>As future work, we plan recording-based authoring, a front end that turns a recorded transaction into a grant document for review; simulating a grant against the account's own decision function before install; refusing a capped rule that the same key could bypass through another rule, as oz-policy-builder's installer does (<a href="https://github.com/{{fact:opb-repo}}/blob/{{fact:opb-pin}}/packages/policy-synth/README.md#L171"><code>policy-synth/README.md:171</code></a>); and testing against a corpus of real mainnet transactions.</p>
 <p>The companion paper <a href="{{doc:oz-policy-builder}}">Perch and oz-policy-builder</a> sets out every dimension with a source for each cell, and its <a href="{{root}}../oz-walkthrough/index.html">walkthrough</a> replays one task in both designs step by step.</p>

@@ -1,11 +1,2 @@
-<p>We consider two attackers. The first is the app itself, or someone who stole its key. Under the shop grant, that key can send at most {{fact:shop-cap-xlm}} XLM per {{fact:shop-period-ledgers}} ledgers to the shop and nothing else: no other token, recipient or function, and no call to the account. The second submits or relays transactions. It chooses when to submit and can resubmit a refused request until it expires, but it cannot change what an external signer's signature covers.</p>
-<p>The account trusts the Soroban host, the verifier contracts a grant names, the document compiler, its adopted recovery controller and the wallet's display of what is signed. It assumes the signature schemes cannot be forged and SHA-256 is collision resistant.</p>
-<h3 id="gaps">What a grant does not cover</h3>
-<ul>
-<li>A key named by several rules holds all of them, and each cap applies to one rule, not to the key or the grant.</li>
-<li>Replacing a capped rule starts an empty window, so lowering a cap right after the app spent up to it allows the new limit again in the same window.</li>
-<li>A standing token allowance and the owner's <dfn><a href="#glossary"><code>execute</code></a></dfn>, which calls any contract as the account, move value outside any grant, and a rule on a token contract with no function list also allows <code>approve</code>.</li>
-<li>A delegated signer's approval does not fix the rule, and a rule edited between signing and inclusion decides under its new contents.</li>
-<li>A spending record holds at most {{fact:spends-per-window}} spends, and a grant document at most {{fact:doc-max-rules}} rules and {{fact:doc-max-signers}} signers.</li>
-</ul>
-<p><a href="{{doc:vision}}#threats">The vision paper</a> covers owner-key theft, guardians and the verifier registry.</p>
+<p>We consider two attackers. The first is the app itself, or someone who stole its key. Under the shop grant, that key can send at most {{fact:shop-cap-xlm}} XLM per {{fact:shop-period-ledgers}} ledgers to the shop and nothing else: no other token, recipient or function, and no call to the account. Any grant it narrows for a helper allows nothing its own grant does not. The second attacker submits or relays transactions. It chooses when to submit and can resubmit a refused request until it expires, but it cannot change what an external signer's signature covers, so it cannot move that signer's payment to a looser rule.</p>
+<p>If an app key is lost or stolen, the owner removes its grant with one call; if the owner's own key is lost, a recovery revokes every grant at once. <a href="{{doc:vision}}#threats">The vision paper</a> covers the owner's key, guardians and the verifier registry.</p>
