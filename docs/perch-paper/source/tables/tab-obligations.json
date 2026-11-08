@@ -57,8 +57,5 @@
    "tested; rule-core lists it as unproven",
    "rule-core `claims.yaml:2940`"
   ]
- ],
- "editions": [
-  "latex"
  ]
 }

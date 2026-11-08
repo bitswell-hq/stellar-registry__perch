@@ -1,0 +1,4 @@
+<p>[placeholder: H/L writes this]</p>
+{{table:tab-run}}
+{{include:demo.html}}
+<div class="table-wrap"><table id="measurements"><thead><tr><th>Reference operation</th><th>Host CPU instructions (applied step)</th><th>Observed effect</th></tr></thead><tbody>{{block:MEASUREMENTS}}</tbody><caption>Measurements of the embedded build, written into this page by its build script: the CPU instructions of each applied, signed transaction in soroban-sim with soroban-env-host {{fact:soroban-env-host-sim}}, applying with enforcing authorization, so <code>__check_auth</code> and verifier calls are included. They are the values {{ref:tab:tab-run}} reports. The host is simulation's recording-mode build, not the exact-metering one, so counts can differ from stellar-core's metering. Signers are software Ed25519 keys.</caption></table></div>

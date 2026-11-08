@@ -5,16 +5,16 @@
   "source": "`source/facts/paper.json` (C)"
  },
  "paper-title-latex": {
-  "value": "Perch: Bounded, Recoverable Grants for Soroban Smart Accounts",
-  "source": "editor decision 12"
+  "value": "Perch: Bounded Grants for Apps and Agents on Soroban Smart Accounts",
+  "source": "r4 plan §2"
  },
  "paper-subtitle-html": {
-  "value": "Bounded, recoverable grants for Soroban smart accounts",
-  "source": "editor decision 12"
+  "value": "Bounded grants for apps and agents on Stellar",
+  "source": "r4 plan §3.1"
  },
  "paper-iteration": {
-  "value": "Third iteration · November 2026",
-  "source": "editor"
+  "value": "Fourth iteration · November 2026",
+  "source": "r4 plan §3.2"
  },
  "authors": {
   "value": "Willem Wyndham and Elizabeth Engelman",

@@ -37,7 +37,7 @@
   ],
   [
    "Relating calls in one transaction",
-   "None: each context is checked alone against its rule ({{ref:fig:fig-contexts}}(c)); draft changes after the pinned build ({{fact:exact-roots-prs}}) add entry roots",
+   "None: each context is checked alone against its rule; draft changes after the pinned build ({{fact:exact-roots-prs}}) add entry roots",
    "One predicate over the execution adapter's batch argument can relate its calls (`docs/stellar.md:350-352`; `policy-interpreter/README.md:390-397`)",
    "V"
   ],
@@ -73,7 +73,7 @@
   ],
   [
    "Assurance",
-   "Lean proofs of the evaluator over its translation ({{ref:sec:proofs}}); shell tested; no external audit completed",
+   "Lean proofs of the evaluator over its translation (verification companion paper); shell tested; no external audit completed",
    "{{fact:opb-interpreter-tests}} interpreter tests ({{fact:opb-tests-against-oz08}} against OpenZeppelin's 0.8.0 Wasm), parity corpus, worst-case suite on Wasm, STRIDE model, mutation testing of one path; no formal model found in the tree (a search, not a proof of absence); pull request {{fact:opb-pentest-pr}} hardened the off-chain packages after an external penetration test; external audit of {{fact:opb-release}} {{fact:opb-audit-status}} since {{fact:opb-audit-start}}, with the OpenZeppelin account and policies out of scope (`README.md:57-59, 166-171`; `audit-overview.md:15-20, 76-85`; `evidence/README.md:23`)",
    "V"
   ],
@@ -97,7 +97,7 @@
   ],
   [
    "Account-key recovery",
-   "Guardian or ZK recovery replaces credentials ({{ref:sec:recovery}})",
+   "Guardian or ZK recovery replaces credentials (vision companion paper)",
    "None; Prime's \"recovery\" moves custody funds to a fixed address (`architecture.md:81-94`)",
    "V"
   ],
@@ -131,8 +131,5 @@
    "A specific deny code per reason (`storage.rs:27-86`)",
    "V"
   ]
- ],
- "editions": [
-  "latex"
  ]
 }

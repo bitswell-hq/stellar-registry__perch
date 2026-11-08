@@ -32,7 +32,7 @@
    "Wallet on that deployment ({{fact:wallet-name}})",
    "{{badge:preview:PREVIEW}}",
    "{{fact:nido-preview-pr}} (draft)",
-   "{{fact:nido-run-transactions}} testnet transactions ({{ref:sec:evaluation}})"
+   "{{fact:nido-run-transactions}} testnet transactions ({{ref:sec:experiment}})"
   ],
   [
    "rule-core evaluator, model and proofs",
@@ -65,5 +65,7 @@
    "Not implemented"
   ]
  ],
- "latex_section": "repro"
+ "editions": [
+  "html"
+ ]
 }

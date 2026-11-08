@@ -107,6 +107,11 @@ class Paper:
         for s in self.sections:
             if s.get('editions') and set(s['editions']) != {'html', 'latex'} and not (s.get('unnumbered') or s.get('appendix')):
                 fail(f'section {s["id"]} is in one edition only, so it must be unnumbered or an appendix')
+        for s in self.sections:
+            for t in s.get('tables', []):
+                if t not in self.tables:
+                    fail(f'{DOC["id"]}: table {t} is listed in the outline but source/tables/{t}.json does not exist')
+                    self.tables[t] = {'title': '', 'columns': [], 'rows': []}
         self.numbers = {ed: self._number(ed) for ed in ('html', 'latex')}
 
     def in_edition(self, item, ed):
@@ -547,7 +552,14 @@ def expand_html(p, text, ctx, blocks, seen):
         kind, arg = m.group(1), m.group(2)
         if kind == 'fig':
             seen['fig'].append(arg)
-            return html_figure(p, arg)
+            if arg not in p.figures:
+                fail(f'{DOC["id"]}: {{{{fig:{arg}}}}} is not in this document\'s outline')
+                return ''
+            try:
+                return html_figure(p, arg)
+            except FileNotFoundError as e:
+                fail(f'{DOC["id"]}: figure {arg} is missing its source file {Path(e.filename).name}')
+                return ''
         if kind == 'table':
             tid, _, flag = arg.partition('|')
             if flag == 'unnumbered':
@@ -855,8 +867,13 @@ def build_latex(p):
         if p.figures[f].get('kind') not in ('table', 'code', 'html'):
             lint_svg(f, p.figures[f])
         if p.in_edition(p.figures[f], 'latex'):
-            files[f'figures/{f}.tex'] = latex_figure(p, f)
-    for t in p.tables:
+            try:
+                files[f'figures/{f}.tex'] = latex_figure(p, f)
+            except FileNotFoundError as e:
+                fail(f'{DOC["id"]}: figure {f} is missing its source file {Path(e.filename).name}')
+    # Only the tables this document places (its outline), not every table in the pool.
+    placed = {t for ts in p.placed('latex', 'tables').values() for t in ts}
+    for t in sorted(placed):
         if p.in_edition(p.tables[t], 'latex') and not any(fg.get('table') == t for fg in p.figures.values()):
             files[f'tables/{t}.tex'] = latex_table(p, t)
     # Section sources must place exactly the outline's figures and tables, in order.

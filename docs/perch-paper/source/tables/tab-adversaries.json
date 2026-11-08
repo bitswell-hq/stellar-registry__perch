@@ -1,6 +1,6 @@
 {
  "title": "Adversaries and what holds against each.",
- "caption": "Trusted, not adversaries: the Soroban host and validators; the verifier contracts documents name; the adopted recovery controller; the document compiler, which turns grant JSON into the model the account lowers; rustc {{fact:rustc-perch}}, which builds the deployed Wasm; the wallet's display of what is signed; and, for the proofs, the Lean kernel, Charon, Aeneas and the specification. T-labels refer to the statements in {{ref:sec:proofs}}, O-labels to the shell obligations there.",
+ "caption": "Trusted, not adversaries: the Soroban host and validators; the verifier contracts documents name; the adopted recovery controller; the document compiler, which turns grant JSON into the model the account lowers; rustc {{fact:rustc-perch}}, which builds the deployed Wasm; the wallet's display of what is signed; and, for the proofs, the Lean kernel, Charon, Aeneas and the specification. T-labels refer to the theorems and O-labels to the shell obligations of the verification companion paper.",
  "columns": [
   "Adversary",
   "Can do",
@@ -13,7 +13,7 @@
    "A1 Grantee (app or agent key)",
    "Sign within rules that name its key; build any invocation tree; cite any rule that names its key",
    "An accepted authorization is allowed by the rules it cites (proved for the evaluator, T2; signer authentication, selection and context conversion tested, O1, O2, O7). No grant rule allows a call to the account, its adopted recovery controller, or the ZK adapter and pool of its recovery configuration (proved for lowering under `Doc.Valid`, T8–T9; O5 unproven; runtime recheck tested). Each capped rule's window stays within its limit (proved for the evaluator from empty records, T6; selection and record persistence tested, O2, O6)",
-   "A key named by several live rules has the union of their authority. Caps are per rule, not per grant. Each context is checked alone, so a rule meant for a call the game makes also allows that call made directly ({{ref:fig:fig-contexts}}c). Allowances, and funds held by other contracts, move without the account's authorization"
+   "A key named by several live rules has the union of their authority. Caps are per rule, not per grant. Each context is checked alone, so a rule meant for a call the game makes also allows that call made directly. Allowances, and funds held by other contracts, move without the account's authorization"
   ],
   [
    "A2 Submitter or relayer",
@@ -40,5 +40,7 @@
    "Names resolved by later installs follow the manager. One key holds both roles on testnet and mainnet"
   ]
  ],
- "latex_section": "formal-appendix"
+ "editions": [
+  "html"
+ ]
 }

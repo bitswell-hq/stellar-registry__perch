@@ -1,4 +1,4 @@
-"""fig-cap-window: grant 1's cap on illustrative ledgers, with hooks for the cap-window controller."""
+"""fig-cap-window: the shop grant's cap on illustrative ledgers, with hooks for the cap-window controller."""
 import json
 import re
 from figlib import SVG, FIGDIR, fact, num, wrap
@@ -129,7 +129,7 @@ def bracket(s, a, b, y):
 
 def steps():
     st = {
-        'intro': ('Grant 1 caps transfers at {{fact:grant1-cap-xlm}} XLM per {{fact:grant1-period-ledgers}} ledgers; '
+        'intro': ('The shop grant caps transfers at {{fact:grant1-cap-xlm}} XLM per {{fact:grant1-period-ledgers}} ledgers; '
                   '*t* is an illustrative ledger. At ledger *L* the window holds the charges made after *L* − 100 and '
                   'through *L*.'),
         'steps': [{'n': str(ev), 'text': '{{fact:cap-event-%d}}' % ev} for ev, _ in EVENTS],

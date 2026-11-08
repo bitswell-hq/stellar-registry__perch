@@ -111,5 +111,17 @@
   "value": "`guardian-only`, `zk-only`, `combined`",
   "markup": true,
   "source": "`P:crates/perch-ir/src/doc.rs:403-413` (R)"
+ },
+ "shop-cap-xlm": {
+  "value": "10",
+  "source": "`source/figures/fig-sim.run.json` Perch `window.limit_xlm`; the shop grant, also `grant1-cap-xlm` (vision)"
+ },
+ "shop-period-ledgers": {
+  "value": "100",
+  "source": "`source/figures/fig-sim.run.json` Perch `window.period_ledgers`; also `grant1-period-ledgers`"
+ },
+ "shop-period-minutes": {
+  "value": "about eight minutes",
+  "source": "100 × 5 s nominal ledgers (C); as `grant1-period-minutes`"
  }
 }

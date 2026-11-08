@@ -178,5 +178,17 @@
   "value": "`not-after-ledger` N authorizes through N − 1",
   "markup": true,
   "source": "r2:371; `rc:crates/rule-eval/src/lowering.rs:12-14` (V)"
+ },
+ "opb-corpus-calls": {
+  "value": "33",
+  "source": "`opb:packages/policy-synth/src/corpus.test.ts:1, 30-31`; `fixtures/corpus/mainnet.json` has 33 entries (V)"
+ },
+ "opb-corpus-shapes": {
+  "value": "26",
+  "source": "`opb:packages/policy-synth/src/corpus.test.ts:1`; 26 distinct `category` values in `fixtures/corpus/mainnet.json` (V)"
+ },
+ "opb-packages-version": {
+  "value": "5.2.0",
+  "source": "`opb:packages/{policy-synth,policy-builder-cli,policy-builder-mcp}/package.json:3` (V)"
  }
 }

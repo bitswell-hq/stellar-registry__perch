@@ -44,5 +44,8 @@
   ]
  ],
  "title": "Ending authority.",
- "caption": "Invalidation is a policy event, collection a storage operation, and archival neither. Only a completed recovery moves the grant generation; otherwise the owner revokes grants one at a time."
+ "caption": "Invalidation is a policy event, collection a storage operation, and archival neither. Only a completed recovery moves the grant generation; otherwise the owner revokes grants one at a time.",
+ "editions": [
+  "html"
+ ]
 }

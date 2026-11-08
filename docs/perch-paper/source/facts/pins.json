@@ -103,5 +103,14 @@
   "value": "356.test.nido.fyi",
   "anon": "[withheld]",
   "source": "r2:60 (C)"
+ },
+ "soroban-sim-repo": {
+  "value": "theahaco/soroban-sim",
+  "anon": "[withheld]",
+  "source": "`gh api repos/theahaco/soroban-sim` (V); `docs/perch-paper/sim/NOTICE.md:22`"
+ },
+ "soroban-sim-license": {
+  "value": "Apache-2.0",
+  "source": "`gh api repos/theahaco/soroban-sim` `.license.spdx_id` (V); `sim/NOTICE.md:22`"
  }
 }
