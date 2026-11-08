@@ -63,7 +63,7 @@
    "id": "threat-model",
    "title_html": "A stolen app key can do only what its grant allows",
    "title_latex": "Threat Model",
-   "nav": "Threats and limits",
+   "nav": "Threat model",
    "tables": [
     "tab-grantee"
    ],
@@ -100,18 +100,15 @@
   },
   {
    "id": "proofs",
-   "title_html": "The decision function is proved, and the code around it is tested",
+   "title_html": "The decision function's guarantees are proved in Lean",
    "title_latex": "Formal Results",
-   "nav": "What is proved",
-   "figures": [
-    "fig-proof-scope"
-   ]
+   "nav": "What is proved"
   },
   {
    "id": "evaluation",
-   "title_html": "Perch has run on testnet through the Nido preview",
+   "title_html": "A Nido wallet run used a grant end to end",
    "title_latex": "Evaluation",
-   "nav": "On testnet"
+   "nav": "In Nido"
   },
   {
    "id": "limits",
@@ -142,7 +139,7 @@
   },
   {
    "id": "conclusion",
-   "title_html": "What we showed and what remains",
+   "title_html": "What Perch shows and what comes next",
    "title_latex": "Conclusion",
    "nav": "Conclusion",
    "aliases": [
