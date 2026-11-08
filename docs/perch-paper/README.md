@@ -20,9 +20,13 @@ side by side in soroban-sim in the browser (its own `README.md`).
 `source/documents.json` lists the documents. Each has an outline
 (`source/outline.json` for the main paper, `source/papers/<id>/outline.json` for
 a companion) that orders its sections, figures and tables in both editions,
-so their numbering agrees: only an exhibit every edition shows takes a number,
-and an exhibit in one edition only is titled and cited by its `short` name. Everything a page states as a fact comes from data
-all documents share:
+so their numbering agrees: LaTeX numbers every exhibit it places, the HTML
+only an exhibit every edition shows, and an exhibit without an HTML number is
+titled and cited by its `short` name. A document with `"html_numbers": false`
+numbers nothing in its HTML edition; an outline's `exhibit_editions` sets the
+editions of an exhibit (such as a generated table) for that document, and an
+entry's `caption_html` replaces its caption in the HTML. Everything a page
+states as a fact comes from data all documents share:
 
 | Source | Holds | HTML | LaTeX |
 | --- | --- | --- | --- |
