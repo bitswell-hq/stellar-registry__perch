@@ -33,7 +33,7 @@
   [
    "4",
    "`spending_limit` off",
-   "applied",
+   "removed",
    "—"
   ],
   [
@@ -57,7 +57,7 @@
   [
    "8",
    "`spending_limit` on",
-   "applied",
+   "re-attached",
    "—"
   ],
   [
@@ -87,8 +87,8 @@
   [
    "13",
    "close 100 ledgers",
-   "100 ledgers closed · record 1 XLM, outside the window",
-   "100 ledgers closed · record 7 XLM, outside the window"
+   "100 ledgers closed · window 0 of 10 (record lists 1 XLM)",
+   "100 ledgers closed · window 0 of 10 (record lists 7 XLM)"
   ],
   [
    "14",

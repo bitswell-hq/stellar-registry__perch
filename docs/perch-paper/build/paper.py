@@ -104,6 +104,11 @@ class Paper:
         fp = SRC / 'figures.json'
         self.figures = dict(json.loads(read(fp)) if fp.exists() else {})
         self.figures.update(self.outline.get('figures', {}))
+        # An outline may set the editions of an exhibit for its own document, as a generated table cannot carry them.
+        for xid, eds in self.outline.get('exhibit_editions', {}).items():
+            for pool in (self.figures, self.tables):
+                if xid in pool:
+                    pool[xid] = {**pool[xid], 'editions': eds}
         self.sec_ids = [s['id'] for s in self.sections]
         used = [x for s in self.sections for x in s.get('figures', [])]
         for f in used:
@@ -325,6 +330,18 @@ def number_of(label):
     return re.sub(r'^[A-Za-z]+', '', label or '')
 
 
+def html_cards(p, kind):
+    """Ids of the statement or definition cards this document's HTML edition places."""
+    directive = 'statements' if kind == 'stmt' else 'definitions'
+    pool = p.statements if kind == 'stmt' else p.definitions
+    ids = set()
+    for s in p.sections:
+        if p.in_edition(s, 'html'):
+            for arg in re.findall(r'\{\{' + directive + r'(?::([^}]*))?\}\}', read(HTMLDIR / 'sections' / f'{s["id"]}.html')):
+                ids |= {x['id'] for x in pick(pool, arg)}
+    return ids
+
+
 def formal_ref(p, arg, ed, ctx):
     kind, _, ident = arg.partition(':')
     pool = p.all_statements if kind == 'stmt' else p.all_definitions
@@ -334,6 +351,9 @@ def formal_ref(p, arg, ed, ctx):
         return '??'
     word = ('Proposition' if item.get('argued') else 'Theorem') if kind == 'stmt' else 'Definition'
     here = ident in {x['id'] for x in (p.statements if kind == 'stmt' else p.definitions)}
+    if ed == 'html':
+        # In the HTML a reference stays on the page only if the page places that card.
+        here = ident in html_cards(p, kind)
     n = number_of(item.get('label'))
     if ed == 'latex':
         return f'{word}~\\ref{{{kind}:{ident}}}' if here else f'{word}~{n}'

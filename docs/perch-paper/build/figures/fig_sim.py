@@ -11,6 +11,7 @@ import html
 import json
 import re
 from figlib import SVG, FIGDIR, PAPER, fact, num, width, wrap
+import perchmodel as M
 
 FID = 'fig-sim'
 RUN = json.loads((FIGDIR / f'{FID}.run.json').read_text())
@@ -77,11 +78,58 @@ def record_note(d):
     cut = max(0, d['ledger'] - w['period_ledgers'])
     inside = sum(int(s['xlm']) for s in w['spends'] if s['ledger'] > cut)
     stored = int(w['stored_xlm'])
-    if stored and not inside:
-        return f'record {stored} XLM, outside the window'
     if inside < stored:
-        return f'record {stored} XLM, {inside} in the window'
+        return f'window {inside} of {w["limit_xlm"]} (record lists {stored} XLM)'
     return f'window {stored} of {w["limit_xlm"]}'
+
+
+def owner_text(st):
+    """What an owner's policy change did, in place of "applied"."""
+    return 'removed' if st['request']['spending_limit'] == 'off' else 're-attached'
+
+
+def perch_reasons():
+    """The model's reason for each Perch refusal in the run: rule-core's authorize (perchmodel) on
+    the grant's rule, replayed at the run's ledgers and checked against every recorded verdict. The
+    account itself returns code 5 for any refusal, so the reason is the model's, and is labelled so."""
+    rule = M.rule('shop', M.XLM, {'only': ['transfer']}, [M.PIN_SHOP], ('app',), cap={'limit': 10, 'period': 100, 'arg': 2})
+    rec, ledger, out = M.empty_record(), None, {}
+    for st in STEPS:
+        d, q = st['designs']['perch'], st['request']
+        if q['op'] == 'pay':
+            auth = ['stranger'] if q.get('signer') == 'unlisted' else ['app']
+            to = M.SHOP if q.get('to', 'shop') == 'shop' else M.ELSEWHERE
+            a = M.authorize([rule], [rec], [M.transfer(to, q['amount_xlm'])], [0], auth, ledger, 0)
+            applied = a['ok'] and q.get('signer') != 'forged'
+            assert applied == (d['status'] == 'applied'), (st['command'], a, d['status'])
+            if applied:
+                rec = a['records'][0]
+            elif not a['ok']:
+                c = a['check']
+                if c == 'charge':
+                    ch = a['charge']
+                    out[st['command']] = f'window {ch["remaining"]} + {ch["amount"]} > {ch["limit"]}'
+                else:
+                    out[st['command']] = {'arguments': 'not the shop',
+                                          'threshold': 'signer not on the rule'}.get(c, c)
+        if d.get('ledger') is not None:
+            ledger = d['ledger']
+    return out
+
+
+REASONS = perch_reasons()
+
+
+def row_info(sts, key):
+    """For a row of identical commands: how many, and how much the design sent across them."""
+    before = None
+    for st in STEPS:
+        if st['command'] == sts[0]['command']:
+            break
+        before = st['designs'][key].get('balance_xlm', before)
+    after = sts[-1]['designs'][key].get('balance_xlm')
+    sent = int(before) - int(after) if before is not None and after is not None else 0
+    return {'n': len(sts), 'sent': sent, 'why': REASONS.get(sts[0]['command']) if key == 'perch' else None}
 
 
 def short_label(st, n=1):
@@ -132,6 +180,8 @@ def chips(d):
 def chip_w(it, size):
     if it[0] == 'arrow':
         return 12
+    if it[0] == 'note':
+        return width(it[1], size) + 6
     return width(it[1], size) + (20 if it[2] == 'trusted' else 10)
 
 
@@ -146,6 +196,8 @@ def draw_chips(s, x, y, w, items, size, draw=True):
         if draw:
             if it[0] == 'arrow':
                 s.path(f'M{num(cx)} {num(cy + 12)}H{num(cx + 11)}', 'fl-m', marker_end='url(#perch-ah-m)')
+            elif it[0] == 'note':
+                s.text(cx + 6, cy + 17, it[1], 'm', size)
             else:
                 s.box(cx, cy, iw, 24, it[2], 4)
                 s.text(cx + (15 if it[2] == 'trusted' else 5), cy + 17, it[1], 'd' if it[2] == 'deny' else 'x', size)
@@ -155,13 +207,14 @@ def draw_chips(s, x, y, w, items, size, draw=True):
     return cy - y + 24
 
 
-def cell(s, x, y, w, d, st, size, draw=True):
+def cell(s, x, y, w, d, st, size, draw=True, info=None):
     """A design's cell: the contracts called, then the verdict and the window; returns height."""
+    info = info or {'n': 1, 'sent': 0, 'why': None}
     v = verdict(d)
     op = st['request']['op']
     if v is None:
         text = (f'set up; {d["balance_xlm"]} XLM' if op == 'reset' else
-                f'{st["request"]["ledgers"]} ledgers closed · {record_note(d)}' if op == 'advance' else
+                record_note(d) if op == 'advance' else
                 'not run: no Perch counterpart')
         rows = wrap(text, w - 20, size)
         hh = 14 + len(rows) * 18
@@ -170,10 +223,17 @@ def cell(s, x, y, w, d, st, size, draw=True):
             s.lines(x + 10, y + 21, rows, 'm', size, lh=18)
         return hh
     if draw:
-        s.box(x, y, w, cell(s, x, y, w, d, st, size, False), 'tested', 6)
-    h = 6 + draw_chips(s, x + 8, y + 6, w - 16, chips(d), size, draw) + 4
+        s.box(x, y, w, cell(s, x, y, w, d, st, size, False, info), 'tested', 6)
+    items = chips(d) + ([('note', f'(model: {info["why"]})')] if info['why'] else [])
+    h = 6 + draw_chips(s, x + 8, y + 6, w - 16, items, size, draw) + 4
     ok, text = v
-    line = text + (f' · {window(d)}' if op == 'pay' else '')
+    if op == 'oz_policy' and ok:
+        text = owner_text(st)
+    times = f' \u00d7{info["n"]}' if info['n'] > 1 else ''
+    if op == 'pay' and ok and info['n'] > 1:
+        line = f'applied{times} \u00b7 {info["sent"]} XLM sent' + ('' if d.get('window') else ' \u00b7 no window')
+    else:
+        line = text + times + (f' \u00b7 {window(d)}' if op == 'pay' else '')
     lines = wrap(line, w - 36, size)
     if draw:
         if ok:
@@ -190,10 +250,11 @@ def detail(d):
 
 def provenance():
     p = RUN['pins']
-    return (f'Recorded native reference run; page SHA-256 {RUN["page_sha256"][:16]}…, run SHA-256 '
-            f'{RUN["golden_sha256"][:16]}…. soroban-sim {p["soroban_sim"][:7]} (soroban-env-host '
-            f'{p["soroban_env_host"]}), OpenZeppelin {p["openzeppelin_stellar_contracts"].split()[-1].strip("()")}, '
-            f'oz-policy-builder {p["oz_policy_builder"][:7]}, Perch {p["perch"][:7]}, rule-core {p["rule_core"][:7]}.')
+    return (f'Window: XLM in it / limit. Perch returns code 5 for any refusal; a "model" reason replays rule-core\u2019s '
+            f'authorize at the run\u2019s ledgers. Page SHA-256 {RUN["page_sha256"][:12]}\u2026, run '
+            f'{RUN["golden_sha256"][:12]}\u2026; soroban-sim {p["soroban_sim"][:7]}, OpenZeppelin '
+            f'{p["openzeppelin_stellar_contracts"].split()[-1].strip("()")}, oz-policy-builder {p["oz_policy_builder"][:7]}, '
+            f'Perch {p["perch"][:7]}, rule-core {p["rule_core"][:7]}.')
 
 
 def entries(key):
@@ -242,7 +303,7 @@ def wide():
         st = sts[0]
         probe = SVG(FID, 760)
         nlab = label(probe, LX, 0, sts, LW, size, 17)
-        h = max(max(cell(probe, COLS[k][0], 0, COLS[k][1], st['designs'][k], st, size, False) for k, *_ in DESIGNS),
+        h = max(max(cell(probe, COLS[k][0], 0, COLS[k][1], st['designs'][k], st, size, False, row_info(sts, k)) for k, *_ in DESIGNS),
                 nlab * 17 + 10)
         s.open(**row_attrs(sts))
         label(s, LX, y + 4, sts, LW, size, 17)
@@ -250,7 +311,7 @@ def wide():
             x, w = COLS[key]
             d = st['designs'][key]
             s.open(data_detail=detail(d) or short_label(st))
-            cell(s, x, y, w, d, st, size)
+            cell(s, x, y, w, d, st, size, info=row_info(sts, key))
             s.close()
         s.close()
         y += h + 3
@@ -274,7 +335,7 @@ def narrow():
             d = st['designs'][key]
             s.open(data_detail=detail(d) or short_label(st))
             s.text(4, y + 14, tag, 'm tag', 14)
-            h = cell(s, 2, y + 20, 336, d, st, size)
+            h = cell(s, 2, y + 20, 336, d, st, size, info=row_info(sts, key))
             s.close()
             y += h + 26
         s.close()
@@ -303,7 +364,10 @@ def text_alt():
                 w = d.get('window')
                 win = 'no window' if w is None else f'window {w["stored_xlm"]} of {w["limit_xlm"]} XLM'
                 arrow = ' → '
-                parts.append(f'{who}: {html.escape(v[1])}; called {arrow.join(calls)}; {n} authorization '
+                vt = owner_text(st) if st['request']['op'] == 'oz_policy' and v[0] else v[1]
+                if key == 'perch' and st['command'] in REASONS:
+                    vt += f' (the model\u2019s reason: {REASONS[st["command"]]})'
+                parts.append(f'{who}: {html.escape(vt)}; called {arrow.join(calls)}; {n} authorization '
                              f'{"entry" if n == 1 else "entries"}; {win}'
                              + ('; state unchanged' if d.get('state_unchanged') else '') + '.')
             items.append(f'<strong>{html.escape(st["label"])}</strong> (command {st["command"]}). ' + ' '.join(parts))
@@ -334,7 +398,7 @@ def table():
             return '\u2014'
         ok, text = v
         if ok:
-            return 'applied' + (f' \u00b7 {win(d)}' if op == 'pay' else '')
+            return owner_text(st) if op == 'oz_policy' else 'applied' + (f' \u00b7 {win(d)}' if op == 'pay' else '')
         calls, refusal = analyse(d)
         code = str(d['code']) if d.get('code') is not None else text
         return f'refused, {code} in {where[CHIP[refusal[0]]]} \u00b7 {win(d)}'
