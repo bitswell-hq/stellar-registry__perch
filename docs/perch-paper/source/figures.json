@@ -4,7 +4,8 @@
   "caption": "The owner installs a grant in the account; the app or agent signs its own calls; for each call the host asks the account, whose one decision function checks the grant and its window; a verifier contract checks the signature. Double border: covered by the theorems. Single border: tested. Hatched: trusted.",
   "editions": [
    "html"
-  ]
+  ],
+  "short": "the overview diagram"
  },
  "fig-shop-grant": {
   "title": "The running example: an app may pay the shop at most {{fact:shop-cap-xlm}} XLM in any {{fact:shop-period-ledgers}} ledgers ({{fact:shop-period-minutes}}).",
@@ -28,7 +29,8 @@
   "caption": "The game grant lets the app key call the game's `guess` and transfer at most {{fact:grant3-cap-xlm}} XLM per {{fact:grant3-period-ledgers}} ledgers to any recipient; it pins no recipient, which case (c) shows. The authorization payload names one installed rule per context. (a) A lost guess: the game's `guess` and the transfer it makes from the account; the capped rule charges the transfer. (b) A win authorizes only the root, and the game pays from its own balance. (c) A direct transfer within the cap, with no game call, is also allowed, because each context is checked alone. Draft changes after the pinned build ({{fact:exact-roots-prs}}) would let a rule require its entry's root ({{ref:sec:agents}}).",
   "editions": [
    "html"
-  ]
+  ],
+  "short": "the game-grant diagram"
  },
  "fig-cap-window": {
   "title": "The shop grant's cap, {{fact:shop-cap-xlm}} XLM per {{fact:shop-period-ledgers}} ledgers, on illustrative ledgers.",
@@ -49,7 +51,8 @@
   "interactive": "compose",
   "editions": [
    "html"
-  ]
+  ],
+  "short": "the composition explorable"
  },
  "fig-sim": {
   "title": "Both designs, one scenario, from soroban-sim's native run.",
@@ -57,14 +60,16 @@
   "interactive": "sim-poster",
   "editions": [
    "html"
-  ]
+  ],
+  "short": "the recorded-run figure"
  },
  "fig-proof-scope": {
   "title": "What the proofs cover.",
   "caption": "One Rust source, two paths: translated into Lean, where the theorems are checked (double border), and compiled into the account's Wasm, which is tested (single border). Tests bridge them (dashed); nothing checks one against the other. The verification companion paper has the full picture.",
   "editions": [
    "html"
-  ]
+  ],
+  "short": "the proof-scope diagram"
  },
  "fig-two-paths": {
   "title": "One guarded call in two accounts.",

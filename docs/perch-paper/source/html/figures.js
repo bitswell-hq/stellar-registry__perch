@@ -494,7 +494,7 @@
   }
 
   // ---------------------------------------------------------------- E2: the cap window
-  // fig-cap-window. The model opens on Figure 3's events; the reader sends, advances, changes
+  // fig-cap-window. The model opens on the figure's own events; the reader sends, advances, changes
   // the cap, checks each call alone, starts at ledger 0 or replaces the rule. The plot shows
   // the window total of the transfers that moved; refusals change nothing.
   CONTROLLERS['cap-window'] = (fig) => {
@@ -748,7 +748,7 @@
     reset.onclick = () => {
       Object.assign(st, { lambda: 10, period: 100, percall: false, zero: false, actions: fig3(), inspect: BASE + 100, touched: true });
       lam.value = 10; per.value = 100; percall.checked = false; zero.checked = false;
-      draw('Back to Figure 3’s events.');
+      draw('Back to the figure’s events.');
     };
     lam.addEventListener('input', () => { st.lambda = Number(lam.value); draw(`Limit ${st.lambda} XLM: the same transfers, judged again.`); });
     per.addEventListener('input', () => { st.period = Number(per.value); draw(`Period ${st.period} ledgers: the same transfers, judged again.`); });
@@ -761,7 +761,7 @@
       st.touched = true;
       if (st.zero) { st.actions = [{ op: 'send', amount: st.lambda }, { op: 'send', amount: st.lambda }]; st.inspect = 0; }
       else { st.actions = fig3(); st.inspect = BASE + 100; }
-      draw(st.zero ? `Two transfers of ${st.lambda} at ledger 0: both accepted.` : 'Back to Figure 3’s events.');
+      draw(st.zero ? `Two transfers of ${st.lambda} at ledger 0: both accepted.` : 'Back to the figure’s events.');
     });
     inspect.addEventListener('input', () => { st.inspect = Number(inspect.value); st.touched = true; draw(); });
     st.touched = true;

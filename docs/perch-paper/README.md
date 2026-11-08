@@ -20,7 +20,8 @@ side by side in soroban-sim in the browser (its own `README.md`).
 `source/documents.json` lists the documents. Each has an outline
 (`source/outline.json` for the main paper, `source/papers/<id>/outline.json` for
 a companion) that orders its sections, figures and tables in both editions,
-so their numbering agrees. Everything a page states as a fact comes from data
+so their numbering agrees: only an exhibit every edition shows takes a number,
+and an exhibit in one edition only is titled and cited by its `short` name. Everything a page states as a fact comes from data
 all documents share:
 
 | Source | Holds | HTML | LaTeX |

@@ -119,6 +119,11 @@ class Paper:
                     fail(f'{DOC["id"]}: table {t} is listed in the outline but source/tables/{t}.json does not exist')
                     self.tables[t] = {'title': '', 'columns': [], 'rows': []}
         self.numbers = {ed: self._number(ed) for ed in ('html', 'latex')}
+        if LATEX:
+            for k, n in self.numbers['html'].items():
+                if k[:4] in ('fig:', 'tab:') and n and self.numbers['latex'].get(k) != n:
+                    fail(f'{DOC["id"]}: {k[4:]} is {n} in the HTML but {self.numbers["latex"].get(k)} in the PDF '
+                         f'(a latex_section move reorders it; move it in both editions or not at all)')
 
     def in_edition(self, item, ed):
         return ed in item.get('editions', ['html', 'latex'])
@@ -132,6 +137,11 @@ class Paper:
                 target = items[x].get('latex_section', s['id']) if ed == 'latex' else s['id']
                 out[target].append(x)
         return out
+
+    def numbered(self, item):
+        # An exhibit takes a number only if every edition of this document shows it, so a number
+        # names the same exhibit in the HTML and the PDF; the others are titled and cited by name.
+        return all(self.in_edition(item, e) for e in (('html', 'latex') if LATEX else ('html',)))
 
     def _number(self, ed):
         nums, fig, tab, main, app = {}, 0, 0, 0, 0
@@ -149,12 +159,12 @@ class Paper:
                 nums['sec:' + s['id']] = f'{main:02d}' if ed == 'html' else str(main)
             for f in figs[s['id']]:
                 if self.in_edition(self.figures[f], ed):
-                    fig += 1
-                    nums['fig:' + f] = str(fig)
+                    fig += self.numbered(self.figures[f])
+                    nums['fig:' + f] = str(fig) if self.numbered(self.figures[f]) else ''
             for t in tabs[s['id']]:
                 if self.in_edition(self.tables[t], ed):
-                    tab += 1
-                    nums['tab:' + t] = str(tab)
+                    tab += self.numbered(self.tables[t])
+                    nums['tab:' + t] = str(tab) if self.numbered(self.tables[t]) else ''
         return nums
 
 
@@ -204,6 +214,7 @@ def _directive(p, body, ed, ctx):
     if kind == 'ref' and arg.split(':')[0] in ('stmt', 'def'):
         return formal_ref(p, arg, ed, ctx)
     if kind == 'ref':
+        arg, _, opt = arg.partition('|')
         if arg not in p.numbers[ed] and not (arg.startswith('sec:') and arg[4:] in p.sec_ids):
             fail(f'unknown or excluded reference {arg!r} in {ctx} ({ed})')
             return '??'
@@ -217,8 +228,14 @@ def _directive(p, body, ed, ctx):
         if n is None and arg.startswith('sec:'):
             sec = next(x for x in p.sections if x['id'] == arg[4:])
             return f'<a href="#{arg[4:]}">{html.escape(sec["title_html"])}</a>'
-        label = ('Appendix ' if appendix else {'sec': '§', 'fig': 'Figure ', 'tab': 'Table '}[arg[:3]]) + (n or '??')
         target = arg[4:]
+        if n == '':
+            item = (p.figures if arg.startswith('fig:') else p.tables)[target]
+            if not item.get('short'):
+                fail(f'{ctx}: {target} is in one edition only, so it has no number; give it a "short" name to be cited by')
+            name = render(p, item.get('short', target), 'html', ctx)
+            return f'<a href="#{target}">{name[:1].upper() + name[1:] if opt == "cap" else name}</a>'
+        label = ('Appendix ' if appendix else {'sec': '§', 'fig': 'Figure ', 'tab': 'Table '}[arg[:3]]) + (n or '??')
         return f'<a href="#{target}">{label}</a>'
     if kind == 'cite':
         keys = arg.split(',')
@@ -350,6 +367,7 @@ def fact_value(p, key, ed, anon=False):
 def html_figure(p, fid):
     f = p.figures[fid]
     n = p.numbers['html']['fig:' + fid]
+    lead = f'Figure {n}. ' if n else ''
     title = render(p, f['title'], 'html', fid)
     cap = render(p, f.get('caption', ''), 'html', fid)
     cls = 'fig' + (' interactive' if f.get('interactive') else '')
@@ -359,14 +377,14 @@ def html_figure(p, fid):
     if f.get('kind') == 'table':
         body = html_table_body(p, p.tables[f['table']], f['table'])
         return (f'<figure class="{cls} fig-table" id="{fid}"{attrs}>{body}'
-                f'<figcaption><span class="figure-title" id="{fid}-title">Figure {n}. {title}</span> {cap}</figcaption></figure>')
+                f'<figcaption><span class="figure-title" id="{fid}-title">{lead}{title}</span> {cap}</figcaption></figure>')
     if f.get('kind') == 'code':
         panels = ''.join(
             f'<div class="code-panel"><p class="panel-title">{render(p, pa["title"], "html", fid)}</p>'
             f'<pre>{html.escape(read(SRC / "figures" / f"{fid}.{pa["file"]}.txt").rstrip())}</pre></div>'
             for pa in f['panels'])
         return (f'<figure class="{cls} fig-code" id="{fid}"{attrs}><div class="code-panels">{panels}</div>'
-                f'<figcaption><span class="figure-title" id="{fid}-title">Figure {n}. {title}</span> {cap}</figcaption></figure>')
+                f'<figcaption><span class="figure-title" id="{fid}-title">{lead}{title}</span> {cap}</figcaption></figure>')
     wide = read(SRC / 'figures' / f'{fid}.svg').strip()
     narrow_p = SRC / 'figures' / f'{fid}.narrow.svg'
     narrow = read(narrow_p).strip() if narrow_p.exists() else ''
@@ -377,10 +395,10 @@ def html_figure(p, fid):
     text_p = SRC / 'figures' / f'{fid}.text.html'
     steps = load_steps(fid)
     alt_body = html_steps(p, fid, steps) if steps else (read(text_p).strip() if text_p.exists() else '')
-    alt = (f'<details class="fig-text" id="{fid}-text"><summary>Figure {n} as text</summary>{alt_body}</details>'
+    alt = (f'<details class="fig-text" id="{fid}-text"><summary>{f"Figure {n}" if n else "This figure"} as text</summary>{alt_body}</details>'
            if alt_body else '')
     return (f'<figure class="{cls}" id="{fid}"{attrs}>{controls}{wide}{narrow}'
-            f'<figcaption><span class="figure-title" id="{fid}-title">Figure {n}. {title}</span> {cap}</figcaption>{alt}</figure>')
+            f'<figcaption><span class="figure-title" id="{fid}-title">{lead}{title}</span> {cap}</figcaption>{alt}</figure>')
 
 
 def slug(text):
@@ -474,7 +492,7 @@ def html_table(p, tid, numbered=True):
     if tid not in p.tables:
         fail(f'{DOC["id"]}: table {tid} does not exist')
         return ''
-    lead = f'Table {p.numbers["html"]["tab:" + tid]}. ' if numbered else ''
+    lead = f'Table {p.numbers["html"]["tab:" + tid]}. ' if numbered and p.numbers['html']['tab:' + tid] else ''
     cap = (f'<caption>{lead}{render(p, t["title"], "html", tid)} '
            f'{render(p, t.get("caption", ""), "html", tid)}</caption>')
     return body.replace('</tbody></table>', f'</tbody>{cap}</table>', 1).replace('<table', f'<table id="{tid}"', 1)
@@ -574,6 +592,9 @@ DIRECTIVE = re.compile(r'\{\{([a-z-]+):?([^}]*)\}\}')
 
 
 def expand_html(p, text, ctx, blocks, seen):
+    # A reference that opens a sentence is marked, so an unnumbered exhibit's short name is capitalized there.
+    text = re.sub(r'((?:^|<p>|<p [^>]*>|<li>|[.!?]\s)\s*)\{\{ref:((?:fig|tab):[\w-]+)\}\}', r'\1{{ref:\2|cap}}', text)
+
     def sub(m):
         kind, arg = m.group(1), m.group(2)
         if kind == 'fig':
