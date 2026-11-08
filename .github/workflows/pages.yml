@@ -17,8 +17,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # The paper's PDF edition is built without write access and deployed beside
-  # the HTML edition that links it.
+  # The papers' PDF editions are built without write access and deployed beside
+  # the HTML editions that link them.
   paper-pdf:
     runs-on: ubuntu-latest
     permissions:

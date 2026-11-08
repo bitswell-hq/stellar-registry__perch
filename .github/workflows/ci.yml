@@ -396,9 +396,9 @@ jobs:
           CARGO_TARGET_DIR=target/zk-d24 zk_wasm --features tree-depth-24
           cargo test -q -p perch-zk-adapter --test costs -- --ignored --nocapture --test-threads 1
 
-  # The Perch paper: both editions come from docs/perch-paper/source, so the
-  # committed index.html and latex/generated/ must match it (paper.py --check),
-  # and the LaTeX edition must build with no undefined reference or citation.
+  # The Perch papers: every edition comes from docs/perch-paper/source, so the
+  # committed pages and latex/generated/ folders must match it (paper.py --check),
+  # and each LaTeX edition must build with no undefined reference or citation.
   paper:
     runs-on: ubuntu-latest
     permissions:

@@ -51,22 +51,22 @@ while read -r id dir name; do
   mkdir -p out
   if [ "${ANONYMOUS:-0}" = 1 ]; then
     main=$name-anonymous
-    rm -rf out/$name.tex out/perch-preamble.tex out/sections out/generated
-    printf '\\def\\anonymous{}\\input{%s}\n' "$name" > out/$main.tex
-    cp -R $name.tex perch-preamble.tex sections generated out/
-    src=out/$main.tex
+    rm -rf out/"$name".tex out/perch-preamble.tex out/sections out/generated
+    printf '\\def\\anonymous{}\\input{%s}\n' "$name" > out/"$main".tex
+    cp -R "$name".tex perch-preamble.tex sections generated out/
+    src=out/"$main".tex
   else
     src=$name.tex
   fi
-  rm -f out/$main.pdf out/$main.log out/$main.aux out/$main.bbl out/$main.blg out/$main.out
+  rm -f out/"$main".pdf out/"$main".log out/"$main".aux out/"$main".bbl out/"$main".blg out/"$main".out
   "$TECTONIC" -X compile --bundle "$BUNDLE" --keep-logs --keep-intermediates --outdir out "$src"
   status=0
-  if grep -nE "LaTeX Warning: (Reference|Citation) .* undefined|There were undefined references|Label\(s\) may have changed|multiply defined|Package perch Error" out/$main.log; then
+  if grep -nE "LaTeX Warning: (Reference|Citation) .* undefined|There were undefined references|Label\(s\) may have changed|multiply defined|Package perch Error" out/"$main".log; then
     status=1
   fi
   # A glyph the fonts lack is dropped silently from the PDF; refuse that too.
-  if grep -n "Missing character: There is no" out/$main.log; then status=1; fi
-  if [ -f out/$main.blg ] && grep -nE "^Warning--|error message" out/$main.blg; then status=1; fi
+  if grep -n "Missing character: There is no" out/"$main".log; then status=1; fi
+  if [ -f out/"$main".blg ] && grep -nE "^Warning--|error message" out/"$main".blg; then status=1; fi
   if [ "$status" -ne 0 ]; then
     echo "build.sh: $id: unresolved references or citations, or missing glyphs (see above)" >&2
     failed=1
