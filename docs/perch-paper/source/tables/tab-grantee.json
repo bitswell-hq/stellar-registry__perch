@@ -21,5 +21,8 @@
    "An external signer's signature binds this account, the entry and the selected rule IDs (tested; a paper proof under signature and hash assumptions)",
    "Delegated signers do not bind rule IDs. A rule edited in place between signing and inclusion decides under its new contents"
   ]
+ ],
+ "editions": [
+  "latex"
  ]
 }

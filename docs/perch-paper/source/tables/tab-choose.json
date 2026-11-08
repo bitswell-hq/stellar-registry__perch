@@ -63,5 +63,8 @@
    "Rules removed one at a time",
    "One owner call per grant; a completed recovery stops every earlier grant from authorizing through the account"
   ]
+ ],
+ "editions": [
+  "latex"
  ]
 }
