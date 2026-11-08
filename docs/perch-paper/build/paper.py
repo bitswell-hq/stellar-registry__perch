@@ -511,10 +511,16 @@ def html_statements(p, arg=''):
 def html_definitions(p, arg=''):
     def item(d):
         ctx = d['id']
-        math = f'<div class="thm-math">{mathml(d["math"], True, ctx)}</div>' if d.get('math') else ''
+        rid = f'def-{ctx}-reading'
+        math = (f'<div class="thm-math" aria-describedby="{rid}">{mathml(d["math"], True, ctx)}</div>'
+                if d.get('math') else '')
+        reading = (f'<p class="thm-reading" id="{rid}"><span class="thm-tag">In words</span> {render(p, d["reading"], "html", ctx)}</p>'
+                   if d.get('reading') else '')
         lean = f' <span class="obj">{render(p, d["lean"], "html", ctx)}</span>' if d.get('lean') else ''
+        tag = '<span class="thm-tag">Precisely</span> ' if reading else ''
         return (f'<li id="def-{ctx}" class="defn"><p class="thm-head"><strong>Definition {number_of(d["label"])}</strong> '
-                f'({render(p, d["title"], "html", ctx).rstrip(".")})</p>{math}<p>{render(p, d["text"], "html", ctx)}{lean}</p></li>')
+                f'({render(p, d["title"], "html", ctx).rstrip(".")})</p>{math}{reading}'
+                f'<p class="thm-text">{tag}{render(p, d["text"], "html", ctx)}{lean}</p></li>')
     return '<ol class="def-list">' + ''.join(item(d) for d in pick(p.definitions, arg)) + '</ol>'
 
 

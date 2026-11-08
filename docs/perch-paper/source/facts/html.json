@@ -31,5 +31,9 @@
  "cedar-spec-pin-short": {
   "value": "a4c5a89",
   "source": "github.com/cedar-policy/cedar-spec a4c5a89cd15637afc1dab39ef0c89baf31c7ebdf, committed 2026-11-06; cedar-lean/lean-toolchain leanprover/lean4:v4.35.0 (V, editor r3, sparse clone)"
+ },
+ "soroban-sim-pin-short": {
+  "value": "d029384",
+  "source": "first seven hex digits of soroban-sim-pin (facts/pins.json, d02938430f0ac41f34e5e3e4c8c48d85b871bd68); r4 plan, Pins"
  }
 }

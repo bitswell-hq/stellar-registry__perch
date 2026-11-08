@@ -1586,14 +1586,14 @@
   };
 
   // ---------------------------------------------------------------- reading paths
-  // <nav class="reading-paths"> holding anchors with data-path-choice="5|20|all" (the no-JS form)
+  // <nav class="reading-paths"> holding anchors with data-reading (or data-path-choice) ="5|20|all" (the no-JS form)
   // becomes a radio group. Blocks carry data-path="5", "20" or "5 20"; the 5-minute path keeps
   // blocks tagged 5, the 20-minute path those tagged 5 or 20. A section with nothing kept
   // collapses to its heading and lede, with a button to expand it. Print shows everything.
   function readingPaths(nav) {
     if (nav.dataset.ready || !document.querySelector('[data-path]')) return;
     nav.dataset.ready = '1';
-    const choices = [...nav.querySelectorAll('[data-path-choice]')].map((a) => [a.dataset.pathChoice, squash(a.textContent)]);
+    const choices = [...nav.querySelectorAll('[data-reading], [data-path-choice]')].map((a) => [a.dataset.reading ?? a.dataset.pathChoice, squash(a.textContent)]);
     if (!choices.length) return;
     const name = uid('path');
     const live = el('p', { class: 'rp-live', 'aria-live': 'polite' });
