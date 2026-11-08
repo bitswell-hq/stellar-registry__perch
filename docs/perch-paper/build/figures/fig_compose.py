@@ -160,7 +160,7 @@ def draw(narrow):
             y += 8
     # guarantees and the closing line
     y += 18
-    g = [('a', 'Window at most 10: holds while the rule exists.'),
+    g = [('a', 'Window at most 10: holds while the rule keeps its cap.'),
          ('b', 'Window at most 10: holds while the window-cap policy is attached.')]
     for key, text in g:
         x, w = cols[key]
@@ -182,11 +182,11 @@ def structure(s, cols, y, order, size, narrow, only=None):
     h_out = 0
     if only in (None, 'a'):
         x, w = cols['a']
-        checks = ['recipient pin', 'per-call bound', 'window cap + its record', 'two signers']
+        checks = ['recipient pin', 'two signers', 'window cap + its record']
         rows = []
         for c in checks:
             rows += wrap('• ' + c, w - 24, 14)
-        slot = wrap('live read: a Perch rule reads nothing outside the account', w - 40, 14)
+        slot = wrap('per-call bound and live read: a Perch rule has neither', w - 40, 14)
         h = 30 + len(rows) * 17 + 10 + len(slot) * 17 + 14
         s.box(x, y, w, h, 'key', 6)
         s.text(x + 12, y + 22, NAMES['decision'], 't', 14)
@@ -210,12 +210,13 @@ def structure(s, cols, y, order, size, narrow, only=None):
 
 def text_alt():
     out = [f'<p>A model of the same five checks in two arrangements. {html.escape(SETUP)} {html.escape(TITLE_A)}: {html.escape(SUB_A)}; '
-           'it has no slot for a live read, since a Perch rule reads nothing outside the account. '
+           'it has no slot for a live read or a per-call bound: a Perch rule reads nothing outside the account and '
+           'cannot bound one call\u2019s amount. '
            f'{html.escape(TITLE_B)}: {html.escape(SUB_B)}, starting with the window cap.</p><ol>']
     for label, req, order, a, b in M.e4_script():
         out.append(f'<li>{html.escape(label)}. (a) {html.escape(a_text(a))}. (b) policies run: '
                    f'{html.escape(", ".join(NAMES[n] for n in b["ran"]))}; {html.escape(b_text(b))}.</li>')
-    out.append(f'</ol><p>Window at most 10: in (a) while the rule exists; in (b) while the window-cap policy is '
+    out.append(f'</ol><p>Window at most 10: in (a) while the rule keeps its cap; in (b) while the window-cap policy is '
                f'attached. {html.escape(CLOSING)}</p>')
     return ''.join(out)
 

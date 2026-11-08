@@ -121,8 +121,8 @@ const svg = (f) => readFileSync(join(SRC, 'figures', f), 'utf8');
   check(!M.attenuate(child, ...M.E1.refused.slice(0, 3)).ok, 'fig-attenuation: the refused move');
   for (const [, id, p, c] of svg('fig-attenuation.svg').matchAll(/data-probe="([^"]+)" data-parent="([^"]+)" data-child="([^"]+)"/g)) {
     const [, , ctx, auth] = M.E1.probes.find((x) => x[0] === id);
-    check((M.accepts(parent, ctx, auth, M.E1.ledger) ? 'allows' : 'refuses') === p, `fig-attenuation probe ${id}: parent`);
-    check((M.accepts(child, ctx, auth, M.E1.ledger) ? 'allows' : 'refuses') === c, `fig-attenuation probe ${id}: child`);
+    check((M.accepts(parent, ctx, auth, M.E1.ledger) ? 'accepts' : 'refuses') === p, `fig-attenuation probe ${id}: parent`);
+    check((M.accepts(child, ctx, auth, M.E1.ledger) ? 'accepts' : 'refuses') === c, `fig-attenuation probe ${id}: child`);
   }
 }
 {

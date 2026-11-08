@@ -292,7 +292,8 @@
       throw new Error(`unknown check ${name}`);
     },
     one(req, rec) {
-      for (const name of ['pin', 'percall', 'threshold', 'window']) {
+      // a Perch rule has no live read and cannot bound one call's amount: neither has a slot here
+      for (const name of ['pin', 'threshold', 'window']) {
         const c = this.check(name, req, rec);
         if (!c.ok) return { ok: false, ran: ['decision'], refused: name, written: [], rolledBack: [], record: rec, charge: c.charge };
         if (name === 'window') return { ok: true, ran: ['decision'], refused: null, written: ['window'], rolledBack: [], record: c.record };
@@ -535,7 +536,7 @@
     const history = el('ol', { class: 'xp-log', 'aria-label': 'Transfers, in order' });
     panel.append(params, toggles, plot,
       h('div', { class: 'xp-row' }, h('label', { class: 'xp-field xp-grow' }, h('span', {}, 'Inspect the window at ledger L'), inspect)),
-      inspectOut, fullest, h('p', { class: 'xp-sub' }, 'In the plot, as in the figure: a charge inside the inspected window is amber, one outside it is dashed; a refused transfer is red with a bar end and changes nothing.'), h('p', { class: 'xp-sub' }, 'Every transfer, in order:'), history);
+      inspectOut, fullest, h('p', { class: 'xp-sub' }, 'In the plot, as in the figure: a charge inside the inspected window is amber, one outside it is plain; a refused transfer is dashed red with a bar end and changes nothing.'), h('p', { class: 'xp-sub' }, 'Every transfer, in order:'), history);
 
     function run() {
       const base = st.zero ? 0 : BASE;
@@ -696,7 +697,7 @@
         right = x + w / 2;
       }
       // charges as chips, in lanes so none overlap, drawn as the figure draws them: amber inside the
-      // inspected window, dashed outside it; a refused transfer red with a bar end
+      // inspected window, plain outside it; a refused transfer dashed red with a bar end
       const lanes = [];
       const cy0 = y0 + 34;
       for (const at of R.attempts) {
@@ -709,7 +710,7 @@
         lanes[lane] = x + w;
         const y = cy0 + lane * 30;
         const inside = at.ok && M.inWindow(at.ledger, L, st.period);
-        const cls = at.ok ? (inside ? 'bx bx-hi' : 'bx dash') : 'bx-no';
+        const cls = at.ok ? (inside ? 'bx bx-hi' : 'bx') : 'bx-no dash';
         out.push(`<rect class="${cls}" x="${n(x)}" y="${y}" width="${n(w)}" height="24" rx="4"/>`);
         if (!at.ok) out.push(`<path class="fl-d" d="M${n(x + w)} ${y - 3}V${y + 27}"/>`);
         t(x + w / 2, y + 17, s, at.ok ? (inside ? 'x' : 'm') : 'd', 'middle');
@@ -845,11 +846,11 @@
     };
     const table = h('table', { class: 'xp-probes' },
       h('thead', {}, h('tr', {}, h('th', { scope: 'col' }, 'Probe'), h('th', { scope: 'col' }, 'Parent'), h('th', { scope: 'col' }, 'Child'), h('th', { scope: 'col' }, 'Why refused'))),
-      h('tbody', {}, rows.map((r) => h('tr', { 'data-probe': r[0] }, h('th', { scope: 'row' }, r[1]), h('td', {}, r[2] ? yes() : no()), h('td', {}, r[3] ? yes() : no()), h('td', { class: 'xp-why' }, why(r))))));
+      h('tbody', {}, rows.map((r) => h('tr', { 'data-probe': r[0] }, h('th', { scope: 'row' }, r[1]), h('td', {}, r[2] ? yes('accepts') : no()), h('td', {}, r[3] ? yes('accepts') : no()), h('td', { class: 'xp-why' }, why(r))))));
     const nc = rows.filter((r) => r[3]).length;
     const np = rows.filter((r) => r[2]).length;
     const each = rows.every((r) => !r[3] || r[2]);
-    return { table, rows, summary: `Child allows ${nc} of ${rows.length}; ${each ? 'the parent allows each' : 'the parent does not allow each'}. The parent allows ${np}.` };
+    return { table, rows, summary: `Child accepts ${nc} of ${rows.length}; ${each ? 'the parent accepts each' : 'the parent does not accept each'}. The parent accepts ${np}.` };
   }
   function replayList(parent, child, origin) {
     const { childRun, parentRun } = M.replay(parent, child, origin);
@@ -1221,7 +1222,7 @@
   // fig-compose. Opens on the figure's four requests; both columns mark, for the newest request,
   // the points that ran (solid), the one that refused (red, bar end) and those not run (dashed).
   const E4_NAME = { pin: 'recipient pin', percall: 'per-call bound', window: 'window cap', threshold: 'two signers', live: 'live read', decision: 'decision point' };
-  const E4_A = ['pin', 'percall', 'threshold', 'window'];
+  const E4_A = ['pin', 'threshold', 'window'];
   const E4_SCRIPT = [
     ['Pay 6 to the shop', { amount: 6, to: 'shop', signers: 'both', price: 'ok' }, null],
     ['Pay 5 more to the shop', { amount: 5, to: 'shop', signers: 'both', price: 'ok' }, null],
@@ -1270,8 +1271,8 @@
       const aItems = E4_A.map((name) => ptItem(name === 'window' ? `window cap: record ${M.windowTotal(st.recA.history, st.now, 100)} of 10` : E4_NAME[name],
         last ? ptState(name, aRan, last.aRes.refused) : ''));
       colA.replaceChildren(h('h4', {}, '(a) Shaped like a Perch account'), h('p', { class: 'xp-sub' }, 'One decision point holds every check and the window record.'),
-        h('ol', { class: 'xp-policies xp-checks' }, aItems, h('li', { class: 'xp-slot' }, 'live read: a Perch rule reads nothing outside the account')),
-        h('p', { class: 'xp-guarantee' }, 'Window at most 10: holds while the rule exists.'));
+        h('ol', { class: 'xp-policies xp-checks' }, aItems, h('li', { class: 'xp-slot' }, 'per-call bound and live read: a Perch rule has neither')),
+        h('p', { class: 'xp-guarantee' }, 'Window at most 10: holds while the rule keeps its cap.'));
       const items = st.order.map((name, i) => {
         const on = st.attached.has(name);
         const up = button('Up', { 'aria-label': `Move ${E4_NAME[name]} up` });

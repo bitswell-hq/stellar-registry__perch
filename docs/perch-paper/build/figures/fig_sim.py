@@ -69,6 +69,21 @@ def window(d):
     return 'off' if w is None else f'{w["stored_xlm"]}/{w["limit_xlm"]}'
 
 
+def record_note(d):
+    """After closing ledgers: the stored record, and whether its spends are still in the window."""
+    w = d.get('window')
+    if w is None:
+        return 'no window'
+    cut = max(0, d['ledger'] - w['period_ledgers'])
+    inside = sum(int(s['xlm']) for s in w['spends'] if s['ledger'] > cut)
+    stored = int(w['stored_xlm'])
+    if stored and not inside:
+        return f'record {stored} XLM, outside the window'
+    if inside < stored:
+        return f'record {stored} XLM, {inside} in the window'
+    return f'window {stored} of {w["limit_xlm"]}'
+
+
 def short_label(st, n=1):
     """A short label for the request, from the command itself."""
     q = st['request']
@@ -146,12 +161,14 @@ def cell(s, x, y, w, d, st, size, draw=True):
     op = st['request']['op']
     if v is None:
         text = (f'set up; {d["balance_xlm"]} XLM' if op == 'reset' else
-                f'{st["request"]["ledgers"]} ledgers closed · window {window(d)}' if op == 'advance' else
+                f'{st["request"]["ledgers"]} ledgers closed · {record_note(d)}' if op == 'advance' else
                 'not run: no Perch counterpart')
+        rows = wrap(text, w - 20, size)
+        hh = 14 + len(rows) * 18
         if draw:
-            s.box(x, y, w, 32, 'none' if op == 'oz_policy' else 'tested', 6)
-            s.text(x + 10, y + 21, text, 'm', size)
-        return 32
+            s.box(x, y, w, hh, 'none' if op == 'oz_policy' else 'tested', 6)
+            s.lines(x + 10, y + 21, rows, 'm', size, lh=18)
+        return hh
     if draw:
         s.box(x, y, w, cell(s, x, y, w, d, st, size, False), 'tested', 6)
     h = 6 + draw_chips(s, x + 8, y + 6, w - 16, chips(d), size, draw) + 4
@@ -313,7 +330,7 @@ def table():
             if op == 'reset':
                 return f'set up; {d["balance_xlm"]} XLM'
             if op == 'advance':
-                return f'{st["request"]["ledgers"]} ledgers closed \u00b7 {win(d)}'
+                return f'{st["request"]["ledgers"]} ledgers closed \u00b7 {record_note(d)}'
             return '\u2014'
         ok, text = v
         if ok:
@@ -332,8 +349,10 @@ def table():
         'caption': (f'Recorded by soroban-sim\u2019s native run of the simulation page. OpenZeppelin requests carried '
                     f'{n_oz.pop()} authorization entries, Perch requests {n_pe.pop()}. The window is the Perch grant\u2019s '
                     'record, or `spending_limit`\u2019s history (none while it is removed). Every refusal was an enforcing '
-                    'simulation that left the ledger unchanged. Payments go to the shop unless noted.'),
+                    'simulation that left the ledger unchanged. Payments go to the shop unless noted. The window column is '
+                    'the stored record; spends 100 or more ledgers old leave it at the next charge.'),
         'latex_size': 'scriptsize',
+        'latex_colspec': '@{}r>{\\raggedright\\arraybackslash}p{0.17\\linewidth}LL@{}',
     }
 
 

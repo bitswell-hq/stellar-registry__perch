@@ -9,7 +9,7 @@
   },
   {
    "n": "2",
-   "text": "**Guards.** Refuse a context calling a reserved hook name ({{fact:reserved-hook-names}}), an account frozen by an authorized `Protected` recovery attempt, and a selected grant rule on the adopted recovery controller or the zero-knowledge adapter or pool of its recovery configuration. A recovery completion leaves here.",
+   "text": "**Guards.** Refuse a context calling a reserved hook name ({{fact:reserved-hook-names}}), an account frozen during a recovery (the vision paper), and a selected grant rule on the account’s adopted recovery contracts. A recovery completion leaves here.",
    "exits": [
     "`ReservedFunction` ({{fact:auth-error-reserved-function}})",
     "`AccountFrozen` ({{fact:auth-error-account-frozen}})",

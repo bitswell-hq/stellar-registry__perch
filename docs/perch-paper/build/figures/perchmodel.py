@@ -303,6 +303,7 @@ def e3_run(req, signer, grant, named):
 # Five checks; (a) one decision point holds the first four and its window record; (b) one
 # policy per check, each with its own state, run in order until one refuses.
 E4_CHECKS = ['pin', 'percall', 'window', 'threshold', 'live']
+E4_A = ['pin', 'threshold', 'window']   # the decision point's checks, in order
 E4_LIMIT, E4_PERIOD = 10, 100
 
 
@@ -323,8 +324,9 @@ def e4_check(name, req, rec):
 
 
 def e4_one(req, rec):
-    """(a): every check of the rule, then one write; the live read has no slot."""
-    for name in ('pin', 'percall', 'threshold', 'window'):
+    """(a): every check of the rule, then one write. A Perch rule has no live read and cannot bound
+    one call's amount (perch-ir `ArgPred` has no amount predicate), so neither has a slot."""
+    for name in E4_A:
         ok, new = e4_check(name, req, rec)
         if not ok:
             return {'ok': False, 'ran': ['decision'], 'refused': name, 'written': [], 'record': rec,

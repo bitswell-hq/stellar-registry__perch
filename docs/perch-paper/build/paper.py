@@ -244,6 +244,9 @@ def _directive(p, body, ed, ctx):
                 fail(f'unknown citation {k!r} in {ctx}')
         if ed == 'latex':
             return r'\cite{' + ','.join(keys) + '}'
+        for k in keys:
+            if k in p.bib and p.cite_number(k) == '?':
+                fail(f'citation {k!r} in {ctx} is not in the reference list (the build did not see it cited)')
         return '[' + ', '.join(f'<a class="cite" href="#ref-{k}">{p.cite_number(k)}</a>' for k in keys) + ']'
     if kind == 'root':
         return '../' * DEPTH if ed == 'html' else ''
@@ -650,15 +653,33 @@ def expand_html(p, text, ctx, blocks, seen):
 def build_html(p, blocks):
     o = p.outline
     seen = {'fig': [], 'tab': []}
-    # Citation numbers follow first use across the HTML sections.
+    # Citation numbers follow first use across the page: its header and abstract, then each section's prose,
+    # includes, figures, tables and formal cards. The reference list holds only what the page cites.
     order = []
+
+    def cites(text):
+        for k in re.findall(r'\{\{cite:([^}]+)\}\}', text):
+            for kk in k.split(','):
+                if kk not in order:
+                    order.append(kk)
+    for name in ('header.html', 'abstract.html'):
+        cites(read(html_file(name)))
     for s in p.sections:
-        if p.in_edition(s, 'html'):
-            for k in re.findall(r'\{\{cite:([^}]+)\}\}', read(HTMLDIR / 'sections' / f'{s["id"]}.html')):
-                for kk in k.split(','):
-                    if kk not in order:
-                        order.append(kk)
-    order += [k for k in p.bib if k not in order and p.bib[k].get('_list', 'html') != 'latex' and 'html' in p.bib[k].get('editions', 'html latex')]
+        if not p.in_edition(s, 'html'):
+            continue
+        src = read(HTMLDIR / 'sections' / f'{s["id"]}.html')
+        for inc in re.findall(r'\{\{include:([^}]+)\}\}', src):
+            src += read(html_file(inc))
+        cites(src)
+        for f in s.get('figures', []):
+            cites(json.dumps(p.figures.get(f, {}), ensure_ascii=False))
+        for t in s.get('tables', []):
+            cites(json.dumps(p.tables.get(t, {}), ensure_ascii=False))
+        for arg in re.findall(r'\{\{statements(?::([^}]*))?\}\}', src):
+            cites(json.dumps(pick(p.statements, arg), ensure_ascii=False))
+        for arg in re.findall(r'\{\{definitions(?::([^}]*))?\}\}', src):
+            cites(json.dumps(pick(p.definitions, arg), ensure_ascii=False))
+    cites(read(html_file('footer.html')))
     p.cite_order = order
     p.cite_number = lambda k: order.index(k) + 1 if k in order else '?'
 

@@ -128,7 +128,7 @@ def mark(s, x, y, ok, size, word=True):
         s.cross(x + 6, y - 5, 5)
         s.path(f'M{num(x + 15)} {num(y - 12)}V{num(y + 2)}', 'fl-d')
     if word:
-        s.text(x + 22, y, 'allows' if ok else 'refuses', 'x' if ok else 'd', size)
+        s.text(x + 22, y, 'accepts' if ok else 'refuses', 'x' if ok else 'd', size)
 
 
 def draw(narrow):
@@ -192,7 +192,7 @@ def draw(narrow):
     for pid, label, p, c in probes:
         rows = wrap(label, lw, size)
         h = len(rows) * 18 + 10
-        s.open(data_probe=pid, data_parent='allows' if p else 'refuses', data_child='allows' if c else 'refuses')
+        s.open(data_probe=pid, data_parent='accepts' if p else 'refuses', data_child='accepts' if c else 'refuses')
         s.line(2, y, W - 2, y, 'rule')
         s.lines(2, y + 22, rows, 'x', size, lh=18)
         mark(s, px, y + 22, p, size, not narrow)
@@ -203,8 +203,8 @@ def draw(narrow):
     n_c = sum(1 for *_, c in probes if c)
     n_p = sum(1 for _, _, p, _ in probes if p)
     y += 24
-    summary = (f'The child allows {n_c} of {len(probes)} probes, and the parent allows each of them; '
-               f'the parent allows {n_p}.')
+    summary = (f'The child accepts {n_c} of {len(probes)} probes, and the parent accepts each of them; '
+               f'the parent accepts {n_p}.')
     y = s.lines(2, y, wrap(summary, W - 4, size), 't', size, lh=18) + 24
     rep = (f'Replay: the child accepts {n_child} of {n_run} requests (a guess, then five transfers of 1, '
            f'one ledger apart; the fifth would make 5 > 4). From empty records the parent accepts all {n_parent}.')
@@ -228,10 +228,10 @@ def text_alt():
         for r in child) + '.</p>')
     out.append('<table><thead><tr><th>Probe</th><th>Parent</th><th>Child</th></tr></thead><tbody>')
     for pid, label, p, c in probes:
-        out.append(f'<tr><td>{md(label)}</td><td>{"allows" if p else "refuses"}</td><td>{"allows" if c else "refuses"}</td></tr>')
+        out.append(f'<tr><td>{md(label)}</td><td>{"accepts" if p else "refuses"}</td><td>{"accepts" if c else "refuses"}</td></tr>')
     out.append('</tbody></table>')
     n_c = sum(1 for *_, c in probes if c)
-    out.append(f'<p>The child allows {n_c} of {len(probes)}; the parent allows each of them. Replay: the child accepts '
+    out.append(f'<p>The child accepts {n_c} of {len(probes)}; the parent accepts each of them. Replay: the child accepts '
                f'{n_child} of {n_run} requests, and the parent accepts all {n_parent} from empty records.</p>')
     return ''.join(out)
 
@@ -245,12 +245,12 @@ def table():
     n_c = sum(1 for *_, c in probes if c)
     return {
         'columns': ['Probe', 'Parent', 'Child'],
-        'rows': [[label, 'allows' if p else 'refuses', 'allows' if c else 'refuses'] for _, label, p, c in probes],
+        'rows': [[label, 'accepts' if p else 'refuses', 'accepts' if c else 'refuses'] for _, label, p, c in probes],
         'title': 'Attenuation, modelled: three steps narrow a grant, and one widening move is refused.',
         'caption': (f'MODEL; the account cannot install an attenuated grant at the pinned build (proposed). Parent: '
                     + '; '.join(f'rule `{r["name"]}`: ' + ', '.join(t for t, _ in describe(r)) for r in parent)
                     + f'. Steps: {done}. Refused: {refused}; nothing changes. Each probe runs alone from empty records. '
-                    f'The child allows {n_c} of {len(probes)}, and the parent allows each of them.'),
+                    f'The child accepts {n_c} of {len(probes)}, and the parent accepts each of them.'),
         'editions': ['html'],
     }
 

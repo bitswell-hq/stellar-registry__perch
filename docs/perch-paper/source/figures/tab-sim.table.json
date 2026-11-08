@@ -87,8 +87,8 @@
   [
    "13",
    "close 100 ledgers",
-   "100 ledgers closed · window 1 of 10",
-   "100 ledgers closed · window 7 of 10"
+   "100 ledgers closed · record 1 XLM, outside the window",
+   "100 ledgers closed · record 7 XLM, outside the window"
   ],
   [
    "14",
@@ -98,6 +98,7 @@
   ]
  ],
  "title": "The recorded run, one command a row.",
- "caption": "Recorded by soroban-sim’s native run of the simulation page. OpenZeppelin requests carried 2 authorization entries, Perch requests 1. The window is the Perch grant’s record, or `spending_limit`’s history (none while it is removed). Every refusal was an enforcing simulation that left the ledger unchanged. Payments go to the shop unless noted.",
- "latex_size": "scriptsize"
+ "caption": "Recorded by soroban-sim’s native run of the simulation page. OpenZeppelin requests carried 2 authorization entries, Perch requests 1. The window is the Perch grant’s record, or `spending_limit`’s history (none while it is removed). Every refusal was an enforcing simulation that left the ledger unchanged. Payments go to the shop unless noted. The window column is the stored record; spends 100 or more ledgers old leave it at the next charge.",
+ "latex_size": "scriptsize",
+ "latex_colspec": "@{}r>{\\raggedright\\arraybackslash}p{0.17\\linewidth}LL@{}"
 }

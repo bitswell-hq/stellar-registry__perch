@@ -25,10 +25,10 @@ STAGES = [
      'The host calls `__check_auth`: the contexts, one named rule per context, the claimed signers.',
      [], 'trusted (host)'),
     ('guards', 'Guards',
-     'Refuse a context calling a reserved hook name ({{fact:reserved-hook-names}}), an account frozen by an authorized '
-     '`Protected` recovery attempt, and a selected grant rule on the adopted recovery controller or the zero-knowledge '
-     'adapter or pool of its recovery configuration. A recovery completion leaves here.',
-     'Reserved hook names, a frozen account, a grant rule on an adopted recovery contract.',
+     'Refuse a context calling a reserved hook name ({{fact:reserved-hook-names}}), an account frozen during a '
+     'recovery (the vision paper), and a selected grant rule on the account\u2019s adopted recovery contracts. '
+     'A recovery completion leaves here.',
+     'Reserved hook names, an account frozen during a recovery, a grant rule on the account\u2019s adopted recovery contracts.',
      ['`ReservedFunction` ({{fact:auth-error-reserved-function}})', '`AccountFrozen` ({{fact:auth-error-account-frozen}})',
       '`ScopeEscalation` ({{fact:auth-error-scope-escalation}})', 'a completion: decided by the recovery controller'],
      'tested'),
