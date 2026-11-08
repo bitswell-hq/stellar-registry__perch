@@ -535,7 +535,7 @@
     const history = el('ol', { class: 'xp-log', 'aria-label': 'Transfers, in order' });
     panel.append(params, toggles, plot,
       h('div', { class: 'xp-row' }, h('label', { class: 'xp-field xp-grow' }, h('span', {}, 'Inspect the window at ledger L'), inspect)),
-      inspectOut, fullest, h('p', { class: 'xp-sub' }, 'Every transfer, in order:'), history);
+      inspectOut, fullest, h('p', { class: 'xp-sub' }, 'Every transfer, in order (the plot\u2019s chips: solid accepted, dashed with a bar end refused, amber inside the inspected window):'), history);
 
     function run() {
       const base = st.zero ? 0 : BASE;
@@ -674,7 +674,10 @@
         out.push(`<rect class="bx-no dash" x="${n(xb)}" y="${n(yv(from + a.amount))}" width="10" height="${n(Math.max(2, yv(from) - yv(from + a.amount)))}" rx="0"/>`);
         out.push(`<path class="gl-d" d="M${n(xb)} ${n(yv(from + a.amount) - 15)}l10 10M${n(xb + 10)} ${n(yv(from + a.amount) - 15)}l-10 10"/>`);
       }
-      for (const v of R.replaced) out.push(`<line class="fl-k" x1="${n(xv(v))}" y1="${top - 6}" x2="${n(xv(v))}" y2="${y0}"/>`);
+      for (const v of R.replaced) {
+        out.push(`<line class="fl-k" x1="${n(xv(v))}" y1="${top - 6}" x2="${n(xv(v))}" y2="${y0}"/>`);
+        t(Math.min(xv(v) + 4, x1 - 70), top + 8, 'replaced', 'k');
+      }
       // the inspected window
       const a = M.sat(L, st.period);
       const xa = a >= lo ? xv(a) : x0;
@@ -1097,11 +1100,11 @@
         host: `Host call: ${what}; the app names ${names}; claimed signer: ${signer}.`,
         guards: 'Guards: no reserved hook name, the account is not frozen, and no grant rule is on a recovery contract. Passed.',
         select: `Select rules: ${names} found, with ${run.choices.length > 1 ? 'their' : 'its'} spending record${run.choices.length > 1 ? 's' : ''}. The account does not search.`,
-        decide: d.ok ? `Decide: every check passes${d.charges.length ? `; ${d.charges.map((c) => `charge ${c.charge.remaining} + ${c.charge.amount} = ${c.charge.total} ≤ ${c.charge.limit}`).join('; ')}` : ''}.`
+        decide: d.ok ? `Decide: every check passes${(d.charges || []).length ? `; ${(d.charges || []).map((c) => `charge ${c.charge.remaining} + ${c.charge.amount} = ${c.charge.total} ≤ ${c.charge.limit}`).join('; ')}` : ''}.`
           : `Decide: refused at ${refusalWhy(run)}. Nothing written; verifier called: no.`,
         authenticate: run.stage === 'authenticate' ? `Authenticate: the signature is not the app’s key; the verifier traps${trap ? ` (recorded run, command ${cmd}: ${trap})` : ''}. Nothing written.`
           : 'Authenticate: the app’s verifier checks the signature over the digest. Passed.',
-        store: `Store: ${d.charges.map((c) => `\`${run.rules[c.j].name}\`’s record now holds ${c.charge.total}`).join('; ') || 'no record changes'}. Accepted.`,
+        store: `Store: ${(d.charges || []).map((c) => `\`${run.rules[c.j].name}\`’s record now holds ${c.charge.total}`).join('; ') || 'no record changes'}. Accepted.`,
       }[stage];
       live.textContent = plain(t);
       if (k >= stopAt()) showResult(); else result.replaceChildren();
@@ -1174,8 +1177,8 @@
         h('p', { class: 'xp-guarantee' }, 'Window at most 10: holds while the rule exists.'));
       const items = st.order.map((name, i) => {
         const on = st.attached.has(name);
-        const up = button('Move up', { 'aria-label': `Move ${E4_NAME[name]} up` });
-        const down = button('Move down', { 'aria-label': `Move ${E4_NAME[name]} down` });
+        const up = button('Up', { 'aria-label': `Move ${E4_NAME[name]} up` });
+        const down = button('Down', { 'aria-label': `Move ${E4_NAME[name]} down` });
         const tog = button(on ? 'Detach' : 'Attach', { 'aria-label': `${on ? 'Detach' : 'Attach'} ${E4_NAME[name]}` });
         setOff(up, i === 0);
         setOff(down, i === st.order.length - 1);
@@ -1582,7 +1585,61 @@
     bar.append(toggle);
   };
 
+  // ---------------------------------------------------------------- reading paths
+  // <nav class="reading-paths"> holding anchors with data-path-choice="5|20|all" (the no-JS form)
+  // becomes a radio group. Blocks carry data-path="5", "20" or "5 20"; the 5-minute path keeps
+  // blocks tagged 5, the 20-minute path those tagged 5 or 20. A section with nothing kept
+  // collapses to its heading and lede, with a button to expand it. Print shows everything.
+  function readingPaths(nav) {
+    if (nav.dataset.ready || !document.querySelector('[data-path]')) return;
+    nav.dataset.ready = '1';
+    const choices = [...nav.querySelectorAll('[data-path-choice]')].map((a) => [a.dataset.pathChoice, squash(a.textContent)]);
+    if (!choices.length) return;
+    const name = uid('path');
+    const live = el('p', { class: 'rp-live', 'aria-live': 'polite' });
+    const fs = h('fieldset', { class: 'rp' }, h('legend', {}, 'Reading path'));
+    const sections = [...document.querySelectorAll('main section[id]')];
+    const keepAlways = (c) => c.matches('h2, .lede, .alias, .rp-expand');
+    const wanted = (v) => (e) => (e.dataset.path || '').split(' ').some((p) => p === '5' || (v === '20' && p === '20'));
+    function apply(v, say) {
+      let collapsed = 0;
+      for (const s of sections) {
+        for (const c of s.children) c.classList.remove('rp-hide');
+        for (const b of s.querySelectorAll(':scope > .rp-expand')) b.remove();
+        if (v === 'all') continue;
+        const want = wanted(v);
+        let hidden = 0;
+        for (const c of [...s.children]) {
+          if (keepAlways(c) || want(c) || [...c.querySelectorAll('[data-path]')].some(want)) continue;
+          c.classList.add('rp-hide');
+          hidden++;
+        }
+        if (!hidden) continue;
+        collapsed++;
+        const more = button('Expand this section', { class: 'rp-expand' });
+        more.onclick = () => { for (const c of s.children) c.classList.remove('rp-hide'); more.remove(); };
+        const after = s.querySelector(':scope > .lede') || s.querySelector(':scope > h2');
+        if (after) after.after(more); else s.prepend(more);
+      }
+      if (say) live.textContent = v === 'all' ? 'Whole paper: every section shown.' : `${v}-minute path: ${collapsed} sections shortened; each keeps its heading, its summary and an Expand button.`;
+      try { localStorage.setItem('perch-reading-path', v); } catch { /* storage unavailable */ }
+    }
+    let start = 'all';
+    try { start = localStorage.getItem('perch-reading-path') || 'all'; } catch { /* storage unavailable */ }
+    if (!choices.some(([v]) => v === start)) start = 'all';
+    for (const [v, label] of choices) {
+      const r = el('input', { type: 'radio', name, value: v, checked: v === start });
+      r.addEventListener('change', () => apply(v, true));
+      fs.append(h('label', { class: 'xp-radio' }, r, ` ${label}`));
+    }
+    nav.replaceChildren(fs, live);
+    apply(start, false);
+  }
+
   function init() {
+    for (const nav of document.querySelectorAll('.reading-paths')) {
+      try { readingPaths(nav); } catch (err) { console.error('reading paths:', err); }
+    }
     const helpers = (fig, detail) => ({ el, head, button, detail, stepper });
     for (const fig of document.querySelectorAll('figure.fig')) {
       const kind = fig.dataset.interactive;

@@ -87,6 +87,12 @@ class Paper:
                     fail(f'fact {k!r} defined twice (second in facts/{fp.name})')
                 self.facts[k] = v
         self.tables = {p.stem: json.loads(read(p)) for p in sorted((SRC / 'tables').glob('*.json'))}
+        # Tables a figure generator writes (build/figures/) sit beside its figure as <id>.table.json.
+        for tp in sorted((SRC / 'figures').glob('*.table.json')):
+            tid = tp.name[:-len('.table.json')]
+            if tid in self.tables:
+                fail(f'table {tid} exists both in tables/ and as figures/{tp.name}')
+            self.tables[tid] = json.loads(read(tp))
         self.all_statements = json.loads(read(SRC / 'statements.json'))
         # A statement may list the documents it appears in ("docs"); otherwise every document has it.
         self.statements = [x for x in self.all_statements if DOC['id'] in x.get('docs', [DOC['id']])]
@@ -454,6 +460,13 @@ def html_table_body(p, t, tid):
 def html_table(p, tid, numbered=True):
     t = p.tables[tid]
     body = html_table_body(p, t, tid)
+    if numbered and 'tab:' + tid not in p.numbers['html']:
+        fail(f'{DOC["id"]}: {{{{table:{tid}}}}} is placed but this document\'s outline does not list it '
+             f'(list it, or place it as {{{{table:{tid}|unnumbered}}}})')
+        numbered = False
+    if tid not in p.tables:
+        fail(f'{DOC["id"]}: table {tid} does not exist')
+        return ''
     lead = f'Table {p.numbers["html"]["tab:" + tid]}. ' if numbered else ''
     cap = (f'<caption>{lead}{render(p, t["title"], "html", tid)} '
            f'{render(p, t.get("caption", ""), "html", tid)}</caption>')

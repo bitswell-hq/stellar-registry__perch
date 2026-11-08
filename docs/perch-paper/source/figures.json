@@ -23,7 +23,7 @@
  },
  "fig-contexts": {
   "title": "One authorization, several contexts, using a game grant.",
-  "caption": "The game grant lets the app key call the game's `guess` and send at most {{fact:grant3-cap-xlm}} XLM per {{fact:grant3-period-ledgers}} ledgers to the game. The authorization payload names one installed rule per context. (a) A lost guess: the game's `guess` and the transfer it makes from the account; the capped rule charges the transfer. (b) A win authorizes only the root, and the game pays from its own balance. (c) A direct transfer within the cap, with no game call, is also allowed, because each context is checked alone. Draft changes after the pinned build ({{fact:exact-roots-prs}}) would let a rule require its entry's root ({{ref:sec:agents}}).",
+  "caption": "The game grant lets the app key call the game's `guess` and transfer at most {{fact:grant3-cap-xlm}} XLM per {{fact:grant3-period-ledgers}} ledgers to any recipient; it pins no recipient, which case (c) shows. The authorization payload names one installed rule per context. (a) A lost guess: the game's `guess` and the transfer it makes from the account; the capped rule charges the transfer. (b) A win authorizes only the root, and the game pays from its own balance. (c) A direct transfer within the cap, with no game call, is also allowed, because each context is checked alone. Draft changes after the pinned build ({{fact:exact-roots-prs}}) would let a rule require its entry's root ({{ref:sec:agents}}).",
   "editions": [
    "html"
   ]

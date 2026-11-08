@@ -53,7 +53,7 @@
 .xp button[aria-pressed=true]{border-color:var(--amber);box-shadow:inset 0 0 0 1px var(--amber);font-weight:650}
 .xp select,.xp input[type=number]{padding:.35rem .5rem;border:1px solid var(--edge);background:var(--bg);color:var(--text);max-width:100%}
 .xp input[type=number]{width:5.5rem}
-.xp input[type=range]{min-height:44px;accent-color:var(--amber);width:100%;min-width:8rem}
+.xp input[type=range]{min-height:44px;accent-color:var(--amber);width:100%;min-width:8rem;border:0;padding:0;background:transparent}
 .xp input[type=checkbox],.xp input[type=radio]{width:1.15rem;height:1.15rem;accent-color:var(--amber);margin:0}
 .xp :focus-visible,.sim-embed :focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 .xp .fig-head{margin:0 0 .5rem}
@@ -62,7 +62,7 @@
 .xp-field>span{line-height:1.3}
 .xp-grow{flex:1 1 16rem}
 .xp-row{display:flex;flex-wrap:wrap;gap:.5rem .8rem;align-items:end;margin:.5rem 0}
-.xp-check,.xp-radio{display:inline-flex;align-items:center;gap:.45rem;min-height:44px;font-size:.85rem;color:var(--text);cursor:pointer}
+.xp-check,.xp-radio{display:inline-flex;flex-direction:row;align-items:center;gap:.45rem;min-height:44px;font-size:.85rem;color:var(--text);cursor:pointer}
 .xp-chip{display:inline-block;font:650 .66rem var(--mono);letter-spacing:.08em;border:1.5px solid var(--fig-stroke);border-radius:3px;padding:.05rem .4rem;color:var(--text);vertical-align:.1em;white-space:nowrap}
 .xp-chip[data-kind=model]{border-style:dashed}
 .xp-chip[data-kind=recorded]{border-style:solid}
@@ -74,7 +74,7 @@
 .xp-out{display:block;font-size:.85rem;color:var(--em);font-variant-numeric:tabular-nums}
 .xp-params{border-top:0;margin:.3rem 0;padding-top:0}
 .xp-params summary{min-height:44px;display:flex;align-items:center}
-.xp-mark{display:inline-block;width:1.1em;text-align:center;font-weight:700}
+.xp-mark{display:inline-block;min-width:1.1em;white-space:nowrap;text-align:center;font-weight:700}
 .xp-yes .xp-mark,.xp-ok>.xp-mark{color:var(--text)}
 .xp-no,.xp-refused{color:var(--deny)}
 .xp-no .xp-mark::after,.xp-refused>.xp-mark::after{content:"|";font-weight:700;margin-left:.05em}
@@ -145,3 +145,12 @@
 @media print{.xp,.sim-actions,.sim-frame,.thm-try,.sim-try{display:none!important}}
 [data-explorable].xp-on{container:fig/inline-size}
 .thm-try:has(>.thm-instance:empty){display:none}
+@container fig (max-width:560px){.xp-compose .fig-head,.xp-att .fig-head{position:static}.xp-policies li{padding:.2rem .4rem}}
+/* Reading paths (figures.js): a radio group over the blocks tagged data-path; print shows everything. */
+.reading-paths .rp{display:flex;flex-wrap:wrap;gap:.2rem 1rem;align-items:center;border:1px solid var(--line);border-radius:6px;padding:.1rem .8rem .3rem;margin:1rem 0 0}
+.reading-paths .rp legend{font-size:.75rem;color:var(--muted);padding:0 .3rem}
+.reading-paths .xp-radio input{width:1.15rem;height:1.15rem;accent-color:var(--amber);margin:0}
+.rp-live{font-size:.8rem;color:var(--muted);margin:.3rem 0;min-height:1em}
+.rp-expand{min-height:44px;font:inherit;font-size:.85rem;padding:.4rem .8rem;border:1px solid var(--edge);border-radius:6px;background:var(--btn);color:var(--text)}
+@media screen{.rp-hide{display:none!important}}
+@media print{.rp-expand,.reading-paths{display:none!important}}

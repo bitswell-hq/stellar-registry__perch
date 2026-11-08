@@ -37,8 +37,8 @@ documents use `{{doc:<id>}}` (LaTeX `\perchdoc{<id>}`) and `{{root}}`. Math is
 written in LaTeX (`\(..\)`, `\[..\]`, statement `math`); `build/texmath.py`
 turns it into MathML for the HTML, set in PerchMath, a STIX Two Math subset
 (`source/html/fonts/`). Figures are drawn by `build/figures/fig_*.py`; the
-explorables and theorem instances live in `source/html/model.js` and
-`figures.js`, and without JavaScript, in print and in the PDF every figure
+explorables and theorem instances live in `source/html/figures.js`
+(`PerchModel`), and without JavaScript, in print and in the PDF every figure
 shows its static form.
 
 ## Building
@@ -47,7 +47,7 @@ shows its static form.
 python3 docs/perch-paper/build/paper.py            # write every page and latex/generated/
 python3 docs/perch-paper/build/paper.py --check    # CI: fail if anything is stale or the figures drift
 python3 docs/perch-paper/build/figures/make.py     # redraw the figures from their data
-node docs/perch-paper/build/test_model.mjs         # the explorables' models against the definitions
+node docs/perch-paper/build/figures/test_model.mjs # the explorables' models against the definitions
 docs/perch-paper/latex/build.sh                    # every PDF; needs Tectonic 0.17.0 on PATH or in $TECTONIC
 ```
 
