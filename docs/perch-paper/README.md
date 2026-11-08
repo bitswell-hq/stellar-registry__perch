@@ -1,56 +1,70 @@
 # Perch paper
 
-The paper has two editions built from one source:
+One source builds four documents, each with an interactive HTML edition and,
+where it helps, an academic LaTeX edition (LNCS):
 
-- `index.html`, the interactive edition for a general audience. It embeds an
-  executable Wasm experiment, its source download, the pinned build manifest
-  and proof boundaries, and works offline from disk.
-- `latex/perch-paper.pdf`, the academic edition (LNCS). CI builds it with a
-  pinned Tectonic and publishes it beside the HTML, which links it; it is not
-  committed.
+| Document | HTML | PDF |
+| --- | --- | --- |
+| Main paper | `index.html` | `latex/perch-paper.pdf` |
+| Perch and oz-policy-builder | `oz-policy-builder/index.html` | `oz-policy-builder/latex/oz-policy-builder.pdf` |
+| What Perch proves | `verification/index.html` | `verification/latex/verification.pdf` |
+| The Perch vision | `vision/index.html` | — |
+
+CI builds the PDFs with a pinned Tectonic and publishes each beside its page;
+they are not committed. `sim/` is the simulation the main paper embeds: an
+OpenZeppelin account with oz-policy-builder's policy and a Perch account, run
+side by side in soroban-sim in the browser (its own `README.md`).
 
 ## Sources
 
-`source/outline.json` orders the sections, figures and tables of both editions,
-so their numbering agrees. Everything an edition states as a fact comes from
-shared data:
+`source/documents.json` lists the documents. Each has an outline
+(`source/outline.json` for the main paper, `source/papers/<id>/outline.json` for
+a companion) that orders its sections, figures and tables in both editions,
+so their numbering agrees. Everything a page states as a fact comes from data
+all documents share:
 
 | Source | Holds | HTML | LaTeX |
 | --- | --- | --- | --- |
 | `source/facts/*.json` | numbers, hashes, versions, dates | `{{fact:key}}` | `\fact{key}` |
 | `source/tables/<id>.json` | tables | `{{table:id}}` | `\perchtable{id}` |
-| `source/figures/<id>.svg` | figures (wide; `.narrow.svg` for phones) | `{{fig:id}}` | `\perchfigure{id}` (TikZ from the same SVG) |
-| `source/statements.json` | formal statements | `{{statements}}` | `generated/statements.tex` |
+| `source/figures.json`, `source/figures/` | figures: captions, SVG (`.narrow.svg` for phones), data | `{{fig:id}}` | `\perchfigure{id}` (TikZ from the same SVG) |
+| `source/statements.json`, `source/definitions.json` | theorems and definitions, with LaTeX math | `{{statements:T2,T6}}`, `{{definitions}}` | `generated/statements/<label>.tex`, `generated/definitions.tex` |
 | `source/refs.bib` | references | `{{cite:key}}`, list generated | `\cite{key}` |
 
-Prose is per edition: `source/html/sections/<id>.html` (general audience) and
-`latex/sections/<id>.tex` (academic). Shared strings use a small inline markup:
-`` `code` ``, `**strong**`, `*em*`, `[text](url)` and the `{{…}}` directives
-above (`build/paper.py` documents them).
-
-Interactive figures enhance the static SVG with `source/html/figures.js`
-(`data-step`, `data-scenario`, `data-detail`, `data-print="no"`); without
-JavaScript, and in print and the PDF, every step shows.
+Prose is per edition: `source/html/sections/` or `source/papers/<id>/html/sections/`
+(general audience) and `<latex folder>/sections/` (academic). Links between
+documents use `{{doc:<id>}}` (LaTeX `\perchdoc{<id>}`) and `{{root}}`. Math is
+written in LaTeX (`\(..\)`, `\[..\]`, statement `math`); `build/texmath.py`
+turns it into MathML for the HTML, set in PerchMath, a STIX Two Math subset
+(`source/html/fonts/`). Figures are drawn by `build/figures/fig_*.py`; the
+explorables and theorem instances live in `source/html/model.js` and
+`figures.js`, and without JavaScript, in print and in the PDF every figure
+shows its static form.
 
 ## Building
 
 ```sh
-python3 docs/perch-paper/build/paper.py          # write index.html and latex/generated/
-python3 docs/perch-paper/build/paper.py --check  # CI: fail if either is stale
-docs/perch-paper/latex/build.sh                  # PDF; needs Tectonic 0.17.0 on PATH or in $TECTONIC
+python3 docs/perch-paper/build/paper.py            # write every page and latex/generated/
+python3 docs/perch-paper/build/paper.py --check    # CI: fail if anything is stale or the figures drift
+python3 docs/perch-paper/build/figures/make.py     # redraw the figures from their data
+node docs/perch-paper/build/test_model.mjs         # the explorables' models against the definitions
+docs/perch-paper/latex/build.sh                    # every PDF; needs Tectonic 0.17.0 on PATH or in $TECTONIC
 ```
 
-`build.sh` pins the TeX bundle, fails on any undefined or changed reference
-or citation or a glyph the fonts lack, and writes the PDF to `latex/out/`.
-`ANONYMOUS=1` builds the double-blind edition as
-`latex/out/perch-paper-anonymous.pdf`. `build/paper.py` needs Python 3.12 or
-later and uses only the standard library.
+`build.sh` pins the TeX bundle and fails on any undefined or changed reference
+or citation or a glyph the fonts lack; `ONLY=<id>` builds one paper,
+`ANONYMOUS=1` the main paper's double-blind edition
+(`latex/out/perch-paper-anonymous.pdf`), and `--stage DIR` copies each PDF to
+the path its page links. `build/paper.py` needs Python 3.12 or later and uses
+only the standard library.
 
-`index.html` keeps four blocks that the embedded source bundle's
+The vision paper (`vision/index.html`) carries the Perch-only live experiment
+and its four blocks that the embedded source bundle's
 `projects/perch-browser/build-page.mjs` refreshes in place (`MEASUREMENTS`,
-`MANIFEST_TABLE`, `GOLDEN`, `EMBEDDED_ASSETS`); `paper.py` copies them from the
-current file, so the two tools can run in either order. Do not edit any other
-part of `index.html` by hand; edit `source/` and rebuild.
+`MANIFEST_TABLE`, `GOLDEN`, `EMBEDDED_ASSETS`); pass that page to
+`build-page.mjs`. `paper.py` copies the blocks from the current page, so the
+two tools can run in either order. Do not edit a generated page by hand; edit
+`source/` and rebuild.
 
 Links to sibling pages use relative paths (for example
 `../cedar-walkthrough/index.html#perch`) so they work at the site root and in a
