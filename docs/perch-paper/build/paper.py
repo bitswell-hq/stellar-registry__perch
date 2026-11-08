@@ -598,6 +598,13 @@ def build_html(p, blocks):
     nav.append(f'</div><small>{o["nav_note"]}</small></nav>')
     css = '\n'.join(read(SHARED_HTML / n).strip() for n in ('style.css', 'page.css', 'figures.css')
                     if (SHARED_HTML / n).exists())
+    font = SHARED_HTML / 'fonts' / 'perch-math.woff2'
+    if font.exists():
+        import base64
+        css = ('/* PerchMath: a subset of STIX Two Math (c) The STIX Fonts Project Authors, SIL Open Font License 1.1; '
+               'see source/html/fonts/. */\n@font-face{font-family:PerchMath;src:url(data:font/woff2;base64,'
+               + base64.b64encode(font.read_bytes()).decode() + ') format("woff2");font-display:swap}'
+               '\nmath{font-family:PerchMath,math}\n' + css)
     head = read(html_file('head.html')).replace('{{style}}', css)
     parts = [expand_html(p, head, 'head', blocks, seen).strip(), ''.join(nav), '']
     wt = f' data-walkthrough="{"../" * (DEPTH + 1)}oz-walkthrough/index.html"' if WALKTHROUGH.exists() else ''
