@@ -2,15 +2,20 @@
 # Populate the build-time pin directories from a deployment manifest
 # (deployments/<network>.json, written by scripts/deploy-stack.sh):
 #
-#   crates/perch-smart-account/wasm/    stateless.id, perch-doc-compiler,
-#                                       perch-interpreter, perch-spending-limit
-#   crates/perch-account-factory/wasm/  stateless.id, perch-account,
-#                                       perch-webauthn-verifier
+#   crates/perch-smart-account/wasm/    perch-doc-compiler, perch-interpreter,
+#                                       perch-spending-limit
+#   crates/perch-account-factory/wasm/  perch-account, perch-webauthn-verifier
 #
 # Each name gets <name>.wasm (git-ignored; only tests read the bytes) and
-# <name>.sha256 (committed, with stateless.id: all a build reads, so a plain
+# <name>.sha256 (committed, with registry.path: all a build reads, so a plain
 # checkout builds without this script). scripts/check-pins.sh checks the
-# committed pins against the manifest offline.
+# committed pins against the manifest.
+#
+# The registry is not a fetched pin: both crates commit the path they derive
+# it from (wasm/registry.path), and the manifest's registry must be the one
+# that path derives on its network, or a migration
+# deployments/pending-registry.json declares (scripts/manifest-registry.sh).
+# This script refuses any other manifest and never rewrites the path.
 #
 # Each wasm is fetched from the chain by the exact address (or, for the
 # account, the exact wasm hash) the manifest records, and refused unless
@@ -25,7 +30,8 @@
 #   --manifest  default deployments/${STELLAR_NETWORK:-testnet}.json
 #   --stack     also fetch every manifest contract into <dir> and write
 #               <dir>/build.json, so tests/release_stack.rs runs against the
-#               deployed bytes
+#               deployed bytes; it keeps the manifest's zk circuit, which
+#               those bytes compile in
 #
 # Requires the Stellar CLI. After a redeploy, run
 # `cargo test -p perch-integration-tests --test testnet_pins`.
@@ -33,7 +39,8 @@
 # The npm package @stellar-registry/perch-artifacts ships this script as
 # `perch-fetch-infra-wasm`, beside a copy of deployments/. There is no crate
 # tree to pin there, so it needs --stack, fills only that, and checks content
-# addresses with the package's own perch-derive-id.
+# addresses with the package's own perch-derive-id (a perch checkout uses
+# scripts/derive-id.py).
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -62,8 +69,7 @@ registry="$(m .registry.id)"
 
 sha256() { if command -v sha256sum >/dev/null; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi; }
 if $checkout; then
-    (cd "$repo_root" && cargo build -q -p perch-derive-id)
-    derive() { "$repo_root/target/debug/perch-derive-id" content "$registry" "$1" "$(m .network_passphrase)"; }
+    derive() { "$repo_root/scripts/derive-id.py" content "$registry" "$1" "$(m .network_passphrase)"; }
 else
     derive() { node "$repo_root/dist/cli/derive-id.js" content "$registry" "$1" "$(m .network_passphrase)"; }
 fi
@@ -114,8 +120,6 @@ fetch() { # contract-name out-file
 pin() { # crate names...
     local dir="$repo_root/crates/$1/wasm" name
     shift
-    mkdir -p "$dir"
-    printf '%s' "$registry" >"$dir/stateless.id"
     for name in "$@"; do
         fetch "$name" "$dir/$name.wasm"
         sha256 "$dir/$name.wasm" >"$dir/$name.sha256"
@@ -123,6 +127,10 @@ pin() { # crate names...
 }
 
 if $checkout; then
+    state="$("$repo_root/scripts/manifest-registry.sh" --manifest "$manifest")"
+    case "$state" in
+        pending\ *) echo "warning: pending registry migration (deployments/pending-registry.json): $state" >&2 ;;
+    esac
     echo "fetching pins from $(basename "$manifest") (registry $registry) ..." >&2
     pin perch-smart-account perch-doc-compiler perch-interpreter perch-spending-limit
     pin perch-account-factory perch-account perch-webauthn-verifier
@@ -133,7 +141,7 @@ if [ -n "$stack" ]; then
     for name in $(m '.contracts | keys[]'); do
         fetch "$name" "$stack/${name//-/_}.wasm"
     done
-    jq '{registry: .registry.id, source, toolchain,
+    jq '{registry: .registry.id, source, toolchain} + (if .zk then {zk} else {} end) + {
          artifacts: [.contracts | to_entries[] |
            {package: .key, version: .value.version, wasm: (.key | gsub("-"; "_") + ".wasm"),
             sha256: .value.sha256, bytes: .value.bytes, tier: .value.tier,

@@ -46,6 +46,7 @@ impl Verifier for PerchWebAuthnVerifier {
         webauthn::canonicalize_key(e, &key_data)
     }
 
+    /// [`Self::canonicalize_key`] for each key, in input order.
     fn batch_canonicalize_key(e: &Env, key_data: Vec<Bytes>) -> Vec<Bytes> {
         webauthn::batch_canonicalize_key(e, &key_data)
     }

@@ -38,6 +38,11 @@
 //! recovery completion is decided by OZ's `do_check_auth` and the recovery
 //! controller alone, and so is every authorization of an account upgraded
 //! from code that kept no stored rule set, until its first `apply_doc`.
+//!
+//! Doc comments on the account's entry points and contract types are
+//! compiled into its wasm's contract spec, which counts against the
+//! network's 131,072-byte contract-size limit. Some field and entry-point
+//! notes are therefore plain `//` comments, which stay out of the wasm.
 #![no_std]
 
 extern crate alloc;
@@ -83,19 +88,21 @@ pub use stellar_accounts;
 
 /// The registry the infra was `deploy_stateless`'d from — the content-addressed
 /// deployer the infra derive their address from: the deployment manifest's
-/// `registry.id` (`deployments/<network>.json`). Its id is **not hardcoded in
-/// source**: it is the committed `wasm/stateless.id`, `include_str!`'d here,
-/// which `scripts/fetch-infra-wasm.sh` (or `scripts/build-stack.sh`) rewrites.
-pub fn stateless_registry(env: &Env) -> Address {
-    Address::from_str(env, include_str!("../wasm/stateless.id").trim())
+/// `registry.id` (`deployments/<network>.json`) for the current network. It is
+/// **not hardcoded in source**: the committed `wasm/registry.path` names the
+/// Stellar Registry root's deployer and salt and the named deploys below it,
+/// and every hop is derived under the ledger's network id, so one build
+/// resolves each network's own registry.
+pub fn constructorless_registry(env: &Env) -> Address {
+    infra::perch_doc_compiler::registry(env)
 }
 
 /// Content-addressed resolvers for the shared infra, named like
 /// `import_contract_client!`. Each `infra::<name>::address(env)` derives
-/// `deployer(stateless_id, sha256(wasm))` fully offline, with **both** the
-/// stateless registry id (from `wasm/stateless.id`) and the wasm hash (from
-/// `wasm/<name>.sha256`) baked at build time from the committed pins
-/// (`wasm/README.md`; a missing file is a build error). Pinned ⇒ a
+/// `deployer(constructorless_registry(env), sha256(wasm))` fully offline, with
+/// **both** the registry's derivation (`wasm/registry.path`) and the wasm
+/// hash (`wasm/<name>.sha256`) baked at build time from the committed
+/// pins (`wasm/README.md`; a missing file is a build error). Pinned ⇒ a
 /// registry republish can't change a deployed account's behavior (`installed ==
 /// reviewed`), and only the names live in source. Grouped in a module so the
 /// derived names don't collide with the `perch_doc_compiler` crate.
@@ -104,9 +111,9 @@ pub mod infra {
     perch_registry_resolve::registry_contract!(perch_interpreter);
 
     // Published and `deploy_stateless`\'d into the same registry as the two
-    // above: the one id in `wasm/stateless.id` derives all three, so they must
-    // share a registry (canonically unverified/perch/constructorless; a
-    // deployment's own instance otherwise, per its manifest).
+    // above: one registry path derives all three, so on each network they
+    // must share a registry (canonically perch/constructorless under that
+    // network's Stellar Registry root).
     perch_registry_resolve::registry_contract!(perch_spending_limit);
 }
 
@@ -144,8 +151,12 @@ pub enum PerchAccountError {
     /// The recovery generation moved since the upgrade was scheduled
     /// (spec §12). The request stays pending but can never execute.
     StaleUpgrade,
+    /// The doc compiler refused the document (its `DocCompilerError` says
+    /// why).
     #[from_contract_client]
     Compiler(DocCompilerError),
+    /// The adopted recovery controller refused the call (its `RecoveryError`
+    /// says why).
     #[from_contract_client]
     Recovery(RecoveryError),
     /// `apply_doc` named an `expected_revision` and the account is at
@@ -236,6 +247,8 @@ pub struct ScopeRecord {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FreezeGate {
+    // The authorized attempt, the only one whose completion the account
+    // authorizes while frozen.
     pub attempt_id: u64,
     /// The authorized attempt's `expires_at`.
     pub until: u32,
@@ -262,6 +275,7 @@ pub struct AccountConfiguration {
     pub doc_hash: Option<BytesN<32>>,
     /// Every installed context rule, with its OZ id.
     pub rules: Vec<InstalledRule>,
+    // The adopted recovery controller, if any.
     pub recovery_controller: Option<Address>,
     /// The zero-signer recovery rule's OZ id, if one is installed.
     pub recovery_rule: Option<u32>,
@@ -269,7 +283,11 @@ pub struct AccountConfiguration {
     /// `#[contracttype]` has no conversion for `Option` of a custom struct).
     /// It is in force while the ledger is below its `until`.
     pub gate: Vec<FreezeGate>,
+    // The recovery generation (spec §12), as
+    // [`PerchSmartAccount::recovery_generation`] returns it.
     pub recovery_generation: u64,
+    // The shared infra the account pins, as [`PerchSmartAccount::infra`]
+    // returns it.
     pub infra: InfraPins,
 }
 
@@ -470,6 +488,7 @@ pub struct UpgradeScheduled {
     #[topic]
     pub request_id: u64,
     pub wasm_hash: BytesN<32>,
+    // The first ledger at which `execute_upgrade` may run it.
     pub executable_at: u32,
 }
 
@@ -588,12 +607,10 @@ pub trait PerchSmartAccount: CustomAccountInterface + SmartAccount {
     /// Apply the admin document: the account's own rules, its recovery
     /// member, and everything a recovery restores. With the scoped-document
     /// entry points ([`Self::apply_scope`]), **the only way authorization
-    /// changes**. The two shared, immutable infra contracts (the stateless
-    /// doc compiler and the interpreter) are derived from the
-    /// build-time-pinned [`stateless_registry`] (see [`infra`]), never
-    /// passed in. Brings the installed rules to the document in one
-    /// invocation, changing only the rules that differ, and returns the
-    /// canonical `doc_hash`.
+    /// changes**. The shared, immutable doc compiler it calls is derived from
+    /// build-time pins (see [`infra`]), never passed in. Brings the installed
+    /// rules to the document in one invocation, changing only the rules that
+    /// differ, and returns the canonical `doc_hash`.
     ///
     /// Authorized by the owner (any ordinary rule scoped to the account),
     /// or, for a recovery completion only, by the zero-signer recovery rule
@@ -656,8 +673,8 @@ pub trait PerchSmartAccount: CustomAccountInterface + SmartAccount {
     }
 
     /// The canonical `doc_hash` of the currently applied policy document, or
-    /// `None` if only the constructor's admin rule exists. Anyone can check
-    /// installed == reviewed.
+    /// `None` before the first `apply_doc` (only the constructor's admin rule
+    /// exists then). Anyone can check installed == reviewed.
     fn applied_doc_hash(e: &Env) -> Option<BytesN<32>> {
         PerchStorage::get_applied_doc(e)
     }
@@ -931,9 +948,9 @@ pub trait PerchSmartAccount: CustomAccountInterface + SmartAccount {
         }
     }
 
-    /// Extend the account's instance, applied document, and the named
-    /// revoked-set and enrolled-id entries to the network maximum.
-    /// Permissionless; changes no meaning.
+    /// Extend the account's instance, the applied document and its credential
+    /// fingerprints, and the named revoked-set and enrolled-id entries to the
+    /// network maximum. Permissionless; changes no meaning.
     fn renew(e: &Env, fingerprints: Vec<BytesN<32>>, enrollment_ids: Vec<BytesN<32>>) {
         extend_persistent(e, |ttl| {
             e.storage().instance().extend_ttl(ttl, ttl);
@@ -980,7 +997,8 @@ pub trait PerchSmartAccount: CustomAccountInterface + SmartAccount {
         smart_account::get_context_rules_count(e)
     }
 
-    /// See [`Self::get_context_rules_count`].
+    // The OZ context rule with this id; panics if there is none. Re-exposed
+    // like [`Self::get_context_rules_count`].
     fn get_context_rule(e: &Env, context_rule_id: u32) -> ContextRule {
         smart_account::get_context_rule(e, context_rule_id)
     }
@@ -1733,10 +1751,13 @@ fn apply_rules(
     sum
 }
 
-/// Constructor helper: install rule 0, "admin", scoped
-/// `CallContract(self)` — the admin signers may manage this account (i.e.
-/// call `apply_doc`) and nothing else. Every other capability arrives via an
-/// applied, doc-reviewed rule set.
+/// Constructor helper: install rule 0, "admin", a policy-free rule scoped
+/// `CallContract(self)`, and store the rule-eval rule it enforces. A rule
+/// scoped to the account authorizes every account entry point that requires
+/// the account's own authorization (`apply_doc`, the scoped-document entry
+/// points, `execute`, the upgrade and recovery-cancel entry points), so the
+/// admin signers hold full owner authority. Every other rule arrives via an
+/// applied, doc-reviewed document.
 pub fn install_admin(e: &Env, admin_signers: &Vec<Signer>) {
     let rule = smart_account::add_context_rule(
         e,
@@ -1779,6 +1800,11 @@ macro_rules! impl_perch_smart_account {
             type Error = $crate::soroban_sdk::Error;
             type Signature = $crate::stellar_accounts::smart_account::AuthPayload;
 
+            // Refuse reserved invoker-only names and, under a `Protected`
+            // freeze, everything but the authorized completion; then bind
+            // the digest to this account and decide with rule-eval (OZ for a
+            // recovery completion), as `perch_smart_account::check_auth`
+            // documents.
             fn __check_auth(
                 e: $crate::soroban_sdk::Env,
                 signature_payload: $crate::soroban_sdk::crypto::Hash<32>,

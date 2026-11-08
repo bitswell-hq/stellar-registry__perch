@@ -34,6 +34,15 @@ Usage:
       The in-repo directories of every path package the crate links (its
       workspace crates and vendored sources), one per line: what its
       `paths_for()` scope must cover.
+  release-deps.py inputs <crate> <rev-a> <rev-b>
+      One line per build input of the crate that differs between the two
+      commits, nothing if none: the directory of every path package it
+      links, any file outside those directories that their sources
+      include_bytes!/include_str!, the Cargo.lock entries of every package
+      it links, the root Cargo.toml tables it builds with ([profile],
+      [patch], [workspace.package], the [workspace.dependencies] entries it
+      inherits), and rust-toolchain.toml and .cargo/config(.toml). Another
+      crate's version bump, or a lock entry it does not link, is no input.
 """
 
 import posixpath
@@ -189,6 +198,60 @@ def changes(crate, base_rev, head_rev):
     return out
 
 
+INCLUDE = re.compile(r'include_(?:bytes|str)!\(\s*"([^"]+)"\s*\)')
+
+
+def object_id(rev, path):
+    """The git object `path` names at `rev` (a tree or a blob), or None."""
+    r = subprocess.run(["git", "rev-parse", "-q", "--verify", f"{rev}:{path}"], capture_output=True, text=True)
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+def build_inputs(crate, rev):
+    """{input: value} for everything `crates/<crate>`'s build reads at `rev`."""
+    tree = Tree(rev)
+    paths, externals, inherited = tree.closure(crate)
+    inside = lambda path: any(path == d or path.startswith(d + "/") for d in paths)
+    out = {}
+    for directory, name in paths.items():
+        out[f"{directory}/"] = object_id(rev, directory)
+        files = subprocess.run(["git", "ls-tree", "-r", "--name-only", rev, "--", directory],
+                               capture_output=True, text=True, check=True).stdout.split()
+        for f in files:
+            if not f.endswith(".rs"):
+                continue
+            for rel in INCLUDE.findall(show(rev, f) or ""):
+                target = posixpath.normpath(posixpath.join(posixpath.dirname(f), rel))
+                if not inside(target):
+                    out[target] = object_id(rev, target)
+        locked = next((p for p in tree.by_name.get(name, []) if "source" not in p), None)
+        if locked is not None:
+            out[f"Cargo.lock {name}"] = (locked["version"], sorted(locked.get("dependencies", [])))
+    for (name, version, source), p in externals.items():
+        out[f"Cargo.lock {name} {version} {source}"] = p.get("checksum")
+    for table in ("profile", "patch"):
+        out[f"Cargo.toml [{table}]"] = tree.root.get(table)
+    out["Cargo.toml [workspace.package]"] = tree.root.get("workspace", {}).get("package")
+    for key in inherited:
+        out[f"Cargo.toml [workspace.dependencies] {key}"] = tree.workspace_deps.get(key)
+    for path in TOOLCHAIN_FILES:
+        out[path] = show(rev, path)
+    return out
+
+
+def input_changes(crate, rev_a, rev_b):
+    a, b = build_inputs(crate, rev_a), build_inputs(crate, rev_b)
+    out = []
+    for key in sorted(a.keys() | b.keys()):
+        if key not in a:
+            out.append(f"{key} added")
+        elif key not in b:
+            out.append(f"{key} removed")
+        elif a[key] != b[key]:
+            out.append(f"{key} changed")
+    return out
+
+
 def latest_tag(crate):
     """The highest `<crate>-v<version>` tag (not another crate's whose name
     extends this one, like perch-account-factory-v* for perch-account)."""
@@ -206,6 +269,9 @@ def main(argv):
             print(f"fix(deps): {line}")
     elif len(argv) >= 3 and argv[0] == "changes":
         for line in changes(argv[1], argv[2], argv[3] if len(argv) > 3 else "HEAD"):
+            print(line)
+    elif len(argv) == 4 and argv[0] == "inputs":
+        for line in input_changes(argv[1], argv[2], argv[3]):
             print(line)
     elif len(argv) >= 2 and argv[0] == "scope":
         paths, _, _ = Tree(argv[2] if len(argv) > 2 else "HEAD").closure(argv[1])

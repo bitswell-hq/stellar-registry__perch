@@ -56,7 +56,7 @@ and requires a `CANON_VERSION` bump.
 `deploy/` holds the deployment PolicyDoc template
 (`perch-testnet.template.json`) and the infra list
 `scripts/bootstrap-testnet.sh` publishes content-addressed
-(`stateless-manifest.json`). The bootstrap writes the per-network documents
+(`constructorless-manifest.json`). The bootstrap writes the per-network documents
 it generates from the template (`perch-testnet.json`,
 `perch-testnet.rules.json`) next to them; those are not committed. These
 files are environment-specific, expected to change, and pinned by nothing.

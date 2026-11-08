@@ -82,8 +82,11 @@ impl CompiledZkFactor {
 #[contracttype]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CompiledRecoveryMode {
+    /// A quorum of guardians.
     GuardianOnly(CompiledGuardianSet),
+    /// One ZK proof.
     ZkOnly(CompiledZkFactor),
+    /// A quorum of guardians and one ZK proof.
     Combined(CompiledGuardianSet, CompiledZkFactor),
 }
 
@@ -96,7 +99,10 @@ pub struct CompiledRecoveryConfig {
     /// identity: two compiled configurations with the same `config_hash` are
     /// the same configuration.
     pub config_hash: BytesN<32>,
+    /// Who may change the configuration, and whether an authorized attempt
+    /// freezes the account.
     pub profile: RecoveryProfile,
+    /// The factors evidence must satisfy.
     pub mode: CompiledRecoveryMode,
     /// The adopted controller instance.
     pub controller: Address,
@@ -106,8 +112,12 @@ pub struct CompiledRecoveryConfig {
     /// Signer ids (not credential fingerprints) a recovery may replace, so
     /// rotating a key does not change the configuration (#92).
     pub replaceable: Vec<String>,
+    /// Ledgers from an attempt's authorization until it can complete.
     pub delay_ledgers: u32,
+    /// The evidence window of a collecting attempt and the completion
+    /// window of an authorized one, in ledgers.
     pub expiry_ledgers: u32,
+    /// Lifetime cap on evidence-based cancellations of authorized attempts.
     pub max_cancels: u32,
 }
 
