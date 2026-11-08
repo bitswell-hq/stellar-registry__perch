@@ -20,75 +20,21 @@
   ],
   [
    "Grant document",
-   "The JSON a wallet submits to install a grant; an input and a hash commitment",
+   "The JSON the owner submits to install a grant",
    "scope document",
    "—"
   ],
   [
-   "Installed grant",
-   "The rules and metadata stored under a grant ID, stamped with the grant generation",
-   "`apply_scope`, `scope(id)`",
-   "—"
-  ],
-  [
    "Rule",
-   "One target contract, function list, argument conditions and signer threshold, with optional expiry, cap and generation",
+   "One target contract, function list, argument conditions and signer threshold, with an optional expiry and cap",
    "`Rule`",
    "Context rule (below)"
   ],
   [
-   "Rule target",
-   "The contract whose functions a rule lets be called",
-   "JSON `\"scope\"`",
-   "The context rule's `CallContract` address"
-  ],
-  [
-   "Signer condition",
-   "Which listed signers must approve: a threshold over distinct identities",
-   "JSON `\"principals\"`",
-   "The rule's signers, with a threshold policy attached"
-  ],
-  [
-   "External signer",
-   "Key material plus a verifier contract that checks evidence for it (Ed25519, WebAuthn passkey)",
-   "`Signer::External`",
-   "Same enum case; refused on rules the interpreter polices (error {{fact:opb-error-external-signer}})"
-  ],
-  [
-   "Delegated signer",
-   "Another Soroban address that approves through the host; in Perch through CAP-0071, inside the account's own authorization entry",
-   "`Signer::Delegated`",
-   "Same enum case; approves in an authorization entry of its own, binding the rule IDs; the only kind on policed rules"
-  ],
-  [
-   "Verifier",
-   "A contract with `verify(digest, key, signature) -> bool`",
-   "`perch_ed25519_verifier`, WebAuthn verifier",
-   "The same interface for External signers"
-  ],
-  [
-   "Document compiler",
-   "A stateless contract that parses and validates a document, resolves verifier names and returns canonical bytes, `doc_hash` and a model",
-   "`perch_doc_compiler`",
-   "Off chain: the policy synthesiser"
-  ],
-  [
-   "Evaluator",
-   "The pure function that decides an authorization and returns the next spending records",
-   "`rule_eval::authorize`",
-   "The interpreter's `enforce`, per policy"
-  ],
-  [
-   "Account shell",
-   "The account code around the decision function: guards, rule lookup, signature checks and storage; tested, not proved",
-   "`perch-smart-account`",
-   "—"
-  ],
-  [
-   "Lowering",
-   "Turning a compiled document's model into the rules the account stores, under the account's address, its excluded set and the current grant generation",
-   "`lower`, `lower_scoped`",
-   "—"
+   "Cap and window",
+   "At most *limit* charged in the last *P* ledgers, checked at every ledger, so the window slides",
+   "`cap`, `period-ledgers`",
+   "`spending_limit` uses the same window boundary. In an oz-policy-builder Intent, `cap` bounds one call (`lte`)"
   ],
   [
    "Spending record",
@@ -97,52 +43,40 @@
    "History in OpenZeppelin's `spending_limit`"
   ],
   [
-   "Stroop",
-   "The smallest unit of XLM: {{fact:stroops-per-xlm}} stroops make one XLM",
-   "—",
-   "—"
+   "Document compiler",
+   "A stateless contract that parses and validates a grant document",
+   "`perch_doc_compiler`",
+   "Off chain: the policy synthesiser"
   ],
   [
-   "Cap and window",
-   "At most *limit* charged over the last *P* ledgers: the window at ledger *L* is (*L* − *P*, *L*]",
-   "`cap`, `period-ledgers`",
-   "`spending_limit` uses the same window boundary. In an oz-policy-builder Intent, `cap` bounds one call (`lte`)"
+   "Decision function",
+   "The pure function that decides an authorization and returns the next spending records; it reads no storage and checks no signature",
+   "`rule_eval::authorize`",
+   "Each attached policy's `enforce`"
   ],
   [
-   "Attenuation",
-   "Deriving from a grant a rule set that allows nothing the original does not, by the ten steps of rule-core's attenuation; modeled and proved, with no account entry point at the pinned build",
-   "rule-core `attenuate`",
-   "—"
+   "Verifier",
+   "A contract with `verify(digest, key, signature) -> bool`",
+   "`perch_ed25519_verifier`, WebAuthn verifier",
+   "The same interface for External signers"
   ],
   [
-   "Grant generation",
-   "A counter on the account, 0 at creation, advanced only by a completed recovery; a grant from an older generation refuses",
-   "`scope_generation`, `StaleScope`",
-   "—"
+   "External signer",
+   "A key the account checks through a verifier contract, such as an Ed25519 key or a passkey",
+   "`Signer::External`",
+   "Refused on rules the interpreter polices (error {{fact:opb-error-external-signer}})"
+  ],
+  [
+   "Delegated signer",
+   "Another Stellar address that approves through the host, inside the account's own authorization entry (CAP-0071)",
+   "`Signer::Delegated`",
+   "Approves in an authorization entry of its own, which binds the rule IDs; the only kind on policed rules"
   ],
   [
    "Context",
-   "One call or contract creation in the invocation tree the host passes to `__check_auth`",
+   "One call or contract creation in the request the host passes to `__check_auth`",
    "`Context`",
    "The same; a context rule matches it"
-  ],
-  [
-   "Authorization entry",
-   "Signed credentials for one invocation tree; the host consumes its nonce when the transaction succeeds",
-   "`SorobanAuthorizationEntry`",
-   "The same"
-  ],
-  [
-   "`__check_auth`",
-   "The account function the host calls to approve an authorization entry; it receives the payload hash, the auth payload and the contexts",
-   "`__check_auth(signature_payload, signatures, auth_contexts)`",
-   "The same entry point"
-  ],
-  [
-   "Auth payload",
-   "The argument of `__check_auth` whose shape the account defines: the signatures and the rule chosen for each context",
-   "`AuthPayload`, `context_rule_ids`",
-   "The same field, `context_rule_ids`"
   ],
   [
    "Enforcing simulation",
@@ -181,15 +115,9 @@
    "The adapter's batch call `execute(calls, grants, wait)`"
   ],
   [
-   "Expiry",
-   "{{fact:perch-expiry-semantics}}",
-   "`not-after-ledger`",
-   "OpenZeppelin `valid_until` N authorizes through N"
-  ],
-  [
-   "rule-core",
-   "The library that holds the evaluator, its Lean model, the translation and the proofs",
-   "`soroban-rule-core`",
+   "Stroop",
+   "The smallest unit of XLM: {{fact:stroops-per-xlm}} stroops make one XLM",
+   "—",
    "—"
   ],
   [

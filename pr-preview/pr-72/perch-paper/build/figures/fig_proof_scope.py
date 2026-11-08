@@ -12,8 +12,8 @@ def wide():
     s.textbox(2, 96, 170, [('Rust source', 't'), (f'rule-core `{fact("rule-core-pin-short")}`, the evaluator', 'x')], 'tested', size=14, minh=80)
     # proof path
     s.textbox(236, 12, 200, [('Charon and Aeneas', 't'), ('translate it to Lean', 'x')], 'trusted', size=14, minh=60)
-    s.textbox(500, 6, 258, [('Lean: the translation and a model', 't'),
-                            (f'{fact("exported-theorems")} theorems, checked by Lean’s kernel', 'x')], 'proved', size=14, minh=76)
+    hl = s.textbox(500, 6, 258, [('Lean: the translation and a model', 't'),
+                            (f'all {fact("exported-theorems")} rule-core theorems kernel-checked; the stated theorems are among them', 'x')], 'proved', size=14, minh=76)
     # shipping path
     s.textbox(236, 196, 200, [(f'rustc {fact("rustc-perch")}', 't'), ('compiles it to Wasm', 'x')], 'trusted', size=14, minh=60)
     s.textbox(500, 196, 258, [('The account’s Wasm', 't'), (f'Perch `{fact("perch-pin-short")}`: tested', 'x')], 'tested', size=14, minh=60)
@@ -22,8 +22,9 @@ def wide():
     arrow_right(s, 436, 496, 42, 'fl', 'perch-ah')
     arrow_right(s, 436, 496, 226, 'fl', 'perch-ah')
     # tests bridge them; nothing checks one against the other
-    s.path(f'M{num(629)} {num(84)}V{num(192)}', 'fl-m dash')
-    s.lines(640, 116, wrap('tests bridge them: golden fixtures and Lean-generated traces', 118, 14), 'm', 14, lh=17)
+    top = 6 + hl
+    s.path(f'M{num(629)} {num(top + 2)}V{num(192)}', 'fl-m dash')
+    s.lines(640, top + 22, wrap('tests bridge them: golden fixtures, Lean-generated traces', 118, 14), 'm', 14, lh=17)
     s.lines(236, 120, wrap('Nothing checks the Wasm against the Lean translation.', 220, 14), 'd', 14, lh=17)
     s.lines(2, 280, wrap('Double border: proved. Single: tested. Hatched: trusted. Dashed: tests, not proofs.', 756, 14), 'm', 14, lh=17)
     s.h = 290
@@ -39,7 +40,7 @@ def narrow():
     y += s.textbox(2, y, 336, [('Charon and Aeneas', 't'), ('translate it to Lean', 'x')], 'trusted', size=14)
     arrow_down(s, 40, y + 2, y + 16, 'fl', 'perch-ah')
     y += 20
-    y += s.textbox(2, y, 336, [('Lean: the translation and a model', 't'), (f'{fact("exported-theorems")} theorems, checked by Lean’s kernel', 'x')], 'proved', size=14) + 12
+    y += s.textbox(2, y, 336, [('Lean: the translation and a model', 't'), (f'all {fact("exported-theorems")} rule-core theorems kernel-checked; the stated theorems are among them', 'x')], 'proved', size=14) + 12
     s.text(2, y + 14, 'SHIPPING PATH', 't tag', 14)
     y += 22
     y += s.textbox(2, y, 336, [(f'rustc {fact("rustc-perch")}', 't'), ('compiles it to Wasm', 'x')], 'trusted', size=14)

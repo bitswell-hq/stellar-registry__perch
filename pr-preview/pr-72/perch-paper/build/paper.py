@@ -104,6 +104,11 @@ class Paper:
         fp = SRC / 'figures.json'
         self.figures = dict(json.loads(read(fp)) if fp.exists() else {})
         self.figures.update(self.outline.get('figures', {}))
+        # An outline may set the editions of an exhibit for its own document, as a generated table cannot carry them.
+        for xid, eds in self.outline.get('exhibit_editions', {}).items():
+            for pool in (self.figures, self.tables):
+                if xid in pool:
+                    pool[xid] = {**pool[xid], 'editions': eds}
         self.sec_ids = [s['id'] for s in self.sections]
         used = [x for s in self.sections for x in s.get('figures', [])]
         for f in used:
@@ -111,7 +116,8 @@ class Paper:
                 fail(f'{DOC["id"]}: figure {f} has no entry in figures.json or the outline')
         self.figures = {f: self.figures[f] for f in used if f in self.figures}
         for s in self.sections:
-            if s.get('editions') and set(s['editions']) != {'html', 'latex'} and not (s.get('unnumbered') or s.get('appendix')):
+            if (s.get('editions') and set(s['editions']) != {'html', 'latex'} and not (s.get('unnumbered') or s.get('appendix'))
+                    and DOC.get('html_numbers', True)):
                 fail(f'section {s["id"]} is in one edition only, so it must be unnumbered or an appendix')
         for s in self.sections:
             for t in s.get('tables', []):
@@ -138,9 +144,14 @@ class Paper:
                 out[target].append(x)
         return out
 
-    def numbered(self, item):
-        # An exhibit takes a number only if every edition of this document shows it, so a number
-        # names the same exhibit in the HTML and the PDF; the others are titled and cited by name.
+    def numbered(self, item, ed):
+        # LaTeX numbers every float it places. In the HTML an exhibit takes a number only if every edition
+        # shows it, so a number names the same exhibit in the HTML and the PDF; the others are titled and
+        # cited by name. A document with "html_numbers": false numbers nothing in its HTML edition.
+        if ed == 'latex':
+            return True
+        if not DOC.get('html_numbers', True):
+            return False
         return all(self.in_edition(item, e) for e in (('html', 'latex') if LATEX else ('html',)))
 
     def _number(self, ed):
@@ -151,6 +162,8 @@ class Paper:
                 continue
             if s.get('unnumbered'):
                 pass
+            elif ed == 'html' and not DOC.get('html_numbers', True):
+                pass
             elif s.get('appendix'):
                 nums['sec:' + s['id']] = 'ABCDEFGH'[app]
                 app += 1
@@ -159,12 +172,12 @@ class Paper:
                 nums['sec:' + s['id']] = f'{main:02d}' if ed == 'html' else str(main)
             for f in figs[s['id']]:
                 if self.in_edition(self.figures[f], ed):
-                    fig += self.numbered(self.figures[f])
-                    nums['fig:' + f] = str(fig) if self.numbered(self.figures[f]) else ''
+                    fig += self.numbered(self.figures[f], ed)
+                    nums['fig:' + f] = str(fig) if self.numbered(self.figures[f], ed) else ''
             for t in tabs[s['id']]:
                 if self.in_edition(self.tables[t], ed):
-                    tab += self.numbered(self.tables[t])
-                    nums['tab:' + t] = str(tab) if self.numbered(self.tables[t]) else ''
+                    tab += self.numbered(self.tables[t], ed)
+                    nums['tab:' + t] = str(tab) if self.numbered(self.tables[t], ed) else ''
         return nums
 
 
@@ -231,9 +244,10 @@ def _directive(p, body, ed, ctx):
         target = arg[4:]
         if n == '':
             item = (p.figures if arg.startswith('fig:') else p.tables)[target]
-            if not item.get('short'):
-                fail(f'{ctx}: {target} is in one edition only, so it has no number; give it a "short" name to be cited by')
-            name = render(p, item.get('short', target), 'html', ctx)
+            short = item.get('short')
+            if not short:
+                fail(f'{ctx}: {target} has no number in this edition; give its entry a "short" name to be cited by')
+            name = render(p, short or target, 'html', ctx)
             return f'<a href="#{target}">{name[:1].upper() + name[1:] if opt == "cap" else name}</a>'
         label = ('Appendix ' if appendix else {'sec': '§', 'fig': 'Figure ', 'tab': 'Table '}[arg[:3]]) + (n or '??')
         return f'<a href="#{target}">{label}</a>'
@@ -315,6 +329,18 @@ def number_of(label):
     return re.sub(r'^[A-Za-z]+', '', label or '')
 
 
+def html_cards(p, kind):
+    """Ids of the statement or definition cards this document's HTML edition places."""
+    directive = 'statements' if kind == 'stmt' else 'definitions'
+    pool = p.statements if kind == 'stmt' else p.definitions
+    ids = set()
+    for s in p.sections:
+        if p.in_edition(s, 'html'):
+            for arg in re.findall(r'\{\{' + directive + r'(?::([^}]*))?\}\}', read(HTMLDIR / 'sections' / f'{s["id"]}.html')):
+                ids |= {x['id'] for x in pick(pool, arg)}
+    return ids
+
+
 def formal_ref(p, arg, ed, ctx):
     kind, _, ident = arg.partition(':')
     pool = p.all_statements if kind == 'stmt' else p.all_definitions
@@ -324,6 +350,9 @@ def formal_ref(p, arg, ed, ctx):
         return '??'
     word = ('Proposition' if item.get('argued') else 'Theorem') if kind == 'stmt' else 'Definition'
     here = ident in {x['id'] for x in (p.statements if kind == 'stmt' else p.definitions)}
+    if ed == 'html':
+        # In the HTML a reference stays on the page only if the page places that card.
+        here = ident in html_cards(p, kind)
     n = number_of(item.get('label'))
     if ed == 'latex':
         return f'{word}~\\ref{{{kind}:{ident}}}' if here else f'{word}~{n}'
@@ -367,12 +396,17 @@ def fact_value(p, key, ed, anon=False):
 
 # ---------------------------------------------------------------- HTML edition
 
+def html_caption(item):
+    """An exhibit's caption in the HTML edition: the entry's "caption_html", else the caption both editions share."""
+    return item.get('caption_html') or item.get('caption', '')
+
+
 def html_figure(p, fid):
     f = p.figures[fid]
     n = p.numbers['html']['fig:' + fid]
     lead = f'Figure {n}. ' if n else ''
     title = render(p, f['title'], 'html', fid)
-    cap = render(p, f.get('caption', ''), 'html', fid)
+    cap = render(p, html_caption(f), 'html', fid)
     cls = 'fig' + (' interactive' if f.get('interactive') else '')
     attrs = f' data-interactive="{f["interactive"]}"' if f.get('interactive') else ''
     if f.get('scenarios'):
@@ -497,7 +531,7 @@ def html_table(p, tid, numbered=True):
         return ''
     lead = f'Table {p.numbers["html"]["tab:" + tid]}. ' if numbered and p.numbers['html']['tab:' + tid] else ''
     cap = (f'<caption>{lead}{render(p, t["title"], "html", tid)} '
-           f'{render(p, t.get("caption", ""), "html", tid)}</caption>')
+           f'{render(p, html_caption(t), "html", tid)}</caption>')
     return body.replace('</tbody></table>', f'</tbody>{cap}</table>', 1).replace('<table', f'<table id="{tid}"', 1)
 
 

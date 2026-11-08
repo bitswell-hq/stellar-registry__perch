@@ -14,7 +14,6 @@ import perchmodel as M
 FID = 'fig-compose'
 NAMES = {'pin': 'recipient pin', 'percall': 'per-call bound', 'window': 'window cap', 'threshold': 'two signers',
          'live': 'live read', 'decision': 'decision point'}
-CLOSING = 'Composition buys flexibility; one decision point gives one place to check.'
 TITLE_A = '(a) Shaped like a Perch account'
 TITLE_B = '(b) Shaped like a policy-composed OpenZeppelin account'
 SUB_A = 'one decision point holds the checks and the window record'
@@ -158,7 +157,7 @@ def draw(narrow):
                 y += h + 6
             s.close()
             y += 8
-    # guarantees and the closing line
+    # the guarantees
     y += 18
     g = [('a', 'Window at most 10: holds while the rule keeps its cap.'),
          ('b', 'Window at most 10: holds while the window-cap policy is attached.')]
@@ -171,9 +170,8 @@ def draw(narrow):
         ya = s.lines(cols['a'][0], y, wrap(g[0][1], cols['a'][1], 14), 'x', 14, lh=17)
         yb = s.lines(cols['b'][0], y, wrap(g[1][1], cols['b'][1], 14), 'x', 14, lh=17)
         s.text(2, y, 'GUARANTEE', 't tag', 14)
-        y = max(ya, yb) + 26
-    y = s.lines(2, y, wrap(CLOSING, W - 4, 15, True), 't', 15, lh=19)
-    s.h = y + 8
+        y = max(ya, yb) + 20
+    s.h = y - 8
     return s
 
 
@@ -217,7 +215,7 @@ def text_alt():
         out.append(f'<li>{html.escape(label)}. (a) {html.escape(a_text(a))}. (b) policies run: '
                    f'{html.escape(", ".join(NAMES[n] for n in b["ran"]))}; {html.escape(b_text(b))}.</li>')
     out.append(f'</ol><p>Window at most 10: in (a) while the rule keeps its cap; in (b) while the window-cap policy is '
-               f'attached. {html.escape(CLOSING)}</p>')
+               f'attached.</p>')
     return ''.join(out)
 
 

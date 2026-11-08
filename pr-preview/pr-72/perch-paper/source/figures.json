@@ -5,12 +5,14 @@
   "editions": [
    "html"
   ],
-  "short": "the overview diagram"
+  "short": "the overview diagram",
+  "caption_html": "The account checks each call against the grant before a verifier checks the signature, and stores the new spending record only after both pass."
  },
  "fig-shop-grant": {
   "title": "The running example: an app may pay the shop at most {{fact:shop-cap-xlm}} XLM in any {{fact:shop-period-ledgers}} ledgers ({{fact:shop-period-minutes}}).",
   "caption": "(a) The grant document as the simulation installs it, with addresses and the key abbreviated: `C...` is a contract, `G...` an account controlled by a key pair. (b) Each marked field in words.",
   "kind": "code",
+  "short": "the shop grant figure",
   "panels": [
    {
     "file": "a",
@@ -35,7 +37,8 @@
  "fig-cap-window": {
   "title": "The shop grant's cap, {{fact:shop-cap-xlm}} XLM per {{fact:shop-period-ledgers}} ledgers, on illustrative ledgers.",
   "caption": "At ledger *L* the window holds charges made after *L* − 100 and through *L*. Charges inside the window at *t* + 100 are highlighted. A refused transfer leaves the spending record unchanged. A charge stops counting exactly 100 ledgers after it was made.",
-  "interactive": "cap-window"
+  "interactive": "cap-window",
+  "short": "the cap-window figure"
  },
  "fig-auth-path": {
   "title": "One authorization in six stages.",
@@ -43,7 +46,10 @@
   "kind": "algorithm",
   "interactive": "auth-path",
   "latex_size": "scriptsize",
-  "latex_exit_width": "0.27"
+  "latex_exit_width": "0.27",
+  "editions": [
+   "latex"
+  ]
  },
  "fig-compose": {
   "title": "The same five checks, arranged two ways.",
@@ -52,7 +58,8 @@
   "editions": [
    "html"
   ],
-  "short": "the composition explorable"
+  "short": "the composition explorable",
+  "caption_html": "MODEL, computed from the paper's definitions; [the simulation](#simulation) runs the real contracts. (a) Shaped like a Perch account: there is no slot for a per-call bound or a live read. (b) Shaped like a policy-composed OpenZeppelin account; oz-policy-builder itself keeps the recipient pin, the per-call bound and the read in one predicate. In the static figure, a bar end marks the check that refused."
  },
  "fig-sim": {
   "title": "Both designs, one scenario, from soroban-sim's native run.",
@@ -61,7 +68,8 @@
   "editions": [
    "html"
   ],
-  "short": "the recorded-run figure"
+  "short": "the recorded-run figure",
+  "caption_html": "Per request: the contracts called during authorization, from the host's diagnostic events; the verdict and code; and the window. OpenZeppelin's signature check calls no contract, so it has no box. Dashed: no Perch counterpart. Page `{{fact:sim-page-sha256-short}}`, reference run `{{fact:sim-golden-sha256-short}}`; pins in {{ref:sec:repro}}."
  },
  "fig-proof-scope": {
   "title": "What the proofs cover.",

@@ -1042,7 +1042,7 @@ S \subseteq S&#x27; \land \mathit{allows}(R, c, S) \implies \mathit{allows}(R, c
     const advP = button('+P');
     const undo = button('Undo');
     bar.append(form, adv1, adv10, advP, undo);
-    panel.append(banner('MODEL', 'Computed in the page from the paper’s definitions of the charge and the window (Definitions 3 and 4): a transfer is charged only if the window total plus its amount stays within the limit, and a refusal changes nothing. Ledgers are illustrative; t is any ledger.'));
+    panel.append(banner('MODEL', 'Computed in the page from the definitions of the charge and the window in What Perch proves: a transfer is charged only if the window total plus its amount stays within the limit, and a refusal changes nothing. Ledgers are illustrative; t is any ledger.'));
     const params = h('details', { class: 'xp-params' }, el('summary'));
     const lam = el('input', { type: 'range', min: 1, max: 20, step: 1, value: 10, name: `${fig.id}-limit` });
     const per = el('input', { type: 'range', min: 10, max: 200, step: 10, value: 100, name: `${fig.id}-period` });
@@ -1054,7 +1054,7 @@ S \subseteq S&#x27; \land \mathit{allows}(R, c, S) \implies \mathit{allows}(R, c
     const clear = button('Clear');
     const toggles = h('div', { class: 'xp-row' },
       h('label', { class: 'xp-check' }, percall, ' Check each call alone'),
-      h('label', { class: 'xp-check' }, zero, ' Allow ledger 0'),
+      h('label', { class: 'xp-check' }, zero, ' Allow ledger 0 (no Stellar ledger has sequence 0; the theorem\u2019s bound over any P consecutive ledgers assumes ledger 1 or later)'),
       replace, reset, clear);
     const plot = el('div', { class: 'xp-plot-wrap' });
     const inspect = el('input', { type: 'range', step: 1, name: `${fig.id}-inspect` });
@@ -1783,14 +1783,16 @@ S \subseteq S&#x27; \land \mathit{allows}(R, c, S) \implies \mathit{allows}(R, c
     const clear = button('Clear');
     bar.append(labelled('Amount', amount), labelled('To', to), labelled('Signed by', signers), labelled('Oracle price', price), pay, again, adv, reset, clear);
     panel.append(banner('MODEL', 'This model adds a co-signer and an oracle price floor to the shop grant, to show where each arrangement places a check. A request passes when every point that runs permits it, and writes commit only if it passes. No verdict here names a contract; the simulation runs the real ones.'));
+    // The oracle example: (b) can read a price and refuse; (a) has no slot for a read.
+    const oracle = button('Pay 1 to the shop with the oracle price below the floor');
+    panel.append(h('div', { class: 'xp-row' }, h('span', { class: 'xp-sub' }, 'Try:'), oracle));
     const newest = el('div', { class: 'xp-newest' });
     const colA = el('section', { class: 'xp-card' });
     const colB = el('section', { class: 'xp-card' });
     panel.append(newest, h('p', { class: 'xp-sub' }, 'For the newest request: solid, the point ran; red with a bar end, it refused; dashed, it did not run.'),
       h('div', { class: 'xp-cards' }, colA, colB));
     const log = el('ol', { class: 'xp-log xp-log-rev', 'aria-label': 'Requests, newest first' });
-    panel.append(h('p', { class: 'xp-sub' }, 'Every request, newest first:'), log,
-      h('p', { class: 'xp-result' }, 'Composition buys flexibility; one decision point gives one place to check.'));
+    panel.append(h('p', { class: 'xp-sub' }, 'Every request, newest first:'), log);
     const winB = () => M.windowTotal(st.movedB, st.now, 100);
     function drawCols() {
       const last = st.log[0];
@@ -1874,6 +1876,14 @@ S \subseteq S&#x27; \land \mathit{allows}(R, c, S) \implies \mathit{allows}(R, c
       redraw(request({ amount: v, to: to.value === 'shop' ? 'shop' : 'another recipient', signers: signers.value, price: price.value }));
     };
     again.onclick = () => { if (!isOff(again)) redraw(request({ ...st.last })); };
+    oracle.onclick = () => {
+      amount.value = 1; to.value = 'shop'; signers.value = 'both'; price.value = 'low';
+      const say = request({ amount: 1, to: 'shop', signers: 'both', price: 'low' });
+      const x = st.log[0];
+      const why = x.aRes.ok && !x.bRes.ok && x.bRes.refused === 'live'
+        ? ' (b) refuses at the live read and (a) accepts, because a Perch rule cannot read another contract.' : '';
+      redraw(say + why);
+    };
     adv.onclick = () => { st.now += 100; redraw(`100 ledgers later: (a) the window record holds ${M.windowTotal(st.recA.history, st.now, 100)} of 10; (b) moved in the window: ${winB()}.`); };
     reset.onclick = () => { script(); redraw('Back to the figure’s four requests.'); };
     clear.onclick = () => { st = fresh(); redraw('Cleared: both arrangements empty, every policy attached.'); };
@@ -1902,7 +1912,7 @@ S \subseteq S&#x27; \land \mathit{allows}(R, c, S) \implies \mathit{allows}(R, c
     // Start, and the full page (the frame links its reference and hash tables).
     const actions = h('div', { class: 'sim-actions' });
     const startBtn = button(`Start the simulation here (${mb ? `${mb} MB, ` : ''}runs offline in this tab)`, { class: 'primary' });
-    actions.append(chip('EXECUTED'), startBtn, el('a', { href: full }, 'Open the full page'));
+    actions.append(el('span', { class: 'xp-chip', 'data-kind': 'executed' }, 'RUNS THE REAL CONTRACTS'), startBtn, el('a', { href: full }, 'Open the full page'));
     const open = embed.querySelector(':scope > .sim-open');
     if (open) open.replaceWith(actions); else embed.prepend(actions);
     const frameBox = el('div', { class: 'sim-frame' });
@@ -1996,7 +2006,7 @@ S \subseteq S&#x27; \land \mathit{allows}(R, c, S) \implies \mathit{allows}(R, c
     const out2 = el('p', { class: 'xp-sub' });
     box.append(h('div', { class: 'xp-row' }, h('label', { class: 'xp-field' }, h('span', {}, 'λ = ', lamOut), lam), h('label', { class: 'xp-field' }, h('span', {}, 'P = ', perOut), per)),
       h('p', { class: 'xp-sub' }, 'Up to six charge attempts to one capped rule, from an empty record, in order:'), table,
-      h('label', { class: 'xp-check' }, zero, ' Start at ledger 0'), out, out2);
+      h('label', { class: 'xp-check' }, zero, ' Start at ledger 0 (no Stellar ledger has sequence 0)'), out, out2);
     const inputs = [];
     table.append(h('thead', {}, h('tr', {}, h('th', { scope: 'col' }, 'Ledger'), h('th', { scope: 'col' }, 'Amount'), h('th', { scope: 'col' }, 'Verdict'))));
     const tbody = el('tbody');

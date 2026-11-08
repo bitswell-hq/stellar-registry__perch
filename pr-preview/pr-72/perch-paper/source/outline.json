@@ -1,10 +1,15 @@
 {
- "nav_note": "A research paper with a dual simulation.<br>Fourth iteration · November 2026",
+ "nav_note": "A research paper with a side-by-side simulation.<br>November 2026",
  "glossary": "tab-glossary-main",
+ "exhibit_editions": {
+  "tab-sim": [
+   "latex"
+  ]
+ },
  "sections": [
   {
    "id": "motivation",
-   "title_html": "What can an app do with a grant?",
+   "title_html": "Apps and agents need authority with limits",
    "title_latex": "Introduction",
    "nav": "Introduction",
    "figures": [
@@ -22,18 +27,18 @@
    "nav": "Background",
    "figures": [
     "fig-contexts"
+   ],
+   "editions": [
+    "latex"
    ]
   },
   {
    "id": "grants",
-   "title_html": "What can a grant say?",
+   "title_html": "A grant says what an app may call and how much it may spend",
    "title_latex": "Grants and Spending Windows",
    "nav": "Grants",
    "figures": [
     "fig-cap-window"
-   ],
-   "tables": [
-    "tab-revoke"
    ],
    "aliases": [
     "model",
@@ -43,28 +48,32 @@
   },
   {
    "id": "authorization",
-   "title_html": "How does the account decide?",
+   "title_html": "The account decides every call at one point",
    "title_latex": "The Authorization Path",
-   "nav": "Authorization",
+   "nav": "How it decides",
    "figures": [
     "fig-auth-path"
    ],
    "aliases": [
-    "gate"
+    "gate",
+    "background"
    ]
   },
   {
    "id": "threat-model",
-   "title_html": "What can a rogue or stolen app key do?",
+   "title_html": "A stolen app key can do only what its grant allows",
    "title_latex": "Threat Model",
-   "nav": "Threats",
+   "nav": "Threats and limits",
    "tables": [
     "tab-grantee"
+   ],
+   "aliases": [
+    "limits"
    ]
   },
   {
    "id": "compare",
-   "title_html": "How does Perch differ from oz-policy-builder?",
+   "title_html": "Perch and oz-policy-builder place the same checks differently",
    "title_latex": "Perch and oz-policy-builder",
    "nav": "Comparison",
    "figures": [
@@ -76,7 +85,7 @@
   },
   {
    "id": "simulation",
-   "title_html": "Run both accounts",
+   "title_html": "soroban-sim runs both accounts in this page",
    "title_latex": "Both Designs in soroban-sim",
    "nav": "Run both",
    "figures": [
@@ -91,42 +100,55 @@
   },
   {
    "id": "proofs",
-   "title_html": "What is proved?",
+   "title_html": "The decision function is proved, and the code around it is tested",
    "title_latex": "Formal Results",
-   "nav": "Formal results",
+   "nav": "What is proved",
    "figures": [
     "fig-proof-scope"
    ]
   },
   {
    "id": "evaluation",
-   "title_html": "What did running it show?",
+   "title_html": "Perch has run on testnet through the Nido preview",
    "title_latex": "Evaluation",
-   "nav": "Evaluation"
+   "nav": "On testnet"
   },
   {
    "id": "limits",
    "title_html": "What does Perch not protect?",
    "title_latex": "Limitations",
-   "nav": "Limitations"
+   "nav": "Limitations",
+   "editions": [
+    "latex"
+   ]
   },
   {
    "id": "related",
    "title_html": "Related work",
    "title_latex": "Related Work",
-   "nav": "Related work"
+   "nav": "Related work",
+   "editions": [
+    "latex"
+   ]
   },
   {
    "id": "agents",
    "title_html": "What next",
    "title_latex": "Future Work",
-   "nav": "Future work"
+   "nav": "Future work",
+   "editions": [
+    "latex"
+   ]
   },
   {
    "id": "conclusion",
-   "title_html": "What this shows",
+   "title_html": "What we showed and what remains",
    "title_latex": "Conclusion",
-   "nav": "Conclusion"
+   "nav": "Conclusion",
+   "aliases": [
+    "agents",
+    "related"
+   ]
   },
   {
    "id": "repro",
