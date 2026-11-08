@@ -583,10 +583,10 @@ limit:
 | Flow | OZ alone | OZ, then rule-eval |
 | --- | --- | --- |
 | Capped transfer through a grant, 1 grant in the admin document | 6.10M (1.5%) | 7.07M (1.8%) |
-| The same, 7 grants | 6.19M (1.5%) | 7.50M (1.9%) |
-| Capped transfer through a scoped grant, 1 scope | 6.15M (1.5%) | 7.19M (1.8%) |
-| Capped transfer through the last of 8 scopes, 65 rules installed (fork) | 6.23M (1.6%) | 7.99M (2.0%) |
-| `execute` through the admin rule, no scopes | 5.54M (1.4%) | 6.26M (1.6%) |
+| The same, 7 grants | 6.19M (1.5%) | 7.49M (1.9%) |
+| Capped transfer through a scoped grant, 1 scope | 6.17M (1.5%) | 7.20M (1.8%) |
+| Capped transfer through the last of 8 scopes, 65 rules installed (fork) | 6.25M (1.6%) | 8.00M (2.0%) |
+| `execute` through the admin rule, no scopes | 5.55M (1.4%) | 6.26M (1.6%) |
 | `execute` through the admin rule, 65 rules installed | 5.99M (1.5%) | 6.71M (1.7%) |
 | Capped transfer after 100 spends in the window (fork) | 6.98M (1.7%) | 12.66M (3.2%) |
 | Capped transfer after 400 spends in the window (fork) | 9.31M (2.3%) | 28.73M (7.2%) |
@@ -598,25 +598,26 @@ limit:
   cost grows with the record's history, which rule-eval copies and charges
   in the account.
 - **Completions are unchanged.** A completion never runs the check: the
-  binding completion is 297.22M without the check and 297.10M with it
-  (74.3%).
+  binding completion is 297.27M (74.3%) without the check and 297.45M
+  (74.4%) with it.
 - **Removing or recapping capped rules reads their records.** `apply_doc`
   and `apply_scope` drop a capped rule's record when they uninstall its
   spending limit, which reads whether it has one: the fork completion whose
-  thief changed every cap went from 280.50M (70.1%) to 282.02M (70.5%), with
+  thief changed every cap went from 280.51M (70.1%) to 281.97M (70.5%), with
   8 more footprint entries. `Protected` reconfiguration replacing every rule
-  went from 264.52M (66.1%) to 268.23M (67.1%), its authorization checked
+  went from 264.50M (66.1%) to 267.97M (67.0%), its authorization checked
   too.
 - **Every budgeted row stays within 75%**: `release_stack.rs` passes, 25
   tests.
 
-The account wasm grows from 118,903 to 130,268 bytes (`stellar contract
-build`), 130,433 bytes as `stellar scaffold build` builds it for a
+The account wasm grows from 119,585 to 128,423 bytes (`stellar contract
+build`), 128,588 bytes as `stellar scaffold build` builds it for a
 deployment, under the 131,072-byte contract limit. The check reads stored
 rules and records from their XDR in one pass and a batch of calls one host
 value at a time, rather than through `#[contracttype]` decoding and
 soroban-facade's context reading, which would take the account over the
-limit. `apply_doc` and `apply_scope` keep `#[contracttype]` conversion: in
+limit; reading a compiled model builds its vectors with plain loops rather
+than iterator adapters, which saves another 2 KB. `apply_doc` and `apply_scope` keep `#[contracttype]` conversion: in
 the account's wasm, where a call costs 67 fuel and a short copy is a byte
 loop, reading the model or writing the set as XDR costs the binding
 completion 7M to 9M more instructions than the host's conversion does.
