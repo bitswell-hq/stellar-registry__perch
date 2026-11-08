@@ -1,0 +1,19 @@
+The account lowers a document into rule-core rules on install: an account
+document by \textit{lower}, a grant document by \textit{lowerScoped} under the
+account's address, its excluded set and the current generation
+(Definition~\ref{def:documents-and-lowering}). \code{Doc.Valid} requires distinct
+signers, fewer than $2^{32}$, in every rule that requires all of them, and no
+not-after ledger of~0; that Perch's compiler emits only valid documents is
+unproven (\code{\fact{claim-perch-validation}}; obligation O5). \code{LowerRoom}
+and the weaker \code{ArgsRoom} say the document's lists fit the evaluator's
+bounded vectors.
+
+\input{generated/statements/T8}
+\input{generated/statements/T9}
+\input{generated/statements/T12}
+
+\noindent A grant's \code{doc\_hash} is the SHA-256 of its CANON~v1 bytes, a
+restriction of RFC~8785~\cite{rfc8785}. Theorem~\ref{stmt:canonical-identity} is
+proved in Perch's own Lean package, not in rule-core.
+
+\input{generated/statements/T13}

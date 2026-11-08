@@ -490,7 +490,7 @@ def html_statements(p, arg=''):
         ctx = st['id']
         argued = st.get('argued')
         word = 'Proposition' if argued else 'Theorem'
-        tag = '<span class="thm-tag">argued, not mechanized</span>' if argued else ''
+        tag = ' <span class="thm-tag">argued, not mechanized</span>' if argued else ''
         head = f'<p class="thm-head"><strong>{word} {number_of(st.get("label"))}</strong> ({render(p, st["title"], "html", ctx).rstrip(".")}){tag}</p>'
         rid = f'stmt-{ctx}-reading'
         math = (f'<div class="thm-math" aria-describedby="{rid}">{mathml(st["math"], True, ctx)}</div>' if st.get('math') else '')
@@ -636,7 +636,7 @@ def build_html(p, blocks):
                'see source/html/fonts/. */\n@font-face{font-family:PerchMath;src:url(data:font/woff2;base64,'
                + base64.b64encode(font.read_bytes()).decode() + ') format("woff2");font-display:swap}'
                '\nmath{font-family:PerchMath,math}\n' + css)
-    head = read(html_file('head.html')).replace('{{style}}', css)
+    head = read(html_file('head.html')).replace('{{style}}', css).replace('{{title}}', html.escape(DOC['title']))
     parts = [expand_html(p, head, 'head', blocks, seen).strip(), ''.join(nav), '']
     wt = f' data-walkthrough="{"../" * (DEPTH + 1)}oz-walkthrough/index.html"' if WALKTHROUGH.exists() else ''
     parts.append(f'<main id="main"{wt}>' + read(SHARED_HTML / 'sprite.svg').strip()

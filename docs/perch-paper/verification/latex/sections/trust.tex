@@ -1,0 +1,36 @@
+\begin{perchbox}
+\textbf{The proofs trust} Lean's kernel (\fact{lean-rule-core};
+\fact{lean-perch-canon} for the canonical-encoding package) and its axioms,
+\fact{standard-axioms}; Charon \fact{charon-rev}, Aeneas \fact{aeneas-rev} and
+Aeneas's Lean library, which models Rust's primitives; the MIR of rustc
+\fact{rustc-mir-nightly}; the specification, that is the denotations and the
+document meaning \code{Doc.allows}, written from Perch's earlier account at
+\fact{doc-allows-source}; the host models, tested against
+\fact{host-model-tested-versions}; and, for
+Theorem~\ref{stmt:canonical-identity}, that its Lean emitter matches Perch's
+\code{canon.rs}, which golden fixtures and fuzzing test. \textbf{The deployed
+account also trusts} rustc \fact{rustc-perch} and its WebAssembly back end; the
+document compiler; the tested account shell, verifiers and recovery controller;
+and soroban-env-host.
+\end{perchbox}
+
+\paragraph{Cryptographic assumptions.} Lemma~\ref{lem:binding} assumes an
+EUF-CMA-secure scheme and a collision-resistant SHA-256, and
+Theorem~\ref{stmt:canonical-identity} gives hash identity only up to SHA-256
+collisions. Ed25519~\cite{rfc8032} is checked with strict verification; P-256 is
+ECDSA with low $S$ enforced; the WebAuthn verifier~\cite{webauthn2} checks
+neither the relying-party ID nor the origin; \fact{mldsa-verifier} is pure
+FIPS~204~\cite{fips204} with a fixed context string. The compiler refuses a key
+not in its verifier's canonical form, so a threshold cannot count one key twice.
+The deployed Ed25519 and WebAuthn verifiers trap on a bad signature
+(\fact{verifier-trap-error} for Ed25519). Ed25519, P-256 and BN254 are not
+post-quantum, so an \fact{mldsa-verifier} signer resists a quantum adversary only
+if every path that can change the account's rules does. A contract ID commits to
+its deployer and salt, not its code, so that an account calls fixed
+infrastructure code assumes the registry deploys each pinned Wasm hash at its
+derived salt.
+
+\paragraph{The claims ledger.} rule-core records \fact{claims-unproven} claims
+as unproven, \fact{claims-unproven-ids}, and \fact{claims-assumed} as assumed,
+\fact{claims-assumed-ids}: hypotheses of the model (bounded room, the empty
+batch, no creation vocabulary, ledgers from~1) and the trusted items above.

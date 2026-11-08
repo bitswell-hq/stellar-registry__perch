@@ -87,6 +87,23 @@
 % A long hash or identifier fact, breakable anywhere.
 \newcommand\facthash[1]{\@ifundefined{perchfact@#1}{\fact{#1}}%
   {\begingroup\edef\x{\noexpand\nolinkurl{\csname perchfact@#1\endcsname}}\x\endgroup}}
+% Link text that may break after a dot or an underscore: Lean declaration names
+% in \repolink (they contain no spaces or braces).
+\newcommand\perchbrk[1]{\perch@brk#1\@nil}
+\def\perch@brk#1{%
+  \ifx#1\@nil
+  \else
+    \ifx#1.%
+      .\allowbreak
+    \else\ifx#1\_%
+      \textunderscore\allowbreak
+    \else
+      #1%
+    \fi\fi
+    \expandafter\perch@brk
+  \fi}
+% A source path, breakable at line ends.
+\newcommand\srcpath[1]{\nolinkurl{#1}}
 \makeatother
 % Callout numbers matching the two-spellings figure.
 \newcommand\callout[1]{\textcircled{\scriptsize #1}}

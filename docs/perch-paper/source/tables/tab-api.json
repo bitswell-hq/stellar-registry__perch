@@ -10,7 +10,7 @@
    "`apply_account_doc`",
    "`apply_doc`",
    "Document bytes, approval-valid-until ledger, optional expected revision → document hash",
-   "Owner authorization, or the recovery-completion path (§06); installs account policy."
+   "Owner authorization, or the recovery-completion path ({{ref:sec:recovery}}); installs account policy."
   ],
   [
    "`apply_grant`",
