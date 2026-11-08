@@ -71,14 +71,6 @@
   "short": "the recorded-run figure",
   "caption_html": "Per request: the contracts called during authorization, from the host's diagnostic events; the verdict and code; and the window. OpenZeppelin's signature check calls no contract, so it has no box. Dashed: no Perch counterpart. Page `{{fact:sim-page-sha256-short}}`, reference run `{{fact:sim-golden-sha256-short}}`; pins in {{ref:sec:repro}}."
  },
- "fig-proof-scope": {
-  "title": "What the proofs cover.",
-  "caption": "One Rust source, two paths: translated into Lean, where the theorems are checked (double border), and compiled into the account's Wasm, which is tested (single border). Tests bridge them (dashed); nothing checks one against the other. The verification companion paper has the full picture.",
-  "editions": [
-   "html"
-  ],
-  "short": "the proof-scope diagram"
- },
  "fig-two-paths": {
   "title": "One guarded call in two accounts.",
   "caption": "Phase by phase through `__check_auth` for a lost guess, with notes for a guess over the cap and a direct transfer: under Perch, and under an OpenZeppelin account whose rules carry oz-policy-builder's `policy-interpreter` and OpenZeppelin's `spending_limit`. The Perch signer is a passkey checked by a verifier contract. oz-policy-builder's rules accept only delegated signers; here the signer is a Stellar account whose own authorization entry the host checks. The OpenZeppelin account runs a rule's policies in the rule's stored order, which for policies given at creation is their address order. A cross marks where each design refuses a guess over the cap: Perch before any signer is authenticated, the OpenZeppelin account in `spending_limit` after authentication. Dashed: no such phase in that design, or not reached in the scenario. Read from source at Perch {{fact:perch-pin-short}}, OpenZeppelin `stellar-contracts` {{fact:oz-v080-tag}} and oz-policy-builder {{fact:opb-pin-short}}; {{ref:tab:tab-walkthrough}} gives the recorded run of the shop task.",

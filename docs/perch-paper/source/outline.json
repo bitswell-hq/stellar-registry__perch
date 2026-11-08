@@ -4,8 +4,7 @@
  "exhibit_editions": {
   "tab-sim": [
    "latex"
-  ],
-  "fig-proof-scope": []
+  ]
  },
  "sections": [
   {
@@ -103,10 +102,7 @@
    "id": "proofs",
    "title_html": "The decision function's guarantees are proved in Lean",
    "title_latex": "Formal Results",
-   "nav": "What is proved",
-   "figures": [
-    "fig-proof-scope"
-   ]
+   "nav": "What is proved"
   },
   {
    "id": "evaluation",
