@@ -43,7 +43,7 @@ records a reference run of \fact{sim-commands}
 commands.\footnote{\url{https://bitswell-hq.github.io/stellar-registry__perch/perch-paper/sim/};
 the Perch paper's section ``Both Designs in soroban-sim'' describes it.} There
 the predicate bounds each transfer at \fact{shop-cap-xlm}~XLM. After
-\fact{sim-pay-xlm}~XLM applies in both and a further \fact{sim-overcap-xlm}~XLM is
+\fact{sim-pay-xlm}~XLM applies in both and a further \fact{sim-second-pay-xlm}~XLM is
 refused in both, the owner removes \code{spending\_limit} from the OpenZeppelin
 rule; \fact{sim-oz-percall-sends} payments of \fact{sim-pay-xlm}~XLM then each
 pass the per-call bound, moving \fact{sim-oz-percall-moved-xlm}~XLM within one

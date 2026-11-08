@@ -19,14 +19,14 @@ external signers on policed rules (\nolinkurl{docs/stellar.md:563-564}), hence
 \fact{sim-oz-entries} authorization entries to Perch's \fact{sim-perch-entries}.
 We report no instruction counts.
 
-\paragraph{The recorded scenario} (Table~\ref{tab:tab-sim}). A \fact{sim-first-pay-xlm}-XLM payment applies in both designs. The
+\paragraph{The recorded scenario} (Table~\ref{tab:tab-sim}). A \fact{sim-pay-xlm}-XLM payment applies in both designs. The
 \fact{sim-second-pay-xlm}~XLM that follows is refused in both: Perch's trace shows \code{\_\_check\_auth}
 refusing with no verifier call, the OpenZeppelin account's shows
 \code{spending\_limit} refusing (\fact{oz-spending-limit-exceeded}). With
 \code{spending\_limit} removed, the OpenZeppelin account applies each of
-\fact{sim-oz-percall-sends} \fact{sim-percall-pay-xlm}-XLM sends under the per-call bound
+\fact{sim-oz-percall-sends} \fact{sim-pay-xlm}-XLM sends under the per-call bound
 (\fact{sim-oz-percall-moved-xlm}~XLM), as oz-policy-builder documents, while
-Perch refuses all three because its window holds \fact{sim-first-pay-xlm}.
+Perch refuses all three because its window holds \fact{sim-pay-xlm}.
 Re-adding \code{spending\_limit} starts an empty history, as replacing
 a Perch rule starts an empty window. Another recipient, a forged signature and
 a key not on the rule are refused by both; \fact{shop-period-ledgers} ledgers

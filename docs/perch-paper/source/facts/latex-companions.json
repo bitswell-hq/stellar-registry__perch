@@ -1,10 +1,1 @@
-{
- "sim-pay-xlm": {
-  "value": "6",
-  "source": "`source/figures/fig-sim.run.json` steps 2 and 5–7, `request.amount_xlm`: each in-rule payment of the recorded dual run before the window clears"
- },
- "sim-overcap-xlm": {
-  "value": "5",
-  "source": "`source/figures/fig-sim.run.json` step 3, `request.amount_xlm`: the payment both designs refuse over the cap"
- }
-}
+{}

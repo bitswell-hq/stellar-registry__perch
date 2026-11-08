@@ -1,18 +1,1 @@
-{
- "sim-first-pay-xlm": {
-  "value": "6",
-  "source": "`source/figures/fig-sim.run.json`, step 2, `request.amount_xlm` (L-main)"
- },
- "sim-second-pay-xlm": {
-  "value": "5",
-  "source": "`source/figures/fig-sim.run.json`, step 3, `request.amount_xlm` (L-main)"
- },
- "sim-late-pay-xlm": {
-  "value": "5",
-  "source": "`source/figures/fig-sim.run.json`, step 14, `request.amount_xlm` (L-main)"
- },
- "sim-percall-pay-xlm": {
-  "value": "6",
-  "source": "`source/figures/fig-sim.run.json`, steps 5-7, `request.amount_xlm` (L-main)"
- }
-}
+{}

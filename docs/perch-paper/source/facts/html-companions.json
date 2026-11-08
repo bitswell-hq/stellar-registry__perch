@@ -1,14 +1,1 @@
-{
- "dd-sim-oz-per-call-bound-xlm": {
-  "value": "10",
-  "source": "source/figures/fig-sim.run.json `task`: \"the oz-policy-builder predicate pins the recipient and bounds each transfer at 10 XLM\" (V, H-comp)"
- },
- "dd-sim-first-pay-xlm": {
-  "value": "6",
-  "source": "source/figures/fig-sim.run.json step 2, \"The app pays the shop 6 XLM\"; steps 5-7 repeat it with spending_limit removed (V, H-comp)"
- },
- "dd-sim-second-pay-xlm": {
-  "value": "5",
-  "source": "source/figures/fig-sim.run.json step 3, \"5 XLM more in the same window\"; step 14 pays 5 again 100 ledgers later (V, H-comp)"
- }
-}
+{}

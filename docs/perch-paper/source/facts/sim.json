@@ -102,5 +102,21 @@
  "sim-wasm-policy-interpreter": {
   "value": "6704996f626904a4e33b95bda17b73963fc9cf502ffdfdbe9d85b4b10288e0d4",
   "source": "`source/figures/fig-sim.run.json` `contracts[\"policy_interpreter.wasm\"]`"
+ },
+ "sim-pay-xlm": {
+  "value": "6",
+  "source": "`source/figures/fig-sim.run.json` steps 2 and 5–7, `request.amount_xlm`: the in-rule payment to the shop, applied by both designs at step 2 and repeated with `spending_limit` removed"
+ },
+ "sim-second-pay-xlm": {
+  "value": "5",
+  "source": "`source/figures/fig-sim.run.json` step 3, `request.amount_xlm`: the payment in the same window that both designs refuse"
+ },
+ "sim-late-pay-xlm": {
+  "value": "5",
+  "source": "`source/figures/fig-sim.run.json` step 14, `request.amount_xlm`: the payment after the window has moved on"
+ },
+ "sim-oz-per-call-bound-xlm": {
+  "value": "10",
+  "source": "`source/figures/fig-sim.run.json` `task`: the oz-policy-builder predicate pins the recipient and bounds each transfer at 10 XLM"
  }
 }
