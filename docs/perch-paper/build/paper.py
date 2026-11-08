@@ -111,7 +111,8 @@ class Paper:
                 fail(f'{DOC["id"]}: figure {f} has no entry in figures.json or the outline')
         self.figures = {f: self.figures[f] for f in used if f in self.figures}
         for s in self.sections:
-            if s.get('editions') and set(s['editions']) != {'html', 'latex'} and not (s.get('unnumbered') or s.get('appendix')):
+            if (s.get('editions') and set(s['editions']) != {'html', 'latex'} and not (s.get('unnumbered') or s.get('appendix'))
+                    and DOC.get('html_numbers', True)):
                 fail(f'section {s["id"]} is in one edition only, so it must be unnumbered or an appendix')
         for s in self.sections:
             for t in s.get('tables', []):
@@ -138,9 +139,14 @@ class Paper:
                 out[target].append(x)
         return out
 
-    def numbered(self, item):
-        # An exhibit takes a number only if every edition of this document shows it, so a number
-        # names the same exhibit in the HTML and the PDF; the others are titled and cited by name.
+    def numbered(self, item, ed):
+        # LaTeX numbers every float it places. In the HTML an exhibit takes a number only if every edition
+        # shows it, so a number names the same exhibit in the HTML and the PDF; the others are titled and
+        # cited by name. A document with "html_numbers": false numbers nothing in its HTML edition.
+        if ed == 'latex':
+            return True
+        if not DOC.get('html_numbers', True):
+            return False
         return all(self.in_edition(item, e) for e in (('html', 'latex') if LATEX else ('html',)))
 
     def _number(self, ed):
@@ -151,6 +157,8 @@ class Paper:
                 continue
             if s.get('unnumbered'):
                 pass
+            elif ed == 'html' and not DOC.get('html_numbers', True):
+                pass
             elif s.get('appendix'):
                 nums['sec:' + s['id']] = 'ABCDEFGH'[app]
                 app += 1
@@ -159,12 +167,12 @@ class Paper:
                 nums['sec:' + s['id']] = f'{main:02d}' if ed == 'html' else str(main)
             for f in figs[s['id']]:
                 if self.in_edition(self.figures[f], ed):
-                    fig += self.numbered(self.figures[f])
-                    nums['fig:' + f] = str(fig) if self.numbered(self.figures[f]) else ''
+                    fig += self.numbered(self.figures[f], ed)
+                    nums['fig:' + f] = str(fig) if self.numbered(self.figures[f], ed) else ''
             for t in tabs[s['id']]:
                 if self.in_edition(self.tables[t], ed):
-                    tab += self.numbered(self.tables[t])
-                    nums['tab:' + t] = str(tab) if self.numbered(self.tables[t]) else ''
+                    tab += self.numbered(self.tables[t], ed)
+                    nums['tab:' + t] = str(tab) if self.numbered(self.tables[t], ed) else ''
         return nums
 
 
@@ -231,9 +239,11 @@ def _directive(p, body, ed, ctx):
         target = arg[4:]
         if n == '':
             item = (p.figures if arg.startswith('fig:') else p.tables)[target]
-            if not item.get('short'):
-                fail(f'{ctx}: {target} is in one edition only, so it has no number; give it a "short" name to be cited by')
-            name = render(p, item.get('short', target), 'html', ctx)
+            short = p.outline.get('shorts', {}).get(target) or item.get('short')
+            if not short:
+                fail(f'{ctx}: {target} has no number in this edition; give it a "short" name (its entry, or the '
+                     f'outline\'s "shorts") to be cited by')
+            name = render(p, short or target, 'html', ctx)
             return f'<a href="#{target}">{name[:1].upper() + name[1:] if opt == "cap" else name}</a>'
         label = ('Appendix ' if appendix else {'sec': '§', 'fig': 'Figure ', 'tab': 'Table '}[arg[:3]]) + (n or '??')
         return f'<a href="#{target}">{label}</a>'

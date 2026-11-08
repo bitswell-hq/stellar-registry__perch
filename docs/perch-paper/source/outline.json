@@ -1,6 +1,14 @@
 {
  "nav_note": "A research paper with a dual simulation.<br>Fourth iteration · November 2026",
  "glossary": "tab-glossary-main",
+ "shorts": {
+  "fig-shop-grant": "the shop grant figure",
+  "fig-cap-window": "the cap-window figure",
+  "fig-auth-path": "the authorization-path figure",
+  "tab-grantee": "the grantee table",
+  "tab-choose": "the comparison table",
+  "tab-sim": "the recorded-run table"
+ },
  "sections": [
   {
    "id": "motivation",
