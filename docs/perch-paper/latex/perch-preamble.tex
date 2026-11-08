@@ -74,8 +74,9 @@
 % Ragged right: an evidence line is a list of long Lean names that break only
 % after a dot or an underscore.
 \newcommand\statementevidence[1]{\par\smallskip\noindent{\upshape\footnotesize\raggedright Evidence: #1\par}}
-% A companion paper: its title, and its address unless the build is anonymous.
-\newcommand\companion[2]{\emph{#2}\ifdefined\anonymous\else\footnote{\url{#1}}\fi}
+% A companion paper: its title and address, both withheld in the anonymous build
+% (a title search finds the published companion).
+\newcommand\companion[2]{\ifdefined\anonymous[withheld for review]\else\emph{#2}\footnote{\url{#1}}\fi}
 \input{generated/facts}
 
 % LaTeX-edition helpers.

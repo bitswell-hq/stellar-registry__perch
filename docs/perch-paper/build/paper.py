@@ -302,7 +302,7 @@ def formal_ref(p, arg, ed, ctx):
     if not item:
         fail(f'unknown {kind} {ident!r} in {ctx}')
         return '??'
-    word = 'Theorem' if kind == 'stmt' else 'Definition'
+    word = ('Proposition' if item.get('argued') else 'Theorem') if kind == 'stmt' else 'Definition'
     here = ident in {x['id'] for x in (p.statements if kind == 'stmt' else p.definitions)}
     n = number_of(item.get('label'))
     if ed == 'latex':
@@ -399,8 +399,14 @@ def link_glossary(p, page):
         return page
     base = '' if own else _directive(p, 'doc:main', 'html', 'glossary')
     names, defs = {}, {}
+    def plain(cell):
+        return html.unescape(re.sub(r'<[^>]+>', '', render(p, cell, 'html', 'glossary'))).strip()
     for r in t['rows']:
-        defs[slug(r[0])] = html.escape(re.sub(r'<[^>]+>', '', render(p, r[1], 'html', 'glossary')))
+        # The hover: every meaning column that has an entry ("—" marks none), named when there are several.
+        parts = [(col, plain(cell)) for col, cell in zip(t['columns'][1:], r[1:])
+                 if not col.lower().startswith('name') and cell.strip() not in ('—', '-', '')]
+        text = parts[0][1] if len(parts) == 1 else '; '.join(f'{col}: {txt}' for col, txt in parts)
+        defs[slug(r[0])] = html.escape(text)
         for name in [r[0]] + [x.strip() for x in re.split(r',| and ', r[0])]:
             names.setdefault(slug(name), slug(r[0]))
 

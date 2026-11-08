@@ -21,7 +21,7 @@
   [
    "Tested on real transactions",
    "{{fact:opb-corpus-calls}} mainnet contract calls of {{fact:opb-corpus-shapes}} shapes, including SEP-41 transfers, Soroswap swaps and Blend submits, taken from synthesis to the interpreter (`packages/policy-synth/src/corpus.test.ts:1-3`; `fixtures/corpus/mainnet.json`)",
-   "{{fact:nido-run-transactions}} testnet transactions through the {{fact:wallet-name}} preview; local reference runs"
+   "{{fact:nido-run-transactions}} transactions through {{fact:wallet-name}}'s testnet preview; local reference runs"
   ],
   [
    "Authoring",
