@@ -1,6 +1,6 @@
 {
  "_source": "Recorded native reference run of docs/perch-paper/sim/index.html (evidence/native-golden.jsonl in its embedded build sources). The page hashes each browser reply minus wall-clock timings and compares it with this run; the WASI build gives the same replies.",
- "page_sha256": "1056d32dee67ec94d318ef63b20188b04c7f1d61975a7362551e319802ec8796",
+ "page_sha256": "ce8174dc3ac325deb511a3fecfa8127d72477ac7d47a1a4a5040680c906b982e",
  "golden_sha256": "38da174d3bc6d7242f788ac2bf479545e3bce18aefbcd578966341c53cbe3dea",
  "replies_sha256": "88bf930eea70cb7344c912049c77e44b134b3806993c12cc7c4edabd52a38136",
  "replies_sha256_note": "SHA-256 of the fifteen replies minus every `ms` field, one JSON line each (replies.mjs); native, WASI and the browser agree on it.",

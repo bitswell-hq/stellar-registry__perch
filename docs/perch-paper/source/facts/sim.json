@@ -1,14 +1,14 @@
 {
  "sim-page-sha256": {
-  "value": "1056d32dee67ec94d318ef63b20188b04c7f1d61975a7362551e319802ec8796",
+  "value": "ce8174dc3ac325deb511a3fecfa8127d72477ac7d47a1a4a5040680c906b982e",
   "source": "`shasum -a 256 docs/perch-paper/sim/index.html`; equals `source/figures/fig-sim.run.json` `page_sha256`"
  },
  "sim-page-sha256-short": {
-  "value": "1056d32d…",
+  "value": "ce8174dc…",
   "source": "same"
  },
  "sim-page-bytes": {
-  "value": "4,901,054",
+  "value": "4,913,857",
   "source": "size of `docs/perch-paper/sim/index.html`"
  },
  "sim-page-mb": {
