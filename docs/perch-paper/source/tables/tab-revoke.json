@@ -27,5 +27,8 @@
    "Every earlier grant, in that transaction",
    "Proved in an account model (T10, in the verification companion paper); tested; run on testnet"
   ]
+ ],
+ "editions": [
+  "html"
  ]
 }

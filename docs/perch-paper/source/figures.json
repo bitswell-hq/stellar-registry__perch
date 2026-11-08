@@ -13,11 +13,13 @@
   "panels": [
    {
     "file": "a",
-    "title": "(a) The grant document"
+    "title": "(a) The grant document",
+    "latex_width": 0.49
    },
    {
     "file": "b",
-    "title": "(b) In words"
+    "title": "(b) In words",
+    "latex_width": 0.49
    }
   ]
  },
@@ -37,21 +39,32 @@
   "title": "One authorization in six stages.",
   "caption": "Stage 4 (decide) is the function the theorems cover (double border); the others are tested account code. Any refusal writes nothing; the verifier runs only after the decision accepts. A recovery completion leaves at stage 2 and is decided by the recovery controller; the vision companion paper lists all nine steps.",
   "kind": "algorithm",
-  "interactive": "auth-path"
+  "interactive": "auth-path",
+  "latex_size": "scriptsize",
+  "latex_exit_width": "0.27"
  },
  "fig-compose": {
   "title": "The same five checks, arranged two ways.",
   "caption": "MODEL. (a) One decision point holding every check and its state, shaped like a Perch account. (b) A separate policy per check, each with its own state, shaped like a policy-composed OpenZeppelin account. Four requests; a bar end marks the refusing point; dashed points did not run. Computed from the paper's definitions; {{ref:sec:simulation}} runs the real contracts.",
-  "interactive": "compose"
+  "interactive": "compose",
+  "editions": [
+   "html"
+  ]
  },
  "fig-sim": {
   "title": "Both designs, one scenario, from soroban-sim's native run.",
   "caption": "RECORDED. Per request: the contracts called while the account authorized it (from the host's diagnostic events), the verdict and code, and the window. Dashed: no such phase. Page `{{fact:sim-page-sha256-short}}`, golden run `{{fact:sim-golden-sha256-short}}`; pins in {{ref:sec:repro}}. No instruction counts.",
-  "interactive": "sim-poster"
+  "interactive": "sim-poster",
+  "editions": [
+   "html"
+  ]
  },
  "fig-proof-scope": {
   "title": "What the proofs cover.",
-  "caption": "One Rust source, two paths: translated into Lean, where the theorems are checked (double border), and compiled into the account's Wasm, which is tested (single border). Tests bridge them (dashed); nothing checks one against the other. The verification companion paper has the full picture."
+  "caption": "One Rust source, two paths: translated into Lean, where the theorems are checked (double border), and compiled into the account's Wasm, which is tested (single border). Tests bridge them (dashed); nothing checks one against the other. The verification companion paper has the full picture.",
+  "editions": [
+   "html"
+  ]
  },
  "fig-two-paths": {
   "title": "One guarded call in two accounts.",

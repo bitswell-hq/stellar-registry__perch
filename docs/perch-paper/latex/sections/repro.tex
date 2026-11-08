@@ -1,54 +1,43 @@
-\perchtable{tab-status}
-\perchfigure{fig-recovery}
+\paragraph{Pins.} \ifdefined\anonymous The revisions of Perch, rule-core and
+soroban-sim are withheld for review and given in the artifact.\else Perch
+\facthash{perch-pin}~\selfcite{perch-src}; rule-core
+\facthash{rule-core-pin}~\selfcite{rule-core}; soroban-sim
+\facthash{soroban-sim-pin} (soroban-env-host
+\fact{soroban-env-host-sim}).\fi{} OpenZeppelin stellar-contracts
+\fact{oz-v080-tag} (\fact{oz-v080-commit}); oz-policy-builder
+\facthash{opb-pin}.
 
-\paragraph{Sources.} \ifdefined\anonymous The revisions of Perch, rule-core,
-soroban-sim and the Guess the Number fixture are withheld for review and given in
-the artifact.\else This paper describes Perch at revision
-\facthash{perch-pin}~\selfcite{perch-src} and rule-core at
-\facthash{rule-core-pin}~\selfcite{rule-core}. The reference run uses soroban-sim
-at \facthash{soroban-sim-pin} and the Guess the Number fixture at
-\facthash{guess-the-number-pin}~\selfcite{guess-the-number}.\fi
+\paragraph{The simulation.} SHA-256 of the page, \facthash{sim-page-sha256}; of
+the golden native run, \facthash{sim-golden-sha256}; and of the reference
+replies minus wall-clock timings, which the native run, the WASI build and the
+browser share, \facthash{sim-replies-sha256}. Contract Wasm, SHA-256:
+{\footnotesize
+\begin{itemize}[nosep,leftmargin=*]
+\item Perch account \facthash{sim-wasm-perch-account}
+\item document compiler \facthash{sim-wasm-perch-doc-compiler}
+\item Ed25519 verifier \facthash{sim-wasm-perch-ed25519-verifier}
+\item OpenZeppelin account \facthash{sim-wasm-oz-account}
+\item OpenZeppelin \code{spending\_limit} \facthash{sim-wasm-oz-spending-limit}
+\item \code{policy-interpreter} \facthash{sim-wasm-policy-interpreter}
+\end{itemize}}
+\noindent The page also loads Perch's earlier policy contracts, which its
+account pins but never calls, and a verifier-registry stub; their hashes are in
+\nolinkurl{sim/README.md}. The page carries its build sources, whose
+\code{BUILD.md} fetches the pinned trees by commit and rebuilds the contracts,
+the driver (native and \code{wasm32-wasip1}), the reference run and the page.
 
-\paragraph{Proofs.} The proofs reproduce from rule-core with Charon
+\paragraph{Proofs.} rule-core's proofs reproduce with Charon
 \fact{charon-rev}, Aeneas \fact{aeneas-rev} and Lean \fact{lean-rule-core}:
 \code{tools/extract.sh -{}-check} regenerates the translation and fails on any
-difference, and \code{lake build} in \code{formal/} checks the theorems;
-rule-core's README gives the full commands. Perch's canonical-encoding package
-uses Lean \fact{lean-perch-canon}. rule-core's CI also checks a ledger of
-\fact{claims-total} claims (\fact{claims-proven} proven, \fact{claims-tested}
-tested, \fact{claims-assumed} assumed, \fact{claims-unproven} unproven).
+difference, and \code{lake build} in \code{formal/} checks the theorems. The
+earlier Perch-only experiment and its full reproducibility record are in the
+vision companion.
 
-\paragraph{Reference run.} Setup loads protocol-\fact{sim-protocol} cost and
-configuration entries from a testnet fixture (ledger \fact{fixture-ledger};
-testnet now runs protocol \fact{testnet-protocol}) and places the compiler and the
-Perch \fact{perch-deployed-account-version} policy contracts at the addresses the
-account derives from its pins; a \fact{registry-stub-bytes}-byte registry stub
-resolves the verifier name \code{\fact{sim-verifier-name}} offline, so the
-production registry's governance is not tested. Refusals caught in enforcing simulation are not submitted,
-so an unchanged fingerprint says nothing about fees for failed, submitted
-transactions. A native program and a WASI reactor run the same driver over the same pinned bytes and agree on every
-returned field except wall-clock time. The HTML edition embeds a source bundle
-with the Rust JSON-command driver, its native entry point, a
-\fact{wasi-imports-count}-function WASI shim, the browser worker, dependency
-locks, the contract build script, the reference command sequence and a
-comparison checker; \code{projects/perch-browser/README.md} in the bundle gives
-the pinned build commands. Like Perch's own release build, the build rewrites the
-account's infrastructure pin files with the hashes of the contracts built in the
-same run, so the embedded account (\fact{embedded-account-short}) differs from
-the testnet preview's (\fact{preview-account-wasm-short}). The account still pins
-the Perch \fact{perch-deployed-account-version} policy contracts and reports them
-through \code{infra()}, but never calls them. The demo's driver maps the names
-this paper uses to the pinned exports of Table~\ref{tab:tab-api} at its call
-boundary. An executable walkthrough of the task in
-Table~\ref{tab:tab-walkthrough}, in both designs, accompanies the HTML edition.
+\section{Formal Definitions and Two Theorems}\label{sec:formal-defs}
+These are the definitions that the theorems of \S\ref{sec:proofs} use, and the
+two of its five theorems that the body states in words only; the verification
+companion gives all nine definitions and thirteen theorems.
 
-\paragraph{This paper.} \code{python3 docs/perch-paper/build/paper.py} renders
-both editions, the HTML edition and this PDF, from shared sources, and
-\code{docs/perch-paper/latex/build.sh} builds this PDF with a pinned Tectonic.
-
-\perchtable{tab-run}
-
-\perchtable{tab-api}
-
-\perchtable{tab-artifacts}
-\perchtable{tab-ending}
+\input{generated/definitions}
+\input{generated/statements/T1}
+\input{generated/statements/T4}

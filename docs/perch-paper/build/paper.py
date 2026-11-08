@@ -441,8 +441,9 @@ def latex_steps(p, fid, st):
         rows.append(f'{x["n"]} & {render(p, x["text"], "latex", fid)} & {exits} & {render(p, x.get("assurance", ""), "latex", fid)} \\\\')
     intro = render(p, st['intro'], 'latex', fid) + '\\par\\smallskip\n' if st.get('intro') else ''
     outro = '\n\\par\\smallskip ' + render(p, st['outro'], 'latex', fid) if st.get('outro') else ''
-    return (intro + '\\footnotesize\\begin{tabularx}{\\linewidth}{@{}r>{\\raggedright\\arraybackslash}X'
-            '>{\\raggedright\\arraybackslash}p{0.3\\linewidth}l@{}}\n\\toprule\n'
+    size, exit_w = p.figures[fid].get('latex_size', 'footnotesize'), p.figures[fid].get('latex_exit_width', '0.3')
+    return (intro + f'\\{size}\\begin{{tabularx}}{{\\linewidth}}{{@{{}}r>{{\\raggedright\\arraybackslash}}X'
+            f'>{{\\raggedright\\arraybackslash}}p{{{exit_w}\\linewidth}}l@{{}}}}\n\\toprule\n'
             '\\textbf{No.} & \\textbf{Step} & \\textbf{Exit and code} & \\textbf{Assurance} \\\\\n\\midrule\n'
             + '\n'.join(rows) + '\n\\bottomrule\n\\end{tabularx}' + outro)
 

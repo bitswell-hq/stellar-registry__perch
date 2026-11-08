@@ -1,4 +1,4 @@
-% Perch: the academic edition of the paper. Build with ./build.sh (pinned
+% Perch: the academic edition of the main paper. Build with ./build.sh (pinned
 % Tectonic). Section order, titles, figures, tables, facts, formal statements
 % and references come from ../source via ../build/paper.py, which writes
 % generated/; prose lives in sections/. See ../README.md.
@@ -7,17 +7,17 @@
 \documentclass[runningheads]{llncs}
 \input{perch-preamble}
 
-\title{Perch: Bounded, Recoverable Grants\\for Soroban Smart Accounts}
-\titlerunning{Perch}
+\title{Perch: Bounded Grants for Apps and Agents\\on Soroban Smart Accounts}
+\titlerunning{Perch: Bounded Grants on Soroban Smart Accounts}
 \ifdefined\anonymous
 \author{Anonymous authors}
 \institute{Anonymous institution}
-\newcommand\repolink[2]{#2}
+\newcommand\repolink[2]{\perchbrk{#2}}
 \else
 \author{Willem Wyndham \and Elizabeth Engelman}
 \authorrunning{W. Wyndham and E. Engelman}
 \institute{The Aha Company}
-\newcommand\repolink[2]{\href{#1}{#2}}
+\newcommand\repolink[2]{\href{#1}{\perchbrk{#2}}}
 \fi
 
 \begin{document}

@@ -215,5 +215,10 @@
  "opb-commits-after-release": {
   "value": "17",
   "source": "`git describe` at 43b13ed: v5.2.0-17-g43b13ed; `git diff v5.2.0 43b13ed -- contracts` is empty (V, editor r3)"
+ },
+ "opb-domain-tags": {
+  "value": "`prime-seat-grant` (session grants) and `prime.execution.adapter.v5` (the execution adapter's address salt)",
+  "markup": true,
+  "source": "`opb:contracts/stellar/prime-seat/src/lib.rs:78`; `opb:docs/stellar.md:157-160` (V, LaTeX author)"
  }
 }
