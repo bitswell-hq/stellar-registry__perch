@@ -139,7 +139,7 @@ States: **Measured** (within budget unless stated; the cell says where);
 | §2 `Protected` reconfiguration, `schedule_upgrade` | Measured: in process (reconfiguration at the caps) and on testnet | Within budget. |
 | §2 `execute_upgrade` | Measured in process only | Within budget. Not run on testnet: the upgrade delay is 120 960 ledgers. |
 | §2 promotion after many collecting attempts | Measured without siblings; bounded by construction | Promotion writes one `invalidate_below` value whatever the number of siblings (spec §6.3 T4); the promoting rows above are within budget. No run with many siblings. |
-| §2 ordinary authorization overhead | Measured on testnet (absolute cost) and in process | Direct authorization and `execute` are within budget ([testnet-exercise.md](../deploy/testnet-exercise.md), "Against the budget"). The scope generation gate adds one footprint entry per selected rule ([Scoped documents](#scoped-documents)). Rule-eval's `authorize` decides an authorization in 5.6M to 6.3M instructions in process, a capped transfer more with a long spending history, up to 47.40M (11.9%) for the longest one window holds ([Rule-eval in `__check_auth`](#rule-eval-in-__check_auth)). |
+| §2 ordinary authorization overhead | Measured on testnet (absolute cost) and in process | Direct authorization and `execute` are within budget ([testnet-exercise.md](../deploy/testnet-exercise.md), "Against the budget"). The scope generation gate adds one footprint entry per selected rule ([Scoped documents](#scoped-documents)). Rule-eval's `authorize` decides an authorization in 5.6M to 6.3M instructions in process, a capped transfer more with a long spending history, up to 47.40M (11.8%) for the longest one window holds ([Rule-eval in `__check_auth`](#rule-eval-in-__check_auth)). |
 | §2 disk read bytes, every row | Required before launch | Neither the release-stack suite nor the testnet exercise reports disk read bytes. |
 | §2 transaction size, every row | Measured on testnet | Within budget. The in-process suite does not meter transaction size. |
 | §2 memory, every row | Measured in process | Within budget. The RPC does not report memory, so testnet rows have none. |
@@ -587,14 +587,14 @@ Instructions, as a share of the 400M limit:
 | Flow | OZ and its policies | Both, OZ first | Rule-eval |
 | --- | --- | --- | --- |
 | Capped transfer through a grant, 1 grant in the admin document | 6.10M (1.5%) | 7.07M (1.8%) | 5.59M (1.4%) |
-| The same, 7 grants | 6.19M (1.5%) | 7.50M (1.9%) | 5.92M (1.5%) |
-| Capped transfer through a scoped grant, 1 scope | 6.15M (1.5%) | 7.19M (1.8%) | 5.70M (1.4%) |
-| Capped transfer through the last of 8 scopes, 65 rules installed (fork) | 6.23M (1.6%) | 7.99M (2.0%) | 6.32M (1.6%) |
-| `execute` through the admin rule, no scopes | 5.54M (1.4%) | 6.26M (1.6%) | 5.85M (1.5%) |
+| The same, 7 grants | 6.19M (1.5%) | 7.49M (1.9%) | 5.92M (1.5%) |
+| Capped transfer through a scoped grant, 1 scope | 6.17M (1.5%) | 7.20M (1.8%) | 5.70M (1.4%) |
+| Capped transfer through the last of 8 scopes, 65 rules installed (fork) | 6.25M (1.6%) | 8.00M (2.0%) | 6.33M (1.6%) |
+| `execute` through the admin rule, no scopes | 5.55M (1.4%) | 6.26M (1.6%) | 5.85M (1.5%) |
 | `execute` through the admin rule, 65 rules installed | 5.99M (1.5%) | 6.71M (1.7%) | 6.17M (1.5%) |
 | Capped transfer after 100 spends in the window (fork) | 6.98M (1.7%) | 12.66M (3.2%) | 10.31M (2.6%) |
 | Capped transfer after 400 spends in the window (fork) | 9.31M (2.3%) | 28.73M (7.2%) | 24.05M (6.0%) |
-| Capped transfer after 906 spends in the window (fork) | not run | not run | 47.40M (11.9%) |
+| Capped transfer after 906 spends in the window (fork) | not run | not run | 47.40M (11.8%) |
 
 - **What an authorization reads and writes.** A capped transfer reads 13
   footprint entries and writes 4, 764 bytes after one spend: the stored
@@ -615,13 +615,13 @@ Instructions, as a share of the 400M limit:
 - **Applies install fewer entries.** Applying or completing a document
   writes no interpreter program, spending-limit window, or policy registry
   entry. The binding fork completion at the caps (the thief kept every name
-  and changed every program) went from 297.10M (74.3%) to 263.54M (65.9%),
+  and changed every program) went from 297.45M (74.4%) to 263.48M (65.9%),
   its footprint from 116 to 100 entries and its memory from 14.7 MB to 10.3
   MB. The costliest budgeted row is now the `Protected` reconfiguration that
-  edits every rule, 266.03M (66.5%). Every budgeted completion and
-  reconfiguration over 200M fell by 2.5M to 35.8M. On the long-lived host
-  the compromise completions at the caps went from 285.52M to 321.63M
-  (71.4% to 80.4%) to 257.05M to 278.34M (64.3% to 69.6%), within 75%
+  edits every rule, 265.93M (66.5%). Every budgeted completion and
+  reconfiguration over 200M fell by 2.5M to 35.4M. On the long-lived host
+  the compromise completions at the caps went from 285.37M to 321.61M
+  (71.3% to 80.4%) to 256.84M to 278.11M (64.2% to 69.5%), within 75%
   unbudgeted too.
 - **Every budgeted row stays within 75%**: `release_stack.rs` passes, 25
   tests. The worst shares of the other limits are memory 37.2%, footprint
@@ -630,12 +630,14 @@ Instructions, as a share of the 400M limit:
   ([Rule-eval rule sets](#rule-eval-rule-sets)); `scripts/cap-sweep.py` has
   not been rerun on this source.
 
-The account wasm is 130,692 bytes as `stellar contract build` builds it
-(130,268 with OZ first), under the 131,072-byte contract limit. It reads
+The account wasm is 128,958 bytes as `stellar contract build` builds it
+(128,423 with OZ first), and 129,123 bytes as `stellar scaffold build`
+builds it for a deployment, under the 131,072-byte contract limit. It reads
 stored rules and records from their XDR in one pass and a batch of calls
 one host value at a time, rather than through `#[contracttype]` decoding and
 soroban-facade's context reading, which would take the account over the
-limit. `apply_doc` and `apply_scope` keep `#[contracttype]` conversion: in
+limit; reading a compiled model builds its vectors with plain loops rather
+than iterator adapters, which saves another 2 KB. `apply_doc` and `apply_scope` keep `#[contracttype]` conversion: in
 the account's wasm, where a call costs 67 fuel and a short copy is a byte
 loop, reading the model or writing the set as XDR costs the binding
 completion 7M to 9M more instructions than the host's conversion does.
