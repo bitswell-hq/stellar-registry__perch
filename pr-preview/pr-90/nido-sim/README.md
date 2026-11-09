@@ -5,8 +5,69 @@ simulator inside it is compiled only on the first press). The reader creates
 a Nido account in soroban-sim the way Nido does, gives an app a Perch grant,
 then plays a guessing game and buys a coffee. Each request goes through the
 soroban-sign-dialog in Nido's look; the dialog's preview runs the request in
-the page's simulator first (verdict, balance change, budget left). After an
-approval the page shows Perch checking every node of the authorization tree.
+the page's simulator first. After an approval the page shows Perch checking
+every node of the authorization tree.
+
+## Minimal by default
+
+The page follows a design review of its dialog and simulation UI: the default
+view says what is approved and what happened; details are one click away.
+
+- **The dialog, default view:** one plain sentence of what you approve, with
+  the amount ("Guess 3 in the game, paying 1 XLM"; at install, "Let the app
+  pay the game up to 2 XLM and the coffee shop up to 10 EURC per 100
+  ledgers, only inside guess and order"); the budget left ("After this: 1 of
+  2 XLM left in this period", or "Over the cap: …" in the danger colour); a
+  one-line verdict ("Your account will accept this", or "Your account will
+  refuse this: the payment must happen inside game.guess"); any warning, as
+  the component raises it; "Network fee paid by Nido's relayer" (the user
+  never pays here); a full-width "Details: calls, rules, simulation" control,
+  collapsed for every request; Reject and Approve.
+- **Behind Details**, four groups: what you authorize (the tree), why it is
+  allowed (per node, the rule matched and its root and cap checks; the cap
+  meter), the simulation (balance changes, events, ledger and protocol), and
+  addresses and fee (full ids, the signer key, the exact fee and its payer).
+- **The page:** a one-line result under the step that caused it ("✓ Applied:
+  you lost 1 XLM; 1 of 2 XLM left in this period", "✕ Refused by your account:
+  the payment must happen inside game.guess"), scrolled into view in the
+  embed, with "Show the checks". Request cards are collapsed to that line;
+  opened, the failing node is open and passing nodes read "✓ all N checks";
+  the host trace, the signed payload, the sources and the comparison with the
+  recorded run sit one level deeper. "Simulated in this page" is one line with
+  a "What is simulated" disclosure.
+
+The dialog is the vendored component, unchanged. The page configures it only
+through its public API: `strings` (functions that read the request the page
+prepared), `::part()` styles in the page's CSS (`title` kept as the
+accessible name but visually hidden, `fee`, `status-reason`,
+`details-summary`), the `logo` slot, and the page's preview provider, which
+adds the plain refusal reason. Two host-page workarounds stand in for
+component features: a fresh `<soroban-sign-dialog>` element for each request,
+so Details starts collapsed; and, because the summary line and the tree's node
+lines use the same strings, the page counts the string calls of each render
+(fee line, one per tree node, then the summary) so that only the summary line
+gets the plain sentence. The "Addresses and fee" group is appended through the
+`footnote` string.
+
+## Requests for the component
+
+From a design review of this page and its dialog, for `@theahaco/soroban-sign-dialog`, as requests, not forks:
+
+1. Reset Details to collapsed on each new request (today the open state
+   carries over; the page creates a fresh element per request instead).
+2. Name the signer's outgoing payments in the summary line ("…, paying 1
+   XLM"), for example a `summaryCall` string given the call and the signer's
+   transfers.
+3. Summarize a grant install's rules and caps in the summary line (an
+   `installGrant` string given the decoded policy).
+4. Drop the short address after a labelled name in the default view, or
+   expose it as a part.
+5. Let the Details label differ when open and closed ("Show details" and
+   "Hide details").
+
+Requests 2 and 3 would also remove the page's string-call counting, and a
+group or slot for addresses inside Details would remove the `footnote`
+workaround.
 
 ## What it runs
 
@@ -62,9 +123,11 @@ every request.
   (the same requests; `commands: []` only creates the account).
 - Without a parameter the page loads nothing heavy: the 3.4 MB reactor is
   compiled on the first press.
-- Element ids: `#nido-controls`, `#nido-status` (polite live region with each
-  verdict), `#nido-totals`, `#nido-log` (cards `#nido-request-N`),
-  `#nido-reference`, `#nido-sources`, `#nido-notices`, `#nido-dialog`.
+- Element ids: `#nido-controls`, `#nido-result-1` to `#nido-result-4` (each
+  step's one-line result), `#nido-status` (visually hidden polite live
+  region), `#nido-totals`, `#nido-log` (collapsed cards `#nido-request-N`),
+  `#nido-reference`, `#nido-sources`, `#nido-notices`, `#nido-dialog` (a
+  fresh element per request).
 
 ## Pins
 
@@ -95,7 +158,7 @@ toolchain), stellar-cli 27.0.0 (`stellar contract build`).
 | reactor (driver, wasm32-wasip1) | 1d1e2094363cfa2fe5d6d944dbbb346031ec5571c7ea5bcdeb33e261d83841eb |
 | reference replies minus timings (native = WASI = browser) | 9ec27d1662a8999436d0961eb5ac122c4aefb28f2d7a405bad7e02b5e5aa7db7 |
 | recorded run `evidence/native-golden.jsonl` | a77586fa99248c75855a2dcf75e056c0bac8d7b88feb4c3c277ec850e9980850 |
-| index.html (5291831 bytes) | b1f6cfa248afe5ac770037a2b29f1e9a761f5530eaaab16ab4822742f4882472 |
+| index.html (5312307 bytes) | 4c4b1281fd5642649192e40c8b15bc702d433ccc8cd1ede8162da17624fedea0 |
 
 None of the Perch artifacts is a deployed contract: the account is built
 from 2c64fe4 with its compiler, interpreter and spending-limit pins staged
