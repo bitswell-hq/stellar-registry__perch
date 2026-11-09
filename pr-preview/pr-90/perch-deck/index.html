@@ -117,7 +117,6 @@ body {
 .notes { display: none; }
 
 /* live stages: a frame of a real page */
-.stage-live { grid-template-rows: minmax(0, 1fr) auto; gap: 10px; }
 .frame-wrap {
   position: relative; min-height: 0;
   border: 1px solid var(--rule); border-radius: 14px; overflow: hidden;
@@ -140,7 +139,8 @@ body {
 }
 .act.ghost { color: var(--ink); background: transparent; border: 1px solid var(--rule); }
 .act:focus-visible, .stage-links a:focus-visible, .lk:focus-visible { outline: 2px solid var(--now); outline-offset: 3px; }
-.stage-sim { grid-template-rows: minmax(0, 1fr) auto; gap: 10px; }
+.stage-sim, .stage-row { grid-template-rows: minmax(0, 1fr) auto; gap: 10px; }
+.stage-links a.act { text-decoration: none; display: inline-block; }
 .stage-sim .frame-wrap { display: none; }
 .stage-sim.live > svg { display: none; }
 .stage-sim.live .frame-wrap { display: block; }
@@ -384,7 +384,7 @@ body {
   </div>
   <div class="stage"><svg role="img" aria-label="An account at the centre of a dial of ledgers. A bracket marks a window of ledgers holding two charges; older charges lie outside it. An app key and an agent reach the account only through the window."></svg></div>
   <aside class="notes">
-    <p>Perch is a Stellar smart account that gives an app or agent a grant, a permission with limits, and enforces those limits itself at one decision point. Perch accounts run on Stellar through the Nido wallet. The dial is the deck's motif: the account at the centre, a ring of ledgers, and a window that holds the charges a grant has made. Solid cyan in an engraved frame is how Perch works at the paper's pinned build. Dashed magenta, with printer's marks, is where it could go.</p>
+    <p>Perch is a Stellar smart account that gives an app or agent a grant, a permission with limits, and enforces those limits itself at one decision point. Perch accounts run on Stellar through the Nido wallet. The dial is the deck's motif: the account at the centre, a ring of ledgers, and a window that holds the charges a grant has made. Solid cyan in an engraved frame is what Perch does, as the main paper presents it. Dashed magenta, with printer's marks, is where it could go.</p>
     <p class="src">docs/perch-paper/source/facts/paper.json (subtitle, authors, affiliation, wallet-name); source/html/abstract.html; source/html/sections/motivation.html.</p>
   </aside>
 </section>
@@ -410,11 +410,12 @@ body {
 
 <section class="slide" data-status="now" data-draw="atten" aria-roledescription="slide" aria-label="Attenuation">
   <header class="head"><h2>Attenuation</h2></header>
-  <div class="stage"><svg role="img" aria-label="The app's shop grant, 10 XLM per 100 ledgers, passes through narrowing steps to a helper's grant that pays the same shop at most 2 XLM per 100 ledgers, held in the account."></svg></div>
+  <div class="stage"><svg role="img" aria-label="The Nido account's grant to the app is a region of allowed calls: the game, any function; the shop, at most 10 XLM per 100 ledgers; until ledger N. The app delegates a smaller region nested inside it to a helper in three narrowing steps: only guess; at most 2 XLM per 100 ledgers; an earlier last ledger M. Paying the shop 5 XLM is inside the app's region and outside the helper's: the app may, the helper is refused. Theorems 4 and 5: the helper's grant allows no call, and no run of payments, that the app's grant refuses."></svg></div>
   <aside class="notes">
     <p>Attenuation derives a narrower grant from an existing one, for an app or agent handing part of its authority to a helper such as a sub-agent. rule-core defines 10 narrowing steps, among them dropping a rule, removing functions, adding an argument condition, raising a signer threshold, lowering a cap, lengthening its period and moving the expiry earlier. From the shop grant, a helper can receive a grant that pays the same shop at most 2 XLM per 100 ledgers.</p>
-    <p>Theorem 4: a grant derived by attenuation allows no call its parent does not, under any signers. Any grant the app narrows for a helper allows nothing its own grant does not.</p>
-    <p class="src">docs/perch-paper/source/html/sections/motivation.html (the shop grant and attenuation), authorization.html ("A stolen app key meets the same checks"); source/statements.json (T4); source/facts/proofs.json (attenuation-steps); source/facts/example.json (grant3-cap-xlm).</p>
+    <p>Theorem 4: a grant derived by attenuation allows no call its parent does not, under any signers; its comparison reads no cap or expiry, so it covers step 1 (only guess). Theorem 5, trace inclusion: every run a derived grant accepts from empty records, its parent accepts too, which covers steps 2 and 3 (the lower cap and the earlier last ledger). Parent and child keep separate records, and neither theorem bounds what they spend together.</p>
+    <p>The drawing follows the paper's attenuation model: a parent with a game rule (any function) and a shop rule (XLM transfers to the shop, at most 10 per 100 ledgers), narrowed by restricting the game to <code>guess</code>, lowering the cap to the 2 XLM the paper gives the helper, and setting an earlier last ledger, three of the 10 steps. The ledgers N and M are illustrative. A 5 XLM payment to the shop is one the app's grant allows and the helper's refuses, as in the model's probe table; a call the parent refuses, such as a payment to anyone else, the child refuses too.</p>
+    <p class="src">docs/perch-paper/source/html/sections/motivation.html (the shop grant and attenuation), authorization.html ("A stolen app key meets the same checks"); source/statements.json (T4, T5); source/facts/proofs.json (attenuation-steps); source/facts/example.json (shop-cap-xlm, shop-period-ledgers, grant3-cap-xlm); source/figures/fig-attenuation.text.html and build/figures/fig_attenuation.py (the model's parent, steps and probes).</p>
   </aside>
 </section>
 
@@ -433,30 +434,72 @@ body {
   <div class="stage"><svg role="img" aria-label="One authorization in six stages: the host calls __check_auth, guards, rule lookup, the decision function rule_eval::authorize, the verifier's signature check, and storing the new spending records. A refusal at any stage writes nothing."></svg></div>
   <aside class="notes">
     <p>If the user signs, the wallet submits the transaction and the account decides in a fixed order. The host calls <code>__check_auth</code>. Guards refuse requests the account never allows through a grant. The account looks up each rule the transaction names and its spending record; it does not search. The decision function, <code>rule_eval::authorize</code> in rule-core, checks every call against its rule and computes the new records; it reads no storage and checks no signature, and it is the part the proofs cover. Only if it accepts does a verifier contract check the app's signature, which binds the account and the rule IDs the transaction names, so a relayer cannot move the payment to another rule the key belongs to. Only then does the account store the new records.</p>
-    <p>A refusal at any stage writes nothing; the decision function reports contract error 5 (<code>RuleEvalRefused</code>). Theorems 1, 2 and 6 are about the decision function (slide 11).</p>
+    <p>A refusal at any stage writes nothing; the decision function reports contract error 5 (<code>RuleEvalRefused</code>). Theorems 1, 2 and 6 are about the decision function (slide 15).</p>
     <p class="src">docs/perch-paper/source/html/sections/authorization.html; source/figures/fig-auth-path.steps.json; crates/perch-smart-account/src/auth.rs (authenticate); source/facts/limits.json (auth-error-rule-eval-refused).</p>
+  </aside>
+</section>
+
+<section class="slide" data-status="now" data-draw="create" aria-roledescription="slide" aria-label="Create your Nido account">
+  <header class="head"><h2>Create your Nido account</h2></header>
+  <div class="stage"><svg role="img" aria-label="You ask Nido's factory to create your account. The factory deploys it, and it starts with Nido's baseline document: one admin rule signed by your passkey. In the simulation a software P-256 key stands in for the passkey, and Nido's factory is rebuilt on this stack's account code; both are labelled simulated."></svg></div>
+  <aside class="notes">
+    <p>Nido creates accounts with its own factory rather than Perch's account factory: <code>create_account(setup_pk, key, setup_sig)</code> deploys an account whose one signer is <code>External(WebAuthn verifier, P-256 key)</code>. The address comes from a salt derived from a setup key, so it exists before the passkey, whose relying-party ID is the account's own subdomain; the setup signature binds the network, the factory and the key. The account's constructor installs one rule, <code>admin</code>: the passkey, through Perch's WebAuthn verifier, over the account itself, the rule Nido's admin baseline document describes.</p>
+    <p>In the simulation, Nido's factory is rebuilt on this stack's account Wasm (the factory Nido pins today deploys an earlier account, Perch c135aca, v0.5.1, which predates grants and exact roots), and a software P-256 key stands in for the passkey. Both are labelled simulated.</p>
+    <p class="src">Nido 97105a0b: contracts/factory/src/contract.rs:217-239, packages/frontend/src/lib/policy/docDraft.ts:220-237, DEPLOYED.md:43-46; Perch crates/perch-smart-account/src/lib.rs:1796-1806 (the admin rule); docs/nido-sim/README.md (what the simulation rebuilds and labels).</p>
+  </aside>
+</section>
+
+<section class="slide" data-status="now" data-draw="install" aria-roledescription="slide" aria-label="Install the grant">
+  <header class="head"><h2>Install the grant</h2></header>
+  <div class="stage"><svg role="img" aria-label="The Nido sign dialog asks you to install the app's grant; you approve with your passkey under the admin rule. One install call: the document compiler checks the grant and the account installs it. The grant covers the game, any function, and the stake its guess asks for, and the shop's order and the payment it pulls."></svg></div>
+  <aside class="notes">
+    <p>The owner installs the app's grant with one call, <code>apply_scope</code>, approved in the Nido sign dialog and signed by the passkey under the account's <code>admin</code> rule. The document compiler validates the grant document, and the account installs its rules. For the demo the grant covers two rooms and the payment asked inside each: a game rule (any game function) and a transfer rule rooted at <code>game.guess</code> for the XLM stake, and a shop rule (<code>order</code>) and a transfer rule rooted at <code>shop.order</code> for the simulated EURC payment. Slides 9 and 10 show how each node is checked.</p>
+    <p class="src">docs/perch-paper/source/html/sections/motivation.html (apply_scope, the document compiler); docs/auth-root.md; docs/nido-sim/README.md (the grant the simulation installs).</p>
+  </aside>
+</section>
+
+<section class="slide" data-status="now" data-draw="nested" aria-roledescription="slide" aria-label="Every call in the tree">
+  <header class="head"><h2>Every call in the tree</h2></header>
+  <div class="stage"><svg role="img" aria-label="The app's keycard opens the game room. Inside, a losing guess asks for the stake, a transfer from the account to the game, and the same card covers it only because it is asked from inside the game room. As a tree: the root game.guess passes the game rule; the nested transfer passes the transfer rule only if it is from the account itself, within the cap, and its entry's root is exactly game.guess. The same transfer made directly, or under another root, is refused."></svg></div>
+  <aside class="notes">
+    <p>A grant covers a root call and the calls it makes on the account's behalf, and the account checks every node of the authorization tree against the rule the payload names for it. In the guess scenario, <code>game.guess</code> calls <code>guesser.require_auth()</code>, and a loss pays the stake with the XLM token's <code>transfer(account, game, stake)</code> inside it, so the account's entry is <code>[game.guess, token.transfer]</code>. The grant has a <code>game</code> rule and a <code>transfer</code> rule. The root passes the game rule. The nested transfer passes the transfer rule only if it is from the account itself (is-self on argument 0), within the cap (argument 2 is charged to the window; in the test, 2 XLM per 100 ledgers with a 1 XLM stake, so the cap refuses a third loss), and its entry's root is exactly <code>game.guess</code> (the rule's <code>auth-root</code>). The same transfer made directly, or under another root, is refused. A win is paid by the game itself, so the account's entry holds only <code>game.guess</code> and uses no allowance. The root check names an exact contract and function; it does not inspect root arguments or other ancestors.</p>
+    <p>Theorem 11 (authorization-tree coverage, in the host model): every call an account's entry approves is allowed by the rules its <code>__check_auth</code> checks, and those see the whole tree. The exact-root condition itself is tested (<code>auth_root.rs</code>), not proved.</p>
+    <p class="src">crates/integration-tests/tests/auth_root.rs (Game::guess; signed_game_loss_and_win_and_document_round_trip; direct_under_cap_and_fabricated_game_root_are_refused; wrong_root_function_contract_omitted_root_auth_and_reordered_tree_are_refused); docs/auth-root.md; crates/perch-ir/src/doc.rs (AuthRoot); docs/perch-paper/source/statements.json (T11).</p>
+  </aside>
+</section>
+
+<section class="slide" data-status="now" data-draw="coffee" aria-roledescription="slide" aria-label="A coffee order, nested">
+  <header class="head"><h2>A coffee order, nested</h2></header>
+  <div class="stage"><svg role="img" aria-label="In the simulation and demos: the app's keycard opens the coffee shop's order counter, and the order pulls payment from the account in EURC, a simulated test token. As a tree: the root shop.order passes the shop rule; the nested EURC transfer passes the transfer rule only if it is from the account itself, within the cap, and its entry's root is exactly shop.order. The same transfer made directly is refused."></svg></div>
+  <aside class="notes">
+    <p>The second instance, built only for the simulation and the demos: a small shop contract whose <code>order</code> pulls payment from the buyer through a EUR stablecoin token, a simulator-only Stellar Asset Contract named for EURC and labelled as a simulated test token. The grant covers the shop's <code>order</code> root and the nested token transfer, with the same rule conditions as the guess grant: the transfer from the account itself, within the cap, under exactly the <code>shop.order</code> root. The Café Perch sign dialog elsewhere in this deck pays directly in XLM and is unchanged.</p>
+    <p>Theorem 11 (authorization-tree coverage, in the host model): every call an account's entry approves is allowed by the rules its <code>__check_auth</code> checks, and those see the whole tree. The exact-root condition itself is tested (<code>auth_root.rs</code>), not proved.</p>
+    <p class="src">The scenario: the simulation's shop contract and its simulated EURC test token (docs/nido-sim/README.md and the page's build sources). The rule conditions: docs/auth-root.md; crates/integration-tests/tests/auth_root.rs; docs/perch-paper/source/statements.json (T11). No EURC token exists outside the simulation and demos.</p>
+  </aside>
+</section>
+
+<section class="slide" data-status="now" data-draw="nidorun" aria-roledescription="slide" aria-label="Nido in soroban-sim">
+  <header class="head"><h2>Nido in soroban-sim</h2></header>
+  <div class="stage stage-sim">
+    <svg role="img" aria-label="The Nido flow, run offline in soroban-sim: create your account, install the grant, play guess and see its nested XLM transfer checked, buy a coffee and see its nested EURC transfer checked. Each signature goes through the Nido sign dialog. Simulated: the passkey, the factory build and the EURC token."></svg>
+    <div class="frame-wrap"><span class="frame-wait">Loading the Nido simulation…</span><iframe data-src="../nido-sim/index.html?embed=1" title="Nido in soroban-sim: create an account, install a grant, play guess, buy a coffee"></iframe></div>
+    <p class="stage-links"><button class="act when-still" type="button" data-run>Run it here (5.3 MB)</button><button class="act ghost when-live" type="button" data-unrun>Back to the drawing</button><a class="act ghost" href="../nido-sim/index.html" target="_blank" rel="noopener">Open the Nido simulation</a></p>
+  </div>
+  <aside class="notes">
+    <p>The Nido flow run offline in soroban-sim, in order: create your Nido account, install the grant, play guess and see its nested XLM transfer checked, then buy a coffee and see its nested transfer of the simulated EURC test token checked. Every signature goes through the Nido-branded sign dialog. Simulated, and labelled so in the page: the passkey (a software P-256 key), the factory build (Nido's factory on this stack's account Wasm) and the EURC token. "Run it here" loads the 5.3 MB page into this slide, and its WebAssembly compiles on the first press inside it; "Open the Nido simulation" opens it on its own, which suits phones. While the frame has focus, keys go to the frame; use the arrows at the bottom to move on.</p>
+    <p class="src">docs/nido-sim/index.html (the simulation page) and docs/nido-sim/README.md; slides 7–10 for the facts it runs.</p>
   </aside>
 </section>
 
 <section class="slide" data-status="now" data-draw="dialog" aria-roledescription="slide" aria-label="Request, view, sign">
   <header class="head"><h2>Request, view, sign</h2></header>
-  <div class="stage"><svg role="img" aria-label="A café app sends a request; the sign dialog shows in plain words what it approves, the budget left and the simulated verdict; the user signs and the account decides. Three orders: 5 XLM succeeds, 8 XLM is refused, and 2 XLM carries a hidden 4 XLM authorization the transaction never uses."></svg></div>
-  <aside class="notes">
-    <p>A toy café app asks the account to pay for an order, under a grant of 10 XLM per 100 ledgers with 3 XLM already spent; unlike the shop grant, it does not pin the recipient. The sign dialog decodes every authorization entry from the transaction alone, with no network, leads with what the user approves in plain words and keeps the whole tree under Details. It previews the request with enforcing simulation, which runs the account's own <code>__check_auth</code>: a 5 XLM order succeeds and the budget left falls from 7 to 2 XLM; an 8 XLM order is refused with contract error 5 and the budget stays at 7.</p>
-    <p>The third order comes from a tampered checkout that adds a second entry, 4 XLM to another address, which the transaction never uses. A signed entry is published with its transaction; in the recorded run, submitting it alone moved 4 XLM. The dialog marks it unused so the user can refuse. Tap an order to hold it.</p>
-    <p class="src">docs/perch-paper/source/html/sections/motivation.html, grants.html; docs/sign-dialog/NOTICE.md.</p>
-  </aside>
-</section>
-
-<section class="slide" data-status="now" data-live="nido" aria-roledescription="slide" aria-label="The dialog in Nido">
-  <header class="head"><h2>The dialog in Nido</h2></header>
-  <div class="stage stage-live">
-    <div class="frame-wrap"><span class="frame-wait">Loading the dialog…</span><iframe data-src="../sign-dialog/nido.html" title="The sign dialog in Nido's look, in a toy café app"></iframe></div>
-    <p class="stage-links"><a href="../sign-dialog/nido.html" target="_blank" rel="noopener">Open on its own page</a><a href="../sign-dialog/NOTICE.md" target="_blank" rel="noopener">What is real and what is recorded</a></p>
+  <div class="stage stage-row"><svg role="img" aria-label="A café app sends a request; the sign dialog shows in plain words what it approves, the budget left and the simulated verdict; the user signs and the account decides. Three orders: 5 XLM succeeds, 8 XLM is refused, and 2 XLM carries a hidden 4 XLM authorization the transaction never uses."></svg>
+    <p class="stage-links"><a href="../sign-dialog/nido.html" target="_blank" rel="noopener">Open the café demo</a><a href="../sign-dialog/NOTICE.md" target="_blank" rel="noopener">What is real and what is recorded</a></p>
   </div>
   <aside class="notes">
-    <p>The real <code>&lt;soroban-sign-dialog&gt;</code> component, vendored from soroban-sim and themed with Nido's colours, type and mark, with nothing in its markup changed. Each order's authorization tree is decoded from its real transaction XDR; the outcome preview returns results recorded from a native soroban-sim run of the pinned Perch contracts. Pick an order: within the cap, over it, or the tampered checkout. The dialog simulates it as it opens. While the frame has focus, keys go to the frame; use the arrows at the bottom to move on.</p>
-    <p class="src">docs/sign-dialog/nido.html, NOTICE.md, nido/NOTICE.md; docs/perch-paper/source/html/sign-dialog.html.</p>
+    <p>A toy café app asks the account to pay for an order, under a grant of 10 XLM per 100 ledgers with 3 XLM already spent; unlike the shop grant, it does not pin the recipient. The sign dialog decodes every authorization entry from the transaction alone, with no network, leads with what the user approves in plain words and keeps the whole tree under Details. It previews the request with enforcing simulation, which runs the account's own <code>__check_auth</code>: a 5 XLM order succeeds and the budget left falls from 7 to 2 XLM; an 8 XLM order is refused with contract error 5 and the budget stays at 7.</p>
+    <p>The third order comes from a tampered checkout that adds a second entry, 4 XLM to another address, which the transaction never uses. A signed entry is published with its transaction; in the recorded run, submitting it alone moved 4 XLM. The dialog marks it unused so the user can refuse. Tap an order to hold it. The café demo is the real <code>&lt;soroban-sign-dialog&gt;</code> component in Nido's look; its previews are recorded from a native soroban-sim run of the pinned Perch contracts, and this café pays directly in XLM.</p>
+    <p class="src">docs/perch-paper/source/html/sections/motivation.html, grants.html; docs/sign-dialog/nido.html, NOTICE.md, nido/NOTICE.md.</p>
   </aside>
 </section>
 
@@ -544,7 +587,8 @@ body {
       <li><a class="lk" href="../perch-paper/verification/index.html"><svg viewBox="0 0 40 40" aria-hidden="true"><rect x="5" y="7" width="30" height="26" rx="4"/><rect x="9" y="11" width="22" height="18" rx="2"/><path d="M14 20l4 4 8-9"/></svg><span class="lk-t">What Perch proves</span><span class="lk-s">every theorem and what it assumes</span></a></li>
       <li><a class="lk" href="../perch-paper/vision/index.html"><svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="14"/><circle cx="20" cy="20" r="7"/><path d="M20 2v6M20 32v6M2 20h6M32 20h6"/></svg><span class="lk-t">The Perch vision</span><span class="lk-s">recovery, agents, the full account</span></a></li>
       <li><a class="lk" href="../perch-paper/sim/index.html"><svg viewBox="0 0 40 40" aria-hidden="true"><rect x="3" y="6" width="34" height="28" rx="4"/><path d="M3 13h34"/><rect x="8" y="18" width="11" height="11" rx="2"/><rect x="21" y="18" width="11" height="11" rx="2"/></svg><span class="lk-t">The simulation</span><span class="lk-s">both accounts in soroban-sim, offline</span></a></li>
-      <li><a class="lk" href="../sign-dialog/nido.html"><svg viewBox="0 0 40 40" aria-hidden="true"><rect x="6" y="4" width="28" height="32" rx="6"/><path d="M11 12h18M11 17h12"/><rect x="11" y="22" width="18" height="6" rx="2"/></svg><span class="lk-t">The sign dialog in Nido</span><span class="lk-s">three orders, previewed</span></a></li>
+      <li><a class="lk" href="../nido-sim/index.html"><svg viewBox="0 0 40 40" aria-hidden="true"><rect x="6" y="4" width="28" height="32" rx="6"/><circle cx="20" cy="15" r="5"/><path d="M12 30c1-5 15-5 16 0"/></svg><span class="lk-t">Nido in soroban-sim</span><span class="lk-s">an account, a grant, guess and a coffee</span></a></li>
+      <li><a class="lk" href="../sign-dialog/nido.html"><svg viewBox="0 0 40 40" aria-hidden="true"><rect x="6" y="4" width="28" height="32" rx="6"/><path d="M11 12h18M11 17h12"/><rect x="11" y="22" width="18" height="6" rx="2"/></svg><span class="lk-t">The café demo</span><span class="lk-s">three orders in the sign dialog</span></a></li>
     </ul>
     <p class="close-foot">Willem Wyndham and Elizabeth Engelman · The Aha Company</p>
   </div>
@@ -664,6 +708,9 @@ const ICONS = {
   coin: [['circle', { r: 21 }], ['circle', { r: 14 }]],
   warn: [['path', { d: 'M0 -20L22 17H-22ZM0 -6V5' }], ['circle', { cx: 0, cy: 11, r: 1.6 }]],
   policy: [['rect', { x: -20, y: -22, width: 40, height: 44, rx: 8 }], ['path', { d: 'M-10 -8H10M-10 0H10M-10 8H4' }]],
+  door: [['rect', { x: -15, y: -26, width: 30, height: 52, rx: 2 }], ['circle', { cx: 8, cy: 2, r: 2.5 }]],
+  factory: [['path', { d: 'M-27 24V-2L-11 8V-2L5 8V-18H17V24ZM-19 14H-11M-3 14H5' }]],
+  desk: [['circle', { cx: 0, cy: -15, r: 8 }], ['path', { d: 'M-15 4C-15 -5 15 -5 15 4M-28 4H28V24H-28ZM-28 10H28' }]],
 };
 const TREE_DOTS = [[0, -18], [-13, -2], [13, -2], [-20, 16], [-6, 16], [6, 16], [20, 16]];
 
@@ -979,62 +1026,117 @@ B.grant = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   c.text(P.min[0], P.min[1], '≈ 8 min', { anchor: 'end', size: .64, k: 'soft' });
 } };
 
+/* Attenuation as nested regions: the helper's grant shrinks inside the app's, one step at a time. */
 B.atten = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   const T = c.tall;
-  const u = T ? 34 : 30;
-  const P = T ? {
-    par: [60, 40, 680, 300], pk: [124, 104], pkl: [164, 114], ps: [124, 184], psl: [164, 194], pb: [104, 228], pbl: [104, 304],
-    stepsL: [400, 400], chips: [[215, 460], [585, 460], [215, 540], [585, 540], [215, 620], [585, 620], [400, 700]],
-    ch: [140, 790, 520, 270], ck: [204, 854], ckl: [244, 864], cs: [204, 934], csl: [244, 944], cb: [184, 978], cbl: [184, 1046],
-    inst: [400, 1060, 400, 1150], acc: [400, 1194], accL: [450, 1204, 'start'],
-    fanIn: [[400, 340]], fanOut: [400, 790],
+  const G = T ? {
+    par: [40, 140, 720, 620], head: [40, 116],
+    stages: [[52, 152, 696, 596], [52, 270, 696, 478], [52, 270, 538, 478], [52, 270, 538, 350]],
+    pts: { guess: [200, 360], one: [390, 540], other: [400, 214], five: [680, 470], late: [400, 718] },
+    steps: [[400, 172, 'middle'], [680, 330, 'middle'], [400, 660, 'middle']],
+    chain: [[150, 860], [400, 860], [650, 860]], ex: [400, 990], steps10: [400, 1090], th: [400, 1170], th2: [400, 1212],
   } : {
-    par: [80, 170, 440, 410], pk: [150, 240], pkl: [190, 250], ps: [150, 330], psl: [190, 340], pb: [124, 398], pbl: [124, 478],
-    stepsL: [800, 112], chips: [[800, 166], [800, 240], [800, 314], [800, 388], [800, 462], [800, 536], [800, 610]],
-    ch: [1080, 230, 440, 300], ck: [1150, 296], ckl: [1190, 306], cs: [1150, 376], csl: [1190, 386], cb: [1124, 420], cbl: [1124, 498],
-    inst: [1300, 530, 1300, 640], acc: [1300, 690], accL: [1350, 700, 'start'],
+    par: [120, 150, 940, 540], head: [120, 126],
+    stages: [[132, 162, 916, 516], [370, 162, 678, 516], [370, 162, 460, 516], [370, 162, 460, 386]],
+    pts: { guess: [480, 300], one: [640, 450], other: [245, 410], five: [946, 410], late: [610, 640] },
+    steps: [[245, 214, 'middle'], [946, 214, 'middle'], [610, 586, 'middle']],
+    chain: [[1180, 200], [1320, 200], [1460, 200]], ex: [1320, 380], steps10: [1320, 540], th: [800, 742], th2: null,
   };
-  const card = (box, k, kl, who, ico, s, sl, b, bl, cap, lab, d) => {
-    c.at(d);
-    const [x, y, w, h] = box;
-    c.rect(x, y, w, h, { k: 'now', rx: 22, w: 1.1 });
-    c.icon(ico, k[0], k[1], 50, { k: 'now' });
-    c.text(kl[0], kl[1], who, { anchor: 'start', size: .9 });
-    c.icon('shop', s[0], s[1], 42, { k: 'now' });
-    c.text(sl[0], sl[1], 'the shop', { anchor: 'start', size: .8 });
-    if (cap < 10) c.rect(b[0], b[1], 10 * u, T ? 32 : 34, { k: 'faint', rx: 6, w: .5 });
-    c.rect(b[0], b[1], cap * u, T ? 32 : 34, { k: 'now', rx: 6, w: .8, fill: 'hatch-now' });
-    c.text(bl[0], bl[1], lab, { anchor: 'start', size: .74, k: 'now' });
-  };
-  card(P.par, P.pk, P.pkl, 'app', 'key', P.ps, P.psl, P.pb, P.pbl, 10, '10 XLM / 100 ledgers', 100);
-  c.at(1000);
-  c.text(P.stepsL[0], P.stepsL[1], 'narrowing steps', { size: .72, k: 'soft' });
-  const steps = ['drop a rule', 'remove functions', 'add a condition', 'raise a threshold', 'lower a cap', 'lengthen a period', 'move expiry earlier'];
-  const half = [];
-  steps.forEach((s, i) => {
-    const [x, y] = P.chips[i];
-    const w = c.chip(x, y, s, { k: 'now', size: T ? .64 : .66, step: 110 });
-    half.push([x, y, w / 2]);
+  const sz = T ? .5 : .56;
+  c.at(80);
+  c.text(G.head[0], G.head[1] - (T ? 30 : 0), T ? "the app's grant: the game, any function;" : "the app's grant: the game, any function · the shop, at most 10 XLM per 100 ledgers · until ledger N", { anchor: 'start', size: sz, k: 'soft' });
+  if (T) c.text(G.head[0], G.head[1], 'the shop, at most 10 XLM per 100 ledgers; until ledger N', { anchor: 'start', size: sz, k: 'soft' });
+  const [px, py, pw, ph] = G.par;
+  c.rect(px, py, pw, ph, { k: 'now', rx: 24, w: 1.1, fill: 'hatch-now', fillOp: .9 });
+  // The calls, as points in the app's region.
+  c.at(500);
+  const PT = [['guess', 'game: guess', true], ['one', 'pay the shop 1 XLM', true], ['other', T ? 'other game functions' : 'other game functions', false], ['five', 'pay the shop 5 XLM', false], ['late', 'a call after ledger M', false]];
+  const marks = {};
+  PT.forEach(([key, lab, inside]) => {
+    const [x, y] = G.pts[key];
+    c.circle(x, y, T ? 9 : 7, { k: 'now', fill: 'now', w: .3, step: 60 });
+    const lines = T && key === 'five' ? ['pay the shop', '5 XLM'] : [lab];
+    if (!inside) lines.forEach((t, i) => c.text(x, y + (T ? 36 : 30) + i * (T ? 26 : 24), t, { size: sz, step: 0 }));
+    if (!inside) {
+      const g = E('g', { transform: `translate(${x + (T ? 22 : 20)} ${y - (T ? 16 : 14)})` }, c.svg);
+      g.setAttribute('class', 'cw-fade');
+      const q = E('path', { d: 'M-7 -7L7 7M7 -7L-7 7' }, g);
+      q.setAttribute('class', 'st k-ink'); q.setAttribute('stroke-width', c.sw * .8);
+      marks[key] = g;
+    }
   });
-  c.at(1900);
-  if (!T) {
-    const [px, py, pw, ph] = P.par, [qx, qy, , qh] = P.ch;
-    half.forEach(([x, y, hw]) => {
-      c.line(px + pw + 6, py + ph / 2, x - hw - 8, y, { k: 'faint', w: .4, step: 20 });
-      c.line(x + hw + 8, y, qx - 6, qy + qh / 2, { k: 'faint', w: .4, step: 20 });
+  // The helper's region, which the player shrinks.
+  const L = E('g', { class: 'an-fade' }, c.svg);
+  L.style.setProperty('--d', '700ms');
+  const child = E('rect', { rx: 18 }, L);
+  child.setAttribute('class', 'st k-now fl-paper');
+  child.setAttribute('fill-opacity', '.55');
+  child.setAttribute('stroke-width', c.sw * 1.1);
+  const ctext = E('text', { 'font-size': f2(c.fs * (T ? .56 : .62)) }, L);
+  ctext.setAttribute('class', 'tx c-now'); ctext.textContent = "the helper's grant";
+  // re-draw the inside points above the helper's region
+  [['guess', 'game: guess'], ['one', 'pay the shop 1 XLM']].forEach(([key, lab]) => {
+    const [x, y] = G.pts[key];
+    const d = E('circle', { cx: x, cy: y, r: T ? 9 : 7 }, L); d.setAttribute('class', 'fl-now');
+    const t = E('text', { x, y: y + (T ? 36 : 30), 'font-size': f2(c.fs * sz), 'text-anchor': 'middle' }, L); t.setAttribute('class', 'tx'); t.textContent = lab;
+  });
+  const STEP = [['1', 'only guess'], ['2', 'at most 2 XLM'], ['3', 'an earlier last ledger, M']];
+  const stepEls = STEP.map(([n, t], i) => {
+    const [x, y, an] = G.steps[i];
+    const g = E('g', null, L); g.setAttribute('class', 'cw-fade');
+    const tt = E('text', { x, y, 'font-size': f2(c.fs * sz), 'text-anchor': an }, g);
+    tt.setAttribute('class', 'tx c-now'); tt.textContent = `${n} · ${t}`;
+    if (i === 1) { const t2 = E('text', { x, y: y + (T ? 26 : 24), 'font-size': f2(c.fs * sz), 'text-anchor': an }, g); t2.setAttribute('class', 'tx c-now'); t2.textContent = 'per 100 ledgers'; }
+    return g;
+  });
+  const setChild = ([x, y, w, h]) => {
+    child.setAttribute('x', f2(x)); child.setAttribute('y', f2(y)); child.setAttribute('width', f2(w)); child.setAttribute('height', f2(h));
+    ctext.setAttribute('x', f2(x + 20)); ctext.setAttribute('y', f2(y + (T ? 40 : 34)));
+  };
+  const lerp = (a, b, k) => a.map((v, i) => v + (b[i] - v) * k);
+  // The delegation, and the call that separates the two regions.
+  c.at(1200);
+  const [[ax, ay], [bx, by], [hx, hy]] = G.chain;
+  c.icon('account', ax, ay, T ? 50 : 46, { k: 'now' });
+  c.text(ax, ay + (T ? 50 : 46), 'Nido account', { size: sz, k: 'soft' });
+  c.arrow(ax + 34, ay, bx - 34, by, { k: 'now', w: .7 });
+  c.icon('key', bx, by, T ? 50 : 46, { k: 'now' });
+  c.text(bx, by + (T ? 50 : 46), 'the app', { size: sz, k: 'soft' });
+  c.arrow(bx + 34, by, hx - 34, hy, { k: 'now', w: .7 });
+  c.icon('agent', hx, hy, T ? 50 : 46, { k: 'now' });
+  c.text(hx, hy + (T ? 50 : 46), 'a helper', { size: sz, k: 'soft' });
+  const [exx, exy] = G.ex;
+  c.text(exx, exy - (T ? 40 : 60), 'pay the shop 5 XLM', { size: T ? .62 : .7 });
+  c.text(exx - (T ? 120 : 70), exy, 'the app', { size: sz, k: 'soft' });
+  c.check(exx - (T ? 120 : 70), exy + (T ? 40 : 40), T ? 34 : 32, { k: 'now' });
+  c.text(exx + (T ? 120 : 70), exy, 'the helper', { size: sz, k: 'soft' });
+  c.cross(exx + (T ? 120 : 70), exy + (T ? 40 : 40), T ? 28 : 26, { k: 'ink' });
+  c.text(G.steps10[0], G.steps10[1], 'three of the 10 narrowing steps', { size: sz, k: 'soft' });
+  c.text(G.th[0], G.th[1], T ? "Theorems 4 and 5: the helper's grant allows no call," : "Theorems 4 and 5: the helper's grant allows no call, and no run of payments, that the app's grant refuses", { size: T ? .54 : .64, k: 'now' });
+  if (T) c.text(G.th2[0], G.th2[1], "and no run of payments, that the app's grant refuses", { size: .54, k: 'now' });
+  const finalState = () => { setChild(G.stages[3]); stepEls.forEach(g => { g.style.opacity = 1; }); Object.values(marks).forEach(g => { g.style.opacity = ''; }); };
+  finalState();
+  c.svg._att = { G, setChild, lerp, stepEls, marks, finalState };
+}, enter(svg) {
+  const P = svg._att;
+  if (!P) return;
+  if (still()) { P.finalState(); return; }
+  const A = svg._anim = new Anim();
+  const run = () => {
+    P.setChild(P.G.stages[0]);
+    P.stepEls.forEach(g => { g.style.opacity = 0; });
+    Object.values(P.marks).forEach(g => { g.style.opacity = 0; });
+    const order = [['other', 0], ['five', 1], ['late', 2]];
+    order.forEach(([key, i], j) => {
+      const t0 = 1600 + j * 1900;
+      A.at(t0, () => { P.stepEls[i].style.opacity = 1; A.tween(900, k => P.setChild(P.lerp(P.G.stages[i], P.G.stages[i + 1], k))); });
+      A.at(t0 + 1000, () => { P.marks[key].style.opacity = 1; });
     });
-  } else {
-    c.line(400, 344, 400, 410, { k: 'faint', w: .5 });
-    c.line(400, 728, 400, 786, { k: 'faint', w: .5 });
-  }
-  card(P.ch, P.ck, P.ckl, 'helper', 'agent', P.cs, P.csl, P.cb, P.cbl, 2, '2 XLM / 100 ledgers', 2200);
-  c.at(3100);
-  c.arrow(...P.inst, { k: 'now', w: .8 });
-  c.icon('account', P.acc[0], P.acc[1], 56, { k: 'now' });
-  c.text(P.accL[0], P.accL[1], 'in the account', { anchor: P.accL[2], size: .7, k: 'now' });
-} };
+    A.at(13500, run);
+  };
+  run();
+}, leave(svg) { if (svg._anim) svg._anim.stop(); if (svg._att) svg._att.finalState(); } };
 
-/* The cap window: drawn in its final state, then played on arrival. */
 B.window = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   const T = c.tall;
   const G = T ? {
@@ -1348,6 +1450,237 @@ B.dialog = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   ctl.set(0);
   if (!still()) ctl.timer = setInterval(() => ctl.set((ctl.cur + 1) % 3), 3800);
 }, leave(svg) { if (svg._dlg) clearInterval(svg._dlg.timer); } };
+
+// A simulated part, labelled wherever it appears.
+const simChip = (c, x, y, s, o = {}) => c.chip(x, y, s, { k: 'seal', tk: 'seal', size: o.size || (c.tall ? .5 : .52), fill: 'hatch-seal', d: o.d });
+// The Nido sign dialog, drawn small: a header, a title, lines and the two buttons.
+function nidoDialog(c, x, y, w, h, title, lines, d) {
+  c.at(d);
+  c.rect(x, y, w, h, { k: 'ink', rx: 22, w: .9, fill: 'paper', anim: 'an-fade' });
+  c.text(x + 30, y + 50, 'Nido', { anchor: 'start', font: 'disp', size: .82 });
+  c.line(x, y + 72, x + w, y + 72, { k: 'faint', w: .5 });
+  c.text(x + 30, y + 120, title, { anchor: 'start', font: 'disp', size: .9 });
+  lines.forEach((t, i) => c.text(x + 30, y + 168 + i * 38, t, { anchor: 'start', size: .56, k: i === lines.length - 1 && lines.length > 2 ? 'soft' : undefined, step: 60 }));
+  const by = y + h - 70;
+  c.rect(x + w - 286, by, 112, 46, { k: 'soft', rx: 12, w: .6, fill: 'paper2' });
+  c.text(x + w - 230, by + 30, 'Reject', { size: .6 });
+  c.rect(x + w - 158, by, 132, 46, { k: 'now', rx: 12, w: .6, fill: 'now' });
+  c.text(x + w - 92, by + 30, 'Approve', { size: .6, k: 'paper' });
+}
+
+B.create = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
+  const T = c.tall;
+  const P = T ? {
+    you: [120, 100], youL: [120, 172], key: [320, 100], keyL: [320, 172], keyChip: [560, 100],
+    a1: [400, 214, 400, 300], a1L: [420, 266, 'start'], fac: [250, 310, 300, 170], facI: [400, 362], facL: [400, 436], facC: [400, 466], facChip: [400, 526],
+    a2: [400, 566, 400, 650], a2L: [420, 616, 'start'], acc: [400, 880, 200], accL: [400, 790], doc: [290, 830, 220, 100],
+    bond: 'M352 118C760 160 770 860 604 876', bondL: [400, 1150],
+  } : {
+    you: [150, 290], youL: [150, 366], key: [150, 470], keyL: [150, 540], keyChip: [150, 590],
+    a1: [232, 340, 420, 340], a1L: [326, 314, 'middle'], fac: [430, 255, 300, 170], facI: [580, 306], facL: [580, 378], facC: [580, 408], facChip: [580, 462],
+    a2: [740, 340, 930, 340], a2L: [835, 314, 'middle'], acc: [1120, 340, 160], accL: [1120, 290], doc: [1026, 318, 188, 84],
+    bond: 'M196 478C460 680 950 680 1120 502', bondL: [660, 690],
+  };
+  c.at(80);
+  c.icon('person', P.you[0], P.you[1], T ? 66 : 76, { k: 'ink' });
+  c.text(P.youL[0], P.youL[1], 'you', { size: .8 });
+  c.icon('passkey', P.key[0], P.key[1], T ? 62 : 70, { k: 'now' });
+  c.text(P.keyL[0], P.keyL[1], 'your passkey', { size: .7 });
+  simChip(c, P.keyChip[0], P.keyChip[1], 'simulated: a software P-256 key');
+  c.at(700);
+  c.arrow(...P.a1, { k: 'ink', w: .7 });
+  c.text(P.a1L[0], P.a1L[1], 'create my account', { anchor: P.a1L[2], size: .6, k: 'soft' });
+  const [fx, fy, fw, fh] = P.fac;
+  c.rect(fx, fy, fw, fh, { k: 'ink', rx: 16, w: .9 });
+  c.icon('factory', P.facI[0], P.facI[1], 58, { k: 'ink' });
+  c.text(P.facL[0], P.facL[1], "Nido's factory", { size: .74 });
+  c.text(P.facC[0], P.facC[1], 'create_account', { size: .5, font: 'code', k: 'soft' });
+  simChip(c, P.facChip[0], P.facChip[1], 'simulated build');
+  c.at(1500);
+  c.arrow(...P.a2, { k: 'now', w: .8 });
+  c.text(P.a2L[0], P.a2L[1], 'deploys', { anchor: P.a2L[2], size: .6, k: 'soft' });
+  const [ax, ay, ar] = P.acc;
+  c.circle(ax, ay, ar, { k: 'now', w: 1.2 });
+  c.circle(ax, ay, ar - 14, { k: 'now', w: .4 });
+  c.text(P.accL[0], P.accL[1], 'your account', { size: .8 });
+  const [dx, dy, dw, dh] = P.doc;
+  c.rect(dx, dy, dw, dh, { k: 'now', rx: 10, w: .8, fill: 'hatch-now' });
+  c.text(dx + 20, dy + 34, 'admin', { anchor: 'start', size: .62, font: 'code' });
+  c.text(dx + 20, dy + 64, 'signed by your passkey', { anchor: 'start', size: .46, k: 'soft' });
+  c.at(2300);
+  c.path(P.bond, { k: 'now', w: .5 });
+  c.text(P.bondL[0], P.bondL[1], "your passkey is the account's admin", { size: .58, k: 'now' });
+} };
+
+B.install = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
+  const T = c.tall;
+  const P = T ? {
+    dlg: [60, 30, 680, 430], key: [200, 520], keyL: [250, 530, 'start'], keyChip: [600, 520], a1: [400, 570, 400, 650], a1L: [420, 618, 'start'],
+    acc: [40, 660, 720, 600], accL: [76, 712], cmp: [100, 776], cmpL: [140, 786], card: [80, 850, 640, 360], cardL: [80, 836],
+  } : {
+    dlg: [70, 150, 470, 420], key: [190, 650], keyL: [236, 660, 'start'], keyChip: [470, 650], a1: [550, 360, 660, 360], a1L: [605, 334, 'middle'],
+    acc: [672, 120, 868, 560], accL: [706, 172], cmp: [740, 236], cmpL: [778, 246], card: [740, 300, 740, 330], cardL: [740, 286],
+  };
+  const [dx, dy, dw, dh] = P.dlg;
+  nidoDialog(c, dx, dy, dw, dh, 'Install a grant', ['the game: guess, and its stake', 'the shop: order, and its payment', 'the full grant under Details'], 80);
+  c.at(900);
+  c.icon('passkey', P.key[0], P.key[1], 56, { k: 'now' });
+  c.text(P.keyL[0], P.keyL[1], 'approve with your passkey', { anchor: P.keyL[2], size: .58 });
+  if (!T) simChip(c, P.keyChip[0], P.keyChip[1] + 44, 'simulated key'); else simChip(c, P.keyChip[0], P.keyChip[1] + 40, 'simulated key');
+  c.arrow(...P.a1, { k: 'now', w: .8 });
+  c.text(P.a1L[0], P.a1L[1], 'one install call', { anchor: P.a1L[2], size: .56, k: 'soft' });
+  c.at(1400);
+  const [ax, ay, aw, ah] = P.acc;
+  c.rect(ax, ay, aw, ah, { k: 'now', rx: 30, w: 1.2 });
+  c.rect(ax + 12, ay + 12, aw - 24, ah - 24, { k: 'now', rx: 22, w: .35 });
+  c.text(P.accL[0], P.accL[1], 'your account', { anchor: 'start', size: .66, k: 'soft' });
+  c.icon('doc', P.cmp[0], P.cmp[1], 40, { k: 'now' });
+  c.text(P.cmpL[0], P.cmpL[1], 'the document compiler checks it; the admin rule passes', { anchor: 'start', size: T ? .46 : .54 });
+  c.at(2000);
+  const [kx, ky, kw, kh] = P.card;
+  c.text(P.cardL[0], P.cardL[1], "the app's grant, installed", { anchor: 'start', size: .56, k: 'soft' });
+  c.rect(kx, ky, kw, kh, { k: 'now', rx: 16, w: 1.1, fill: 'paper' });
+  c.rect(kx, ky + kh * .1, kw, kh * .08, { k: 'now', w: .15, fill: 'now', fillOp: .2 });
+  c.rect(kx + 26, ky + kh * .3, 44, 34, { k: 'now', rx: 4, w: .5 });
+  const lines = [['game', 'any function'], ['XLM.transfer', 'only inside the game room'], ['shop.order', ''], ['EURC.transfer', 'only inside the shop']];
+  lines.forEach(([a, b], i) => {
+    const y = ky + kh * (T ? .34 : .34) + i * (T ? 62 : 54);
+    c.text(kx + 100, y, a, { anchor: 'start', size: T ? .54 : .56, font: 'code', step: 80 });
+    if (b) c.text(kx + (T ? 330 : 330), y, b, { anchor: 'start', size: T ? .44 : .5, k: 'now', step: 0 });
+  });
+} };
+
+B.nidorun = { vb: ['0 0 1600 760', '0 0 800 1200'], draw(c) {
+  const T = c.tall;
+  const cx = T ? [205, 595, 205, 595] : [230, 610, 990, 1370], cy = T ? [300, 300, 760, 760] : [360, 360, 360, 360];
+  const tw = T ? 360 : 340, th = T ? 420 : 400;
+  c.at(60);
+  c.text(T ? 400 : 800, T ? 40 : 100, 'in soroban-sim, offline; every signature in the Nido sign dialog', { size: T ? .48 : .62, k: 'soft' });
+  const tiles = [['1', 'create your account', 'a passkey as admin'], ['2', 'install the grant', 'one install call'], ['3', 'play guess', 'the nested XLM transfer'], ['4', 'buy a coffee', 'the nested EURC transfer']];
+  tiles.forEach(([n, a, b], i) => {
+    const x = cx[i], y = cy[i], d = 200 + i * 500;
+    c.at(d);
+    c.rect(x - tw / 2, y - th / 2, tw, th, { k: 'now', rx: 18, w: .9 });
+    c.circle(x - tw / 2 + 34, y - th / 2 + 34, 18, { k: 'now', w: .7 });
+    c.text(x - tw / 2 + 34, y - th / 2 + 35, n, { size: .6, base: 'central', k: 'now' });
+    const gy = y - 70;
+    if (i === 0) { c.icon('factory', x - 50, gy, 54, { k: 'ink' }); c.arrow(x - 18, gy, x + 14, gy, { k: 'now', w: .6 }); c.icon('account', x + 52, gy, 56, { k: 'now' }); }
+    else if (i === 1) { c.rect(x - 70, gy - 40, 140, 80, { k: 'now', rx: 10, w: .9 }); c.rect(x - 70, gy - 26, 140, 10, { k: 'now', w: .1, fill: 'now', fillOp: .2 }); c.rect(x - 56, gy - 4, 22, 16, { k: 'now', rx: 3, w: .4 }); }
+    else {
+      const [r, k2] = i === 2 ? ['game.guess', 'XLM.transfer'] : ['shop.order', 'EURC.transfer'];
+      c.rect(x - 130, gy - 62, 170, 40, { k: 'ink', rx: 6, w: .7 });
+      c.text(x - 118, gy - 35, r, { anchor: 'start', size: .44, font: 'code' });
+      c.path(`M${x - 110} ${gy - 22}V${gy + 22}H${x - 84}`, { k: 'ink', w: .5 });
+      c.rect(x - 82, gy + 2, 194, 40, { k: 'ink', rx: 6, w: .7 });
+      c.text(x - 70, gy + 29, k2, { anchor: 'start', size: .44, font: 'code' });
+      c.check(x + 136, gy + 22, 22, { k: 'now' });
+      c.check(x + 64, gy - 42, 22, { k: 'now' });
+    }
+    c.text(x, y + 46, a, { size: T ? .66 : .72 });
+    c.text(x, y + 84, b, { size: T ? .5 : .54, k: 'soft' });
+    c.chip(x, y + th / 2 - 46, i === 0 ? 'in Nido' : 'signed in Nido', { k: 'now', tk: 'now', size: .48 });
+  });
+  c.at(2400);
+  simChip(c, T ? 400 : 800, T ? 1080 : 640, 'simulated: the passkey, the factory build, the EURC token', { size: T ? .46 : .52 });
+} };
+
+// A grant covers the root call and the calls it makes: a keycard, a room, and the tree.
+function nestedScene(c, cfg) {
+  const T = c.tall;
+  const P = T ? {
+    card: [40, 70, 300, 170], room: [400, 40, 360, 330], door: [400, 200], doorL: [416, 284], desk: [620, 250], deskL: [620, 322],
+    walk: 'M340 150H386M418 200C500 200 530 230 570 245', ck1: [450, 150], ck2: [700, 196], same: [620, 150],
+    out: [190, 430], outL: [190, 500], outPath: 'M190 246V392', token: [190, 470],
+    treeL: [400, 600], root: [60, 640, 380, 70], kid: [150, 760, 420, 70], conds: [[180, 880], [180, 922], [180, 964]], dir: [60, 1060, 380, 64], dirL: [60, 1166],
+  } : {
+    card: [60, 150, 320, 180], room: [450, 130, 380, 340], door: [450, 300], doorL: [466, 390], desk: [690, 330], deskL: [690, 404],
+    walk: 'M380 300H436M468 300C560 300 600 320 640 330', ck1: [500, 254], ck2: [770, 282], same: [690, 238],
+    out: [220, 560], outL: [220, 632], outPath: 'M220 332V520', token: [640, 580],
+    treeL: [1210, 140], root: [930, 170, 380, 70], kid: [1010, 290, 440, 70], conds: [[1040, 404], [1040, 444], [1040, 484]], dir: [930, 580, 380, 64], dirL: [930, 682],
+  };
+  c.at(80);
+  // The keycard: one line for the room, one for the payment asked inside it.
+  const [kx, ky, kw, kh] = P.card;
+  c.rect(kx, ky, kw, kh, { k: 'now', rx: 16, w: 1.1, fill: 'paper' });
+  c.rect(kx, ky + kh * .13, kw, kh * .1, { k: 'now', w: .15, fill: 'now', fillOp: .2 });
+  c.rect(kx + 22, ky + kh * .36, 42, 32, { k: 'now', rx: 4, w: .5 });
+  c.text(kx + kw * .3, ky + kh * .5, cfg.card[0], { anchor: 'start', size: .56, font: 'code' });
+  c.text(kx + kw * .3, ky + kh * .7, cfg.card[1], { anchor: 'start', size: .56, font: 'code' });
+  c.text(kx + kw * .3, ky + kh * .87, cfg.card[2], { anchor: 'start', size: .42, k: 'now' });
+  c.text(kx, ky - 16, "the app's keycard", { anchor: 'start', size: .56, k: 'soft' });
+  // The room the card opens; the payment is asked for inside.
+  c.at(500);
+  const [rx, ry, rw, rh] = P.room;
+  c.path(`M${rx} ${P.door[1] - 46}V${ry}H${rx + rw}V${ry + rh}H${rx}V${P.door[1] + 46}`, { k: 'ink', w: 1.2 });
+  c.text(rx + rw / 2, ry + 44, cfg.room, { size: .7 });
+  c.icon('door', P.door[0], P.door[1], 92, { k: 'now', fill: 'hatch-now' });
+  c.text(P.doorL[0], P.doorL[1], cfg.door, { anchor: 'start', size: .54, k: 'soft' });
+  c.icon(cfg.counter, P.desk[0], P.desk[1], 84, { k: 'now' });
+  c.text(P.deskL[0], P.deskL[1], cfg.inside[0], { size: .58 });
+  c.text(P.deskL[0], P.deskL[1] + 30, cfg.inside[1], { size: .48, k: 'soft' });
+  c.at(1300);
+  c.path(P.walk, { k: 'now', w: .8 });
+  c.check(P.ck1[0], P.ck1[1], 30, { k: 'now' });
+  c.check(P.ck2[0], P.ck2[1], 30, { k: 'now' });
+  c.text(P.same[0], P.same[1], 'the same card', { size: .52, k: 'now' });
+  c.at(1900);
+  if (cfg.token) {
+    // A simulated token: labelled as such wherever it appears.
+    const [tx, ty] = P.token;
+    const w = c.chip(tx, ty, cfg.token, { k: 'seal', tk: 'seal', size: T ? .5 : .56, fill: 'hatch-seal' });
+    if (T) c.line(tx + w / 2 + 6, ty, P.deskL[0] - 70, P.deskL[1] + 44, { k: 'seal', w: .5 });
+    else c.line(tx, ty - 20, P.desk[0], P.deskL[1] + 46, { k: 'seal', w: .5 });
+  } else {
+    c.path(P.outPath, { k: 'soft', w: .7 });
+    c.icon('desk', P.out[0], P.out[1], 70, { k: 'soft' });
+    c.cross(P.out[0] + 52, P.out[1] - 30, 24, { k: 'ink' });
+    c.text(P.outL[0], P.outL[1], 'the same payment, asked directly', { size: .5, k: 'soft' });
+    c.text(P.outL[0], P.outL[1] + 28, 'refused', { size: .5 });
+  }
+  // The authorization tree, node by node.
+  c.at(2400);
+  if (T) c.line(40, 560, 760, 560, { k: 'faint', w: .5 }); else c.line(890, 110, 890, 700, { k: 'faint', w: .5 });
+  c.text(P.treeL[0], P.treeL[1], 'the authorization tree', { size: .6, k: 'soft' });
+  const node = ([x, y, w, h], a, b, ok, d) => {
+    c.rect(x, y, w, h, { k: ok ? 'ink' : 'soft', w: .9, rx: 8, d, fill: ok ? null : 'hatch' });
+    c.text(x + 22, y + h / 2 - 3, a, { anchor: 'start', size: .6, font: 'code', d: d + 80 });
+    c.text(x + 22, y + h / 2 + 23, b, { anchor: 'start', size: .46, k: 'soft', d: d + 120 });
+    if (ok) c.check(x + w + 36, y + h / 2, 30, { k: 'now', d: d + 400 }); else c.cross(x + w + 36, y + h / 2, 24, { k: 'ink', d: d + 400 });
+  };
+  node(P.root, cfg.root[0], cfg.root[1], true, 2500);
+  const [ax, ay, , ah] = P.root, [bx, by, , bh] = P.kid;
+  c.path(`M${ax + 40} ${ay + ah}V${by + bh / 2}H${bx - 6}`, { k: 'ink', w: .7, d: 2900 });
+  node(P.kid, cfg.kid[0], 'nested: passes the transfer rule only if', true, 3100);
+  cfg.conds.forEach((t, i) => {
+    const [x, y] = P.conds[i];
+    c.circle(x, y - 7, 5, { k: 'now', fill: 'now', w: .3, d: 3500 + i * 200 });
+    c.text(x + 18, y, t, { anchor: 'start', size: .54, d: 3500 + i * 200 });
+  });
+  c.at(4300);
+  node(P.dir, cfg.dir, 'made directly, or under another root', false, 4300);
+  c.text(P.dirL[0], P.dirL[1], cfg.dirNote, { anchor: 'start', size: .5, k: 'soft' });
+}
+
+B.nested = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
+  nestedScene(c, {
+    card: ['game.guess', 'XLM.transfer', 'only inside the game room'],
+    room: 'the game room', door: 'door: guess', counter: 'desk', inside: ['a loss: pay the stake', 'account to game, in XLM'],
+    root: ['game.guess', 'the root: passes the game rule'], kid: ['XLM.transfer, the stake'],
+    conds: ['from the account itself', 'within the cap', 'its root is exactly game.guess'],
+    dir: 'XLM.transfer as the root', dirNote: 'refused: the transfer rule needs the game room',
+  });
+} };
+
+B.coffee = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
+  nestedScene(c, {
+    card: ['shop.order', 'EURC.transfer', 'only inside the shop'],
+    room: 'the coffee shop', door: 'door: order', counter: 'cup', inside: ['the order pulls payment', 'account to shop, in EURC'],
+    token: 'EURC: a simulated test token',
+    root: ['shop.order', 'the root: passes the shop rule'], kid: ['EURC.transfer, the payment'],
+    conds: ['from the account itself', 'within the cap', 'its root is exactly shop.order'],
+    dir: 'EURC.transfer as the root', dirNote: 'refused: the transfer rule needs the shop',
+  });
+} };
 
 B.where = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   const T = c.tall;
@@ -1849,7 +2182,7 @@ function statusChip(s) {
   head.appendChild(chip);
 }
 const svgOf = s => $('.stage > svg', s);
-function enter(s) { const b = B[s.dataset.draw]; const svg = svgOf(s); if (b && b.enter && svg) b.enter(svg); loadFrame(s); }
+function enter(s) { const b = B[s.dataset.draw]; const svg = svgOf(s); if (b && b.enter && svg) b.enter(svg); }
 function leave(s) { const b = B[s.dataset.draw]; const svg = svgOf(s); if (b && b.leave && svg) b.leave(svg); }
 
 function render() {
@@ -1873,7 +2206,7 @@ function render() {
   if (s && s.classList.contains('active')) { s.classList.remove('on'); void s.offsetWidth; s.classList.add('on'); enter(s); }
 }
 
-/* Live frames: the dialog loads when its slide opens; the simulation loads on request. */
+/* Live frame: the simulation loads on request. */
 function themeParam() { const t = root.dataset.theme; return t ? (t === 'dark' ? 'dark' : 'light') : ''; }
 function syncFrameTheme(f) {
   try {
@@ -1890,11 +2223,10 @@ function startFrame(f) {
   if (!f || f.getAttribute('src')) return;
   let src = f.dataset.src;
   const t = themeParam();
-  if (t && src.includes('/sim/')) src += (src.includes('?') ? '&' : '?') + 'theme=' + t;
+  if (t && src.includes('sim/')) src += (src.includes('?') ? '&' : '?') + 'theme=' + t;
   f.addEventListener('load', () => { syncFrameTheme(f); const w = f.parentNode.querySelector('.frame-wait'); if (w) w.remove(); });
   f.setAttribute('src', src);
 }
-function loadFrame(s) { if (s.dataset.live) startFrame($('iframe', s)); }
 $$('[data-run]').forEach(b => b.addEventListener('click', e => {
   e.stopPropagation();
   const st = b.closest('.stage-sim');
