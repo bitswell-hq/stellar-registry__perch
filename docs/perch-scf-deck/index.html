@@ -386,9 +386,9 @@ body {
 
 <section class="slide" data-status="plain" data-draw="oneplace" aria-roledescription="slide" aria-label="Where the policy lives">
   <header class="head"><h2>Where the policy lives</h2></header>
-  <div class="stage"><svg role="img" aria-label="Common setups enforce agent-payment policy in one place. In the client only: limits applied by the agent's own tools, which an agent can route around, as in the cited study; the chain sees a valid key. On chain, written apart: client rules and contract logic are two rule sets written separately, which can drift. The funded design, Perch: one Cedar policy checked in both places, off chain by a contained engine and on chain by the account, the backstop."></svg></div>
+  <div class="stage"><svg role="img" aria-label="Common setups enforce agent-payment policy in one place. Limits the agent can reach: in its own tools, or behind an approval channel it can read, as in the cited study; the chain sees a valid key. On chain, written apart: client rules and contract logic are two rule sets written separately, which can drift. The funded design, Perch: one Cedar policy checked in both places, off chain by a contained engine and on chain by the account, the backstop."></svg></div>
   <aside class="notes">
-    <p>Common setups for agent payments enforce the policy in one place. Some apply limits in the client or agent framework, where the agent's own process or tools check them; an agent that overreaches can route around them, as in the cited study, where agents read an emailed one-time code and raised their own caps. Others put the policy in on-chain logic written separately from the client's rules, so the two rule sets can drift apart. This slide names no product; the point is where the check sits.</p>
+    <p>Common setups for agent payments enforce the policy in one place. Some keep the limits within the agent's reach: the agent's own process or tools check them, or a provider enforces them behind an approval channel the agent can read. The cited study is the second kind: the wallet provider, Circle, enforced the cap, and agents raised it with a one-time code emailed to an inbox they could read. Others put the policy in on-chain logic written separately from the client's rules, so the two rule sets can drift apart. This slide names no product; the point is where the check sits.</p>
     <p>Perch's funded design combines them: one Cedar policy, evaluated by a contained policy engine in the runtime and compiled into the rules the account enforces on chain. Off chain it covers what the chain cannot see (files, websites, signing, spawning); on chain the account is the backstop for payments and contract calls.</p>
     <p class="src">arXiv:2610.35835, p. 4 (the emailed-code finding); SCF Build submission, Products &amp; Services (the funded work), Tranche #1 items 2 and 3 (as agreed 2026-11-09).</p>
   </aside>
@@ -923,7 +923,6 @@ B.keepcap = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   c.text(T ? 400 : 800, T ? 1250 : 752, 'Reading an email gets the agent nothing.', { anchor: T ? 'middle' : 'start', size: T ? .62 : .78 });
 } };
 
-// The three tranches: each deliverable's title, how it completes, and its icon.
 /* Perch in one picture: an account whose grants decide every call, with the decision proved in Lean. */
 B.perch = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   const T = c.tall;
@@ -945,7 +944,7 @@ B.perch = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   const [ax, ay, ar] = P.acc;
   c.circle(ax, ay, ar, { k: 'now', w: 1.2 });
   c.circle(ax, ay, ar - 14, { k: 'now', w: .35 });
-  c.seal(P.seal[0], P.seal[1], P.seal[2], { id: 'P' });
+  c.seal(P.seal[0], P.seal[1], P.seal[2]);
   const [gx, gy, gw, gh] = P.card;
   c.rect(gx, gy, gw, gh, { k: 'now', rx: 14, w: 1, fill: 'paper' });
   c.text(gx + gw / 2, gy + 36, 'a grant', { size: T ? .56 : .62, k: 'now' });
@@ -970,11 +969,11 @@ B.perch = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   funded(c, P.chip[0], P.chip[1], 'funded: the merged account on mainnet (Tranche 3)', { size: T ? .44 : .48 });
 } };
 
-/* Where agent-payment policy lives: in the client, on chain apart, or one policy in both. */
+/* Where agent-payment policy lives: within the agent's reach, on chain apart, or one policy in both. */
 B.oneplace = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   const T = c.tall;
   const caps = [
-    ['in the client only', 'ink', ["limits applied by the agent's own tools", 'an agent can route around them,', 'as in the cited study']],
+    ['limits the agent can reach', 'ink', ['in its own tools, or behind an', 'approval channel it can read,', 'as in the cited study']],
     ['on chain, written apart', 'ink', ['two rule sets, written separately:', 'client rules and contract logic', 'can drift']],
     ['Perch: one policy, both places', 'now', ['one policy, checked in both places', 'off chain: a contained engine', 'on chain: the account, the backstop']],
   ];
@@ -1003,7 +1002,7 @@ B.oneplace = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
     }
     c.at(400 + i * 900);
     if (i === 0) {
-      // The limits live inside the agent's own process; the chain sees only a valid key.
+      // The limits, or their approval, sit within the agent's reach; the chain sees only a valid key.
       if (T) {
         c.rect(50, y0 + 70, 240, 150, { k: 'soft', rx: 14, w: .6 });
         c.icon('agent', 120, y0 + 142, 50, { k: 'ink' });
@@ -1012,10 +1011,10 @@ B.oneplace = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
         c.circle(170, y0 + 324, 36, { k: 'soft', w: .7, fill: 'hatch' });
       } else {
         c.rect(120, 150, 350, 210, { k: 'soft', rx: 16, w: .6 });
-        c.text(140, 184, "the agent's process", { anchor: 'start', size: .44, k: 'soft' });
+        c.text(140, 184, "the agent's reach", { anchor: 'start', size: .44, k: 'soft' });
         c.icon('agent', 210, 272, 64, { k: 'ink' });
         c.icon('policy', 350, 266, 50, { k: 'soft' });
-        c.text(350, 332, 'its own limits', { size: .44, k: 'soft' });
+        c.text(350, 332, 'limits or approval', { size: .44, k: 'soft' });
         c.arrow(295, 364, 295, 446, { k: 'soft', w: .6 });
         c.icon('key', 330, 404, 34, { k: 'ink' });
         c.circle(295, 510, 58, { k: 'soft', w: .8, fill: 'hatch' });
@@ -1067,7 +1066,7 @@ B.oneplace = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
         c.text(1180, 440, 'contained engine', { size: .44 });
         c.circle(1430, 404, 68, { k: 'now', w: 1.1 });
         c.circle(1430, 404, 56, { k: 'now', w: .3 });
-        c.seal(1430, 404, 34, { id: 'P' });
+        c.seal(1430, 404, 34);
         c.text(1180, 500, 'off chain', { size: .46, k: 'next' });
         c.text(1430, 500, 'the account, on chain', { size: .46, k: 'now' });
       }
@@ -1083,15 +1082,15 @@ B.contained = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
     p1: [300, 122, 200, 186], p2: [500, 122, 600, 186], ch1: [196, 150], ch2: [604, 150],
     E1: [30, 190, 350, 230], E2: [420, 190, 350, 230], link: [380, 305, 420, 305],
     linkL: [[400, 466, .5, 'next', 'the same decision'], [400, 498, .42, 'soft', 'proved for the Rust translation,'], [400, 526, .42, 'soft', 'tested for the compiled contract'], [400, 556, .42, 'soft', 'caps and windows: the account alone'], [400, 588, .42, 'now', 'today: a prototype fragment proof']],
-    ag: [[90, 724, 54], [160, 738, 42]], agL: [[60, 806], [60, 834]], toEng: [110, 690, 110, 426], reqL: [[128, 640], [128, 664]],
-    ky: [300, 690, 440, 112], e2k: [200, 424, 296, 744], k2a: [690, 686, 600, 426],
+    ag: [[90, 724, 54], [160, 738, 42]], agL: [[60, 806], [60, 834]], toEng: [110, 690, 110, 426], reqL: [128, 640],
+    ky: [300, 690, 440, 112], e2k: [150, 424, 316, 686], k2a: [690, 686, 600, 426],
     tested: [400, 900], proved: [400, 940], over: [96, 1024], overT: [136, 1030],
   } : {
     pol: [580, 14, 440, 112], polT: [800, 52], polC: [[612, 88], [612, 114]],
     p1: [700, 126, 320, 226], p2: [900, 126, 1280, 226], ch1: [480, 168], ch2: [1120, 168],
     E1: [90, 230, 460, 190], E2: [1050, 230, 460, 190], link: [550, 325, 1050, 325],
     linkL: [[800, 304, .6, 'next', 'the same decision'], [800, 360, .5, 'soft', 'proved for the Rust translation · tested for the compiled contract'], [800, 392, .46, 'soft', 'covers call matching; caps and time windows: the account alone'], [800, 424, .46, 'now', 'today: a prototype proof for a small fragment']],
-    ag: [[150, 548, 56], [226, 562, 42]], agL: [[290, 540], [290, 572]], toEng: [180, 496, 180, 426], reqL: [[198, 470], [198, 0]],
+    ag: [[150, 548, 56], [226, 562, 42]], agL: [[290, 540], [290, 572]], toEng: [180, 496, 180, 426], reqL: [198, 470],
     ky: [610, 470, 330, 120], e2k: [470, 424, 606, 530], k2a: [940, 530, 1170, 426],
     tested: [90, 672], proved: [1050, 672], over: [470, 734], overT: [500, 742],
   };
@@ -1129,10 +1128,10 @@ B.contained = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   c.text(P.agL[0][0], P.agL[0][1], T ? 'WASI agents,' : 'agents: WASI components', { anchor: 'start', size: T ? .42 : .5 });
   c.text(P.agL[1][0], P.agL[1][1], T ? 'no keys' : 'that hold no keys', { anchor: 'start', size: T ? .42 : .5, k: 'soft' });
   c.arrow(...P.toEng, { k: 'next', w: .7 });
-  if (T) { c.text(P.reqL[0][0], P.reqL[0][1], 'every request', { anchor: 'start', size: .38, k: 'next' }); }
-  else c.text(P.reqL[0][0], P.reqL[0][1], 'every request', { anchor: 'start', size: .44, k: 'next' });
+  c.text(P.reqL[0], P.reqL[1], 'every request', { anchor: 'start', size: T ? .38 : .44, k: 'next' });
   const [kx, ky, kw, kh] = P.ky;
-  c.curve(...P.e2k, { k: 'next', w: .6, dir: T ? 'v' : 'h', head: true });
+  if (T) c.arrow(...P.e2k, { k: 'next', w: .6 });
+  else c.curve(...P.e2k, { k: 'next', w: .6, dir: 'h', head: true });
   c.rect(kx, ky, kw, kh, { k: 'next', rx: 16, w: .9 });
   c.icon('key', kx + 44, ky + 44, T ? 40 : 42, { k: 'next' });
   c.text(kx + 84, ky + 52, 'key service', { anchor: 'start', size: T ? .54 : .62 });
