@@ -1,10 +1,13 @@
 # Nido theme for the sign-dialog preview
 
-`../nido.html` is `../standalone.html` with one stylesheet linked, `theme.css`
-(`python3 build.py` writes it). It also hides the page's "Page theme" and
-"Dialog style" controls, since Nido's light-only theme overrides both. The
-component and the page are otherwise unchanged: the theme sets only the component's `--ssd-*` custom properties and
-styles its `::part()` regions, so it shows how the same dialog looks in Nido.
+`../nido.html` is `../standalone.html` (the vendored component, unchanged) in
+Nido's look; `python3 build.py` writes it. It links one stylesheet,
+`theme.css`, which sets only the component's `--ssd-*` custom properties and
+styles its `::part()` regions; puts Nido's mark and name in the component's
+`logo` slot; runs the outcome preview as the dialog opens (`preview="auto"`,
+the simulator always on); and hides the page's "Page theme", "Dialog style"
+and "Preview" controls, which do nothing with a light-only theme and the
+preview always on.
 
 ## Sources
 
@@ -26,8 +29,7 @@ styles its `::part()` regions, so it shows how the same dialog looks in Nido.
 
 ## What the theme does not change
 
-The dialog's own wording is the component's. Nido's signing screen labels its
-buttons "Confirm" and "Cancel" and heads the tree "What your account
-authorizes"; the component has no label API, and rewriting its text in CSS
-would hide its "Sign anyway" state, so the labels stay as the component sets
-them.
+The dialog's wording is the component's own default (`Approve`, `Reject`,
+`Details`, "Will succeed", "Will be refused"). The component accepts string
+overrides, but a theme does not set them, so Nido's own labels ("Confirm",
+"Cancel") are not applied here.

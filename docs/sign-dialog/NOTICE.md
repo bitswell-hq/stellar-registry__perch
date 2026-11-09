@@ -1,13 +1,22 @@
-# Café Perch sign mock: what is real and what is canned
+# Café Perch sign demo: what is real and what is recorded
 
 Open `index.html` over HTTP, or open `standalone.html` straight from disk: it
-holds the same three modules inlined, so it works from `file://`.
+holds the same three modules inlined, so it works from `file://`. `nido.html`
+is the same page in Nido's look (`nido/NOTICE.md`).
 
 ## Real
 
-- `soroban-sign-dialog.js` is the component itself, not a mock. The element
-  name, attributes, properties, methods, events, `::part` names and `--ssd-*`
-  custom properties are the API the real component keeps (see `API.md`).
+- `soroban-sign-dialog.js` is the `@theahaco/soroban-sign-dialog` component,
+  vendored unchanged from theahaco/soroban-sim at commit
+  `fb38b9c835e66dcaacf293d1f166bf2da45c1a91`
+  (`packages/soroban-sign-dialog`, version 0.1.0): its `dist/soroban-sign-dialog.js`,
+  SHA-256 `a5239ec1a2e49ec5491c968d19eb62a975f5188e868cd2213bf296f98de072ee`,
+  which `node scripts/build.mjs --js-only` reproduces byte for byte from that
+  commit. `API.md` is the package's, from the same commit. Both are under the
+  Apache License 2.0 (`LICENSE`, soroban-sim's licence at that commit). Its
+  default layout leads with what the user approves in plain words, the grant
+  budget left, and the simulated outcome, with the full authorization tree,
+  arguments and events under one Details disclosure.
 - Each order's transaction is a real `TransactionEnvelope`, built the way a
   dapp builds one: a recording simulation, then an unsigned envelope with the
   recorded authorization entries and resources. The dialog decodes the tree
@@ -15,9 +24,9 @@ holds the same three modules inlined, so it works from `file://`.
 - The approve event's `invocationHash` is sha256 of each entry's
   `SorobanAuthorizedInvocation` XDR, computed in the page.
 
-## Canned
+## Recorded
 
-**Preview effects** does not run a simulator in this mock. The page sets
+The outcome preview does not run a simulator in this demo. The page sets
 `previewProvider` to a function that returns a stored `PreviewResult` for the
 transaction after an artificial 0.7 s delay. Each stored result was captured
 from a native soroban-sim run (`perch-capture capture`):
@@ -61,6 +70,7 @@ before and after each order.
 
 ## Regenerate
 
-This directory is a fixed snapshot generated outside this repository by the
-component's prototype tooling (the soroban-sim run named above), so
-`canned-previews.js` and `standalone.html` are not regenerated here.
+`canned-previews.js` is a fixed snapshot generated outside this repository from
+the soroban-sim run named above, and is not regenerated here.
+`build-standalone.py` writes `standalone.html` from `index.html` and the three
+modules, and `nido/build.py` writes `nido.html` from `standalone.html`.
