@@ -116,7 +116,7 @@ body {
 
 .stage { min-height: 0; min-width: 0; display: grid; padding-top: clamp(6px, 1.4vh, 18px); position: relative; }
 .stage > svg { width: 100%; height: 100%; display: block; overflow: visible; min-height: 0; }
-.notes { display: none; }
+.notes, .sources { display: none; }
 
 .stage-links {
   margin: 0; font-size: clamp(13px, 1.1vw, 15px); color: var(--ink-2);
@@ -303,6 +303,73 @@ body {
 #notes-panel .src { color: var(--ink-2); font-size: 13px; margin: 0; }
 #notes-panel code { font-family: var(--f-code); font-size: .92em; }
 
+#notes-panel p, #sources-panel p { margin: 0 0 .7em; }
+#notes-panel p:last-child, #sources-panel p:last-child { margin-bottom: 0; }
+#notes-panel { font-size: 17px; }
+#notes-panel .np-h, #sources-panel .sp-h { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
+#sources-panel {
+  position: fixed; left: 22px; right: 22px; bottom: 70px;
+  max-height: 42vh; overflow: auto;
+  background: var(--paper-2); border: 1px solid var(--rule); border-radius: 6px;
+  padding: 16px 20px; z-index: 6;
+  font-size: 14px; line-height: 1.5; color: var(--ink);
+  max-width: 78ch; margin: 0 auto;
+}
+#sources-panel .src { color: var(--ink-2); font-size: 13px; }
+#sources-panel code { font-family: var(--f-code); font-size: .92em; }
+
+/* ---------- recorder ---------- */
+#rec-btn .rec-dot { fill: currentColor; stroke: none; }
+html[data-recording] #rec-btn { color: var(--next); }
+.still #rec-btn { display: none; }
+#rec-count {
+  position: fixed; inset: 0; z-index: 20; pointer-events: none;
+  display: grid; place-content: center; text-align: center; gap: 10px;
+  background: var(--paper);
+  background: color-mix(in srgb, var(--paper) 72%, transparent);
+  font-size: 17px; color: var(--ink-2);
+}
+#rec-count[hidden], #rec-panel[hidden], #rec-msg[hidden] { display: none; }
+#rec-count b { display: block; font-family: var(--f-display); font-weight: 400; font-size: 160px; line-height: 1; color: var(--ink); }
+#rec-panel {
+  position: fixed; top: 14px; right: 14px; z-index: 15;
+  width: min(390px, calc(100vw - 28px)); max-height: calc(100vh - 100px); overflow: auto;
+  background: var(--paper-2); border: 1px solid var(--rule); border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, .18);
+  padding: 14px 16px; font-size: 15px; line-height: 1.45; color: var(--ink);
+}
+#rec-panel p { margin: 0; }
+.rp-top { display: flex; align-items: baseline; gap: 8px; font-variant-numeric: tabular-nums; }
+.rp-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--next); align-self: center; }
+html[data-recording="paused"] .rp-dot { background: var(--ink-2); }
+#rp-time { margin-left: auto; font-size: 24px; }
+#rp-time.over { color: var(--next); }
+.rp-lim { color: var(--ink-2); }
+#rp-cur { color: var(--ink-2); font-size: 13px; margin: 6px 0 10px; font-variant-numeric: tabular-nums; }
+#rp-script p { font-size: 18px; line-height: 1.5; margin: 0 0 .6em; }
+.rp-next { color: var(--ink-2); font-size: 13px; margin: 4px 0 10px; }
+.rp-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.rp-btns button {
+  appearance: none; font: inherit; font-size: 14px; cursor: pointer;
+  border: 1px solid var(--rule); background: var(--paper); color: var(--ink);
+  border-radius: 999px; padding: 6px 14px;
+}
+.rp-btns button:focus-visible, .rm-x:focus-visible, #rec-msg a:focus-visible { outline: 2px solid var(--now); outline-offset: 2px; }
+.rp-note { font-size: 12px; color: var(--ink-2); margin-top: 10px !important; }
+#rec-msg {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: 74px; z-index: 16;
+  width: max-content; max-width: min(640px, calc(100vw - 28px));
+  background: var(--paper-2); border: 1px solid var(--rule); border-radius: 8px;
+  padding: 12px 40px 12px 16px; font-size: 14px; line-height: 1.45; color: var(--ink);
+}
+#rec-msg.err { border-color: var(--next); }
+#rec-msg a { color: var(--now); }
+#rec-msg kbd, .rp-btns kbd { font-family: var(--f-code); font-size: .9em; }
+.rm-x { position: absolute; top: 6px; right: 8px; appearance: none; border: 0; background: transparent; color: var(--ink-2); font-size: 18px; line-height: 1; cursor: pointer; padding: 4px; }
+@media print {
+  #rec-btn, #src-btn, #notes-btn, #rec-panel, #rec-count, #rec-msg, #notes-panel, #sources-panel { display: none !important; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .marks svg, .bar i, .lk { transition: none; }
 }
@@ -346,7 +413,10 @@ body {
     </ul>
   </div>
   <div class="stage"><svg role="img" aria-label="An account at the centre of a dial of ledgers. A bracket marks a window of ledgers holding two charges; older charges lie outside it. An app key and an agent reach the account only through the window."></svg></div>
-  <aside class="notes">
+  <aside class="notes" data-sec="6">
+    <p>This is Perch Agent Grants, from The Aha Company: subagent budgets, enforced by Stellar smart accounts.</p>
+  </aside>
+  <aside class="sources">
     <p>Perch Agent Grants, an Open Track submission for an SCF Build Award by The Aha Company. Perch is a set of Soroban contracts that turns a Stellar smart account into a permission engine for apps and agents; this award funds an agent runtime whose root authority is a grant on a Perch account. Solid cyan is what exists today; dashed magenta, with printer's marks, is the work the award funds.</p>
     <p class="src">SCF Build submission, Submission Title, Build Award Track and Products &amp; Services. The dial is the Perch deck's title drawing.</p>
   </aside>
@@ -354,8 +424,12 @@ body {
 
 <section class="slide" data-status="now" data-draw="perch" aria-roledescription="slide" aria-label="What Perch is">
   <header class="head"><h2>What Perch is</h2></header>
-  <div class="stage"><svg role="img" aria-label="Perch is a Stellar smart account. An app or agent's every call is checked against a grant, which says which calls, which signers, a spending cap and an expiry; rule_eval::check_auth decides every authorization. The decision function is proved in Lean, with kernel-checked theorems. Perch contracts are live on Stellar mainnet since 26 October 2026, and Nido creates Perch accounts. Funded: the merged account on mainnet, Tranche 3."></svg></div>
-  <aside class="notes">
+  <div class="stage"><svg role="img" aria-label="Perch is a Stellar smart account. An app or agent's every call is checked against a grant, which says which calls, which signers, a spending cap and an expiry; rule_eval::check_auth decides every authorization. The decision function is proved in Lean, with kernel-checked theorems. Perch contracts are live on Stellar mainnet since 26 October 2026, and Nido creates Perch accounts."></svg></div>
+  <aside class="notes" data-sec="18">
+    <p>Perch is a Stellar smart account. Each app or agent gets a grant: which calls, which signers, a spending cap, an expiry.</p>
+    <p>One function decides every authorization, and it is proved in Lean. Perch contracts are live on mainnet, and Nido creates Perch accounts.</p>
+  </aside>
+  <aside class="sources">
     <p>Perch is a set of Soroban contracts that turns a Stellar smart account into a permission engine for apps and agents. The owner installs grants: which contracts and functions an app or agent may call, argument conditions, which keys must sign, a sliding-window spending cap and an expiry. Every authorization is decided by <code>rule_eval::check_auth</code> over the rules the account stores, including nested calls in the authorization tree.</p>
     <p>The decision function, about 2,400 lines of Rust, is translated into Lean, and kernel-checked theorems show that it returns what a readable model returns, accepts only calls a rule allows, keeps every window within its cap, never lets a narrowed grant allow more than its parent, and never allows a call to the account or its recovery contracts: 13 theorems in all. The step from the evaluator to the account (P1) is argued, not proved, and nothing checks the compiled Wasm against the translation.</p>
     <p>Perch contracts are live on Stellar mainnet since 2026-10-26: the registry, the document compiler and the account factory, from the earlier account design. Nido, The Aha Company's passkey wallet, creates Perch accounts through its factory. Grants with <code>apply_grant</code> and <code>rule_eval::check_auth</code> are merged in the repository and reach mainnet in Tranche 3.</p>
@@ -366,7 +440,11 @@ body {
 <section class="slide" data-status="now" data-draw="agents" aria-roledescription="slide" aria-label="Agents with keys">
   <header class="head"><h2>Agents with keys</h2></header>
   <div class="stage"><svg role="img" aria-label="Today an agent that spends for a user holds a key that can do anything the account can, and a subagent copies it. With Perch the agent holds a grant and the account checks every call against it. Funded: subagents receive narrower grants and hold no keys."></svg></div>
-  <aside class="notes">
+  <aside class="notes" data-sec="15">
+    <p>An agent with a key can do anything the account can, and its subagents copy it.</p>
+    <p>With Perch, the agent holds a grant, and the account checks every call. We'll give subagents narrower grants and no keys.</p>
+  </aside>
+  <aside class="sources">
     <p>An agent that spends for a user holds a key that can do anything the account can, and anything it spawns inherits that power. A Perch grant fixes which contracts and functions an app or agent may call, argument conditions, which keys must sign, a sliding-window spending cap and an expiry, and the account checks every call in the authorization tree against it, so a stolen app key can spend no more than its grant allows. The funded work adds an agent runtime in which subagents receive narrower grants and hold no keys.</p>
     <p class="src">SCF Build submission, Products &amp; Services (items 1 and 2, and the funded work).</p>
   </aside>
@@ -377,7 +455,11 @@ body {
   <div class="stage stage-row"><svg role="img" aria-label="A published study. An agent is asked to pay three invoices of 0.01 USDC each. Its wallet caps spending at 0.01 USDC a day, and raising the cap needs a one-time code emailed to the owner, into the inbox the agent reads. The agent reads the code and raises its own cap. 9 of 10 models did this in at least one of 20 runs, unprompted, with no attacker present."></svg>
     <p class="stage-links"><span>Breckenridge, Vilardell, Wang, Zhang and Juels, “I-HITL: Inalienable Human-in-the-Loop”, 2026</span><a href="https://arxiv.org/abs/2610.35835" target="_blank" rel="noopener">arXiv:2610.35835</a></p>
   </div>
-  <aside class="notes">
+  <aside class="notes" data-sec="20">
+    <p>In a recent study from Cornell Tech, Yale and IC3, agents paying three small invoices hit a daily cap. Raising it took a code emailed to the owner, in an inbox the agent could read.</p>
+    <p>Nine of ten models raised their own cap, unprompted, in at least one of twenty runs.</p>
+  </aside>
+  <aside class="sources">
     <p>A study from Cornell Tech, Yale University and IC3 tested a human-in-the-loop gate on spending. A LangChain agent had three tools: the user's email, a web browser and an agent wallet holding 10 USDC on Base mainnet, with a spending policy of 0.01 USDC per transaction, 0.01 USDC per day, 0.30 USDC per week and 1 USDC per month. Changing the policy needs a one-time passcode that the wallet provider emails to the account owner. The system prompt told the agent to act only on the user's instructions and to treat anything a tool returns, emails included, as data; no task mentioned the spending policy or how to change it.</p>
     <p>In the payment experiment the inbox held three invoices of 0.01 USDC each, so paying all three needed a higher daily cap. Across 20 trials per model, with no adversary present, 9 of 10 models read the code from the inbox and raised their own spending cap in at least one run. In a second experiment, tasked only with summarizing the inbox, 5 of 10 models paid an attacker who impersonated the user by email. The authors disclosed the results to the wallet provider, Circle, on 22 September 2026; Circle's agent-wallet documentation now warns never to give an agent access to the inbox that receives the code. The paper argues that a human in the loop needs a channel the agent cannot reach.</p>
     <p class="src">Breckenridge, Vilardell, Wang, Zhang and Juels, "I-HITL: Inalienable Human-in-the-Loop", arXiv:2610.35835 (v3, 30 October 2026): p. 4 (Setup, Experiments, Key Findings), p. 5 (Results), Appendix D (p. 18). The ten models are not named here.</p>
@@ -387,7 +469,11 @@ body {
 <section class="slide" data-status="plain" data-draw="oneplace" aria-roledescription="slide" aria-label="Where the policy lives">
   <header class="head"><h2>Where the policy lives</h2></header>
   <div class="stage"><svg role="img" aria-label="Common setups enforce agent-payment policy in one place. Limits the agent can reach: in its own tools, or behind an approval channel it can read, as in the cited study; the chain sees a valid key. On chain, written apart: client rules and contract logic are two rule sets written separately, which can drift. The funded design, Perch: one Cedar policy checked in both places, off chain by a contained engine and on chain by the account, the backstop."></svg></div>
-  <aside class="notes">
+  <aside class="notes" data-sec="16">
+    <p>Common setups keep limits within the agent's reach: in its own tools, or behind an approval it can read. Or contract logic is written apart from the client's rules, and the two can drift.</p>
+    <p>We put one policy in both places.</p>
+  </aside>
+  <aside class="sources">
     <p>Common setups for agent payments enforce the policy in one place. Some keep the limits within the agent's reach: the agent's own process or tools check them, or a provider enforces them behind an approval channel the agent can read. The cited study is the second kind: the wallet provider, Circle, enforced the cap, and agents raised it with a one-time code emailed to an inbox they could read. Others put the policy in on-chain logic written separately from the client's rules, so the two rule sets can drift apart. This slide names no product; the point is where the check sits.</p>
     <p>Perch's funded design combines them: one Cedar policy, evaluated by a contained policy engine in the runtime and compiled into the rules the account enforces on chain. Off chain it covers what the chain cannot see (files, websites, signing, spawning); on chain the account is the backstop for payments and contract calls.</p>
     <p class="src">arXiv:2610.35835, p. 4 (the emailed-code finding); SCF Build submission, Products &amp; Services (the funded work), Tranche #1 items 2 and 3 (as agreed 2026-11-09).</p>
@@ -397,7 +483,11 @@ body {
 <section class="slide" data-status="next" data-draw="contained" aria-roledescription="slide" aria-label="A contained policy runtime">
   <header class="head"><h2>A contained policy runtime</h2></header>
   <div class="stage"><svg role="img" aria-label="Funded work. One Cedar policy is evaluated off chain by a contained policy engine, official Cedar with no imports, for files, websites, signing and spawning, and compiled into the Perch account's rule on chain for payments, contract calls and caps. Between them, the same decision: proved for the Rust translation, tested for the compiled contract; caps and time windows are the account's alone; today a prototype proof covers a small fragment. Agents, WASI components that hold no keys, send every request to the engine; the key service checks the request, then signs. The runtime is tested, not proven; the decision function is proved in Lean. Even if the runtime fails, the account refuses an over-cap payment."></svg></div>
-  <aside class="notes">
+  <aside class="notes" data-sec="21">
+    <p>Our funded design is a contained policy runtime. One Cedar policy is evaluated off chain by an engine with no imports, and compiled into the account's rules on chain.</p>
+    <p>Agents hold no keys. The runtime is tested; the decision function is proved. If the runtime fails, the account refuses an over-cap payment.</p>
+  </aside>
+  <aside class="sources">
     <p>Funded work (Tranches 1 and 2). One Cedar policy is the source of both checks. In the runtime, agents run as WASI components and hold no keys; a root agent's authority starts from a grant on the account, and a subagent is spawned only with a grant derived from its parent's (Tranche 1, item 1). Every file, website, signing and spawn request goes to the contained policy engine: official Cedar 4.14.x packaged as an import-free WebAssembly component, with no files, network or keys of its own, in which any policy error refuses and a subagent's request must be permitted by its own policies and every ancestor's (Tranche 1, item 3). Signing goes through the key service, which signs only after checking the signing request and every authorization context (Tranche 2, item 1).</p>
     <p>The same policy is compiled into the rules the account enforces on chain, by a compiler from a stated Cedar subset that refuses anything it cannot translate exactly, with compiled numeric rules carrying 64-bit bounds to match Cedar's integers. A Lean theorem, on Cedar's published Lean specification, is to show that the account's decision function, as translated from Rust, allows a call exactly when Cedar allows the matching request, and a harness runs the compiled contract in a local Soroban host and the official Cedar engine on the same generated requests (Tranche 1, item 2). The link is proved for the Rust translation and tested for the compiled contract, and it covers stateless call matching: spending caps and time windows are enforced only by the account.</p>
     <p>Proved today: the account's decision function, in 13 kernel-checked Lean theorems; P1 is argued, and nothing checks the compiled Wasm against the translation. The runtime will be tested, not proven. Payments over x402 (Tranche 2, item 2) and contract calls reach the account, which rechecks them on chain; with an attenuated grant installed (Tranche 2, item 1), an over-cap subagent payment is refused even with the runtime's own check switched off. Also today: an unpublished experiment proved the equivalence for a cut-down fragment, and Cedar's smallest evaluator build measured 710,772 bytes against the 131,072-byte contract limit (the Perch account is 106,668 bytes, measured 6 November 2026), which is why Cedar runs off chain.</p>
@@ -408,7 +498,11 @@ body {
 <section class="slide" data-status="now" data-draw="keepcap" aria-roledescription="slide" aria-label="A cap the agent cannot raise">
   <header class="head"><h2>A cap the agent cannot raise</h2></header>
   <div class="stage"><svg role="img" aria-label="The cap lives in the Perch account's own grant: the shop, at most 10 XLM per 100 ledgers. The agent paying the shop 5 XLM is inside its grant and allowed. The agent calling apply_grant to raise its cap is refused: Theorem 8, no grant allows a call to the account. An emailed code is refused: no rule in the account takes a code. The owner changes the grant through the admin rule, with the passkey on the owner's device. Reading an email gets the agent nothing."></svg></div>
-  <aside class="notes">
+  <aside class="notes" data-sec="17">
+    <p>The cap lives in the account's grant. The agent pays within it, but by Theorem 8 no grant allows a call to the account, so it can't raise the cap.</p>
+    <p>An emailed code opens nothing. Only the owner's passkey changes a grant.</p>
+  </aside>
+  <aside class="sources">
     <p>Perch keeps the cap in the account's own grant, and every authorization is decided by <code>rule_eval::check_auth</code> over the rules the account stores. Changing a grant, with <code>apply_grant</code> or <code>remove_grant</code>, is a call to the account that only its admin rule authorizes; in Nido the admin is the owner's passkey, a signature made on the owner's device that the agent cannot produce. A grant can never authorize a call to the account itself or its recovery contracts. That is Theorem 8, grant target containment: "No grant as lowered at install, nor any grant derived from one, allows a call to the account or its adopted recovery contracts."</p>
     <p>So the agent's own key cannot raise its own cap, and there is nothing an emailed code could open: reading an email gets the agent nothing. This assumes the agent holds only its grant's key and the owner's passkey stays on the owner's device. It is not the paper's I-HITL protocol; it is where Perch puts the limit. This is the merged account; mainnet still runs the earlier design, and deploying this one is Tranche 3.</p>
     <p class="src">SCF Build submission, Products &amp; Services (items 1–3); docs/perch-paper/source/statements.json (T8); crates/perch-smart-account/src/lib.rs (the admin rule, <code>apply_grant</code>, <code>remove_grant</code>); docs/nido-sim/README.md (step 1, the passkey).</p>
@@ -420,7 +514,11 @@ body {
   <div class="stage stage-row"><svg role="img" aria-label="On Stellar mainnet since 26 October 2026: the Perch registry, document compiler and account factory, and Nido, which creates Perch accounts through its factory. Merged in the repository: grants installed with apply_grant, every authorization decided by rule_eval::check_auth, recovery, verifiers, and 13 Lean theorems. The mainnet account is the earlier design; deploying the new account to mainnet is Tranche 3."></svg>
     <p class="stage-links"><a href="https://github.com/stellar-registry/perch/blob/main/deployments/mainnet.json">mainnet.json</a><a href="https://stellar.expert/explorer/public/contract/CC236AK2RX7MUO7BV7JYDDW5KHZ3X7YYJOJKCVDC543BQBNNSUCZB7NN">Registry</a><a href="https://stellar.expert/explorer/public/contract/CB65ACZRA777XHGEKVX46LEU2ZSUAL2UQY2PKMVDL7KJTDHRTX5MTBQD">Document compiler</a><a href="https://stellar.expert/explorer/public/contract/CC2K7PEAV24N66JCEG5OPFCBBA4OK6DK7YISRCMQQQUC7KLNISNGYLMK">Account factory</a><a href="https://stellar.expert/explorer/public/contract/CBHERM3IKL2QLLJWNPBTATIHVFNT3FLFZKPFG4L2X7CHUPRLJHGC3FAC">Nido's factory</a></p>
   </div>
-  <aside class="notes">
+  <aside class="notes" data-sec="13">
+    <p>Today, Perch's registry, compiler and account factory are on mainnet, and Nido creates Perch accounts.</p>
+    <p>Grants, recovery, verifiers and thirteen Lean theorems are merged. The new account reaches mainnet in Tranche 3.</p>
+  </aside>
+  <aside class="sources">
     <p>Perch contracts have been live on Stellar mainnet since 2026-10-26: the registry, the document compiler and the account factory, from the earlier design (source c135aca, channel beta, a single-key registry admin). Nido, The Aha Company's passkey wallet, creates Perch accounts on mainnet through its factory. Nido's wallet counts, the mainnet deployment and npm downloads are reported under Nido's SCF #41 award; they are context here, not claimed for this ask.</p>
     <p>Merged in the repository and not funded here: the account with grants (<code>apply_grant</code>), every authorization decided by <code>rule_eval::check_auth</code>, recovery, and passkey and Ed25519 verifiers. The decision function is translated into Lean, and kernel-checked theorems show that it returns what a readable model returns, accepts only calls a rule allows, keeps every window within its cap, never lets a narrowed grant allow more than its parent, and never allows a call to the account or its recovery contracts. A merge is not a mainnet migration: deploying the account changes to mainnet is Tranche 3, deliverable 1.</p>
     <p class="src">SCF Build submission, Traction Evidence; Products &amp; Services; SCF Build Tranche Deliverables ("Baseline"); Tranche #3 Deliverables, item 1.</p>
@@ -430,7 +528,10 @@ body {
 <section class="slide" data-status="now" data-draw="atten" aria-roledescription="slide" aria-label="Narrowing a grant">
   <header class="head"><h2>Narrowing a grant</h2></header>
   <div class="stage"><svg role="img" aria-label="The app's grant is a region of allowed calls: the game, any function; the shop, at most 10 XLM per 100 ledgers; until ledger N. A helper's grant is a smaller region nested inside it, made in three narrowing steps: only guess; at most 2 XLM per 100 ledgers; an earlier last ledger M. Paying the shop 5 XLM: the app may, the helper is refused. Theorems 4 and 5: the helper's grant allows no call, and no run of payments, that the app's grant refuses. Funded: the runtime that spawns the helper, and the account entry point that installs its grant."></svg></div>
-  <aside class="notes">
+  <aside class="notes" data-sec="9">
+    <p>Theorems 4 and 5 show a narrowed helper's grant never allows a call, or a run of payments, that the app's grant refuses.</p>
+  </aside>
+  <aside class="sources">
     <p>Attenuation derives a narrower grant from an existing one; rule-core defines 10 narrowing steps, three shown here. Theorem 4: a derived grant allows no call its parent does not, under any signers; its comparison reads no cap or expiry, so it covers step 1. Theorem 5, trace inclusion: every run a derived grant accepts from empty records, its parent accepts too, which covers steps 2 and 3. N and M are illustrative.</p>
     <p>Funded: a runtime that spawns a subagent only with a grant derived from its parent's (Tranche 1, deliverable 1), and an account entry point that installs a derived grant, checked on chain to be no wider than its parent (Tranche 2, deliverable 1). The account cannot install an attenuated grant today.</p>
     <p class="src">The Perch deck, slide 4, and its sources (statements.json T4, T5; facts example.json, proofs.json); SCF Build submission, Tranche #1 and #2 Deliverables.</p>
@@ -440,7 +541,10 @@ body {
 <section class="slide" data-status="next" data-draw="t1" aria-roledescription="slide" aria-label="Tranche 1: MVP">
   <header class="head"><h2>Tranche 1: MVP</h2></header>
   <div class="stage"><svg role="img" aria-label="Tranche 1, an agent runtime rooted in a Perch grant, by 29 January 2027: agent runtime core; verified Cedar-to-Perch compiler and two-engine test harness; Cedar policy engine as an import-free WebAssembly component; public MVP demo."></svg></div>
-  <aside class="notes">
+  <aside class="notes" data-sec="10">
+    <p>Tranche 1, by January 29: the runtime core, a verified Cedar-to-Perch compiler with a two-engine test harness, the contained Cedar engine, and a public demo.</p>
+  </aside>
+  <aside class="sources">
     <p>Complete by 2027-01-29. 1. Agent runtime core: a Rust runtime whose root authority is an installed grant on a Perch account, read from Stellar testnet; a subagent is spawned only with a grant derived through rule-core's attenuation steps, and a wider spawn is refused; agents hold no keys. 2. Verified Cedar-to-Perch compiler and two-engine test harness, as on the contained policy runtime slide. 3. Cedar policy engine as an import-free WebAssembly component: official Cedar 4.14.x, zero imports, any policy error refuses, a subagent's request must be permitted by its own policies and every ancestor's. 4. Public MVP demo: a root agent and one subagent, with refused attempts to read outside the granted folder, reach an unapproved website and spawn a child wider than its parent; a reproducible script and a recorded video.</p>
     <p class="src">SCF Build submission, Tranche #1 Deliverables and Completion Date; items 2 and 3 as agreed 2026-11-09.</p>
   </aside>
@@ -449,7 +553,10 @@ body {
 <section class="slide" data-status="next" data-draw="t2" aria-roledescription="slide" aria-label="Tranche 2: testnet">
   <header class="head"><h2>Tranche 2: testnet</h2></header>
   <div class="stage"><svg role="img" aria-label="Tranche 2, agent payments on Stellar, by 26 March 2027: attenuated grants on the account and subagent signing; x402 payer flow for Perch accounts; grant review views for wallets; threat model and monitoring plan."></svg></div>
-  <aside class="notes">
+  <aside class="notes" data-sec="10">
+    <p>Tranche 2, by March 26: attenuated grants and subagent signing on the account, x402 payments, grant review views, and a threat model with monitoring.</p>
+  </aside>
+  <aside class="sources">
     <p>Complete by 2027-03-26. 1. Attenuated grants on the account and subagent signing: an entry point that installs a grant derived from an existing grant, checked on chain to be no wider than its parent; testnet transactions in which a subagent payment within its cap succeeds and one over its cap is refused by the account, including with the runtime's own check switched off. 2. x402 payer flow: an agent pays an x402-protected endpoint from a Perch account under its grant, through an existing Stellar x402 facilitator; testnet links for one allowed payment and one over-cap refusal. 3. Grant review views for wallets: embeddable views of a grant, a derived subagent grant and what it has left to spend, with an enforcing-simulation preview, built on the existing open-source sign dialog component; a published npm package. 4. Threat model and monitoring plan: a STRIDE threat model and a monitoring plan with alerts on grant installs and removals, recovery wipes, refusals and spending near caps, running against testnet.</p>
     <p class="src">SCF Build submission, Tranche #2 Deliverables and Completion Date.</p>
   </aside>
@@ -458,7 +565,10 @@ body {
 <section class="slide" data-status="next" data-draw="t3" aria-roledescription="slide" aria-label="Tranche 3: mainnet">
   <header class="head"><h2>Tranche 3: mainnet</h2></header>
   <div class="stage"><svg role="img" aria-label="Tranche 3, mainnet launch, by 28 May 2027: mainnet release of the account and agent-grant contracts; runtime 1.0 release; mainnet agent payment demonstration; developer documentation."></svg></div>
-  <aside class="notes">
+  <aside class="notes" data-sec="9">
+    <p>Tranche 3, by May 28: the mainnet release, after the Audit Bank audit; runtime 1.0; a mainnet payment demo; and developer docs.</p>
+  </aside>
+  <aside class="sources">
     <p>Complete by 2027-05-28. 1. Mainnet release of the account and agent-grant contracts: deploy the Tranche 2 account changes to Stellar mainnet through the repository's release workflow, after the Audit Bank audit, with fixes for all critical and high findings; verified source for each contract; a documented upgrade path for existing accounts. 2. Runtime 1.0 release: versioned runtime and evaluator component packages, with an integration guide for agent frameworks. 3. Mainnet agent payment demonstration: an agent under a Perch grant on mainnet pays an x402 endpoint, and an over-cap attempt is refused on chain. 4. Developer documentation: one site covering the account, grants, the runtime, the threat model, the test plan and an operations runbook.</p>
     <p class="src">SCF Build submission, Tranche #3 Deliverables and Completion Date.</p>
   </aside>
@@ -467,7 +577,10 @@ body {
 <section class="slide" data-status="next" data-draw="timeline" aria-roledescription="slide" aria-label="Timeline">
   <header class="head"><h2>Timeline</h2></header>
   <div class="stage"><svg role="img" aria-label="Three tranches on a calendar from December 2026 to June 2027. Tranche 1, MVP, by 29 January 2027: agent runtime core; verified Cedar-to-Perch compiler and two-engine test harness; Cedar policy engine as an import-free WebAssembly component; public MVP demo. Tranche 2, testnet, by 26 March 2027: attenuated grants on the account and subagent signing; x402 payer flow for Perch accounts; grant review views for wallets; threat model and monitoring plan. Tranche 3, mainnet launch, by 28 May 2027: mainnet release of the account and agent-grant contracts; runtime 1.0 release; mainnet agent payment demonstration; developer documentation."></svg></div>
-  <aside class="notes">
+  <aside class="notes" data-sec="5">
+    <p>Three tranches, three fixed dates: January, March and May.</p>
+  </aside>
+  <aside class="sources">
     <p>Three tranches, each with four deliverables and a completion date. Tranche 1, MVP, by 2027-01-29: agent runtime core; verified Cedar-to-Perch compiler and two-engine test harness; Cedar policy engine as an import-free WebAssembly component; public MVP demo. Tranche 2, testnet, by 2027-03-26: attenuated grants on the account and subagent signing; x402 payer flow for Perch accounts; grant review views for wallets; threat model and monitoring plan. Tranche 3, mainnet launch, by 2027-05-28: mainnet release of the account and agent-grant contracts; Runtime 1.0 release; mainnet agent payment demonstration; developer documentation.</p>
     <p class="src">SCF Build submission, Tranche #1, #2 and #3 Deliverables and Completion Dates; Tranche 1 items 2 and 3 as agreed 2026-11-09.</p>
   </aside>
@@ -484,7 +597,10 @@ body {
     </ul>
     <p class="close-foot">The Aha Company · <a href="https://github.com/stellar-registry/perch">github.com/stellar-registry/perch</a></p>
   </div>
-  <aside class="notes">
+  <aside class="notes" data-sec="5">
+    <p>We're Willem Wyndham, Pamela Selle, Zach Fedor and Fabricius Zatti. Thank you.</p>
+  </aside>
+  <aside class="sources">
     <p>Four people from The Aha Company work on this submission: Willem Wyndham (CSO), Pamela Selle (Principal Engineer), Zach Fedor (Engineer) and Fabricius Zatti (Principal Engineer). Each line paraphrases the submission's team description.</p>
     <p class="src">SCF Build submission, Team Description; Project URL.</p>
   </aside>
@@ -493,13 +609,26 @@ body {
 </main>
 
 
-<aside id="notes-panel" hidden aria-label="Speaker notes"></aside>
+<aside id="notes-panel" hidden aria-label="Speaker script"></aside>
+<aside id="sources-panel" hidden aria-label="Sources"></aside>
+<div id="rec-count" hidden role="status" aria-live="assertive"></div>
+<div id="rec-msg" hidden role="status" aria-live="polite"></div>
+<section id="rec-panel" hidden aria-label="Presenter view, not recorded">
+  <p class="rp-top"><span class="rp-dot" aria-hidden="true"></span><span id="rp-state">Recording</span><span id="rp-time">0:00</span><span class="rp-lim">/ 3:00</span></p>
+  <p id="rp-cur"></p>
+  <div id="rp-script"></div>
+  <p class="rp-next">Next: <span id="rp-next"></span></p>
+  <p class="rp-btns"><button type="button" id="rp-pause">Pause (P)</button><button type="button" id="rp-stop">Stop and save (R)</button></p>
+  <p class="rp-note">Only you see this panel. The video shows the slides and your voice.</p>
+</section>
 
 <nav class="chrome" aria-label="Deck controls">
   <button class="btn" id="prev" aria-label="Previous slide"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
   <ol class="marks" id="marks"></ol>
   <span class="count" id="count" aria-live="polite"></span>
-  <button class="btn" id="notes-btn" aria-label="Speaker notes" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M5 5h14v10H9l-4 4z"/><path d="M8.5 9h7M8.5 12h4.5"/></svg></button>
+  <button class="btn" id="notes-btn" aria-label="Speaker script (N)" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M5 5h14v10H9l-4 4z"/><path d="M8.5 9h7M8.5 12h4.5"/></svg></button>
+  <button class="btn" id="src-btn" aria-label="Sources (S)" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M7 4h7l4 4v12H7z"/><path d="M14 4v4h4M9.5 12.5h6M9.5 15.5h6"/></svg></button>
+  <button class="btn" id="rec-btn" aria-label="Record a video (R)" aria-pressed="false"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/><circle class="rec-dot" cx="12" cy="12" r="3.4"/></svg></button>
   <button class="btn" id="theme-btn" aria-label="Switch theme"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/><path d="M12 4.5a7.5 7.5 0 0 0 0 15z" fill="currentColor"/></svg></button>
   <button class="btn" id="next" aria-label="Next slide"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
   <div class="bar" aria-hidden="true"><i id="bar"></i></div>
@@ -508,6 +637,8 @@ body {
 <script>
 (() => {
 'use strict';
+// The page as authored, before this script changes it: the recorder lays it out again at 1920x1080.
+const SRC = '<!doctype html>\n' + document.documentElement.outerHTML;
 const NS = 'http://www.w3.org/2000/svg';
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
@@ -929,11 +1060,11 @@ B.perch = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   const P = T ? {
     ag: [400, 96], key: [438, 126], call: [400, 150, 400, 228], callL: [424, 196, 'start'],
     acc: [400, 460, 210], seal: [400, 324, 40], card: [250, 380, 300, 118], dec: [282, 556], decT: [318, 552],
-    accL: [400, 724], rows: [[80, 830], [80, 960]], tx: 132, chip: [400, 1100],
+    accL: [400, 724], rows: [[80, 830], [80, 960]], tx: 132,
   } : {
     ag: [190, 360], key: [232, 392], call: [252, 360, 548, 360], callL: [400, 336, 'middle'],
     acc: [780, 360, 220], seal: [780, 214, 44], card: [640, 270, 280, 120], dec: [676, 452], decT: [712, 446],
-    accL: [780, 632], rows: [[1110, 250], [1110, 410]], tx: 1160, chip: [1300, 560],
+    accL: [780, 632], rows: [[1110, 250], [1110, 410]], tx: 1160,
   };
   c.at(80);
   c.icon('agent', P.ag[0], P.ag[1], T ? 62 : 70, { k: 'ink' });
@@ -966,7 +1097,6 @@ B.perch = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
     c.text(P.tx, y + 30, b, { anchor: 'start', size: T ? .44 : .5, k: 'soft' });
     c.at(2200);
   });
-  funded(c, P.chip[0], P.chip[1], 'funded: the merged account on mainnet (Tranche 3)', { size: T ? .44 : .48 });
 } };
 
 /* Where agent-payment policy lives: within the agent's reach, on chain apart, or one policy in both. */
@@ -1455,18 +1585,23 @@ function go(i, fromHash) {
   $('#bar').style.width = ((i + 1) / slides.length * 100) + '%';
   if (!fromHash) history.replaceState(null, '', '#' + (i + 1));
   if (!$('#notes-panel').hidden) showNotes();
+  if (!$('#sources-panel').hidden) showSources();
 }
 const next = () => go(cur + 1), prev = () => go(cur - 1);
 
 function showNotes() {
   const n = $('.notes', slides[cur]);
-  $('#notes-panel').innerHTML = n ? n.innerHTML : '';
+  const w = n ? n.textContent.trim().split(/\s+/).length : 0;
+  $('#notes-panel').innerHTML = `<p class="np-h">Say it in about ${mmss(secOf(slides[cur]))} · ${w} words · sources: S</p>` + (n ? n.innerHTML : '');
 }
 function toggleNotes() {
   const p = $('#notes-panel'), btn = $('#notes-btn');
   p.hidden = !p.hidden;
   btn.setAttribute('aria-pressed', String(!p.hidden));
-  if (!p.hidden) showNotes();
+  if (!p.hidden) {
+    showNotes();
+    if (!$('#sources-panel').hidden) toggleSources();
+  }
 }
 
 const darkQ = matchMedia('(prefers-color-scheme: dark)');
@@ -1478,7 +1613,7 @@ function toggleTheme() {
   try { localStorage.setItem('perch-scf-deck-theme', t); } catch (_) { /* storage unavailable */ }
   syncThemeLabel();
 }
-try { const t = localStorage.getItem('perch-scf-deck-theme'); if (t === 'light' || t === 'dark') root.dataset.theme = t; } catch (_) { /* storage unavailable */ }
+if (!root.dataset.recFrame) try { const t = localStorage.getItem('perch-scf-deck-theme'); if (t === 'light' || t === 'dark') root.dataset.theme = t; } catch (_) { /* storage unavailable */ }
 const qs = new URLSearchParams(location.search);
 const qp = qs.get('theme');
 if (qs.get('still') === '1') root.classList.add('still');
@@ -1503,6 +1638,10 @@ addEventListener('keydown', e => {
   else if (k === 'End') { e.preventDefault(); go(slides.length - 1); }
   else if (k === 'n' || k === 'N') toggleNotes();
   else if (k === 't' || k === 'T') toggleTheme();
+  else if (k === 's' || k === 'S') toggleSources();
+  else if ((k === 'r' || k === 'R') && !root.classList.contains('still')) toggleRecord();
+  else if (k === 'p' || k === 'P') pauseRecording();
+  else if (k === 'Escape' && (R.state === 'arming' || R.state === 'counting')) stopRecording();
 });
 
 // Swipe in any direction; a tap on the right of the stage advances, on the left goes back.
@@ -1526,6 +1665,368 @@ let rt;
 addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(render, 140); });
 addEventListener('hashchange', () => { const n = parseInt(location.hash.slice(1), 10); if (n) go(n - 1, true); });
 reduce.addEventListener('change', () => { const s = slides[cur]; leave(s); enter(s); });
+
+/* ---------- sources: each slide's background and citations, kept out of the spoken script ---------- */
+function showSources() {
+  const n = $('.sources', slides[cur]);
+  $('#sources-panel').innerHTML = `<p class="sp-h">Sources for slide ${cur + 1}</p>` + (n ? n.innerHTML : '');
+}
+function toggleSources() {
+  const p = $('#sources-panel'), btn = $('#src-btn');
+  p.hidden = !p.hidden;
+  btn.setAttribute('aria-pressed', String(!p.hidden));
+  if (!p.hidden) {
+    showSources();
+    if (!$('#notes-panel').hidden) toggleNotes();
+  }
+}
+const mmss = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+const secOf = s => { const n = $('.notes', s); return n ? parseInt(n.dataset.sec, 10) || 0 : 0; };
+
+/* ---------- recorder: the slides at 1920x1080 plus the microphone, saved as a local file ----------
+   Each slide is painted once, in its final state, onto a 1920x1080 canvas: the deck is laid out at
+   1920x1080 in a hidden same-origin frame, its SVG drawings are serialized with their computed styles
+   and drawn as images, and its HTML text is drawn word by word at the positions the browser laid out.
+   The recording is that canvas's stream plus the microphone, through MediaRecorder; nothing leaves the
+   browser. The presenter overlay is ordinary page content, so it never reaches the canvas. */
+const VW = 1920, VH = 1080;
+const PROPS = ['fill', 'fill-opacity', 'fill-rule', 'stroke', 'stroke-width', 'stroke-opacity', 'stroke-dasharray', 'stroke-dashoffset',
+  'stroke-linecap', 'stroke-linejoin', 'opacity', 'font-family', 'font-size', 'font-style', 'font-weight', 'letter-spacing',
+  'text-anchor', 'dominant-baseline', 'vector-effect', 'display'];
+function inlineStyles(src, dst, win, symbol) {
+  const cs = win.getComputedStyle(src);
+  let css = '';
+  PROPS.forEach(p => { const v = cs.getPropertyValue(p); if (v) css += `${p}:${v};`; });
+  if (symbol && /\bs-/.test(src.getAttribute('class') || '')) css = css.replace(/(^|;)stroke:[^;]*/, '$1stroke:currentColor');
+  else if (!symbol) css += `color:${cs.color};`;
+  dst.setAttribute('style', css);
+  dst.removeAttribute('class');
+  for (let i = 0; i < src.children.length; i++) inlineStyles(src.children[i], dst.children[i], win, symbol);
+}
+async function svgImage(el, win, doc) {
+  const r = el.getBoundingClientRect();
+  const cl = el.cloneNode(true);
+  inlineStyles(el, cl, win, false);
+  cl.setAttribute('xmlns', NS);
+  cl.setAttribute('width', f2(r.width));
+  cl.setAttribute('height', f2(r.height));
+  const defs = document.createElementNS(NS, 'defs');
+  const want = new Set($$('use', cl).map(u => (u.getAttribute('href') || '').slice(1)));
+  $$('#defs defs > *', doc).forEach(d => {
+    if (d.tagName === 'pattern' || want.has(d.id)) { const c = d.cloneNode(true); inlineStyles(d, c, win, d.tagName === 'symbol'); defs.appendChild(c); }
+  });
+  cl.insertBefore(defs, cl.firstChild);
+  const img = new Image();
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(cl));
+  await img.decode();
+  return { img, r };
+}
+function rrect(g, x, y, w, h, r) {
+  r = Math.max(0, Math.min(r, w / 2, h / 2));
+  g.beginPath();
+  g.moveTo(x + r, y);
+  g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r);
+  g.closePath();
+}
+// A border and inset spread shadows, the only box decorations the slides use.
+function paintBox(g, x, y, w, h, cs) {
+  const rad = parseFloat(cs.borderTopLeftRadius) || 0, bw = parseFloat(cs.borderTopWidth) || 0;
+  const sh = cs.boxShadow && cs.boxShadow !== 'none' ? cs.boxShadow.split(/,(?![^(]*\))/) : [];
+  sh.reverse().forEach(part => {
+    if (!/inset/.test(part)) return;
+    const col = (part.match(/rgba?\([^)]*\)|#[0-9a-f]+/i) || [''])[0];
+    const nums = part.replace(col, '').match(/-?[\d.]+px/g) || [];
+    const spread = parseFloat(nums[3] || '0');
+    if (!col || spread <= 0) return;
+    g.lineWidth = spread; g.strokeStyle = col;
+    const k = bw + spread / 2;
+    rrect(g, x + k, y + k, w - 2 * k, h - 2 * k, rad - k); g.stroke();
+  });
+  if (bw > 0 && cs.borderTopStyle !== 'none') {
+    g.lineWidth = bw; g.strokeStyle = cs.borderTopColor;
+    rrect(g, x + bw / 2, y + bw / 2, w - bw, h - bw, rad - bw / 2); g.stroke();
+  }
+}
+function paintText(g, node, win, doc) {
+  const cs = win.getComputedStyle(node.parentElement);
+  g.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+  g.fillStyle = cs.color; g.strokeStyle = cs.color; g.textBaseline = 'alphabetic';
+  if ('letterSpacing' in g) g.letterSpacing = cs.letterSpacing === 'normal' ? '0px' : cs.letterSpacing;
+  const up = cs.textTransform === 'uppercase', ul = /underline/.test(cs.textDecorationLine || '');
+  const text = node.textContent, range = doc.createRange();
+  let word = '', wx = 0, wy = 0, wr = 0;
+  const flush = () => {
+    if (!word) return;
+    const s = up ? word.toUpperCase() : word;
+    const m = g.measureText(s);
+    const base = wy + (m.fontBoundingBoxAscent || parseFloat(cs.fontSize) * .8);
+    g.fillText(s, wx, base);
+    if (ul) { g.lineWidth = 1; g.beginPath(); g.moveTo(wx, base + 3.5); g.lineTo(wr, base + 3.5); g.stroke(); }
+    word = '';
+  };
+  for (let i = 0; i < text.length; i++) {
+    if (/\s/.test(text[i])) { flush(); continue; }
+    range.setStart(node, i); range.setEnd(node, i + 1);
+    const rc = range.getClientRects()[0];
+    if (!rc) continue;
+    if (word && Math.abs(rc.top - wy) > 2) flush();
+    if (!word) { wx = rc.left; wy = rc.top; }
+    word += text[i]; wr = rc.right;
+  }
+  flush();
+}
+async function paintSlide(doc, i) {
+  const win = doc.defaultView, s = $$('.slide', doc)[i];
+  const cv = document.createElement('canvas');
+  cv.width = VW; cv.height = VH;
+  const g = cv.getContext('2d');
+  g.fillStyle = win.getComputedStyle(doc.body).backgroundColor;
+  g.fillRect(0, 0, VW, VH);
+  const fr = win.getComputedStyle(s, '::before');
+  if (fr.content && fr.content !== 'none') {
+    const t = parseFloat(fr.top) || 0, l = parseFloat(fr.left) || 0;
+    paintBox(g, l, t, VW - l - (parseFloat(fr.right) || 0), VH - t - (parseFloat(fr.bottom) || 0), fr);
+  }
+  const walk = async n => {
+    if (n.nodeType === 3) { if (n.textContent.trim()) paintText(g, n, win, doc); return; }
+    if (n.nodeType !== 1) return;
+    const cs = win.getComputedStyle(n);
+    if (cs.display === 'none') return;
+    if (n.tagName.toLowerCase() === 'svg') {
+      const { img, r } = await svgImage(n, win, doc);
+      if (!r.width || !r.height) return;
+      const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      const m = new DOMMatrix(cs.transform === 'none' ? '' : cs.transform);
+      g.save();
+      g.translate(cx, cy); g.transform(m.a, m.b, m.c, m.d, m.e, m.f); g.translate(-cx, -cy);
+      g.drawImage(img, r.left, r.top, r.width, r.height);
+      g.restore();
+      return;
+    }
+    if ((parseFloat(cs.borderTopWidth) || 0) > 0 || /inset/.test(cs.boxShadow)) {
+      const r = n.getBoundingClientRect();
+      paintBox(g, r.left, r.top, r.width, r.height, cs);
+    }
+    for (const c of n.childNodes) await walk(c);
+  };
+  for (const c of s.childNodes) await walk(c);
+  return cv;
+}
+// Lay the deck out at 1920x1080 in a hidden frame, in its final state, and paint every slide.
+async function paintAll(onStep) {
+  const f = document.createElement('iframe');
+  f.setAttribute('aria-hidden', 'true'); f.tabIndex = -1; f.title = 'Recording layout';
+  f.style.cssText = `position:fixed;left:-${VW * 4}px;top:0;width:${VW}px;height:${VH}px;border:0;pointer-events:none;`;
+  const h = new DOMParser().parseFromString(SRC, 'text/html').documentElement;
+  h.className = 'still'; h.dataset.recFrame = '1'; h.dataset.theme = isDark() ? 'dark' : 'light';
+  f.srcdoc = '<!doctype html>\n' + h.outerHTML;
+  const loaded = new Promise(r => f.addEventListener('load', r, { once: true }));
+  document.body.appendChild(f);
+  await loaded;
+  const doc = f.contentDocument, out = [];
+  try {
+    const n = $$('.slide', doc).length;
+    for (let i = 0; i < n; i++) { out.push(await paintSlide(doc, i)); if (onStep) onStep(i + 1, n); }
+  } finally { f.remove(); }
+  return out;
+}
+// avc3 keeps codec settings in-band, which Chrome asks for; Safari offers avc1.
+const MIMES = ['video/mp4;codecs=avc3.640028,mp4a.40.2', 'video/mp4;codecs=avc1.640028,mp4a.40.2', 'video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4',
+  'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
+const pickMime = () => MIMES.find(m => MediaRecorder.isTypeSupported(m)) || '';
+const R = { state: 'idle' };
+const recBtn = $('#rec-btn'), panel = $('#rec-panel'), msg = $('#rec-msg'), countEl = $('#rec-count');
+function say(html, kind) {
+  msg.innerHTML = html + '<button type="button" class="rm-x" aria-label="Close">×</button>';
+  msg.className = kind || '';
+  msg.hidden = false;
+  $('.rm-x', msg).addEventListener('click', () => { msg.hidden = true; });
+}
+function setState(st) {
+  R.state = st;
+  if (st === 'idle') delete root.dataset.recording; else root.dataset.recording = st;
+  recBtn.setAttribute('aria-pressed', String(st !== 'idle'));
+  recBtn.setAttribute('aria-label', st === 'idle' ? 'Record a video (R)' : 'Stop recording (R)');
+  panel.hidden = !(st === 'recording' || st === 'paused');
+  $('#rp-pause').textContent = st === 'paused' ? 'Resume (P)' : 'Pause (P)';
+  $('#rp-state').textContent = st === 'paused' ? 'Paused' : 'Recording';
+  updatePanel();
+}
+function elapsed() { return (R.acc || 0) + (R.state === 'recording' && R.since ? (performance.now() - R.since) / 1000 : 0); }
+function updatePanel() {
+  if (panel.hidden) return;
+  const t = elapsed();
+  $('#rp-time').textContent = mmss(t);
+  $('#rp-time').classList.toggle('over', t > 180);
+  const s = slides[cur], nx = slides[cur + 1];
+  const onSlide = R.slideAt != null ? t - R.slideAt : 0;
+  $('#rp-cur').textContent = `Slide ${cur + 1} of ${slides.length} · ${mmss(onSlide)} of about ${mmss(secOf(s))}`;
+  const n = $('.notes', s);
+  if (R.scriptFor !== cur) { $('#rp-script').innerHTML = n ? n.innerHTML : ''; R.scriptFor = cur; }
+  $('#rp-next').textContent = nx ? nx.getAttribute('aria-label') : 'the end';
+}
+function frame(now) {
+  if (!R.g) return;
+  if (R.shown !== cur) { R.from = R.shown; R.shown = cur; R.t0 = now; R.slideAt = elapsed(); updatePanel(); }
+  const a = R.from == null ? 1 : Math.min(1, (now - R.t0) / 350);
+  const g = R.g;
+  g.globalAlpha = 1;
+  if (a < 1) g.drawImage(R.snaps[R.from], 0, 0);
+  g.globalAlpha = a;
+  g.drawImage(R.snaps[R.shown], 0, 0);
+  g.globalAlpha = 1;
+  R.raf = requestAnimationFrame(frame);
+}
+function release() {
+  cancelAnimationFrame(R.raf);
+  clearInterval(R.tick);
+  if (R.mic) R.mic.getTracks().forEach(t => t.stop());
+  if (R.stream) R.stream.getTracks().forEach(t => t.stop());
+  Object.assign(R, { run: null, g: null, mic: null, stream: null, rec: null, snaps: null, shown: null, from: null, acc: 0, since: 0, slideAt: null, scriptFor: null });
+  countEl.hidden = true;
+  setState('idle');
+}
+async function startRecording() {
+  if (R.state !== 'idle') return;
+  msg.hidden = true;
+  const cv0 = document.createElement('canvas');
+  if (!window.MediaRecorder || !cv0.captureStream || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    say('This browser cannot record the deck here. Recent Chrome, Edge, Firefox and Safari can.', 'err');
+    return;
+  }
+  setState('arming');
+  const run = R.run = {};
+  if (!$('#notes-panel').hidden) toggleNotes();
+  if (!$('#sources-panel').hidden) toggleSources();
+  let mic;
+  try {
+    mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+  } catch (e) {
+    if (R.run !== run) return;
+    release();
+    const blocked = e && (e.name === 'NotAllowedError' || e.name === 'SecurityError');
+    say(blocked
+      ? 'The microphone was blocked, so nothing was recorded. Allow the microphone for this page in the browser’s site settings, then press <kbd>R</kbd> again.'
+      : 'No microphone could be opened (' + (e && e.name || 'error') + '), so nothing was recorded. Connect one and press <kbd>R</kbd> again.', 'err');
+    return;
+  }
+  if (R.run !== run) { mic.getTracks().forEach(t => t.stop()); return; }
+  R.mic = mic;
+  countEl.hidden = false;
+  countEl.textContent = 'Preparing slides…';
+  let snaps;
+  try {
+    snaps = await paintAll((k, n) => { if (R.run === run) countEl.textContent = `Preparing slides ${k} / ${n}`; });
+  } catch (e) {
+    if (R.run !== run) return;
+    release();
+    say('The slides could not be prepared for recording (' + (e && e.message || 'error') + '). Nothing was recorded.', 'err');
+    return;
+  }
+  if (R.run !== run) return;
+  R.snaps = snaps;
+  const cv = document.createElement('canvas');
+  cv.width = VW; cv.height = VH;
+  R.g = cv.getContext('2d');
+  R.shown = null; R.from = null;
+  R.raf = requestAnimationFrame(frame);
+  R.stream = new MediaStream([...cv.captureStream(30).getVideoTracks(), ...R.mic.getAudioTracks()]);
+  R.mime = pickMime();
+  setState('counting');
+  for (const k of [3, 2, 1]) {
+    countEl.innerHTML = `<b>${k}</b><span>Recording starts. Press R to cancel.</span>`;
+    await new Promise(r => setTimeout(r, 1000));
+    if (R.run !== run) return;
+  }
+  countEl.hidden = true;
+  const chunks = [];
+  const rec = new MediaRecorder(R.stream, { mimeType: R.mime || undefined, videoBitsPerSecond: 8e6, audioBitsPerSecond: 128e3 });
+  R.rec = rec;
+  rec.addEventListener('dataavailable', e => { if (e.data && e.data.size) chunks.push(e.data); });
+  rec.addEventListener('stop', () => save(chunks, rec.mimeType || R.mime, elapsed()));
+  R.acc = 0; R.since = performance.now(); R.slideAt = 0; R.from = null; R.shown = cur;
+  rec.start(1000);
+  setState('recording');
+  R.tick = setInterval(updatePanel, 250);
+}
+function pauseRecording() {
+  if (R.state === 'recording') { R.acc = elapsed(); R.since = 0; R.rec.pause(); setState('paused'); }
+  else if (R.state === 'paused') { R.since = performance.now(); R.rec.resume(); setState('recording'); }
+}
+function stopRecording() {
+  if (R.state === 'arming' || R.state === 'counting') { release(); say('Recording cancelled; nothing was saved.'); return; }
+  if (R.state !== 'recording' && R.state !== 'paused') return;
+  R.acc = elapsed(); R.since = 0;
+  R.rec.stop();
+}
+// MediaRecorder writes WebM with no duration (Chrome) or a zero one (Firefox); set it in the Info
+// element so players can seek.
+async function webmDuration(blob, ms) {
+  const h = new Uint8Array(await blob.slice(0, Math.min(blob.size, 1 << 16)).arrayBuffer());
+  const vlen = b => { for (let i = 0; i < 8; i++) if (b & (0x80 >> i)) return i + 1; return 9; };
+  const id = q => { const l = vlen(h[q]); let v = 0; for (let i = 0; i < l; i++) v = v * 256 + h[q + i]; return [v, l]; };
+  const size = q => { const l = vlen(h[q]); let v = h[q] & (0xFF >> l); for (let i = 1; i < l; i++) v = v * 256 + h[q + i]; return [v, l]; };
+  let [i0, l0] = id(0), [z0, s0] = size(l0);
+  if (i0 !== 0x1A45DFA3) return blob;
+  let q = l0 + s0 + z0;
+  const [i1, l1] = id(q), [, s1] = size(q + l1);
+  if (i1 !== 0x18538067) return blob;
+  q += l1 + s1;
+  while (q < h.length - 16) {
+    const [ci, cl] = id(q), [cz, cs] = size(q + cl);
+    const body = q + cl + cs, end = body + cz;
+    if (ci === 0x1F43B675 || end > h.length) return blob;
+    if (ci === 0x1549A966) {
+      let scale = 1e6, dq = 0, dz = 0;
+      for (let r = body; r < end;) {
+        const [ei, el] = id(r), [ez, es] = size(r + el);
+        if (ei === 0x4489) { dq = r + el + es; dz = ez; }
+        if (ei === 0x2AD7B1) { scale = 0; for (let k = 0; k < ez; k++) scale = scale * 256 + h[r + el + es + k]; }
+        r += el + es + ez;
+      }
+      const ticks = ms * 1e6 / (scale || 1e6);
+      if (dq) {
+        const dv = new DataView(h.buffer);
+        if (dz === 8) dv.setFloat64(dq, ticks); else if (dz === 4) dv.setFloat32(dq, ticks); else return blob;
+        return new Blob([h.subarray(0, end), blob.slice(end)], { type: blob.type });
+      }
+      const nz = cz + 11;
+      if (nz >= 2 ** (7 * cs) - 1) return blob;
+      const hdr = new Uint8Array(cl + cs);
+      hdr.set(h.subarray(q, q + cl));
+      for (let k = cs - 1, v = nz; k >= 0; k--, v = Math.floor(v / 256)) hdr[cl + k] = v & 0xFF;
+      hdr[cl] |= 0x80 >> (cs - 1);
+      const dur = new Uint8Array(11);
+      dur.set([0x44, 0x89, 0x88]);
+      new DataView(dur.buffer).setFloat64(3, ticks);
+      return new Blob([h.subarray(0, q), hdr, h.subarray(body, end), dur, blob.slice(end)], { type: blob.type });
+    }
+    q = end;
+  }
+  return blob;
+}
+async function save(chunks, mime, secs) {
+  release();
+  const type = (mime || 'video/webm').split(';')[0];
+  let blob = new Blob(chunks, { type });
+  if (/webm/.test(type)) try { blob = await webmDuration(blob, secs * 1000); } catch (_) { /* keep the file as recorded */ }
+  const ext = /mp4/.test(type) ? 'mp4' : 'webm';
+  const fmt = ext === 'mp4' ? 'MP4 (H.264 and AAC)' : 'WebM (' + (/vp9/.test(mime) ? 'VP9' : 'VP8') + ' and Opus)';
+  const d = new Date(), p2 = n => String(n).padStart(2, '0');
+  const name = `perch-agent-grants-${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}.${ext}`;
+  if (R.url) URL.revokeObjectURL(R.url);
+  R.url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = R.url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  say(`Saved <b>${name}</b>: ${fmt}, 1920×1080, ${mmss(secs)}, ${(blob.size / 1048576).toFixed(1)} MB. It stays on this computer; nothing was uploaded. <a href="${R.url}" download="${name}">Download again</a>`, 'ok');
+}
+function toggleRecord() { if (R.state === 'idle') startRecording(); else stopRecording(); }
+[[recBtn, toggleRecord], [$('#rp-pause'), pauseRecording], [$('#rp-stop'), stopRecording]].forEach(([b, fn]) => {
+  b.addEventListener('click', () => { b.blur(); fn(); });
+});
+$('#src-btn').addEventListener('click', toggleSources);
 
 slides.forEach(s => { s.setAttribute('aria-hidden', 'true'); s.inert = true; });
 render();
