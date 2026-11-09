@@ -1,8 +1,9 @@
 # Nido theme for the sign-dialog preview
 
 `../nido.html` is `../standalone.html` with one stylesheet linked, `theme.css`
-(`python3 build.py` writes it). The component and the page are otherwise
-unchanged: the theme sets only the component's `--ssd-*` custom properties and
+(`python3 build.py` writes it). It also hides the page's "Page theme" and
+"Dialog style" controls, since Nido's light-only theme overrides both. The
+component and the page are otherwise unchanged: the theme sets only the component's `--ssd-*` custom properties and
 styles its `::part()` regions, so it shows how the same dialog looks in Nido.
 
 ## Sources

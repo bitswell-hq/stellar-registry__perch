@@ -55,6 +55,7 @@
   }
 </style>
 <link rel="stylesheet" href="nido/theme.css">
+<style>.controls label[hidden] { display: none; }</style>
 </head>
 <body>
 <div class="wrap">
@@ -63,8 +64,8 @@
   <header class="shop">
     <h1><small>A toy dapp</small>Café Perch</h1>
     <div class="controls">
-      <label>Page theme <select id="theme"><option value="">auto</option><option>light</option><option>dark</option></select></label>
-      <label>Dialog style <select id="brand"><option value="">default</option><option value="brand">shop brand</option></select></label>
+      <label hidden>Page theme <select id="theme"><option value="">auto</option><option>light</option><option>dark</option></select></label>
+      <label hidden>Dialog style <select id="brand"><option value="">default</option><option value="brand">shop brand</option></select></label>
       <label>Preview <select id="preview"><option value="manual">on request</option><option value="auto">automatic</option><option value="off">off</option></select></label>
     </div>
   </header>

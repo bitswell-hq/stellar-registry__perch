@@ -41,4 +41,3 @@ soroban-sign-dialog::part(approve), soroban-sign-dialog::part(reject), soroban-s
 }
 soroban-sign-dialog::part(approve) { min-height: 52px; }
 soroban-sign-dialog::part(reject) { min-height: 52px; background: #F4E8D7; color: #2A1A12; border-color: transparent; }
-soroban-sign-dialog::part(approve):hover { background: #b83e14; }
