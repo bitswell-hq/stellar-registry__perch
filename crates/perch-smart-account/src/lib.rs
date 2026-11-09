@@ -206,7 +206,8 @@ pub enum PerchAccountError {
     /// A completed recovery would overflow the scope generation.
     GenerationExhausted,
     /// A scoped document has a `recovery` member, a self-admin rule, a rule
-    /// on the account or its recovery contracts, or a guardian approval.
+    /// on the account or its recovery contracts, a guardian approval, or a
+    /// token-admin function.
     // docs/account-interface.md, "Errors".
     ScopeEscalation,
     /// No scoped document has this scope id.
@@ -1094,8 +1095,14 @@ pub trait PerchSmartAccount: CustomAccountInterface {
 ///   account the delegating account's contexts.
 /// - A selected rule a scoped document installed is refused for a call on
 ///   the current recovery controller, ZK adapter or pool, or for a guardian
-///   approval on any contract (`ScopeEscalation`), on every path the same
-///   way.
+///   approval or a token-admin function ([`TOKEN_ADMIN_FNS`]) on any
+///   contract (`ScopeEscalation`), on every path the same way.
+/// - A context chosen under a capped rule, admin or scoped, or under a
+///   scoped rule for a token function whose argument 0 is the owner
+///   (`transfer`, `transfer_from`, `approve`, `burn`, `burn_from`, matched
+///   by name), is refused unless argument 0 is this account
+///   (`RuleEvalRefused`), as a CAP-0071 delegate too. A scoped rule for any
+///   other function matches as its argument predicates say.
 /// - rule-eval's `authorize` over the stored rule sets refuses what it does
 ///   not accept: a chosen scoped rule whose stored rule carries another
 ///   scope generation than the account's, from a scoped document a
@@ -1131,7 +1138,8 @@ pub fn check_auth(
     }
     // A scoped rule never authorizes a call on the excluded set, which may
     // have been adopted after its scope was applied (spec §7.6), and never
-    // casts a guardian approval, at whatever controller (§2). An admin
+    // casts a guardian approval, at whatever controller (§2), or calls a
+    // token-admin function, on whatever contract (§7.6). An admin
     // document's rule has no tag. A tag is extended on read, as its scope's
     // record is (`gate`), so the two live together.
     for (i, id) in signatures.context_rule_ids.iter().enumerate() {
@@ -1140,7 +1148,10 @@ pub fn check_auth(
                 contract, fn_name, ..
             })) = auth_contexts.get(i as u32)
             {
-                if excluded_contract(e, &contract) || is_guardian_approval(e, &fn_name) {
+                if excluded_contract(e, &contract)
+                    || is_guardian_approval(e, &fn_name)
+                    || is_token_admin(e, &fn_name)
+                {
                     return Err(PerchAuthError::ScopeEscalation.into());
                 }
             }
@@ -1336,9 +1347,10 @@ fn apply_scope_doc(e: &Env, scope: u32, doc_json: Bytes) -> Result<BytesN<32>, P
 /// member, a rule scoped to the account itself (every `self-admin` rule)
 /// or to a contract of the excluded set (spec §7.6; the compiler checks the
 /// ZK adapter and pool only within one document, spec §15 rule 3). A rule
-/// whose `functions` names a guardian approval (§2) is refused by
-/// `rule_set::lowered_scoped`; one that leaves its functions unrestricted
-/// is refused a guardian approval in `__check_auth` instead.
+/// whose `functions` names a guardian approval (§2) or a token-admin
+/// function ([`TOKEN_ADMIN_FNS`]) is refused by `rule_set::lowered_scoped`;
+/// one that leaves its functions unrestricted is refused them in
+/// `__check_auth` instead.
 fn check_scoped(e: &Env, me: &Address, compiled: &CompiledDoc) -> Result<(), PerchAccountError> {
     if !compiled.recovery.is_empty() {
         return Err(PerchAccountError::ScopeEscalation);
@@ -1379,6 +1391,19 @@ fn check_normal(e: &Env, me: &Address, compiled: &CompiledDoc) -> Result<(), Per
         }
     }
     Ok(())
+}
+
+/// The Stellar Asset Contract's admin functions. No grant (scoped
+/// document) calls them: they act with the token admin's authority, which
+/// no argument names, so admin powers stay with the admin document (spec
+/// §7.6). Like guardian approvals they are matched by name on any contract.
+pub const TOKEN_ADMIN_FNS: [&str; 4] = ["mint", "clawback", "set_admin", "set_authorized"];
+
+/// Whether `fn_name` is in [`TOKEN_ADMIN_FNS`].
+pub fn is_token_admin(e: &Env, fn_name: &Symbol) -> bool {
+    TOKEN_ADMIN_FNS
+        .iter()
+        .any(|name| Symbol::new(e, name) == *fn_name)
 }
 
 /// Whether `contract` is in the applied admin document's excluded set,
