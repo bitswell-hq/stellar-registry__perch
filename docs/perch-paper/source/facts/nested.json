@@ -1,0 +1,19 @@
+{
+  "nested-stake-xlm": {
+    "value": "1",
+    "source": "crates/integration-tests/tests/auth_root.rs:28, 47 (Game::guess: a loss transfers UNIT from the guesser to the game)"
+  },
+  "nested-cap-xlm": {
+    "value": "2",
+    "source": "crates/integration-tests/tests/auth_root.rs:117, 273 (the transfer rule's cap: limit 2 UNIT)"
+  },
+  "nested-period-ledgers": {
+    "value": "100",
+    "source": "crates/integration-tests/tests/auth_root.rs:117 (period-ledgers 100)"
+  },
+  "auth-root-pin": {
+    "value": "c593bacde94604b37dabc908f1c151b1149edf5c",
+    "anon": "[withheld]",
+    "source": "git rev-parse c593bac (V): feat(auth)!: constrain rules to exact entry roots"
+  }
+}
