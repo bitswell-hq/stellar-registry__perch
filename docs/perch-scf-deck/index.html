@@ -879,7 +879,7 @@ B.keepcap = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   c.at(80);
   c.circle(A.x, A.y, A.r, { k: 'now', w: 1.2 });
   c.circle(A.x, A.y, A.r - 14, { k: 'now', w: .35 });
-  c.seal(A.x, A.y - (T ? 104 : 118), T ? 40 : 44, { id: 'P' });
+  c.seal(A.x, A.y - (T ? 104 : 118), T ? 40 : 44);
   const [gw, gh] = T ? [300, 132] : [280, 124];
   c.rect(A.x - gw / 2, A.y - (T ? 30 : 34), gw, gh, { k: 'now', rx: 14, w: 1, fill: 'paper' });
   c.text(A.x, A.y + (T ? 6 : 2), "the agent's grant", { size: T ? .48 : .54, k: 'soft' });
@@ -980,7 +980,7 @@ B.runtime = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   const [ax, ay, ar] = P.acc;
   c.circle(ax, ay, ar, { k: 'now', w: 1.2 });
   c.circle(ax, ay, ar - 12, { k: 'now', w: .35 });
-  c.seal(ax, ay, ar * .56, { id: 'P' });
+  c.seal(ax, ay, ar * .56);
   c.text(P.accL[0][0], P.accL[0][1], 'the Perch account · today', { size: T ? .56 : .62, k: 'now' });
   c.text(P.accL[1][0], P.accL[1][1], T ? 'holds the root grant; rechecks every payment' : 'rechecks payments and contract calls', { size: T ? .42 : .5, k: 'soft' });
   if (!T) {
