@@ -473,7 +473,7 @@ body {
   <aside class="notes">
     <p>Beyond the paper: exact entry roots arrived in the stack with commit c593bac ("constrain rules to exact entry roots"), after the paper's pin f0275f4; the paper lists "rules that require their entry's root" as proposed in §12.</p>
     <p>Every node of an authorization tree is checked against the rule the payload names for it. In the guess scenario, <code>game.guess</code> calls <code>guesser.require_auth()</code>, and a loss pays the stake with the XLM token's <code>transfer(account, game, stake)</code> inside it, so the account's entry is <code>[game.guess, token.transfer]</code>. The grant has a <code>game</code> rule and a <code>transfer</code> rule. The root passes the game rule. The nested transfer passes the transfer rule only if it is from the account itself (is-self on argument 0), within the cap (argument 2 is charged to the window; in the test, 2 XLM per 100 ledgers with a 1 XLM stake, so the cap refuses a third loss), and its entry's root is exactly <code>game.guess</code> (the rule's <code>auth-root</code>). The same transfer made directly, or under another root, is refused. A win is paid by the game itself, so the account's entry holds only <code>game.guess</code> and uses no allowance. The root check names an exact contract and function; it does not inspect root arguments or other ancestors.</p>
-    <p class="src">crates/integration-tests/tests/auth_root.rs (Game::guess; signed_game_loss_and_win_and_document_round_trip; direct_under_cap_and_fabricated_game_root_are_refused; wrong_root_function_contract_omitted_root_auth_and_reordered_tree_are_refused); docs/auth-root.md; crates/perch-ir/src/doc.rs (AuthRoot); commit c593bac. bitswell/soroban-rule-core 5a689a5, crates/rule-eval/src/authorize.rs and rule.rs. Paper §12 (sections/agents.tex).</p>
+    <p class="src">crates/integration-tests/tests/auth_root.rs (Game::guess; signed_game_loss_and_win_and_document_round_trip; direct_under_cap_and_fabricated_game_root_are_refused; wrong_root_function_contract_omitted_root_auth_and_reordered_tree_are_refused; auth_free_router_keeps_entry_roots_and_caps_aggregate_across_entries); docs/auth-root.md; crates/perch-ir/src/doc.rs (AuthRoot); commit c593bac. bitswell/soroban-rule-core 5a689a5, crates/rule-eval/src/authorize.rs and rule.rs. Paper §12 (sections/agents.tex).</p>
   </aside>
 </section>
 
@@ -598,7 +598,7 @@ body {
 
 <section class="slide" data-ref="§9" data-draw="eval" aria-roledescription="slide" aria-label="Evaluation">
   <header class="head"><h2>Evaluation</h2></header>
-  <div class="stage"><svg role="img" aria-label="57 traces from the model run through the compiled account, every verdict and record matching. 11 testnet transactions through Nido's preview. A passkey-signed transfer paid 12,889 stroops. An account holding the game's grant pays 1.677 XLM a year in rent."></svg></div>
+  <div class="stage"><svg role="img" aria-label="57 traces from the model run through the natively compiled account, every verdict and record matching. 11 testnet transactions through Nido's preview. A passkey-signed transfer paid 12,889 stroops. An account holding the game's grant pays 1.677 XLM a year in rent."></svg></div>
   <aside class="notes">
     <p>RQ1, enforcement: Perch's tests run 57 Lean-generated traces through the natively compiled account and check every verdict and spending record against the model. In the recorded run each Perch verdict is the one the shop grant specifies, and the designs agreed except on the three sends after the owner removed <code>spending_limit</code>.</p>
     <p>Testnet preview: on 5 November 2026, a scripted run of Nido's preview with virtual passkeys made 11 testnet transactions, among them a game's two-rule grant, two lost guesses and a one-guardian recovery to completion; the wallet, not the chain, declined a third guess over the cap. Cost, Perch only: a passkey-signed transfer through a grant paid a testnet fee of 12,889 stroops, WebAuthn verification included; a fresh preview account holding the game's grant, after two capped transfers (3,308 bytes), pays 1.677 XLM a year in rent at the floor rate. Threats to validity: one task; one host version, recording-mode, without exact metering; signer kinds that differ by necessity; testnet resets, with envelopes not yet archived; and a game run from a branch with an uncommitted patch.</p>
@@ -1520,10 +1520,10 @@ B.nidorun = { vb: ['0 0 1600 760', '0 0 800 1200'], draw(c) {
 
 B.desk = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   const T = c.tall;
-  const st = [['arrival', 'the host', 'trusted', 'network'], ['guards', '', 'tested', 'guard'], ['look up', 'select rules', 'tested', 'list'], ['decide', 'rule-core', 'proved', 'desk'], ['ID check', 'authenticate', 'trusted', 'magnifier'], ['logbook', 'store records', 'tested', 'doc']];
+  const st = [['arrival', 'the host', 'trusted', 'network'], ['guards', '', 'tested', 'guard'], ['look up', 'select rules', 'tested', 'list'], ['decide', 'rule-core', 'proved', 'desk'], ['ID check', 'authenticate', 'tested', 'magnifier', 'verifier trusted'], ['logbook', 'store records', 'tested', 'doc']];
   const P = T ? { w: 260, h: 104, xs: () => 330, ys: i => 90 + i * 168, done: [330, 1110] }
     : { w: 190, h: 128, xs: i => 118 + i * 236, ys: () => 300, done: [1520, 300] };
-  st.forEach(([lab, paper, kind, ic], i) => {
+  st.forEach(([lab, paper, kind, ic, note], i) => {
     const x = P.xs(i), y = P.ys(i);
     c.at(150 + i * 300);
     const k = kind === 'proved' ? 'plan' : 'ink';
@@ -1540,6 +1540,7 @@ B.desk = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
     }
     if (T) c.badge(x - P.w / 2 - 20 - (kind === 'proved' ? 50 : 70), y + 8, kind, { size: .5 });
     else c.badge(x - 28 + (kind === 'proved' ? 10 : 6), y - P.h / 2 - 22, kind, { size: .54 });
+    if (note) c.text(T ? x + P.w / 2 + 12 : x, T ? y + 34 : y - P.h / 2 - 54, note, { anchor: T ? 'start' : 'middle', size: .44, k: 'soft', italic: true });
     if (i < st.length - 1) {
       if (T) c.arrow(x, y + P.h / 2 + 6, x, P.ys(i + 1) - P.h / 2 - 10, { k: 'ink', w: .7 });
       else c.arrow(x + P.w / 2 + 6, y, P.xs(i + 1) - P.w / 2 - 10, y, { k: 'ink', w: .7 });
@@ -1669,7 +1670,7 @@ B.guards = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
 
 B.stronger = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   const T = c.tall;
-  const opb = [['maturity', 'testnet pin; audit in progress; 33 mainnet transactions'], ['authoring', 'record or declare, synthesise, verify'], ['expressiveness', 'reads, quantifiers, clock windows, deny codes'], ['reach', 'rules on existing OpenZeppelin accounts']];
+  const opb = [['maturity', 'testnet pin; audit in progress; 33 mainnet transactions tested'], ['authoring', 'record or declare, synthesise, verify'], ['expressiveness', 'reads, quantifiers, clock windows, deny codes'], ['reach', 'rules on existing OpenZeppelin accounts']];
   const pr = [['limits over time', 'a window inside the rule'], ['one decision point', 'refuses before any verifier runs'], ['one card across contracts', 'one install, one removal'], ['a proved core', 'the decision, in Lean']];
   const col = (x0, y0, head, k, items, d) => {
     c.at(d);
@@ -1924,12 +1925,12 @@ B.t8 = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
 
 B.eval = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   const T = c.tall;
-  const cells = [['57', 'traces from the model', 'run through the compiled account: every verdict and record matches'], ['11', 'testnet transactions', "through Nido's preview: a two-rule game grant, two lost guesses, a one-guardian recovery"], ['12,889', 'stroops in fees', 'one passkey-signed transfer through a grant'], ['1.677', 'XLM a year in rent', 'an account holding the game grant, 3,308 bytes']];
+  const cells = [['57', 'traces from the model', 'run through the natively compiled account: every verdict and record matches'], ['11', 'testnet transactions', "through Nido's preview: a two-rule game grant, two lost guesses, a one-guardian recovery"], ['12,889', 'stroops in fees', 'one passkey-signed transfer through a grant'], ['1.677', 'XLM a year in rent', 'an account holding the game grant, 3,308 bytes']];
   const pos = T ? cells.map((_, i) => [70, 90 + i * 240]) : cells.map((_, i) => [120 + (i % 2) * 700, 140 + Math.floor(i / 2) * 240]);
   cells.forEach(([n, a, b], i) => {
     const [x, y] = pos[i];
     c.at(150 + i * 500);
-    c.text(x, y + 60, n, { anchor: 'start', font: 'disp', size: T ? 2.1 : 2.6, k: i < 2 ? 'plan' : 'brass' });
+    c.text(x, y + 60, n, { anchor: 'start', font: 'disp', size: T ? 2.1 : 2.6, k: 'brass' });
     c.text(x + (T ? 0 : 0), y + (T ? 112 : 112), a, { anchor: 'start', size: T ? .66 : .74 });
     const words = b.split(' '), lines = [];
     let cur = '';
@@ -2037,7 +2038,7 @@ B.future = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
 
 B.conclusion = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   const T = c.tall;
-  const done = [['desk', 'plan', 'one desk decides and charges the meter'], ['stamp', 'plan', 'the tracing is proved to keep three bounds'], ['list', 'ink', 'the shell is tested'], ['cross', 'stop', 'nothing is audited'], ['guard', 'ink', 'the designs differed only where the limit was removed'], ['people', 'ink', 'oz-policy-builder is ahead in maturity, authoring and expressiveness']];
+  const done = [['desk', 'ink', 'one desk decides and charges the meter'], ['stamp', 'plan', 'the tracing is proved to keep three bounds'], ['list', 'ink', 'the shell is tested'], ['cross', 'stop', 'nothing is audited'], ['guard', 'ink', 'the designs differed only where the limit was removed'], ['people', 'ink', 'oz-policy-builder is ahead in maturity, authoring and expressiveness']];
   const next = ['merge the stack', 'complete an audit', 'measure both designs with exact metering'];
   c.at(80);
   done.forEach(([ic, k, s], i) => {
