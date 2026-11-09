@@ -475,7 +475,7 @@ body {
   <div class="stage"><svg role="img" aria-label="Recorded soroban-sim run. Both accounts pay 6 XLM and refuse 5 more. With spending_limit detached, the OpenZeppelin account applies three more 6 XLM payments, 18 XLM, while Perch refuses all three. Balances fall to 76 and 94 XLM."></svg></div>
   <aside class="notes">
     <p>soroban-sim's recorded native run, commands 2 to 8. Both accounts pay the shop 6 XLM and refuse a further 5 XLM in the same window: Perch in its decision, with no verifier call, and the OpenZeppelin account in <code>spending_limit</code>. The owner removes <code>spending_limit</code> from the OpenZeppelin rule. The per-call bound then applies each of three more 6 XLM payments, 18 XLM within a few ledgers, while Perch refuses all three because its window already holds 6. Adding <code>spending_limit</code> back starts it with an empty history, as replacing a Perch rule starts an empty window.</p>
-    <p>These were the only verdicts on which the two differed. From 100 XLM, the run ends at 70 XLM for OpenZeppelin and 88 XLM for Perch.</p>
+    <p>These were the only verdicts on which the two differed. From 100 XLM, after commands 2–8 the OpenZeppelin account holds 76 XLM and Perch holds 94 XLM. After commands 9–14 the run ends at 70 XLM and 88 XLM.</p>
     <p class="src">docs/perch-paper/source/html/sections/simulation.html ("The recorded run shows where the designs differ"); source/facts/sim.json (sim-pay-xlm, sim-second-pay-xlm, sim-oz-percall-sends, sim-oz-percall-moved-xlm, sim-oz-final-xlm, sim-perch-final-xlm); source/figures/fig-sim.run.json, commands 2–8.</p>
   </aside>
 </section>
