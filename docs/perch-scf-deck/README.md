@@ -7,7 +7,7 @@ Controls:
 - Navigation: arrows, Space or Shift+Space, PageUp/PageDown, and Home/End; swipe, or tap either side of the stage.
 - `N` shows the speaker script for the slide: a few lines to say aloud, with a target time. `S` shows the slide's sources: the background and citations that used to be in the notes. `T` switches between light and dark; until then the deck follows the OS.
 - `R` records a video of the deck (below); `P` pauses and resumes a recording.
-- `#n` opens slide n, and `?still=1` shows every slide's final drawing without motion. Reduced motion has the same effect.
+- `#n` opens slide n, and `?still=1` shows every slide's final drawing without motion, and turns the recorder off. Reduced motion also stops the motion; the recorder stays available.
 
 Solid cyan in an engraved frame is what exists today. Dashed magenta with printer's marks is work the award would fund. Slide 4, marked "a cited study", draws another team's published experiment in plain ink and links the paper. Slide 5 compares where agent-payment policy is enforced; it names no product and has no status mark.
 
