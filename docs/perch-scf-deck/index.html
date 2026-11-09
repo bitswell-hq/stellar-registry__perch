@@ -1060,11 +1060,11 @@ B.perch = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   const P = T ? {
     ag: [400, 96], key: [438, 126], call: [400, 150, 400, 228], callL: [424, 196, 'start'],
     acc: [400, 460, 210], seal: [400, 324, 40], card: [250, 380, 300, 118], dec: [282, 556], decT: [318, 552],
-    accL: [400, 724], rows: [[80, 830], [80, 960]], tx: 132, chip: [400, 1100],
+    accL: [400, 724], rows: [[80, 830], [80, 960]], tx: 132,
   } : {
     ag: [190, 360], key: [232, 392], call: [252, 360, 548, 360], callL: [400, 336, 'middle'],
     acc: [780, 360, 220], seal: [780, 214, 44], card: [640, 270, 280, 120], dec: [676, 452], decT: [712, 446],
-    accL: [780, 632], rows: [[1110, 250], [1110, 410]], tx: 1160, chip: [1300, 560],
+    accL: [780, 632], rows: [[1110, 250], [1110, 410]], tx: 1160,
   };
   c.at(80);
   c.icon('agent', P.ag[0], P.ag[1], T ? 62 : 70, { k: 'ink' });
@@ -1795,7 +1795,13 @@ async function paintSlide(doc, i) {
     if (cs.display === 'none') return;
     if (n.tagName.toLowerCase() === 'svg') {
       const { img, r } = await svgImage(n, win, doc);
-      if (r.width && r.height) g.drawImage(img, r.left, r.top, r.width, r.height);
+      if (!r.width || !r.height) return;
+      const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      const m = new DOMMatrix(cs.transform === 'none' ? '' : cs.transform);
+      g.save();
+      g.translate(cx, cy); g.transform(m.a, m.b, m.c, m.d, m.e, m.f); g.translate(-cx, -cy);
+      g.drawImage(img, r.left, r.top, r.width, r.height);
+      g.restore();
       return;
     }
     if ((parseFloat(cs.borderTopWidth) || 0) > 0 || /inset/.test(cs.boxShadow)) {
@@ -1812,7 +1818,9 @@ async function paintAll(onStep) {
   const f = document.createElement('iframe');
   f.setAttribute('aria-hidden', 'true'); f.tabIndex = -1; f.title = 'Recording layout';
   f.style.cssText = `position:fixed;left:-${VW * 4}px;top:0;width:${VW}px;height:${VH}px;border:0;pointer-events:none;`;
-  f.srcdoc = SRC.replace('<html lang="en">', `<html lang="en" class="still" data-rec-frame="1" data-theme="${isDark() ? 'dark' : 'light'}">`);
+  const h = new DOMParser().parseFromString(SRC, 'text/html').documentElement;
+  h.className = 'still'; h.dataset.recFrame = '1'; h.dataset.theme = isDark() ? 'dark' : 'light';
+  f.srcdoc = '<!doctype html>\n' + h.outerHTML;
   const loaded = new Promise(r => f.addEventListener('load', r, { once: true }));
   document.body.appendChild(f);
   await loaded;
@@ -1875,7 +1883,7 @@ function release() {
   clearInterval(R.tick);
   if (R.mic) R.mic.getTracks().forEach(t => t.stop());
   if (R.stream) R.stream.getTracks().forEach(t => t.stop());
-  Object.assign(R, { g: null, mic: null, stream: null, rec: null, snaps: null, shown: null, from: null, acc: 0, since: 0, slideAt: null, scriptFor: null });
+  Object.assign(R, { run: null, g: null, mic: null, stream: null, rec: null, snaps: null, shown: null, from: null, acc: 0, since: 0, slideAt: null, scriptFor: null });
   countEl.hidden = true;
   setState('idle');
 }
@@ -1888,11 +1896,14 @@ async function startRecording() {
     return;
   }
   setState('arming');
+  const run = R.run = {};
   if (!$('#notes-panel').hidden) toggleNotes();
   if (!$('#sources-panel').hidden) toggleSources();
+  let mic;
   try {
-    R.mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
   } catch (e) {
+    if (R.run !== run) return;
     release();
     const blocked = e && (e.name === 'NotAllowedError' || e.name === 'SecurityError');
     say(blocked
@@ -1900,16 +1911,21 @@ async function startRecording() {
       : 'No microphone could be opened (' + (e && e.name || 'error') + '), so nothing was recorded. Connect one and press <kbd>R</kbd> again.', 'err');
     return;
   }
+  if (R.run !== run) { mic.getTracks().forEach(t => t.stop()); return; }
+  R.mic = mic;
   countEl.hidden = false;
   countEl.textContent = 'Preparing slides…';
+  let snaps;
   try {
-    R.snaps = await paintAll((k, n) => { countEl.textContent = `Preparing slides ${k} / ${n}`; });
+    snaps = await paintAll((k, n) => { if (R.run === run) countEl.textContent = `Preparing slides ${k} / ${n}`; });
   } catch (e) {
+    if (R.run !== run) return;
     release();
     say('The slides could not be prepared for recording (' + (e && e.message || 'error') + '). Nothing was recorded.', 'err');
     return;
   }
-  if (R.state !== 'arming') return;
+  if (R.run !== run) return;
+  R.snaps = snaps;
   const cv = document.createElement('canvas');
   cv.width = VW; cv.height = VH;
   R.g = cv.getContext('2d');
@@ -1921,7 +1937,7 @@ async function startRecording() {
   for (const k of [3, 2, 1]) {
     countEl.innerHTML = `<b>${k}</b><span>Recording starts. Press R to cancel.</span>`;
     await new Promise(r => setTimeout(r, 1000));
-    if (R.state !== 'counting') return;
+    if (R.run !== run) return;
   }
   countEl.hidden = true;
   const chunks = [];
@@ -2000,9 +2016,9 @@ async function save(chunks, mime, secs) {
   say(`Saved <b>${name}</b>: ${fmt}, 1920×1080, ${mmss(secs)}, ${(blob.size / 1048576).toFixed(1)} MB. It stays on this computer; nothing was uploaded. <a href="${R.url}" download="${name}">Download again</a>`, 'ok');
 }
 function toggleRecord() { if (R.state === 'idle') startRecording(); else stopRecording(); }
-recBtn.addEventListener('click', toggleRecord);
-$('#rp-pause').addEventListener('click', pauseRecording);
-$('#rp-stop').addEventListener('click', stopRecording);
+[[recBtn, toggleRecord], [$('#rp-pause'), pauseRecording], [$('#rp-stop'), stopRecording]].forEach(([b, fn]) => {
+  b.addEventListener('click', () => { b.blur(); fn(); });
+});
 $('#src-btn').addEventListener('click', toggleSources);
 
 slides.forEach(s => { s.setAttribute('aria-hidden', 'true'); s.inert = true; });
