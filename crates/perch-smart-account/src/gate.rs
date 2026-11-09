@@ -24,6 +24,12 @@
 //! a completion (`auth::authorize_completion`), and no other authorization
 //! may choose it.
 //!
+//! A capped rule meters the account's own transfers: a context chosen under
+//! one is refused with `RuleEvalRefused` unless its argument 0 (a
+//! `transfer`'s `from`) is the account. As a CAP-0071 delegate the account
+//! is handed the delegating account's contexts (`docs/recovery/cap-0071.md`
+//! C2), and its caps do not spend for that account.
+//!
 //! Each capped rule keeps one record. It is kept across an apply exactly
 //! when its rule keeps both its id and its cap: a changed cap, or a
 //! removed or replaced rule, drops it in `apply_doc` and `apply_scope`
@@ -89,6 +95,12 @@ pub(crate) fn authorize(
         choices.push(j as u32);
     }
     let contexts = convert::calls(e, contexts).ok_or_else(refused)?;
+    let me = convert::address(e, &e.current_contract_address()).ok_or_else(refused)?;
+    for (ctx, j) in contexts.iter().zip(&choices) {
+        if rules[*j as usize].cap.is_some() && !from_self(ctx, &me) {
+            return Err(refused());
+        }
+    }
     let signers = convert::signers(e, &payload.signers.keys()).ok_or_else(refused)?;
     let after = rule_eval::authorize(
         &rules,
@@ -120,6 +132,12 @@ pub(crate) fn authorize(
         }
     }
     Ok(())
+}
+
+/// Whether `ctx` is a call whose argument 0 is the address `me`.
+fn from_self(ctx: &rule_eval::Context, me: &[u8]) -> bool {
+    matches!(ctx, rule_eval::Context::Call { args, .. }
+        if matches!(args.first(), Some(rule_eval::Val::Address(a)) if a.as_slice() == me))
 }
 
 /// Whether two records hold the same spends and total.

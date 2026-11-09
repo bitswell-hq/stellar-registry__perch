@@ -1096,6 +1096,9 @@ pub trait PerchSmartAccount: CustomAccountInterface {
 ///   the current recovery controller, ZK adapter or pool, or for a guardian
 ///   approval on any contract (`ScopeEscalation`), on every path the same
 ///   way.
+/// - A context chosen under a capped rule, admin or scoped, is refused
+///   unless its argument 0 is this account (`RuleEvalRefused`): a cap
+///   meters the account's own transfers, as a CAP-0071 delegate too.
 /// - rule-eval's `authorize` over the stored rule sets refuses what it does
 ///   not accept: a chosen scoped rule whose stored rule carries another
 ///   scope generation than the account's, from a scoped document a

@@ -164,7 +164,12 @@ the release-stack suite, and the testnet exercise cover them.
 - Cumulative caps (`cap`) lower to a rule-eval cap, charged against a
   spending record the account keeps. They are outside the stateless model by
   construction ([`THEORY.md`](./THEORY.md) explains why this boundary is a
-  theorem); rule-core's model covers them.
+  theorem); rule-core's model covers them. On capped rules the account
+  refines that model: it additionally requires the transfer to be from the
+  account (argument 0 is the account, `gate.rs`), so its verdict there is
+  the model's or a refusal. `rule_core_documents.rs` and
+  `rule_eval_baseline.rs` compare against the model's verdicts so refined
+  (`rule_core::refined`).
 
 ## Not established
 
