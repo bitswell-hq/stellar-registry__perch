@@ -15,7 +15,7 @@ def once(old, new):
 
 once('</head>', '<link rel="stylesheet" href="nido/theme.css">\n<style>.controls label[hidden] { display: none; }</style>\n</head>')
 once('<soroban-sign-dialog id="dialog"></soroban-sign-dialog>',
-     '<soroban-sign-dialog id="dialog" preview="auto"><span slot="logo" class="nido-logo">'
+     '<soroban-sign-dialog id="dialog"><span slot="logo" class="nido-logo">'
      '<img src="nido/nest.svg" alt="" width="20" height="20">Nido</span></soroban-sign-dialog>')
 for select in ('<select id="theme">', '<select id="brand">', '<select id="preview">'):
     label = '<label>' + page.split(select, 1)[0].rsplit('<label>', 1)[-1] + select
