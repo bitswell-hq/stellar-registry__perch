@@ -1,6 +1,6 @@
 # Perch Agent Grants deck
 
-`index.html` is a 13-slide deck for The Aha Company's SCF Build Award submission (Open Track): "Perch Agent Grants: subagent budgets enforced by Stellar smart accounts". It uses the Perch deck's engine, palette and seals and is a separate deck, so `../perch-deck/` is unchanged. Everything is in one file, with inline SVG, CSS and JS and system fonts, and the deck makes no network requests. The stellar.expert, deployment-record and GitHub links are plain links.
+`index.html` is a 14-slide deck for The Aha Company's SCF Build Award submission (Open Track): "Perch Agent Grants: subagent budgets enforced by Stellar smart accounts". It uses the Perch deck's engine, palette and seals and is a separate deck, so `../perch-deck/` is unchanged. Everything is in one file, with inline SVG, CSS and JS and system fonts, and the deck makes no network requests. The stellar.expert, deployment-record and GitHub links are plain links.
 
 Controls:
 
@@ -8,11 +8,13 @@ Controls:
 - `N` shows each slide's speaker notes, which carry its sources. `T` switches between light and dark; until then the deck follows the OS.
 - `#n` opens slide n, and `?still=1` shows every slide's final drawing without motion. Reduced motion has the same effect.
 
-Solid cyan in an engraved frame is what exists today. Dashed magenta with printer's marks is work the award would fund. Slide 3, marked "a cited study", draws another team's published experiment in plain ink and links the paper; slide 4 shows where Perch keeps the cap, and slide 7 the funded agent runtime, tagged with its tranches.
+Solid cyan in an engraved frame is what exists today. Dashed magenta with printer's marks is work the award would fund. Slide 4, marked "a cited study", draws another team's published experiment in plain ink and links the paper. Slide 5 compares where agent-payment policy is enforced; it names no product and has no status mark.
+
+The arc introduces Perch (slide 2), then the problem (slides 3–4), then the contrast (slide 5). The funded design follows, a contained policy runtime (slide 6): one Cedar policy, evaluated off chain by a contained engine and compiled into the rules the account enforces on chain. Slides 7–9 cover what exists today, and slides 10–13 the funded work. Only the account's decision function is called proved; the runtime is tested, not proven.
 
 The deck is written as if release PR #168 has merged. Grants (`apply_grant`), `rule_eval::check_auth`, recovery and the verifiers are the merged baseline, and the award does not fund them. Mainnet still runs the earlier account design (`c135aca`). Deploying the account changes to mainnet is Tranche 3, deliverable 1.
 
-On the Cedar slide, only two things are stated as fact: the size measurements and the fragment proof. Everything else on it is funded work.
+On the contained policy runtime slide, the fragment proof and the size measurements (in its notes) are stated as fact; everything else Cedar-related is funded work.
 
 ## Sources
 
@@ -23,17 +25,18 @@ Tranche 1 items 2 and 3 carry the titles and scope agreed on 2026-11-09. The dec
 | Slides | Source |
 | --- | --- |
 | 1 | the SCF Build submission, Submission Title, Build Award Track, Products & Services. The dial and seal P are the Perch deck's title drawing (`../perch-deck/thumbnail.py`). |
-| 2 | the SCF Build submission, Products & Services (items 1 and 2, and the funded work) |
-| 3 | Breckenridge, Vilardell, Wang, Zhang and Juels, "I-HITL: Inalienable Human-in-the-Loop", [arXiv:2610.35835](https://arxiv.org/abs/2610.35835) (v3, 30 October 2026): p. 4 (Setup, Experiments, Key Findings), p. 5 (Results), Appendix D (p. 18). The paper names the ten models; the deck does not. |
-| 4 | the SCF Build submission, Products & Services (items 1–3); `docs/perch-paper/source/statements.json` (T8, grant target containment); `crates/perch-smart-account/src/lib.rs` (the admin rule, `apply_grant`, `remove_grant`); `docs/nido-sim/README.md` (step 1, the passkey). This is not the paper's I-HITL protocol. |
-| 5 | the SCF Build submission, Traction Evidence (`deployments/mainnet.json`, the Registry, Document compiler and Account factory on stellar.expert, Nido's factory), Products & Services, and SCF Build Tranche Deliverables ("Baseline"). Nido's counts are context reported under Nido's SCF #41 award and are not shown. |
-| 6 | The Perch deck, slide 4, and its sources (`docs/perch-paper/source/statements.json` T4 and T5, `source/facts/example.json`, `source/facts/proofs.json`). The SCF Build submission, Tranche #1 item 1 and Tranche #2 item 1. |
-| 7 | the SCF Build submission, Products & Services (the funded work), Tranche #1 items 1 and 3 (item 3 as agreed 2026-11-09) and Tranche #2 items 1 and 2; the vision paper, §08 "Agents, budgets and payments (proposed)" (`docs/perch-paper/source/papers/vision/html/sections/agents.html`). |
-| 8 | the SCF Build submission, Tranche #1 items 2 and 3, as agreed 2026-11-09. The sizes are from `docs/cedar-walkthrough/` ("Why not upload the full Cedar evaluator?", measured 2026-11-06). The fragment proof is from the vision paper, §09 "Cedar as an authoring language" (`docs/perch-paper/source/papers/vision/html/sections/cedar.html`). |
-| 9 | the SCF Build submission, Tranche #1 Deliverables and Completion Date. Items 2 and 3 are as agreed 2026-11-09. |
-| 10 | the SCF Build submission, Tranche #2 Deliverables and Completion Date |
-| 11 | the SCF Build submission, Tranche #3 Deliverables and Completion Date |
-| 12 | the SCF Build submission, Tranche #1, #2 and #3 Deliverables and Completion Dates. Tranche 1 items 2 and 3 are as agreed 2026-11-09. |
-| 13 | the SCF Build submission, Team Description and Project URL |
+| 2 | the SCF Build submission, Products & Services (items 1–3), Traction Evidence, Tranche #3 item 1; `docs/perch-paper/source/statements.json` (P1). |
+| 3 | the SCF Build submission, Products & Services (items 1 and 2, and the funded work) |
+| 4 | Breckenridge, Vilardell, Wang, Zhang and Juels, "I-HITL: Inalienable Human-in-the-Loop", [arXiv:2610.35835](https://arxiv.org/abs/2610.35835) (v3, 30 October 2026): p. 4 (Setup, Experiments, Key Findings), p. 5 (Results), Appendix D (p. 18). The paper names the ten models; the deck does not. |
+| 5 | arXiv:2610.35835, p. 4 (the emailed-code finding); the SCF Build submission, Products & Services (the funded work), Tranche #1 items 2 and 3 (as agreed 2026-11-09). The common setups are described, not named. |
+| 6 | the SCF Build submission, Products & Services (items 1 and 3, and the funded work), Tranche #1 items 1–3 (items 2 and 3 as agreed 2026-11-09) and Tranche #2 items 1 and 2; `docs/cedar-walkthrough/` ("Why not upload the full Cedar evaluator?", measured 2026-11-06); the vision paper, §08 and §09 (`docs/perch-paper/source/papers/vision/html/sections/agents.html`, `cedar.html`). |
+| 7 | the SCF Build submission, Products & Services (items 1–3); `docs/perch-paper/source/statements.json` (T8, grant target containment); `crates/perch-smart-account/src/lib.rs` (the admin rule, `apply_grant`, `remove_grant`); `docs/nido-sim/README.md` (step 1, the passkey). This is not the paper's I-HITL protocol. |
+| 8 | the SCF Build submission, Traction Evidence (`deployments/mainnet.json`, the Registry, Document compiler and Account factory on stellar.expert, Nido's factory), Products & Services, and SCF Build Tranche Deliverables ("Baseline"). Nido's counts are context reported under Nido's SCF #41 award and are not shown. |
+| 9 | The Perch deck, slide 4, and its sources (`docs/perch-paper/source/statements.json` T4 and T5, `source/facts/example.json`, `source/facts/proofs.json`). The SCF Build submission, Tranche #1 item 1 and Tranche #2 item 1. |
+| 10 | the SCF Build submission, Tranche #1 Deliverables and Completion Date. Items 2 and 3 are as agreed 2026-11-09. |
+| 11 | the SCF Build submission, Tranche #2 Deliverables and Completion Date |
+| 12 | the SCF Build submission, Tranche #3 Deliverables and Completion Date |
+| 13 | the SCF Build submission, Tranche #1, #2 and #3 Deliverables and Completion Dates. Tranche 1 items 2 and 3 are as agreed 2026-11-09. |
+| 14 | the SCF Build submission, Team Description and Project URL |
 
 Nothing in this folder has been posted or submitted.
