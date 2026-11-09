@@ -1686,7 +1686,7 @@ nav .nav-links a[href="#repro"]::after{content:" · detail";font-size:.66rem;let
     const frameBox = el('div', { class: 'sim-frame' });
     if (tries) tries.after(frameBox); else actions.after(frameBox);
     const note = tries && tries.querySelector('.sim-note');
-    if (note) note.textContent = 'Each link runs its scenario here, starting the simulation if it is not running; Ctrl- or Cmd-click opens it on the full page instead. Both accounts run every request, from a fresh ledger with the rule installed.';
+    if (note) note.textContent = `Each link runs its scenario here, starting the simulation if it is not running; Ctrl- or Cmd-click opens it on the full page instead. ${embed.dataset.note || 'Both accounts run every request, from a fresh ledger with the rule installed.'}`;
     let fold = null;
     if (fig) {
       if (!fig.querySelector('.xp-chip')) {
