@@ -95,9 +95,9 @@ def dial(sw=2.4):
 
     def icon(name, x, y, s, col):
         sc = s / 60
-        body = ''.join(ICONS[name])
+        body = ''.join(ICONS[name]).replace('class="dot"', f'fill="{col}"')
         return (f'<g transform="translate({x} {y}) scale({f2(sc)})" stroke="{col}" stroke-width="{f2(sw / sc)}" class="icon">'
-                f'{body.replace("class=\"dot\"", f"fill=\"{col}\"")}</g>')
+                f'{body}</g>')
 
     def lk(x, y, a, r):
         tx, ty = pol(r, a)
