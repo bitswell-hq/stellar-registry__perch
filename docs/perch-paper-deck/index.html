@@ -135,6 +135,21 @@ body {
 }
 .stage-links a { color: var(--plan); text-underline-offset: 3px; }
 .stage-sim { grid-template-rows: minmax(0, 1fr) auto; gap: 8px; }
+.frame-wrap { position: relative; min-height: 0; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; background: var(--paper-2); }
+.frame-wrap iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; background: transparent; }
+.frame-wrap .frame-wait { position: absolute; inset: 0; display: grid; place-items: center; color: var(--ink-2); font-size: 15px; pointer-events: none; }
+.stage-sim .frame-wrap { display: none; }
+.stage-sim.live > svg { display: none; }
+.stage-sim.live .frame-wrap { display: block; }
+.stage-sim .when-live { display: none; }
+.stage-sim.live .when-live { display: inline-block; }
+.stage-sim.live .when-still { display: none; }
+.act {
+  appearance: none; font: inherit; font-size: clamp(14px, 1.15vw, 16px); cursor: pointer; text-decoration: none; display: inline-block;
+  color: var(--paper); background: var(--brass); border: 0; border-radius: 6px; padding: 9px 18px; letter-spacing: .01em;
+}
+.act.ghost { color: var(--ink); background: transparent; border: 1px solid var(--rule); }
+.act:focus-visible { outline: 2px solid var(--plan); outline-offset: 3px; }
 
 /* title sheet */
 .slide-title {
@@ -458,7 +473,21 @@ body {
   <aside class="notes">
     <p>Beyond the paper: exact entry roots arrived in the stack with commit c593bac ("constrain rules to exact entry roots"), after the paper's pin f0275f4; the paper lists "rules that require their entry's root" as proposed in §12.</p>
     <p>Every node of an authorization tree is checked against the rule the payload names for it. In the guess scenario, <code>game.guess</code> calls <code>guesser.require_auth()</code>, and a loss pays the stake with the XLM token's <code>transfer(account, game, stake)</code> inside it, so the account's entry is <code>[game.guess, token.transfer]</code>. The grant has a <code>game</code> rule and a <code>transfer</code> rule. The root passes the game rule. The nested transfer passes the transfer rule only if it is from the account itself (is-self on argument 0), within the cap (argument 2 is charged to the window; in the test, 2 XLM per 100 ledgers with a 1 XLM stake, so the cap refuses a third loss), and its entry's root is exactly <code>game.guess</code> (the rule's <code>auth-root</code>). The same transfer made directly, or under another root, is refused. A win is paid by the game itself, so the account's entry holds only <code>game.guess</code> and uses no allowance. The root check names an exact contract and function; it does not inspect root arguments or other ancestors.</p>
-    <p class="src">crates/integration-tests/tests/auth_root.rs (Game::guess; signed_game_loss_and_win_and_document_round_trip; direct_under_cap_and_fabricated_game_root_are_refused; wrong_root_function_contract_omitted_root_auth_and_reordered_tree_are_refused); docs/auth-root.md; crates/perch-ir/src/doc.rs (AuthRoot); commit c593bac. rule-core 5a689a57 authorize.rs and rule.rs, as cited in the nested-calls fact sheet. Paper §12 (sections/agents.tex).</p>
+    <p class="src">crates/integration-tests/tests/auth_root.rs (Game::guess; signed_game_loss_and_win_and_document_round_trip; direct_under_cap_and_fabricated_game_root_are_refused; wrong_root_function_contract_omitted_root_auth_and_reordered_tree_are_refused); docs/auth-root.md; crates/perch-ir/src/doc.rs (AuthRoot); commit c593bac. bitswell/soroban-rule-core 5a689a5, crates/rule-eval/src/authorize.rs and rule.rs. Paper §12 (sections/agents.tex).</p>
+  </aside>
+</section>
+
+<section class="slide" data-beyond="Nido in soroban-sim" data-draw="nidorun" aria-roledescription="slide" aria-label="A Nido account, live">
+  <header class="head"><h2>A Nido account, live</h2></header>
+  <div class="stage stage-sim">
+    <svg role="img" aria-label="In the test building, offline: Nido's factory builds your account and a passkey stand-in holds its master key; the app's keycard is issued; in the game room a losing guess asks for the stake, and in the shop an order pulls the payment, each approved in the Nido sign dialog and checked node by node. Simulated: the passkey stand-in, the rebuilt factory, the EURC test token, the game and the shop."></svg>
+    <div class="frame-wrap"><span class="frame-wait">Loading the Nido simulation…</span><iframe data-src="../nido-sim/index.html?embed=1" title="Nido in soroban-sim: create an account, install a grant, play guess, buy a coffee"></iframe></div>
+    <p class="stage-links"><button class="act when-still" type="button" data-run>Run it here (5.3 MB)</button><button class="act ghost when-live" type="button" data-unrun>Back to the drawing</button><a class="act ghost" href="../nido-sim/index.html" target="_blank" rel="noopener">Open the Nido simulation</a></p>
+  </div>
+  <aside class="notes">
+    <p>Beyond the paper: a Nido account in soroban-sim, the way Nido creates one, running this stack's account. Creating it: a one-time setup key gives the address from Nido's factory before any passkey exists; a passkey stand-in, a software P-256 key, is created; the setup key signs a binding of the network, the factory and the passkey; <code>create_account</code> deploys the account, whose constructor installs one <code>admin</code> rule for the passkey through Perch's WebAuthn verifier. Installing the grant: the passkey signs <code>apply_scope</code> under the admin rule, for a game rule, an XLM transfer rule rooted at <code>game.guess</code> (2 XLM per 100 ledgers), a shop rule (<code>order</code>), and a test-EURC transfer rule rooted at <code>shop.order</code> (10 EURC per 100 ledgers). Using it: a losing guess is the tree <code>game.guess</code> → <code>XLM.transfer</code> (1 XLM); a win is <code>game.guess</code> alone; a coffee is <code>shop.order</code> → <code>EURC.transfer</code> (3.50 EURC). Each request opens the Nido sign dialog, whose preview runs the request in the page first; after approval the page shows each node's checks.</p>
+    <p>Simulated, and labelled so: the passkey stand-in, Nido's factory rebuilt to deploy this stack's account, the EURC test token, and the game and shop written for the demo. None of the page's contracts is a deployed one. "Run it here" loads the 5.3 MB page; its simulator compiles on the first press inside it. While the frame has focus, keys go to the frame; use the arrows at the bottom to move on.</p>
+    <p class="src">docs/nido-sim/index.html and README.md (what it runs, embedding, pins and hashes); nidohq/nido 97105a0b, contracts/factory/src/contract.rs (create_account); docs/auth-root.md; slide 10.</p>
   </aside>
 </section>
 
@@ -624,6 +653,7 @@ body {
       <li><a class="lk" href="../perch-paper/oz-policy-builder/index.html"><svg viewBox="0 0 40 40" aria-hidden="true"><rect x="4" y="8" width="14" height="24" rx="3"/><rect x="22" y="8" width="14" height="24" rx="3"/><path d="M8 16h6M8 22h6M26 16h6M26 22h6"/></svg><span class="lk-t">Perch and oz-policy-builder</span><span class="lk-s">the comparison, a source per cell</span></a></li>
       <li><a class="lk" href="../perch-paper/vision/index.html"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M6 34V14L20 5l14 9v20z"/><path d="M16 34V24h8v10"/></svg><span class="lk-t">The Perch vision</span><span class="lk-s">recovery, agents, the full account</span></a></li>
       <li><a class="lk" href="../perch-paper/sim/index.html"><svg viewBox="0 0 40 40" aria-hidden="true"><rect x="3" y="6" width="34" height="28" rx="3"/><path d="M3 13h34"/><rect x="8" y="18" width="11" height="11" rx="2"/><rect x="21" y="18" width="11" height="11" rx="2"/></svg><span class="lk-t">The simulation</span><span class="lk-s">both designs in soroban-sim</span></a></li>
+      <li><a class="lk" href="../nido-sim/index.html"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M6 34V14L20 5l14 9v20z"/><rect x="15" y="20" width="10" height="14" rx="1"/><circle cx="31" cy="30" r="3"/></svg><span class="lk-t">Nido in soroban-sim</span><span class="lk-s">an account, a grant, guess and a coffee</span></a></li>
       <li><a class="lk" href="../perch-deck/index.html"><svg viewBox="0 0 40 40" aria-hidden="true"><rect x="4" y="8" width="32" height="22" rx="3"/><path d="M20 30v5M13 35h14"/></svg><span class="lk-t">The Perch deck</span><span class="lk-s">the HTML paper's story, in slides</span></a></li>
     </ul>
     <p class="close-foot">Willem Wyndham and Elizabeth Engelman · The Aha Company</p>
@@ -1451,6 +1481,43 @@ B.tree = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   c.text(P.dirL[0], P.dirL[1], 'refused: the transfer line needs the game room', { anchor: 'start', size: .5, k: 'stop' });
 } };
 
+B.nidorun = { vb: ['0 0 1600 760', '0 0 800 1200'], draw(c) {
+  const T = c.tall;
+  const cx = T ? [205, 595, 205, 595] : [230, 610, 990, 1370], cy = T ? [300, 300, 760, 760] : [360, 360, 360, 360];
+  const tw = T ? 360 : 340, th = T ? 420 : 400;
+  const sim = (x, y, t) => c.chip(x, y, t, { k: 'soft', size: T ? .44 : .48, fill: 'hatch' });
+  c.at(60);
+  c.text(T ? 400 : 800, T ? 40 : 100, 'in the test building, offline; each signature in the Nido dialog', { size: T ? .48 : .62, k: 'soft' });
+  const tiles = [['the building is built', 'a passkey stand-in holds', 'the master key'], ['the keycard is issued', 'one install call', ''], ['the game room', 'a loss asks for the stake', ''], ['the shop', 'an order pulls the payment', '']];
+  tiles.forEach(([a, b, b2], i) => {
+    const x = cx[i], y = cy[i], d = 200 + i * 500;
+    c.at(d);
+    c.rect(x - tw / 2, y - th / 2, tw, th, { k: 'ink', rx: 10, w: .9 });
+    c.circle(x - tw / 2 + 32, y - th / 2 + 32, 16, { k: 'brass', w: .7 });
+    c.text(x - tw / 2 + 32, y - th / 2 + 33, String(i + 1), { size: .56, base: 'central', k: 'brass' });
+    const gy = y - 70;
+    if (i === 0) { c.icon('building', x - 36, gy, 70, { k: 'ink' }); c.icon('master', x + 60, gy + 14, 50, { k: 'brass' }); }
+    else if (i === 1) { const g = c.keycard(x - 80, gy - 46, 160, 96, {}); c.text(48, 60, 'the app', { anchor: 'start', size: .44, p: g, anim: 'none', d: 0 }); }
+    else {
+      const [r, k2] = i === 2 ? ['game.guess', 'XLM.transfer'] : ['shop.order', 'EURC.transfer'];
+      c.rect(x - 130, gy - 62, 170, 40, { k: 'ink', rx: 6, w: .7 });
+      c.text(x - 118, gy - 35, r, { anchor: 'start', size: .44, font: 'code' });
+      c.path(`M${x - 110} ${gy - 22}V${gy + 22}H${x - 84}`, { k: 'ink', w: .5 });
+      c.rect(x - 82, gy + 2, 194, 40, { k: 'ink', rx: 6, w: .7 });
+      c.text(x - 70, gy + 29, k2, { anchor: 'start', size: .44, font: 'code' });
+      c.check(x + 64, gy - 42, 22, { k: 'brass' });
+      c.check(x + 136, gy + 22, 22, { k: 'brass' });
+    }
+    c.text(x, y + 46, a, { size: T ? .64 : .7 });
+    c.text(x, y + 82, b, { size: T ? .48 : .52, k: 'soft' });
+    if (b2) c.text(x, y + 110, b2, { size: T ? .48 : .52, k: 'soft' });
+    c.chip(x, y + th / 2 - 44, i === 0 ? 'in Nido' : 'the Nido dialog', { k: 'brass', tk: 'brass', size: .46 });
+  });
+  c.at(2400);
+  if (T) { sim(400, 1040, 'simulated: the passkey stand-in, the rebuilt factory,'); sim(400, 1090, 'the EURC test token, the game and the shop'); }
+  else sim(800, 630, 'simulated: the passkey stand-in, the rebuilt factory, the EURC test token, the game and the shop');
+} };
+
 B.desk = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   const T = c.tall;
   const st = [['arrival', 'the host', 'trusted', 'network'], ['guards', '', 'tested', 'guard'], ['look up', 'select rules', 'tested', 'list'], ['decide', 'rule-core', 'proved', 'desk'], ['ID check', 'authenticate', 'trusted', 'magnifier'], ['logbook', 'store records', 'tested', 'doc']];
@@ -2029,6 +2096,35 @@ function sheet(s) {
   }
 }
 const svgOf = s => $('.stage > svg', s);
+function syncFrameTheme(f) {
+  try {
+    const d = f.contentDocument;
+    if (!d) return;
+    const t = root.dataset.theme || '';
+    if (t) d.documentElement.setAttribute('data-theme', t); else d.documentElement.removeAttribute('data-theme');
+  } catch (_) { /* a frame we cannot reach keeps its own theme */ }
+}
+function startFrame(f) {
+  if (!f || f.getAttribute('src')) return;
+  let src = f.dataset.src;
+  const t = root.dataset.theme;
+  if (t) src += (src.includes('?') ? '&' : '?') + 'theme=' + t;
+  f.addEventListener('load', () => { syncFrameTheme(f); const w = f.parentNode.querySelector('.frame-wait'); if (w) w.remove(); });
+  f.setAttribute('src', src);
+}
+$$('[data-run]').forEach(b => b.addEventListener('click', e => {
+  e.stopPropagation();
+  const st = b.closest('.stage-sim');
+  st.classList.add('live');
+  startFrame($('iframe', st));
+  const u = $('[data-unrun]', st); if (u) u.focus();
+}));
+$$('[data-unrun]').forEach(b => b.addEventListener('click', e => {
+  e.stopPropagation();
+  const st = b.closest('.stage-sim');
+  st.classList.remove('live');
+  const r = $('[data-run]', st); if (r) r.focus();
+}));
 function enter(s) { const b = B[s.dataset.draw]; const svg = svgOf(s); if (b && b.enter && svg) b.enter(svg); }
 function leave(s) { const b = B[s.dataset.draw]; const svg = svgOf(s); if (b && b.leave && svg) b.leave(svg); }
 
@@ -2114,6 +2210,7 @@ function toggleTheme() {
   root.dataset.theme = t;
   try { localStorage.setItem('perch-paper-deck-theme', t); } catch (_) { /* storage unavailable */ }
   syncThemeLabel();
+  $$('iframe[src]').forEach(syncFrameTheme);
 }
 try { const t = localStorage.getItem('perch-paper-deck-theme'); if (t === 'light' || t === 'dark') root.dataset.theme = t; } catch (_) { /* storage unavailable */ }
 const qs = new URLSearchParams(location.search);
@@ -2128,7 +2225,7 @@ $('#next').addEventListener('click', next);
 $('#notes-btn').addEventListener('click', toggleNotes);
 $('#theme-btn').addEventListener('click', toggleTheme);
 
-const inControl = t => t && t.closest && t.closest('a, button, input, select');
+const inControl = t => t && t.closest && t.closest('a, button, input, select, iframe, .frame-wrap');
 addEventListener('keydown', e => {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   const k = e.key, t = e.target;
