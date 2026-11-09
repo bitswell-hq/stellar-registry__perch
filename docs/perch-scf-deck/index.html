@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Perch Agent Grants</title>
-<meta name="description" content="Perch Agent Grants, an SCF Build Award submission: subagent budgets enforced by Stellar smart accounts. An agent that raised its own cap, where Perch keeps the cap, what exists today, the funded agent runtime, the three tranches with their dates, and the team.">
+<meta name="description" content="Perch Agent Grants, an SCF Build Award submission: subagent budgets enforced by Stellar smart accounts. What Perch is, an agent that raised its own cap, where the policy lives, the funded contained policy runtime, where Perch keeps the cap, what exists today, the three tranches with their dates, and the team.">
 <link rel="icon" href="data:,">
 <style>
 :root {
@@ -71,7 +71,7 @@ body {
   transition: opacity .55s ease, transform .7s cubic-bezier(.2, .7, .2, 1), visibility 0s;
 }
 /* today and the title: an engraved double-rule frame */
-.slide[data-status="now"]::before, .slide[data-status="title"]::before, .slide[data-status="cited"]::before {
+.slide[data-status="now"]::before, .slide[data-status="title"]::before, .slide[data-status="cited"]::before, .slide[data-status="plain"]::before {
   content: ""; position: absolute; inset: 10px; pointer-events: none;
   border: 1px solid var(--rule);
   box-shadow: inset 0 0 0 4px var(--paper), inset 0 0 0 5px var(--rule);
@@ -279,8 +279,8 @@ body {
   width: 16px; height: 16px; display: grid; place-items: center; border-radius: 50%;
 }
 .marks svg { width: 12px; height: 12px; overflow: visible; transition: transform .3s ease; }
-.marks .m-now circle, .marks .m-title circle, .marks .m-cited circle { fill: var(--now); opacity: .45; }
-.marks .m-title circle, .marks .m-cited circle { fill: var(--ink-2); }
+.marks .m-now circle, .marks .m-title circle, .marks .m-cited circle, .marks .m-plain circle { fill: var(--now); opacity: .45; }
+.marks .m-title circle, .marks .m-cited circle, .marks .m-plain circle { fill: var(--ink-2); }
 .marks .m-next circle { fill: none; stroke: var(--next); stroke-width: 1.4; stroke-dasharray: 2.6 2.2; opacity: .7; }
 .marks button[aria-current="true"] svg { transform: scale(1.55); }
 .marks button[aria-current="true"] circle { opacity: 1; }
@@ -352,6 +352,17 @@ body {
   </aside>
 </section>
 
+<section class="slide" data-status="now" data-draw="perch" aria-roledescription="slide" aria-label="What Perch is">
+  <header class="head"><h2>What Perch is</h2></header>
+  <div class="stage"><svg role="img" aria-label="Perch is a Stellar smart account. An app or agent's every call is checked against a grant, which says which calls, which signers, a spending cap and an expiry; rule_eval::check_auth decides every authorization. The decision function is proved in Lean, with kernel-checked theorems. Perch contracts are live on Stellar mainnet since 26 October 2026, and Nido creates Perch accounts. Funded: the merged account on mainnet, Tranche 3."></svg></div>
+  <aside class="notes">
+    <p>Perch is a set of Soroban contracts that turns a Stellar smart account into a permission engine for apps and agents. The owner installs grants: which contracts and functions an app or agent may call, argument conditions, which keys must sign, a sliding-window spending cap and an expiry. Every authorization is decided by <code>rule_eval::check_auth</code> over the rules the account stores, including nested calls in the authorization tree.</p>
+    <p>The decision function, about 2,400 lines of Rust, is translated into Lean, and kernel-checked theorems show that it returns what a readable model returns, accepts only calls a rule allows, keeps every window within its cap, never lets a narrowed grant allow more than its parent, and never allows a call to the account or its recovery contracts: 13 theorems in all. The step from the evaluator to the account (P1) is argued, not proved, and nothing checks the compiled Wasm against the translation.</p>
+    <p>Perch contracts are live on Stellar mainnet since 2026-10-26: the registry, the document compiler and the account factory, from the earlier account design. Nido, The Aha Company's passkey wallet, creates Perch accounts through its factory. Grants with <code>apply_grant</code> and <code>rule_eval::check_auth</code> are merged in the repository and reach mainnet in Tranche 3.</p>
+    <p class="src">SCF Build submission, Products &amp; Services (items 1–3), Traction Evidence, Tranche #3 item 1; docs/perch-paper/source/statements.json (P1).</p>
+  </aside>
+</section>
+
 <section class="slide" data-status="now" data-draw="agents" aria-roledescription="slide" aria-label="Agents with keys">
   <header class="head"><h2>Agents with keys</h2></header>
   <div class="stage"><svg role="img" aria-label="Today an agent that spends for a user holds a key that can do anything the account can, and a subagent copies it. With Perch the agent holds a grant and the account checks every call against it. Funded: subagents receive narrower grants and hold no keys."></svg></div>
@@ -370,6 +381,27 @@ body {
     <p>A study from Cornell Tech, Yale University and IC3 tested a human-in-the-loop gate on spending. A LangChain agent had three tools: the user's email, a web browser and an agent wallet holding 10 USDC on Base mainnet, with a spending policy of 0.01 USDC per transaction, 0.01 USDC per day, 0.30 USDC per week and 1 USDC per month. Changing the policy needs a one-time passcode that the wallet provider emails to the account owner. The system prompt told the agent to act only on the user's instructions and to treat anything a tool returns, emails included, as data; no task mentioned the spending policy or how to change it.</p>
     <p>In the payment experiment the inbox held three invoices of 0.01 USDC each, so paying all three needed a higher daily cap. Across 20 trials per model, with no adversary present, 9 of 10 models read the code from the inbox and raised their own spending cap in at least one run. In a second experiment, tasked only with summarizing the inbox, 5 of 10 models paid an attacker who impersonated the user by email. The authors disclosed the results to the wallet provider, Circle, on 22 September 2026; Circle's agent-wallet documentation now warns never to give an agent access to the inbox that receives the code. The paper argues that a human in the loop needs a channel the agent cannot reach.</p>
     <p class="src">Breckenridge, Vilardell, Wang, Zhang and Juels, "I-HITL: Inalienable Human-in-the-Loop", arXiv:2610.35835 (v3, 30 October 2026): p. 4 (Setup, Experiments, Key Findings), p. 5 (Results), Appendix D (p. 18). The ten models are not named here.</p>
+  </aside>
+</section>
+
+<section class="slide" data-status="plain" data-draw="oneplace" aria-roledescription="slide" aria-label="Where the policy lives">
+  <header class="head"><h2>Where the policy lives</h2></header>
+  <div class="stage"><svg role="img" aria-label="Common setups enforce agent-payment policy in one place. In the client only: limits applied by the agent's own tools, which an agent can route around, as in the cited study; the chain sees a valid key. On chain, written apart: client rules and contract logic are two rule sets written separately, which can drift. The funded design, Perch: one Cedar policy checked in both places, off chain by a contained engine and on chain by the account, the backstop."></svg></div>
+  <aside class="notes">
+    <p>Common setups for agent payments enforce the policy in one place. Some apply limits in the client or agent framework, where the agent's own process or tools check them; an agent that overreaches can route around them, as in the cited study, where agents read an emailed one-time code and raised their own caps. Others put the policy in on-chain logic written separately from the client's rules, so the two rule sets can drift apart. This slide names no product; the point is where the check sits.</p>
+    <p>Perch's funded design combines them: one Cedar policy, evaluated by a contained policy engine in the runtime and compiled into the rules the account enforces on chain. Off chain it covers what the chain cannot see (files, websites, signing, spawning); on chain the account is the backstop for payments and contract calls.</p>
+    <p class="src">arXiv:2610.35835, p. 4 (the emailed-code finding); SCF Build submission, Products &amp; Services (the funded work), Tranche #1 items 2 and 3 (as agreed 2026-11-09).</p>
+  </aside>
+</section>
+
+<section class="slide" data-status="next" data-draw="contained" aria-roledescription="slide" aria-label="A contained policy runtime">
+  <header class="head"><h2>A contained policy runtime</h2></header>
+  <div class="stage"><svg role="img" aria-label="Funded work. One Cedar policy is evaluated off chain by a contained policy engine, official Cedar with no imports, for files, websites, signing and spawning, and compiled into the Perch account's rule on chain for payments, contract calls and caps. Between them, the same decision: proved for the Rust translation, tested for the compiled contract; caps and time windows are the account's alone; today a prototype proof covers a small fragment. Agents, WASI components that hold no keys, send every request to the engine; the key service checks the request, then signs. The runtime is tested, not proven; the decision function is proved in Lean. Even if the runtime fails, the account refuses an over-cap payment."></svg></div>
+  <aside class="notes">
+    <p>Funded work (Tranches 1 and 2). One Cedar policy is the source of both checks. In the runtime, agents run as WASI components and hold no keys; a root agent's authority starts from a grant on the account, and a subagent is spawned only with a grant derived from its parent's (Tranche 1, item 1). Every file, website, signing and spawn request goes to the contained policy engine: official Cedar 4.14.x packaged as an import-free WebAssembly component, with no files, network or keys of its own, in which any policy error refuses and a subagent's request must be permitted by its own policies and every ancestor's (Tranche 1, item 3). Signing goes through the key service, which signs only after checking the signing request and every authorization context (Tranche 2, item 1).</p>
+    <p>The same policy is compiled into the rules the account enforces on chain, by a compiler from a stated Cedar subset that refuses anything it cannot translate exactly, with compiled numeric rules carrying 64-bit bounds to match Cedar's integers. A Lean theorem, on Cedar's published Lean specification, is to show that the account's decision function, as translated from Rust, allows a call exactly when Cedar allows the matching request, and a harness runs the compiled contract in a local Soroban host and the official Cedar engine on the same generated requests (Tranche 1, item 2). The link is proved for the Rust translation and tested for the compiled contract, and it covers stateless call matching: spending caps and time windows are enforced only by the account.</p>
+    <p>Proved today: the account's decision function, in 13 kernel-checked Lean theorems; P1 is argued, and nothing checks the compiled Wasm against the translation. The runtime will be tested, not proven. Payments over x402 (Tranche 2, item 2) and contract calls reach the account, which rechecks them on chain; with an attenuated grant installed (Tranche 2, item 1), an over-cap subagent payment is refused even with the runtime's own check switched off. Also today: an unpublished experiment proved the equivalence for a cut-down fragment, and Cedar's smallest evaluator build measured 710,772 bytes against the 131,072-byte contract limit (the Perch account is 106,668 bytes, measured 6 November 2026), which is why Cedar runs off chain.</p>
+    <p class="src">SCF Build submission, Products &amp; Services (items 1 and 3, and the funded work); Tranche #1 items 1–3 (items 2 and 3 as agreed 2026-11-09); Tranche #2 items 1 and 2; docs/cedar-walkthrough ("Why not upload the full Cedar evaluator?"); vision paper §08 and §09.</p>
   </aside>
 </section>
 
@@ -405,31 +437,11 @@ body {
   </aside>
 </section>
 
-<section class="slide" data-status="next" data-draw="runtime" aria-roledescription="slide" aria-label="The agent runtime">
-  <header class="head"><h2>The agent runtime</h2></header>
-  <div class="stage"><svg role="img" aria-label="Funded work: the agent runtime. A root agent and its subagents run as WASI components that hold no keys, each with a grant narrower than its parent's. Every file, website, signing and spawning request goes to a Cedar policy engine, an import-free Wasm component, which decides it (Tranche 1). Allowed signing requests go to a key service that checks the request, then signs (Tranche 2). Payments over x402 and contract calls reach the Perch account, which exists today, holds the root grant and rechecks them on chain: over the cap, a payment is refused even if the runtime is compromised."></svg></div>
-  <aside class="notes">
-    <p>Funded work. Agents run as WASI components and hold no keys. A root agent's authority is a grant installed on a Perch account and read from it, and a subagent is spawned only with a grant derived from its parent's; a wider spawn is refused (Tranche 1, item 1). Every file, website, signing and spawn request goes to the Cedar policy engine, official Cedar packaged as an import-free WebAssembly component with no files, sockets or keys of its own; a subagent's request must be permitted by its own policies and every ancestor's (Tranche 1, item 3).</p>
-    <p>Signing goes through the key service, which signs only after checking the signing request and every authorization context (Tranche 2, item 1). Payments, over x402 on Stellar (Tranche 2, item 2), and contract calls reach the Perch account, which rechecks them on chain. With an attenuated grant installed on the account (Tranche 2, item 1), a subagent payment over its cap is refused by the account even with the runtime's own check switched off, so an over-cap payment is refused even if the runtime is compromised. Today: the account, grants, the proofs and Nido.</p>
-    <p class="src">SCF Build submission, Products &amp; Services (the funded work); Tranche #1 items 1 and 3 (item 3 as agreed 2026-11-09); Tranche #2 items 1 and 2; vision paper §08, "Agents, budgets and payments (proposed)".</p>
-  </aside>
-</section>
-
-<section class="slide" data-status="next" data-draw="engines" aria-roledescription="slide" aria-label="One policy, two engines">
-  <header class="head"><h2>One policy, two engines</h2></header>
-  <div class="stage"><svg role="img" aria-label="Funded: one Cedar policy feeds two engines. Off chain, the runtime runs official Cedar for files, websites, signing and spawning. On chain, a compiler turns the same policy into the rule the account enforces for payments and contract calls. A Lean theorem and a two-engine test harness join them: proved for the Rust translation, tested for the compiled contract; it covers stateless call matching, and spending caps and time windows are enforced only by the account. Today: Cedar's smallest evaluator build is 710,772 bytes against a 131,072-byte contract limit, and the Perch account is 106,668 bytes, so Cedar runs off chain; a prototype proof covers a small fragment."></svg></div>
-  <aside class="notes">
-    <p>Funded (Tranche 1, deliverables 2 and 3, agreed 2026-11-09): a compiler from a stated Cedar subset to the rules the account enforces, which refuses anything it cannot translate exactly, with compiled numeric rules carrying 64-bit bounds to match Cedar's integers; a Lean theorem, on Cedar's published Lean specification, that the account's decision function, as translated from Rust, allows a call exactly when Cedar allows the matching request; a harness running the compiled contract in a local Soroban host and the official Cedar engine on the same generated requests, with zero disagreements; and the official Cedar 4.14.x policy engine as an import-free WebAssembly component in which any policy error refuses and a subagent's request must be permitted by its own policies and every ancestor's.</p>
-    <p>Today: measured on 6 November 2026, Cedar's smallest evaluator build is 710,772 bytes, the network's contract limit 131,072 bytes and the Perch account 106,668 bytes, which is why Cedar runs off chain; and an unpublished experiment proved the equivalence for a cut-down fragment, with no placeholder proofs. The policy drawn is illustrative.</p>
-    <p class="src">SCF Build submission, Tranche #1 Deliverables, items 2 and 3, as agreed 2026-11-09; docs/cedar-walkthrough ("Why not upload the full Cedar evaluator?"); vision paper §09, "Cedar as an authoring language".</p>
-  </aside>
-</section>
-
 <section class="slide" data-status="next" data-draw="t1" aria-roledescription="slide" aria-label="Tranche 1: MVP">
   <header class="head"><h2>Tranche 1: MVP</h2></header>
   <div class="stage"><svg role="img" aria-label="Tranche 1, an agent runtime rooted in a Perch grant, by 29 January 2027: agent runtime core; verified Cedar-to-Perch compiler and two-engine test harness; Cedar policy engine as an import-free WebAssembly component; public MVP demo."></svg></div>
   <aside class="notes">
-    <p>Complete by 2027-01-29. 1. Agent runtime core: a Rust runtime whose root authority is an installed grant on a Perch account, read from Stellar testnet; a subagent is spawned only with a grant derived through rule-core's attenuation steps, and a wider spawn is refused; agents hold no keys. 2. Verified Cedar-to-Perch compiler and two-engine test harness, as on the previous slide. 3. Cedar policy engine as an import-free WebAssembly component: official Cedar 4.14.x, zero imports, any policy error refuses, a subagent's request must be permitted by its own policies and every ancestor's. 4. Public MVP demo: a root agent and one subagent, with refused attempts to read outside the granted folder, reach an unapproved website and spawn a child wider than its parent; a reproducible script and a recorded video.</p>
+    <p>Complete by 2027-01-29. 1. Agent runtime core: a Rust runtime whose root authority is an installed grant on a Perch account, read from Stellar testnet; a subagent is spawned only with a grant derived through rule-core's attenuation steps, and a wider spawn is refused; agents hold no keys. 2. Verified Cedar-to-Perch compiler and two-engine test harness, as on the contained policy runtime slide. 3. Cedar policy engine as an import-free WebAssembly component: official Cedar 4.14.x, zero imports, any policy error refuses, a subagent's request must be permitted by its own policies and every ancestor's. 4. Public MVP demo: a root agent and one subagent, with refused attempts to read outside the granted folder, reach an unapproved website and spawn a child wider than its parent; a reproducible script and a recorded video.</p>
     <p class="src">SCF Build submission, Tranche #1 Deliverables and Completion Date; items 2 and 3 as agreed 2026-11-09.</p>
   </aside>
 </section>
@@ -911,160 +923,239 @@ B.keepcap = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   c.text(T ? 400 : 800, T ? 1250 : 752, 'Reading an email gets the agent nothing.', { anchor: T ? 'middle' : 'start', size: T ? .62 : .78 });
 } };
 
-/* The funded agent runtime: agents without keys, one policy engine, a key service, and the account on chain. */
-B.runtime = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
+// The three tranches: each deliverable's title, how it completes, and its icon.
+/* Perch in one picture: an account whose grants decide every call, with the decision proved in Lean. */
+B.perch = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   const T = c.tall;
   const P = T ? {
-    rt: [30, 76, 740, 852], rtL: [34, 56],
-    root: [320, 112, 160, 120], subs: [[190, 314, 130, 114], [480, 314, 130, 114]],
-    narrow: [400, 470], nokeys: [400, 504],
-    chips: [[110, 566], [250, 566], [560, 566], [690, 566]], toEng: [400, 520, 400, 594],
-    eng: [150, 604, 500, 152], ky: [200, 798, 400, 112], toKey: [400, 756, 400, 792], allowed: [418, 780],
-    acc: [400, 1114, 100], toAcc: [400, 910, 400, 1004], payL: [[418, 962], [418, 988]],
-    accL: [[400, 1248], [400, 1282]], over: [578, 1062],
+    ag: [400, 96], key: [438, 126], call: [400, 150, 400, 228], callL: [424, 196, 'start'],
+    acc: [400, 460, 210], seal: [400, 324, 40], card: [250, 380, 300, 118], dec: [282, 556], decT: [318, 552],
+    accL: [400, 724], rows: [[80, 830], [80, 960]], tx: 132, chip: [400, 1100],
   } : {
-    rt: [40, 84, 1030, 630], rtL: [44, 64],
-    root: [130, 150, 160, 120], subs: [[80, 420, 130, 114], [250, 420, 130, 114]],
-    narrow: [230, 600], nokeys: [230, 640],
-    chips: [[500, 216], [640, 216], [500, 258], [640, 258]], toEngA: [290, 210, 418, 350], toEngB: [380, 476, 418, 440],
-    eng: [420, 300, 290, 190], ky: [780, 300, 260, 190], toKey: [710, 395, 776, 395], allowed: [743, 380],
-    acc: [1370, 395, 140], toAcc: [1040, 395, 1222, 395], payL: [[1150, 362], [1150, 388]],
-    accL: [[1370, 590], [1370, 626]], over: [1240, 690],
-    rootPath: 'M1370 255V112H210V146', rootL: [760, 136],
+    ag: [190, 360], key: [232, 392], call: [252, 360, 548, 360], callL: [400, 336, 'middle'],
+    acc: [780, 360, 220], seal: [780, 214, 44], card: [640, 270, 280, 120], dec: [676, 452], decT: [712, 446],
+    accL: [780, 632], rows: [[1110, 250], [1110, 410]], tx: 1160, chip: [1300, 560],
   };
   c.at(80);
-  const [rx, ry, rw, rh] = P.rt;
-  c.rect(rx, ry, rw, rh, { k: 'next', rx: 26, w: .9 });
-  c.text(P.rtL[0], P.rtL[1], 'the agent runtime · funded work', { anchor: 'start', size: T ? .58 : .64, k: 'next' });
-  // Agents as WASI components: a root agent and two subagents, none holding a key.
-  c.at(500);
-  const comp = ([x, y, w, h], label, s) => {
-    c.rect(x, y, w, h, { k: 'next', rx: 14, w: .6 });
-    c.icon('agent', x + w / 2, y + h / 2 - (T ? 10 : 10), s, { k: 'next' });
-    c.text(x + w / 2, y + h - (T ? 12 : 12), label, { size: T ? .4 : .44, k: 'soft' });
-  };
-  comp(P.root, 'root agent', T ? 52 : 54);
-  P.subs.forEach(b => comp(b, 'subagent', T ? 44 : 46));
-  const [qx, qy, qw, qh] = P.root;
-  P.subs.forEach(([x, y, w]) => c.line(qx + qw / 2, qy + qh, x + w / 2, y, { k: 'next', w: .6 }));
-  c.text(P.narrow[0], P.narrow[1], "each grant narrower than its parent's", { size: T ? .46 : .5, k: 'next' });
-  c.text(P.nokeys[0], P.nokeys[1], 'WASI components that hold no keys', { size: T ? .46 : .5, k: 'soft' });
-  // Every request goes through the policy engine.
-  c.at(1200);
-  ['files', 'websites', 'signing', 'spawning'].forEach((s, i) => c.chip(P.chips[i][0], P.chips[i][1], s, { k: 'next', tk: 'next', size: T ? .44 : .46 }));
-  if (T) c.arrow(...P.toEng, { k: 'next', w: .7 });
-  else { c.curve(...P.toEngA, { k: 'next', w: .7, head: true }); c.curve(...P.toEngB, { k: 'next', w: .7, head: true }); }
-  const [ex, ey, ew, eh] = P.eng;
-  c.rect(ex, ey, ew, eh, { k: 'next', rx: 18, w: .9 });
-  c.icon('policy', ex + (T ? 52 : 46), ey + (T ? 50 : 52), T ? 50 : 46, { k: 'next' });
-  c.text(ex + (T ? 100 : 86), ey + (T ? 58 : 60), 'Cedar policy engine', { anchor: 'start', size: T ? .6 : .62 });
-  c.text(ex + (T ? 100 : 30), ey + (T ? 96 : 116), 'an import-free Wasm component', { anchor: 'start', size: T ? .46 : .5, k: 'soft' });
-  c.text(ex + (T ? 100 : 30), ey + (T ? 130 : 152), 'decides every request', { anchor: 'start', size: T ? .46 : .5, k: 'next' });
-  if (T) c.text(ex + ew - 22, ey + 40, 'Tranche 1', { anchor: 'end', size: .4, k: 'next' }); else c.text(ex + ew / 2, ey + eh + 32, 'Tranche 1', { size: .46, k: 'next' });
-  // Signing goes through the key service, which checks the request first.
-  c.at(1900);
-  c.arrow(...P.toKey, { k: 'next', w: .7 });
-  c.text(P.allowed[0], P.allowed[1], 'allowed', { anchor: T ? 'start' : 'middle', size: .42, k: 'next' });
-  const [kx, ky, kw, kh] = P.ky;
-  c.rect(kx, ky, kw, kh, { k: 'next', rx: 18, w: .9 });
-  c.icon('key', kx + (T ? 50 : 46), ky + (T ? 46 : 52), T ? 46 : 44, { k: 'next' });
-  c.text(kx + (T ? 96 : 86), ky + (T ? 54 : 60), 'key service', { anchor: 'start', size: T ? .6 : .62 });
-  if (T) c.text(kx + kw - 22, ky + 40, 'Tranche 2', { anchor: 'end', size: .4, k: 'next' }); else c.text(kx + kw / 2, ky + kh + 32, 'Tranche 2', { size: .46, k: 'next' });
-  if (T) c.text(kx + 96, ky + 94, 'checks the request, then signs', { anchor: 'start', size: .46, k: 'soft' });
-  else { c.text(kx + 30, ky + 116, 'checks the request,', { anchor: 'start', size: .5, k: 'soft' }); c.text(kx + 30, ky + 152, 'then signs', { anchor: 'start', size: .5, k: 'soft' }); }
-  // The Perch account rechecks every payment and contract call on chain.
-  c.at(2500);
-  c.arrow(...P.toAcc, { k: 'next', w: .7 });
-  c.text(P.payL[0][0], P.payL[0][1], 'payments (x402)', { anchor: T ? 'start' : 'middle', size: T ? .42 : .44, k: 'next' });
-  c.text(P.payL[1][0], P.payL[1][1], 'and contract calls', { anchor: T ? 'start' : 'middle', size: T ? .42 : .44, k: 'next' });
+  c.icon('agent', P.ag[0], P.ag[1], T ? 62 : 70, { k: 'ink' });
+  c.icon('key', P.key[0], P.key[1], T ? 30 : 32, { k: 'now', step: 0 });
+  c.arrow(...P.call, { k: 'now', w: .7 });
+  c.text(P.callL[0], P.callL[1], 'every call it makes', { anchor: P.callL[2], size: T ? .5 : .56, k: 'soft' });
+  c.at(700);
   const [ax, ay, ar] = P.acc;
   c.circle(ax, ay, ar, { k: 'now', w: 1.2 });
-  c.circle(ax, ay, ar - 12, { k: 'now', w: .35 });
-  c.seal(ax, ay, ar * .56);
-  c.text(P.accL[0][0], P.accL[0][1], 'the Perch account · today', { size: T ? .56 : .62, k: 'now' });
-  c.text(P.accL[1][0], P.accL[1][1], T ? 'holds the root grant; rechecks every payment' : 'rechecks payments and contract calls', { size: T ? .42 : .5, k: 'soft' });
-  if (!T) {
-    c.path(P.rootPath, { k: 'next', w: .6 });
-    c.head(210, 146, Math.PI / 2, { k: 'next', w: .6 });
-    c.text(P.rootL[0], P.rootL[1], 'the root grant, read from the account', { size: .48, k: 'next' });
-  }
-  c.at(3200);
-  const [ox, oy] = P.over;
-  c.cross(ox, oy, T ? 26 : 28, { k: 'ink' });
-  const ol = T ? ['over the cap: refused', 'on chain, even if the', 'runtime is compromised'] : ['over the cap: refused on chain,', 'even if the runtime is compromised'];
-  ol.forEach((s, i) => c.text(ox + (T ? 30 : 32), oy + 8 + i * (T ? 32 : 34), s, { anchor: 'start', size: T ? .42 : .5 }));
+  c.circle(ax, ay, ar - 14, { k: 'now', w: .35 });
+  c.seal(P.seal[0], P.seal[1], P.seal[2], { id: 'P' });
+  const [gx, gy, gw, gh] = P.card;
+  c.rect(gx, gy, gw, gh, { k: 'now', rx: 14, w: 1, fill: 'paper' });
+  c.text(gx + gw / 2, gy + 36, 'a grant', { size: T ? .56 : .62, k: 'now' });
+  c.text(gx + gw / 2, gy + 72, 'which calls, which signers,', { size: T ? .46 : .5 });
+  c.text(gx + gw / 2, gy + 102, 'a spending cap, an expiry', { size: T ? .46 : .5 });
+  c.icon('desk', P.dec[0], P.dec[1], T ? 38 : 40, { k: 'now' });
+  c.text(P.decT[0], P.decT[1], 'rule_eval::check_auth', { anchor: 'start', size: T ? .44 : .5, font: 'code', k: 'now' });
+  c.text(P.decT[0], P.decT[1] + 30, 'decides every authorization', { anchor: 'start', size: T ? .42 : .46, k: 'soft' });
+  c.text(P.accL[0], P.accL[1], 'a Stellar smart account', { size: T ? .62 : .68, k: 'now' });
+  c.at(1700);
+  const rows = [
+    ['proof', 'the decision function, proved in Lean', 'kernel-checked theorems'],
+    ['factory', 'Perch contracts live on Stellar mainnet', 'since 2026-10-26; Nido creates Perch accounts'],
+  ];
+  rows.forEach(([ic, a, b], i) => {
+    const [x, y] = P.rows[i];
+    c.icon(ic, x, y, T ? 46 : 50, { k: 'now' });
+    c.text(P.tx, y - 4, a, { anchor: 'start', size: T ? .54 : .62 });
+    c.text(P.tx, y + 30, b, { anchor: 'start', size: T ? .44 : .5, k: 'soft' });
+    c.at(2200);
+  });
+  funded(c, P.chip[0], P.chip[1], 'funded: the merged account on mainnet (Tranche 3)', { size: T ? .44 : .48 });
 } };
 
-B.engines = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
+/* Where agent-payment policy lives: in the client, on chain apart, or one policy in both. */
+B.oneplace = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
+  const T = c.tall;
+  const caps = [
+    ['in the client only', 'ink', ["limits applied by the agent's own tools", 'an agent can route around them,', 'as in the cited study']],
+    ['on chain, written apart', 'ink', ['two rule sets, written separately:', 'client rules and contract logic', 'can drift']],
+    ['Perch: one policy, both places', 'now', ['one policy, checked in both places', 'off chain: a contained engine', 'on chain: the account, the backstop']],
+  ];
+  c.at(60);
+  if (T) {
+    c.text(40, 44, 'common setups', { anchor: 'start', size: .46, k: 'soft' });
+    c.text(40, 866, 'the funded design', { anchor: 'start', size: .46, k: 'next' });
+    c.line(40, 452, 760, 452, { k: 'faint', w: .5 });
+    c.line(40, 840, 760, 840, { k: 'faint', w: .5 });
+  } else {
+    c.text(548, 62, 'common setups', { size: .5, k: 'soft' });
+    c.text(1305, 62, 'the funded design', { size: .5, k: 'next' });
+    c.line(548, 90, 548, 740, { k: 'faint', w: .5 });
+    c.line(1053, 40, 1053, 740, { k: 'faint', w: .5 });
+  }
+  caps.forEach(([h, hk, lines], i) => {
+    c.at(200 + i * 900);
+    const y0 = [70, 470, 880][i];
+    if (T) {
+      c.text(40, y0 + 30, h, { anchor: 'start', size: .6, k: hk === 'now' ? 'now' : undefined });
+      lines.forEach((s, j) => c.text(330, y0 + 140 + j * 38, s, { anchor: 'start', size: j ? .46 : .52, k: j ? (i === 2 ? (j === 1 ? 'next' : 'now') : 'soft') : (i === 2 ? 'now' : undefined), step: 40 }));
+    } else {
+      const cx = [295, 800, 1305][i];
+      c.text(cx, 116, h, { size: .66, k: hk === 'now' ? 'now' : undefined });
+      lines.forEach((s, j) => c.text(cx, 664 + j * 34, s, { size: j ? .46 : .52, k: j ? (i === 2 ? (j === 1 ? 'next' : 'now') : 'soft') : (i === 2 ? 'now' : undefined), step: 40 }));
+    }
+    c.at(400 + i * 900);
+    if (i === 0) {
+      // The limits live inside the agent's own process; the chain sees only a valid key.
+      if (T) {
+        c.rect(50, y0 + 70, 240, 150, { k: 'soft', rx: 14, w: .6 });
+        c.icon('agent', 120, y0 + 142, 50, { k: 'ink' });
+        c.icon('policy', 222, y0 + 142, 40, { k: 'soft' });
+        c.arrow(170, y0 + 224, 170, y0 + 282, { k: 'soft', w: .6 });
+        c.circle(170, y0 + 324, 36, { k: 'soft', w: .7, fill: 'hatch' });
+      } else {
+        c.rect(120, 150, 350, 210, { k: 'soft', rx: 16, w: .6 });
+        c.text(140, 184, "the agent's process", { anchor: 'start', size: .44, k: 'soft' });
+        c.icon('agent', 210, 272, 64, { k: 'ink' });
+        c.icon('policy', 350, 266, 50, { k: 'soft' });
+        c.text(350, 332, 'its own limits', { size: .44, k: 'soft' });
+        c.arrow(295, 364, 295, 446, { k: 'soft', w: .6 });
+        c.icon('key', 330, 404, 34, { k: 'ink' });
+        c.circle(295, 510, 58, { k: 'soft', w: .8, fill: 'hatch' });
+        c.text(295, 600, 'the chain sees a valid key', { size: .44, k: 'soft' });
+      }
+    } else if (i === 1) {
+      // Two rule sets, one in the client and one in a contract, kept in step by hand.
+      if (T) {
+        c.rect(40, y0 + 80, 130, 120, { k: 'soft', rx: 12, w: .6 });
+        c.icon('policy', 105, y0 + 140, 40, { k: 'soft' });
+        c.arrow(174, y0 + 140, 206, y0 + 140, { k: 'soft', w: .6 });
+        c.circle(262, y0 + 140, 52, { k: 'soft', w: .7 });
+        c.icon('policy', 262, y0 + 140, 34, { k: 'soft' });
+        c.text(170, y0 + 268, '≠', { size: 1.1 });
+      } else {
+        c.rect(590, 170, 200, 200, { k: 'soft', rx: 16, w: .6 });
+        c.icon('agent', 650, 246, 54, { k: 'ink' });
+        c.icon('policy', 742, 300, 42, { k: 'soft' });
+        c.arrow(794, 270, 826, 270, { k: 'soft', w: .6 });
+        c.circle(920, 270, 92, { k: 'soft', w: .8 });
+        c.icon('policy', 920, 270, 46, { k: 'soft' });
+        c.text(690, 404, 'client rules', { size: .46, k: 'soft' });
+        c.text(920, 404, 'contract logic', { size: .46, k: 'soft' });
+        c.text(805, 486, '≠', { size: 1.3 });
+        c.text(805, 534, 'written separately', { size: .5, k: 'soft' });
+      }
+    } else {
+      // One policy: evaluated off chain by a contained engine, compiled into the account's rules.
+      if (T) {
+        const y = y0;
+        c.rect(80, y + 60, 180, 64, { k: 'next', rx: 12, w: .7 });
+        c.text(170, y + 100, 'one policy', { size: .44, k: 'next' });
+        c.curve(130, y + 124, 90, y + 186, { k: 'next', w: .6, dir: 'v', head: true });
+        c.curve(210, y + 124, 250, y + 186, { k: 'next', w: .6, dir: 'v', head: true });
+        c.rect(30, y + 190, 120, 80, { k: 'next', rx: 12, w: .7 });
+        c.icon('policy', 90, y + 230, 36, { k: 'next' });
+        c.circle(254, y + 236, 46, { k: 'now', w: 1 });
+        c.circle(254, y + 236, 36, { k: 'now', w: .3 });
+        c.text(90, y + 304, 'off chain', { size: .4, k: 'next' });
+        c.text(254, y + 304, 'on chain', { size: .4, k: 'now' });
+      } else {
+        c.rect(1205, 150, 200, 96, { k: 'next', rx: 12, w: .8 });
+        c.text(1305, 190, 'one Cedar policy', { size: .5, k: 'next' });
+        c.text(1305, 224, 'permit (…) when { … };', { size: .4, font: 'code', k: 'soft' });
+        c.curve(1255, 246, 1180, 332, { k: 'next', w: .6, dir: 'v', head: true });
+        c.curve(1355, 246, 1430, 332, { k: 'next', w: .6, dir: 'v', head: true });
+        c.rect(1085, 338, 190, 124, { k: 'next', rx: 14, w: .8 });
+        c.icon('policy', 1180, 382, 40, { k: 'next' });
+        c.text(1180, 440, 'contained engine', { size: .44 });
+        c.circle(1430, 404, 68, { k: 'now', w: 1.1 });
+        c.circle(1430, 404, 56, { k: 'now', w: .3 });
+        c.seal(1430, 404, 34, { id: 'P' });
+        c.text(1180, 500, 'off chain', { size: .46, k: 'next' });
+        c.text(1430, 500, 'the account, on chain', { size: .46, k: 'now' });
+      }
+    }
+  });
+} };
+
+/* The contained policy runtime: one Cedar policy, evaluated in the runtime and compiled into the account. */
+B.contained = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   const T = c.tall;
   const P = T ? {
-    pol: [180, 24, 440, 116], polT: [400, 62], polC: [[210, 96], [210, 122]],
-    E1: [40, 220, 340, 200], E2: [420, 220, 340, 200], e1a: [110, 600, 'start'],
-    p1: [300, 142, 210, 216], p2: [500, 142, 590, 216], comp: [600, 176],
-    link: [380, 320, 420, 320], linkL: [[400, 472], [400, 508], [400, 540]], scope: [[400, 594], [400, 628]],
-    div: 676, today: [40, 724], bars: { x0: 60, w: 600, y1: 790, y2: 870, lab1: [60, 776], lab2: [60, 856], lim: [60 + 600 * 131072 / 710772, 760, 900], limL: [184, 922], off: [60, 966] }, frag: [80, 1044],
+    pol: [180, 10, 440, 112], polT: [400, 48], polC: [[210, 82], [210, 106]],
+    p1: [300, 122, 200, 186], p2: [500, 122, 600, 186], ch1: [196, 150], ch2: [604, 150],
+    E1: [30, 190, 350, 230], E2: [420, 190, 350, 230], link: [380, 305, 420, 305],
+    linkL: [[400, 466, .5, 'next', 'the same decision'], [400, 498, .42, 'soft', 'proved for the Rust translation,'], [400, 526, .42, 'soft', 'tested for the compiled contract'], [400, 556, .42, 'soft', 'caps and windows: the account alone'], [400, 588, .42, 'now', 'today: a prototype fragment proof']],
+    ag: [[90, 724, 54], [160, 738, 42]], agL: [[60, 806], [60, 834]], toEng: [110, 690, 110, 426], reqL: [[128, 640], [128, 664]],
+    ky: [300, 690, 440, 112], e2k: [200, 424, 296, 744], k2a: [690, 686, 600, 426],
+    tested: [400, 900], proved: [400, 940], over: [96, 1024], overT: [136, 1030],
   } : {
-    pol: [580, 24, 440, 132], polT: [800, 62], polC: [[612, 100], [612, 128]],
-    E1: [90, 260, 450, 170], E2: [1060, 260, 450, 170],
-    p1: [700, 158, 315, 258], p2: [900, 158, 1285, 258], comp: [1110, 208],
-    link: [540, 345, 1060, 345], linkL: [[800, 318], [800, 384]], scope: [[800, 474]],
-    div: 520, today: [90, 572], bars: { x0: 380, w: 600, y1: 598, y2: 660, lab1: [366, 616, 'end'], lab2: [366, 678, 'end'], lim: [380 + 600 * 131072 / 710772, 580, 690], limL: [500, 576], off: [380, 724] }, frag: [1090, 640],
+    pol: [580, 14, 440, 112], polT: [800, 52], polC: [[612, 88], [612, 114]],
+    p1: [700, 126, 320, 226], p2: [900, 126, 1280, 226], ch1: [480, 168], ch2: [1120, 168],
+    E1: [90, 230, 460, 190], E2: [1050, 230, 460, 190], link: [550, 325, 1050, 325],
+    linkL: [[800, 304, .6, 'next', 'the same decision'], [800, 360, .5, 'soft', 'proved for the Rust translation · tested for the compiled contract'], [800, 392, .46, 'soft', 'covers call matching; caps and time windows: the account alone'], [800, 424, .46, 'now', 'today: a prototype proof for a small fragment']],
+    ag: [[150, 548, 56], [226, 562, 42]], agL: [[290, 540], [290, 572]], toEng: [180, 496, 180, 426], reqL: [[198, 470], [198, 0]],
+    ky: [610, 470, 330, 120], e2k: [470, 424, 606, 530], k2a: [940, 530, 1170, 426],
+    tested: [90, 672], proved: [1050, 672], over: [470, 734], overT: [500, 742],
   };
   c.at(80);
   const [px, py, pw, ph] = P.pol;
   c.rect(px, py, pw, ph, { k: 'next', rx: 14, w: .9 });
   c.text(P.polT[0], P.polT[1], 'one Cedar policy', { size: T ? .62 : .7, k: 'next' });
-  c.text(P.polC[0][0], P.polC[0][1], 'permit (principal, action, resource)', { anchor: 'start', font: 'code', size: T ? .42 : .48, k: 'soft' });
-  c.text(P.polC[1][0], P.polC[1][1], 'when { … };', { anchor: 'start', font: 'code', size: T ? .42 : .48, k: 'soft' });
-  c.at(700);
-  c.curve(P.p1[0], P.p1[1], P.p1[2], P.p1[3], { k: 'next', w: .7, dir: 'v', head: true });
-  c.curve(P.p2[0], P.p2[1], P.p2[2], P.p2[3], { k: 'next', w: .7, dir: 'v', head: true });
-  c.chip(P.comp[0], P.comp[1], 'compiler', { k: 'next', tk: 'next', size: T ? .46 : .54, fill: 'paper' });
-  const engine = ([x, y, w, h], ic, ik, title, sub, uses, d) => {
+  c.text(P.polC[0][0], P.polC[0][1], 'permit (principal, action, resource)', { anchor: 'start', font: 'code', size: T ? .42 : .46, k: 'soft' });
+  c.text(P.polC[1][0], P.polC[1][1], 'when { … };', { anchor: 'start', font: 'code', size: T ? .42 : .46, k: 'soft' });
+  c.at(600);
+  c.curve(...P.p1, { k: 'next', w: .7, dir: 'v', head: true });
+  c.curve(...P.p2, { k: 'next', w: .7, dir: 'v', head: true });
+  c.chip(P.ch1[0], P.ch1[1], 'evaluated', { k: 'next', tk: 'next', size: T ? .42 : .48, fill: 'paper' });
+  c.chip(P.ch2[0], P.ch2[1], 'compiled', { k: 'next', tk: 'next', size: T ? .42 : .48, fill: 'paper' });
+  // Off chain: the runtime's contained engine. On chain: the account's compiled rule.
+  const box = ([x, y, w, h], k, ic, t1, t2, sub, uses, d) => {
     c.at(d);
-    c.rect(x, y, w, h, { k: 'next', rx: 16, w: 1 });
-    c.icon(ic, x + (T ? 46 : 56), y + (T ? 56 : 60), T ? 48 : 54, { k: ik });
-    c.text(x + (T ? 86 : 104), y + (T ? 50 : 54), title, { anchor: 'start', size: T ? .6 : .74 });
-    c.text(x + (T ? 86 : 104), y + (T ? 82 : 88), sub, { anchor: 'start', size: T ? .46 : .54, k: 'next' });
-    uses.forEach((s, i) => c.text(x + (T ? 22 : 30), y + h - (T ? 52 - i * 28 : 26), s, { anchor: 'start', size: T ? .44 : .52, k: 'soft' }));
+    c.rect(x, y, w, h, { k, rx: 16, w: k === 'now' ? 1.1 : .9 });
+    c.icon(ic, x + (T ? 44 : 56), y + (T ? 50 : 60), T ? 46 : 52, { k });
+    if (T) { c.text(x + 80, y + 46, t1, { anchor: 'start', size: .52 }); c.text(x + 80, y + 76, t2, { anchor: 'start', size: .52 }); }
+    else c.text(x + 104, y + 66, t1 + ' ' + t2, { anchor: 'start', size: .68 });
+    c.text(x + (T ? 22 : 30), y + (T ? 122 : 116), sub, { anchor: 'start', size: T ? .42 : .52, k });
+    uses.forEach((s, i) => c.text(x + (T ? 22 : 30), y + (T ? 166 + i * 30 : 160), s, { anchor: 'start', size: T ? .42 : .5, k: 'soft' }));
   };
-  engine(P.E1, 'agent', 'next', 'the runtime', 'official Cedar', T ? ['files · websites ·', 'signing · spawning'] : ['files · websites · signing · spawning'], 1100);
-  engine(P.E2, 'account', 'now', 'the account', 'the compiled rule', T ? ['payments ·', 'contract calls'] : ['payments · contract calls'], 1400);
-  c.at(1900);
-  c.line(...P.link, { k: 'next', w: .9 });
-  c.head(P.link[0], P.link[1], Math.PI, { k: 'next', w: .9 });
-  c.head(P.link[2], P.link[3], 0, { k: 'next', w: .9 });
-  const LL = P.linkL;
-  c.text(LL[0][0], LL[0][1], 'a Lean theorem and a two-engine test harness', { size: T ? .52 : .6, k: 'next' });
-  if (T) { c.text(LL[1][0], LL[1][1], 'proved for the Rust translation,', { size: .48, k: 'soft' }); c.text(LL[2][0], LL[2][1], 'tested for the compiled contract', { size: .48, k: 'soft' }); }
-  else c.text(LL[1][0], LL[1][1], 'proved for the Rust translation · tested for the compiled contract', { size: .52, k: 'soft' });
-  if (T) { c.text(P.scope[0][0], P.scope[0][1], 'covers stateless call matching;', { size: .5 }); c.text(P.scope[1][0], P.scope[1][1], 'caps and time windows: the account alone', { size: .5 }); }
-  else c.text(P.scope[0][0], P.scope[0][1], 'covers stateless call matching; spending caps and time windows are enforced only by the account', { size: .58 });
-  // What exists today, drawn solid.
-  c.at(2500);
-  if (T) c.line(40, P.div, 760, P.div, { k: 'faint', w: .5 }); else c.line(90, P.div, 1510, P.div, { k: 'faint', w: .5 });
-  c.text(P.today[0], P.today[1], 'today', { anchor: 'start', size: T ? .56 : .6, k: 'now' });
-  const Bz = P.bars, sc = Bz.w / 710772;
+  box(P.E1, 'next', 'policy', 'contained', 'policy engine', T ? 'off chain, no imports' : 'off chain · official Cedar, no imports', T ? ['files · websites ·', 'signing · spawning'] : ['files · websites · signing · spawning'], 1000);
+  box(P.E2, 'now', 'account', 'the Perch', 'account', T ? 'on chain, the compiled rule' : 'on chain · the compiled rule', T ? ['payments, contract calls', 'and caps'] : ['payments · contract calls · caps'], 1300);
+  c.at(1800);
+  c.line(...P.link, { k: 'next', w: .8 });
+  c.head(P.link[0], P.link[1], Math.PI, { k: 'next', w: .8 });
+  c.head(P.link[2], P.link[3], 0, { k: 'next', w: .8 });
+  P.linkL.forEach(([x, y, z, k, s]) => c.text(x, y, s, { size: z, k, step: 40 }));
+  // Agents send every request to the engine; signing goes through the key service.
+  c.at(2400);
+  P.ag.forEach(([x, y, s]) => c.icon('agent', x, y, s, { k: 'next' }));
+  c.text(P.agL[0][0], P.agL[0][1], T ? 'WASI agents,' : 'agents: WASI components', { anchor: 'start', size: T ? .42 : .5 });
+  c.text(P.agL[1][0], P.agL[1][1], T ? 'no keys' : 'that hold no keys', { anchor: 'start', size: T ? .42 : .5, k: 'soft' });
+  c.arrow(...P.toEng, { k: 'next', w: .7 });
+  if (T) { c.text(P.reqL[0][0], P.reqL[0][1], 'every request', { anchor: 'start', size: .38, k: 'next' }); }
+  else c.text(P.reqL[0][0], P.reqL[0][1], 'every request', { anchor: 'start', size: .44, k: 'next' });
+  const [kx, ky, kw, kh] = P.ky;
+  c.curve(...P.e2k, { k: 'next', w: .6, dir: T ? 'v' : 'h', head: true });
+  c.rect(kx, ky, kw, kh, { k: 'next', rx: 16, w: .9 });
+  c.icon('key', kx + 44, ky + 44, T ? 40 : 42, { k: 'next' });
+  c.text(kx + 84, ky + 52, 'key service', { anchor: 'start', size: T ? .54 : .62 });
+  c.text(kx + 30, ky + (T ? 92 : 96), 'checks the request, then signs', { anchor: 'start', size: T ? .42 : .48, k: 'soft' });
+  c.curve(...P.k2a, { k: 'next', w: .6, dir: T ? 'v' : 'h', head: true });
+  // What is proved, what is tested, and the backstop.
+  c.at(3000);
   if (T) {
-    const lx = Bz.lim[0] + 14;
-    c.text(lx, Bz.lab1[1], "Cedar's smallest evaluator, 710,772 B", { anchor: 'start', size: .46 });
-    c.text(lx, Bz.lab2[1], 'the Perch account, 106,668 B', { anchor: 'start', size: .46, k: 'now' });
+    c.text(P.tested[0], P.tested[1], 'off chain, the runtime: tested, not proven', { size: .46, k: 'next' });
+    c.text(P.proved[0], P.proved[1], 'on chain, the decision function: proved in Lean', { size: .46, k: 'now' });
   } else {
-    c.text(Bz.lab1[0], Bz.lab1[1], "Cedar's smallest evaluator", { anchor: 'end', size: .5 });
-    c.text(Bz.lab2[0], Bz.lab2[1], 'the Perch account', { anchor: 'end', size: .5, k: 'now' });
+    c.text(P.tested[0], P.tested[1], 'the runtime: tested, not proven', { anchor: 'start', size: .56, k: 'next' });
+    c.icon('proof', P.proved[0] + 20, P.proved[1] - 8, 34, { k: 'now' });
+    c.text(P.proved[0] + 50, P.proved[1], 'the decision function: proved in Lean', { anchor: 'start', size: .56, k: 'now' });
   }
-  c.rect(Bz.x0, Bz.y1, 710772 * sc, 24, { k: 'soft', w: .5, fill: 'hatch' });
-  c.rect(Bz.x0, Bz.y2, 106668 * sc, 24, { k: 'now', w: .6, fill: 'now', fillOp: .35 });
-  if (!T) { c.text(Bz.x0 + 710772 * sc + 14, Bz.y1 + 18, '710,772 B', { anchor: 'start', size: .46, font: 'code' }); c.text(Math.max(Bz.x0 + 106668 * sc, Bz.lim[0]) + 14, Bz.y2 + 18, '106,668 B', { anchor: 'start', size: .46, font: 'code', k: 'now' }); }
-  const [lmx, lmy1, lmy2] = Bz.lim;
-  c.line(lmx, lmy1, lmx, lmy2, { k: 'ink', w: .9 });
-  c.text(Bz.limL[0], Bz.limL[1], 'contract limit, 131,072 B', { anchor: 'start', size: .44 });
-  c.text(Bz.off[0], Bz.off[1], 'so Cedar runs off chain; measured 2026-11-06', { anchor: 'start', size: .46, k: 'soft' });
-  c.check(P.frag[0], P.frag[1], 34, { k: 'now' });
-  c.text(P.frag[0] + 34, P.frag[1] + 8, 'a prototype proof for a small fragment', { anchor: 'start', size: T ? .5 : .56 });
+  c.at(3400);
+  c.cross(P.over[0], P.over[1], T ? 28 : 30, { k: 'ink' });
+  if (T) {
+    c.text(P.overT[0], P.overT[1], 'even if the runtime fails,', { anchor: 'start', size: .52 });
+    c.text(P.overT[0], P.overT[1] + 36, 'the account refuses an over-cap payment', { anchor: 'start', size: .52 });
+  } else c.text(P.overT[0], P.overT[1], 'even if the runtime fails, the account refuses an over-cap payment', { anchor: 'start', size: .62 });
 } };
 
-// The three tranches: each deliverable's title, how it completes, and its icon.
 const TR = [
   { name: 'Tranche 1: MVP', sub: 'an agent runtime rooted in a Perch grant', date: '2027-01-29', items: [
     ['Agent runtime core', 'a subagent is spawned only with a narrower grant; wider spawns refused; agents hold no keys', 'agent'],
