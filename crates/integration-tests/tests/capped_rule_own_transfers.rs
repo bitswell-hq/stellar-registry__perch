@@ -10,7 +10,8 @@
 //! Real `PerchAccount`s, the real compiler and a Stellar Asset Contract,
 //! under enforcing authorization (`set_auths`), never mocked auth. A's capped
 //! rule is a scoped document's: XLM `transfer`, capped at 10 XLM per 100
-//! ledgers, signed by an app key.
+//! ledgers, signed by an app key; the same document's uncapped XLM rule for
+//! that key authorizes B's transfer through the same delegated path.
 
 mod support;
 
@@ -43,8 +44,10 @@ fn as_owner(w: &World, account: &Address, owner: &Address, root: SorobanAuthoriz
 /// B's authorization of `root` through B's rule `b_rule`, whose signer is
 /// the Perch account A; A approves through its rule `a_rule`, whose signer
 /// is `key` (CAP-0071 nesting, all in B's one entry).
+#[allow(clippy::too_many_arguments)]
 fn via_delegate(
     w: &World,
+    nonce: i64,
     b: &Address,
     b_rule: u32,
     a: &Address,
@@ -58,7 +61,7 @@ fn via_delegate(
             SorobanAddressCredentialsWithDelegates {
                 address_credentials: SorobanAddressCredentials {
                     address: b.clone().into(),
-                    nonce: 900_001,
+                    nonce,
                     signature_expiration_ledger: w.ledger() + 1_000,
                     signature: w.sc(AuthPayload {
                         signers: map![e, (Signer::Delegated(a.clone()), Bytes::new(e))],
@@ -125,10 +128,11 @@ fn a_capped_rule_meters_only_the_accounts_own_transfers() {
     let grant = json(
         &w,
         format!(
-            r#"{{"version":1,"network":"{net}","signers":[{{"id":"app","address":"{}"}}],"rules":[{{"name":"xlm","scope":{{"type":"contract","address":"{}"}},"principals":{{"type":"all","signers":["app"]}},"functions":["transfer"],"cap":{{"limit":"{}","period-ledgers":100}}}}]}}"#,
+            r#"{{"version":1,"network":"{net}","signers":[{{"id":"app","address":"{}"}}],"rules":[{{"name":"xlm","scope":{{"type":"contract","address":"{}"}},"principals":{{"type":"all","signers":["app"]}},"functions":["transfer"],"cap":{{"limit":"{}","period-ledgers":100}}}},{{"name":"xlm-open","scope":{{"type":"contract","address":"{}"}},"principals":{{"type":"all","signers":["app"]}},"functions":["transfer"]}}]}}"#,
             strkey(&app),
             strkey(&xlm),
-            10 * UNIT
+            10 * UNIT,
+            strkey(&xlm)
         ),
     );
     as_owner(
@@ -144,6 +148,7 @@ fn a_capped_rule_meters_only_the_accounts_own_transfers() {
     PerchAccountClient::new(e, &a).apply_scope(&SCOPE, &grant);
     e.set_auths(&[]);
     let grant_rule = w.rule_id(&a, "xlm");
+    let open_rule = w.rule_id(&a, "xlm-open");
 
     // B (the world's account): its owner names A as the signer of B's rule
     // on the XLM contract, so A is B's CAP-0071 delegated signer there.
@@ -192,6 +197,7 @@ fn a_capped_rule_meters_only_the_accounts_own_transfers() {
     // check as B's delegated signer.
     e.set_auths(&[via_delegate(
         &w,
+        900_001,
         &b,
         b_rule,
         &a,
@@ -207,4 +213,21 @@ fn a_capped_rule_meters_only_the_accounts_own_transfers() {
         token.balance(&b)
     );
     assert_eq!(token.balance(&b), FUNDS);
+
+    // A's uncapped rule on the XLM contract authorizes the same transfer
+    // through the same delegated path.
+    e.set_auths(&[via_delegate(
+        &w,
+        900_002,
+        &b,
+        b_rule,
+        &a,
+        open_rule,
+        &app,
+        transfer(&b),
+    )]);
+    let open = token.try_transfer(&b, &sink, &UNIT);
+    e.set_auths(&[]);
+    assert!(open.is_ok(), "A's uncapped rule approves B's transfer");
+    assert_eq!(token.balance(&b), FUNDS - UNIT);
 }
