@@ -5,7 +5,8 @@
 Controls:
 
 - Navigation: arrows, Space or Shift+Space, PageUp/PageDown, and Home/End; swipe, or tap either side of the stage.
-- `N` shows each slide's speaker notes, which carry its sources. `T` switches between light and dark; until then the deck follows the OS.
+- `N` shows the speaker script for the slide: a few lines to say aloud, with a target time. `S` shows the slide's sources: the background and citations that used to be in the notes. `T` switches between light and dark; until then the deck follows the OS.
+- `R` records a video of the deck (below); `P` pauses and resumes a recording.
 - `#n` opens slide n, and `?still=1` shows every slide's final drawing without motion. Reduced motion has the same effect.
 
 Solid cyan in an engraved frame is what exists today. Dashed magenta with printer's marks is work the award would fund. Slide 4, marked "a cited study", draws another team's published experiment in plain ink and links the paper. Slide 5 compares where agent-payment policy is enforced; it names no product and has no status mark.
@@ -14,7 +15,24 @@ The arc introduces Perch (slide 2), then the problem (slides 3–4), then the co
 
 The deck is written as if release PR #168 has merged. Grants (`apply_grant`), `rule_eval::check_auth`, recovery and the verifiers are the merged baseline, and the award does not fund them. Mainnet still runs the earlier account design (`c135aca`). Deploying the account changes to mainnet is Tranche 3, deliverable 1.
 
-On the contained policy runtime slide, the fragment proof and the size measurements (in its notes) are stated as fact; everything else Cedar-related is funded work.
+On the contained policy runtime slide, the fragment proof and the size measurements (in its sources view) are stated as fact; everything else Cedar-related is funded work.
+
+## Speaker script
+
+The script is 430 words over the 14 slides. At about 150 words a minute, it runs 2:54, inside SCF's three-minute limit. Each slide's notes carry a target time (`data-sec`); the script panel shows it with the word count. The script says only what the slides say. Its citations are in the sources view (`S`), with nothing removed.
+
+## Recording a video
+
+The Record button in the controls, or `R`, records the deck with your voice and saves a video file. Everything happens in the browser: nothing is uploaded and there is no server.
+
+1. Use a desktop browser. Press `R` and allow the microphone. If it is blocked, the deck says so and records nothing; allow it in the site settings and press `R` again.
+2. The deck prepares the slides, then counts down 3, 2, 1. `R` or `Escape` cancels the countdown.
+3. Present as usual with the arrow keys. A presenter panel, top right, shows the script for the current slide, the time against 3:00, the time on this slide against its target, and the next slide. The panel is not in the video.
+4. `P` pauses and resumes. `R`, or "Stop and save", ends the recording and downloads `perch-agent-grants-<date>-<time>.mp4`, or `.webm`. The message names the format, size and length.
+
+The video is 1920×1080 at 30 frames a second. The deck lays itself out at 1920×1080 in a hidden frame and paints each slide in its final state onto a canvas: the drawings as images, the text at the positions the browser laid out. The recording is that canvas plus the microphone, through `MediaRecorder`. Slides change with a short crossfade; the arrival animations are not recorded.
+
+The file is MP4 (H.264 and AAC) where the browser can write it, as in Safari and recent Chrome, and WebM (VP9 or VP8 with Opus) otherwise. YouTube and Vimeo accept both. The deck adds the duration that WebM files from `MediaRecorder` lack. The recording uses the theme in effect when it starts.
 
 ## Sources
 
