@@ -7,14 +7,13 @@
 //! `deployer(constructorless_registry, pinned_wasm_hash)`, and the infra type is
 //! registered there. Resolution is pinned (offline, no `fetch_hash` XCC), so
 //! native mode needs no registry contract, no mock, and no wasm artifact — just
-//! the same derivation the account uses. See [`crate::faithful`] for the phase-2
-//! variant on the true registry wasm.
+//! the same derivation the account uses.
 
 use perch_account::{PerchAccount, PerchAccountClient};
 use perch_account_types::Signer;
 use perch_doc_compiler::{PerchDocCompiler, PerchDocCompilerClient};
 use perch_ed25519_verifier::PerchEd25519Verifier;
-use perch_interpreter::{PerchInterpreter, PerchInterpreterClient};
+use perch_interpreter::PerchInterpreter;
 use perch_smart_account::{constructorless_registry, infra};
 use perch_spending_limit::PerchSpendingLimit;
 use soroban_sdk::testutils::Ledger as _;
@@ -58,10 +57,8 @@ pub struct World {
     pub env: Env,
     /// The registry the account content-addresses its infra off
     /// (`deployer(registry, hash)`, the registry its `registry.path` derives
-    /// on the bound network). Native
-    /// mode deploys no contract there — resolution is a pure offline
-    /// derivation — but the field is populated for parity with
-    /// [`crate::faithful`] mode, which puts the real registry here.
+    /// on the bound network). Native mode deploys no contract there:
+    /// resolution is a pure offline derivation.
     pub registry: Option<Address>,
     /// The stateless doc-compiler (`compile_doc`).
     pub compiler: Address,
@@ -84,11 +81,6 @@ impl World {
     /// Typed client for the doc-compiler.
     pub fn compiler_client(&self) -> PerchDocCompilerClient<'_> {
         PerchDocCompilerClient::new(&self.env, &self.compiler)
-    }
-
-    /// Typed client for the interpreter.
-    pub fn interpreter_client(&self) -> PerchInterpreterClient<'_> {
-        PerchInterpreterClient::new(&self.env, &self.interpreter)
     }
 
     /// Typed client for the account — the `apply_doc` entry point.

@@ -34,7 +34,6 @@ pub fn signer(id: &str, verifier: &str, key: &str) -> SignerDecl {
 }
 
 /// Build a delegated signer declaration.
-#[allow(dead_code)]
 pub fn delegated_signer(id: &str, address: &str) -> SignerDecl {
     SignerDecl {
         id: id.into(),
@@ -45,7 +44,6 @@ pub fn delegated_signer(id: &str, address: &str) -> SignerDecl {
 }
 
 /// Overwrite an external signer's key (test mutation helper).
-#[allow(dead_code)]
 pub fn set_key(s: &mut SignerDecl, new_key: &str) {
     match &mut s.method {
         SignerMethod::External { key, .. } => *key = new_key.into(),
@@ -54,7 +52,6 @@ pub fn set_key(s: &mut SignerDecl, new_key: &str) {
 }
 
 /// Overwrite an external signer's verifier (test mutation helper).
-#[allow(dead_code)]
 pub fn set_verifier(s: &mut SignerDecl, new_verifier: &str) {
     match &mut s.method {
         SignerMethod::External { verifier, .. } => *verifier = new_verifier.into(),

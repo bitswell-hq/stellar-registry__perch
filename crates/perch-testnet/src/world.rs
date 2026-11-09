@@ -864,12 +864,7 @@ impl<'a> World<'a> {
     }
 }
 
-pub fn strkey(a: &Address) -> String {
-    let s = a.to_string();
-    let mut buf = std::vec![0u8; s.len() as usize];
-    s.copy_into_slice(&mut buf);
-    String::from_utf8(buf).expect("strkey")
-}
+pub use perch_testkit::delta::strkey;
 
 pub fn tamper(e: &soroban_sdk::Env, ev: &ZkEvidence) -> ZkEvidence {
     let mut proof = std::vec![0u8; ev.proof.len() as usize];

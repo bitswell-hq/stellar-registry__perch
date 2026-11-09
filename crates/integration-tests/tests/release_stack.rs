@@ -203,7 +203,7 @@ struct Stack {
 }
 
 fn hex(b: &[u8]) -> String {
-    b.iter().map(|x| format!("{x:02x}")).collect()
+    hex::encode(b)
 }
 
 fn sha256_hex(b: &[u8]) -> String {

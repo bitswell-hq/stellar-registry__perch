@@ -231,12 +231,7 @@ pub fn enrollment(e: &Env, n: u8) -> ZkEnrollment {
 // Documents
 // ---------------------------------------------------------------------------
 
-pub fn strkey(a: &Address) -> String {
-    let s = a.to_string();
-    let mut buf = std::vec![0u8; s.len() as usize];
-    s.copy_into_slice(&mut buf);
-    String::from_utf8(buf).unwrap()
-}
+pub use perch_testkit::delta::strkey;
 
 pub fn hex32(b: &BytesN<32>) -> String {
     hex::encode(b.to_array())
