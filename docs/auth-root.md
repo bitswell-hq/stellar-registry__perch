@@ -31,7 +31,7 @@ both branches, as in the referenced Guess the Number fixture.
 This condition checks exact contract and function only. It does not inspect
 root arguments, arbitrary parents or ancestors, or companion-rule names. It
 does not prove every context present in a signed authorization tree executed.
-There is no caller-supplied root argument to `check_auth` or `authorize`.
+There is no caller-supplied root argument to `perch_smart_account::check_auth` or `rule_eval::check_auth`.
 
 ## Validation and state
 

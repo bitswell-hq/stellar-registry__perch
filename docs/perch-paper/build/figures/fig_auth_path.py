@@ -37,9 +37,9 @@ STAGES = [
      'Look up each named rule and its spending record; no search.',
      ['`ContextRuleNotFound` ({{fact:oz-error-context-rule-not-found}})'], 'tested'),
     ('decide', 'Decide',
-     '`rule_eval::authorize` maps the rules, records, contexts, choices, claimed signers, ledger and generation to the '
+     '`rule_eval::check_auth` maps the rules, records, contexts, choices, claimed signers, ledger and generation to the '
      'next records or a refusal. It reads no storage and checks no signature.',
-     '`rule_eval::authorize`: no storage read, no signature checked.',
+     '`rule_eval::check_auth`: no storage read, no signature checked.',
      ['stale grant: `StaleGrant` ({{fact:auth-error-stale-scope}})',
       'otherwise `RuleEvalRefused` ({{fact:auth-error-rule-eval-refused}})'], 'proved'),
     ('authenticate', 'Authenticate',

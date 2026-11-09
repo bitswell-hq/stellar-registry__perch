@@ -97,7 +97,7 @@ def charge(rec, limit, period, now, amount):
 
 
 def authorize(rules, records, contexts, choices, auth, now, gen):
-    """rule_eval::authorize: three passes; returns ok + records, or the first refusal."""
+    """rule_eval::check_auth: three passes; returns ok + records, or the first refusal."""
     if len(choices) != len(contexts):
         return {'ok': False, 'check': 'choices', 'i': None}
     if len(records) != len(rules):

@@ -2,16 +2,16 @@
 //!
 //! An authorization other than a recovery completion, on an account that
 //! stores its admin rule set, is decided by rule-eval's
-//! `rule_eval::authorize`, over the stored rule-eval rules (`rule_set`) of
+//! `rule_eval::check_auth`, over the stored rule-eval rules (`rule_set`) of
 //! the rules the payload chooses, at the current ledger and grant
 //! generation, under every signer the payload names, and with the account's
 //! own spending records. `auth::authenticate` then checks every one of those
 //! signers against OpenZeppelin's digest, so wallets sign the bytes they
-//! sign for an OpenZeppelin account, and the records `authorize` charged are
+//! sign for an OpenZeppelin account, and the records `check_auth` charged are
 //! stored.
 //! Each chosen rule id is read as the stored rule its record holds, among
 //! the account document's records, or its grant's when a grant document
-//! installed it (its tag). `authorize` reads only the rules its
+//! installed it (its tag). `check_auth` reads only the rules its
 //! choices name, so running it over the chosen rules alone gives the verdict
 //! and records of running it over the whole stored set. A chosen id that names no installed rule refuses with
 //! `ContextRuleNotFound` (#3000), as OZ refuses it, which wallets read as a
@@ -90,7 +90,7 @@ pub(crate) fn authorize(
     }
     let contexts = convert::calls(e, contexts).ok_or_else(refused)?;
     let signers = convert::signers(e, &payload.signers.keys()).ok_or_else(refused)?;
-    let after = rule_eval::authorize(
+    let after = rule_eval::check_auth(
         &rules,
         &records,
         &contexts,

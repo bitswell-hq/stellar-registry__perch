@@ -33,7 +33,7 @@
 //! own reading of the batch (`perch_rule_eval::convert::calls`, what its
 //! rule-eval check reads) must equal the facade's.
 //!
-//! `__check_auth` decides with rule-eval's `authorize` over the stored rule
+//! `__check_auth` decides with rule-eval's `check_auth` over the stored rule
 //! sets and the account's `authenticate` of every signer
 //! (`perch_smart_account::check_auth`), so a refusal by either is a refused
 //! verdict. An accepted verdict carries the spending records the account

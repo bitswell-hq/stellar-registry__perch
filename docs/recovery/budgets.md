@@ -139,7 +139,7 @@ States: **Measured** (within budget unless stated; the cell says where);
 | §2 `Protected` reconfiguration, `schedule_upgrade` | Measured: in process (reconfiguration at the caps) and on testnet | Within budget. |
 | §2 `execute_upgrade` | Measured in process only | Within budget. Not run on testnet: the upgrade delay is 120 960 ledgers. |
 | §2 promotion after many collecting attempts | Measured without siblings; bounded by construction | Promotion writes one `invalidate_below` value whatever the number of siblings (spec §6.3 T4); the promoting rows above are within budget. No run with many siblings. |
-| §2 ordinary authorization overhead | Measured on testnet (absolute cost) and in process | Direct authorization and `execute` are within budget ([testnet-exercise.md](../deploy/testnet-exercise.md), "Against the budget"). The grant generation gate adds one footprint entry per selected rule ([Grant documents](#grant-documents)). Rule-eval's `authorize` decides an authorization in 5.6M to 6.3M instructions in process, a capped transfer more with a long spending history, up to 47.40M (11.8%) for the longest one window holds ([Rule-eval in `__check_auth`](#rule-eval-in-__check_auth)). |
+| §2 ordinary authorization overhead | Measured on testnet (absolute cost) and in process | Direct authorization and `execute` are within budget ([testnet-exercise.md](../deploy/testnet-exercise.md), "Against the budget"). The grant generation gate adds one footprint entry per selected rule ([Grant documents](#grant-documents)). Rule-eval's `check_auth` decides an authorization in 5.6M to 6.3M instructions in process, a capped transfer more with a long spending history, up to 47.40M (11.8%) for the longest one window holds ([Rule-eval in `__check_auth`](#rule-eval-in-__check_auth)). |
 | §2 disk read bytes, every row | Required before launch | Neither the release-stack suite nor the testnet exercise reports disk read bytes. |
 | §2 transaction size, every row | Measured on testnet | Within budget. The in-process suite does not meter transaction size. |
 | §2 memory, every row | Measured in process | Within budget. The RPC does not report memory, so testnet rows have none. |
@@ -570,14 +570,14 @@ source's sweep is in [The account's own rule registry](#the-accounts-own-rule-re
 ### Rule-eval in `__check_auth`
 
 `__check_auth` decides every authorization but a recovery completion with
-rule-eval's `authorize` over the stored rules of the chosen rules, and the
+rule-eval's `check_auth` over the stored rules of the chosen rules, and the
 account's `authenticate` checks the signers (`implementation.md`, "Rule-eval in
 `__check_auth`"). A document rule carries no policy, so an
 authorization calls neither the interpreter nor the spending limit, and an
 apply installs and uninstalls neither. Source: 2026-11-04, stacks built with
 `scripts/build-stack.sh --builder contract` from this source, from the
 source where OZ's `do_check_auth` with the interpreter and the spending
-limit ran first and rule-eval's `authorize` second, and from the source
+limit ran first and rule-eval's `check_auth` second, and from the source
 before rule-eval's check, each through every `release_stack.rs` flow (25
 tests, `--skip cap_sweep`), real proofs, passkeys, enforcing authorization.
 Instructions, as a share of the 400M limit:

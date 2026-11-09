@@ -1,7 +1,7 @@
 //! rule-eval as `__check_auth`'s rule check, under ENFORCING authorization
 //! (`perch_smart_account::check_auth`; see `support/mod.rs` for the world).
 //!
-//! rule-eval's `authorize` over the account's stored rule-eval rules decides
+//! rule-eval's `check_auth` over the account's stored rule-eval rules decides
 //! every authorization but a recovery completion, and the account's
 //! `authenticate` checks the signers:
 //!

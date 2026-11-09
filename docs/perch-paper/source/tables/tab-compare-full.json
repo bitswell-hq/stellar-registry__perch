@@ -13,7 +13,7 @@
  "rows": [
   [
    "Where the decision runs",
-   "Linked `rule_eval::authorize` inside `__check_auth` (`gate.rs:93-105`)",
+   "Linked `rule_eval::check_auth` inside `__check_auth` (`gate.rs:93-105`)",
    "The account selects the rule and authenticates, then calls each attached policy's `enforce`; the shared interpreter evaluates the stored predicate (OZ `storage.rs:629-690`; `policy-interpreter/src/lib.rs:192-277`)",
    "V"
   ],

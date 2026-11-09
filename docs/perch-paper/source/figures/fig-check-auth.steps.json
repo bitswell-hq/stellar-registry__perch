@@ -49,7 +49,7 @@
   },
   {
    "n": "7",
-   "text": "`rule_eval::authorize` maps rules, records, contexts, choices, signers, ledger and generation to the next records. It reads no storage and checks no signature.",
+   "text": "`rule_eval::check_auth` maps rules, records, contexts, choices, signers, ledger and generation to the next records. It reads no storage and checks no signature.",
    "exits": [
     "stale grant: `StaleGrant` ({{fact:auth-error-stale-scope}})",
     "otherwise `RuleEvalRefused` ({{fact:auth-error-rule-eval-refused}})"

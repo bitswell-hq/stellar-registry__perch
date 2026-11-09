@@ -8,7 +8,7 @@
 //! records the document installs: the stored rule at index `i` is what the
 //! installed rule at index `i` enforces, the account document's recovery rule
 //! last when there is one. The constructor stores its admin rule the same
-//! way. `__check_auth` decides an authorization with `rule_eval::authorize`
+//! way. `__check_auth` decides an authorization with `rule_eval::check_auth`
 //! over the rules its payload chooses (`gate`).
 
 use perch_account_types::Signer;

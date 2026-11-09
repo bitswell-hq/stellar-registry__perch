@@ -20,7 +20,7 @@ def wide():
     # the account: the installed grant, the decision function, the store
     probe = SVG(FID, 760)
     hg = probe.textbox(546, 0, 198, [('Installed grant', 't'), ('rules and spending records', 'm')], 'tested', size=14)
-    hd = probe.textbox(546, 0, 198, [('Decision function', 't'), ('`rule_eval::authorize` checks the rules and the window', 'x')], 'tested', size=14)
+    hd = probe.textbox(546, 0, 198, [('Decision function', 't'), ('`rule_eval::check_auth` checks the rules and the window', 'x')], 'tested', size=14)
     hs = probe.textbox(546, 0, 198, [('Store', 't'), ('the new window record', 'm')], 'tested', size=14)
     yg = 46
     yd = yg + hg + 14
@@ -29,7 +29,7 @@ def wide():
     s.box(532, 10, 226, bottom - 10, 'key', 8)
     s.text(546, 34, 'Perch account', 't', 15)
     s.textbox(546, yg, 198, [('Installed grant', 't'), ('rules and spending records', 'm')], 'tested', size=14)
-    s.textbox(546, yd, 198, [('Decision function', 't'), ('`rule_eval::authorize` checks the rules and the window', 'x')], 'tested', size=14)
+    s.textbox(546, yd, 198, [('Decision function', 't'), ('`rule_eval::check_auth` checks the rules and the window', 'x')], 'tested', size=14)
     s.textbox(546, ys, 198, [('Store', 't'), ('the new window record', 'm')], 'tested', size=14)
     yv = bottom + 30
     hv = s.textbox(532, yv, 226, [('Verifier contract', 't'), ('checks the app\u2019s signature', 'm')], 'tested', size=14)
@@ -56,7 +56,7 @@ def narrow():
         ([('Owner', 't'), ('installs a grant (`apply_grant`)', 'x')], 'tested'),
         ([('App or agent', 't'), ('signs its own call', 'x')], 'tested'),
         ([('Soroban host', 't'), ('asks the account (`__check_auth`)', 'x')], 'tested'),
-        ([('Decision function', 't'), ('`rule_eval::authorize` checks the installed grant’s rules and window', 'x')], 'tested'),
+        ([('Decision function', 't'), ('`rule_eval::check_auth` checks the installed grant’s rules and window', 'x')], 'tested'),
         ([('Verifier contract', 't'), ('checks the signature, only after the decision accepts', 'x')], 'tested'),
         ([('Store', 't'), ('the new window record', 'x')], 'tested'),
     ]

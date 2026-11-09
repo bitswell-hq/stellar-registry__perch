@@ -1006,7 +1006,7 @@ the account's counter, which never gives an id twice. A document rule
 carries no policy, only the recovery rule its controller: what a rule
 allows, its program and cap included, is the rule-eval rule its record
 holds (`rule_set`), and `__check_auth` decides with rule-eval's
-`authorize` over those rules. A completion (T5) reads the
+`check_auth` over those rules. A completion (T5) reads the
 recovery rule from its record; nothing of OZ's registry is written.
 Installing it calls the controller's `rcv_install`; removing it calls no hook. The apply
 never scans historical rule ids, which grow without bound with every past
@@ -1143,7 +1143,7 @@ one selected for a guardian approval on any contract
 (`PerchAuthError::GrantEscalation`), after the reserved-name guard and the
 freeze and before any rule is evaluated. So the `apply_grant` guard above
 also holds for a grant applied before that member, without `apply_doc`
-scanning the grants. rule-eval's `authorize` then refuses a chosen rule
+scanning the grants. rule-eval's `check_auth` then refuses a chosen rule
 whose generation is not the current one, which the account reports as
 `PerchAuthError::StaleGrant`. Like the freeze, both hold on every path that
 reaches `__check_auth`, CAP-0071 delegation included. A rule without a tag
@@ -1854,7 +1854,7 @@ on the deployed contract
 | Contract | Entry point | Authorization |
 | --- | --- | --- |
 | Account | `__constructor(admin_signers)` | Deploy time only. Installs rule 0, `admin`, scoped to the account, with the given signers, held to the install-time limits and refusing two that are one key (§7.5); emits `context_rule_added`. |
-| Account | `__check_auth` | Reserved names (rule 1), then the freeze (§9), then the grant generation gate (§7.6), then rule-eval's `authorize` over the stored rules of the chosen rules (`RuleEvalRefused`; a chosen id that names no installed rule, `ContextRuleNotFound`, OZ's code #3000; the recovery rule outside a completion, `RuleEvalRefused`), then the account's `authenticate` of every payload signer against OZ's digest, then the spending records `authorize` charged are stored. A recovery completion is decided instead over the account's record of the recovery rule, in OZ's `do_check_auth`'s order (§7.5; no payload signer, `UnauthorizedSigner`; an expired rule or a context off the account, `UnvalidatedContext`), and then by the controller's `rcv_complete` (T5). An account storing no rule set, which the constructor never leaves, authorizes nothing else (`RuleEvalRefused`). The order of the refusing steps does not matter for security: each only refuses. |
+| Account | `__check_auth` | Reserved names (rule 1), then the freeze (§9), then the grant generation gate (§7.6), then rule-eval's `check_auth` over the stored rules of the chosen rules (`RuleEvalRefused`; a chosen id that names no installed rule, `ContextRuleNotFound`, OZ's code #3000; the recovery rule outside a completion, `RuleEvalRefused`), then the account's `authenticate` of every payload signer against OZ's digest, then the spending records `authorize` charged are stored. A recovery completion is decided instead over the account's record of the recovery rule, in OZ's `do_check_auth`'s order (§7.5; no payload signer, `UnauthorizedSigner`; an expired rule or a context off the account, `UnvalidatedContext`), and then by the controller's `rcv_complete` (T5). An account storing no rule set, which the constructor never leaves, authorizes nothing else (`RuleEvalRefused`). The order of the refusing steps does not matter for security: each only refuses. |
 | Account | `apply_doc(doc_json, approval_valid_until, expected_revision)` | Owner authorization, or the recovery rule (completion only); refused with `StaleRevision` when `expected_revision` is set and the account is at another configuration revision. Then, in order: compile (`Compiler(..)` errors), `AdminLockout`, the rule-eval lowering of the compiled model (`ModelInvalid`, `UnguardedRule`, `AdminLockout`), `RevokedCredential`, `ZkFactorChangedInPlace`, `EnrollmentReused`, the controller's `rcv_sync` (`Recovery(..)` errors), `WipedCredential` unless the outcome is a completion (§7.6), rule reconciliation, leaf insertion, completion effects (`GenerationExhausted` when the grant generation is at `u64::MAX`). Emits `DocApplied`. |
 | Account | `execute(target, fn, args)` | Owner authorization; reserved names refused |
 | Account | `schedule_upgrade`, `execute_upgrade`, `cancel_upgrade` | Owner authorization (§12) |

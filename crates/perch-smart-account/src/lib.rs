@@ -35,7 +35,7 @@
 //! its counter, and each rule's name, policies, and the rule-eval rule that
 //! decides what it allows, which holds its scope, signers, and expiry.
 //! `__check_auth` decides every authorization with rule-core's
-//! `rule_eval::authorize` over those stored rules (`rule_set`, `gate`), and
+//! `rule_eval::check_auth` over those stored rules (`rule_set`, `gate`), and
 //! the account's `authenticate` (`auth`) checks the signers. The signer,
 //! payload, and context-rule types are `perch-account-types`', the XDR and
 //! contract-spec twins of OZ's. A recovery completion is decided by the
@@ -1076,7 +1076,7 @@ pub trait PerchSmartAccount: CustomAccountInterface {
 /// The account's `__check_auth`: the reserved-name guard, the `Protected`
 /// freeze, and the excluded-contract gate for grant rules run before any
 /// rule is evaluated (spec §7.6, §9, §15); then the recovery controller
-/// decides a recovery completion, and rule-eval's `authorize` over the
+/// decides a recovery completion, and rule-eval's `check_auth` over the
 /// stored rule sets, with `authenticate` checking every signer, decides
 /// anything else (`gate`).
 ///
@@ -1093,7 +1093,7 @@ pub trait PerchSmartAccount: CustomAccountInterface {
 ///   the current recovery controller, ZK adapter or pool, or for a guardian
 ///   approval on any contract (`GrantEscalation`), on every path the same
 ///   way.
-/// - rule-eval's `authorize` over the stored rule sets refuses what it does
+/// - rule-eval's `check_auth` over the stored rule sets refuses what it does
 ///   not accept: a chosen grant rule whose stored rule carries another
 ///   grant generation than the account's, from a grant document a
 ///   recovery completion wiped, with `StaleGrant`, anything else with

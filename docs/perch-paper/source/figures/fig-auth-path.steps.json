@@ -28,7 +28,7 @@
   },
   {
    "n": "4",
-   "text": "**Decide.** `rule_eval::authorize` maps the rules, records, contexts, choices, claimed signers, ledger and generation to the next records or a refusal. It reads no storage and checks no signature.",
+   "text": "**Decide.** `rule_eval::check_auth` maps the rules, records, contexts, choices, claimed signers, ledger and generation to the next records or a refusal. It reads no storage and checks no signature.",
    "exits": [
     "stale grant: `StaleGrant` ({{fact:auth-error-stale-scope}})",
     "otherwise `RuleEvalRefused` ({{fact:auth-error-rule-eval-refused}})"

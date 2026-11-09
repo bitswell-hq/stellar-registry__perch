@@ -18,7 +18,7 @@ STEPS = [
     (5, 'tested', f'bound = SHA-256(domain ‖ account ‖ signature payload), with domain `"{fact("auth-domain-tag")}"`', []),
     (6, 'tested', 'Resolve the selected rule IDs to stored rules and spending records; convert the contexts.',
      [f'ContextRuleNotFound · {fact("oz-error-context-rule-not-found")}', f'RuleEvalRefused · {fact("auth-error-rule-eval-refused")}']),
-    (7, 'proved', '`rule_eval::authorize`: rules, records, contexts, choices, signers, ledger, generation → next records. '
+    (7, 'proved', '`rule_eval::check_auth`: rules, records, contexts, choices, signers, ledger, generation → next records. '
      'No storage, no signatures.',
      [f'StaleGrant · {fact("auth-error-stale-scope")}', f'RuleEvalRefused · {fact("auth-error-rule-eval-refused")}']),
     (8, 'tested', 'digest = SHA-256(bound ‖ XDR(selected rule IDs)). For each claimed signer:', []),
@@ -148,7 +148,7 @@ def steps():
             {'n': '6', 'text': 'Resolve the selected rule IDs to stored rules and spending records; convert the contexts.',
              'exits': ['`ContextRuleNotFound` ({{fact:oz-error-context-rule-not-found}})',
                        '`RuleEvalRefused` ({{fact:auth-error-rule-eval-refused}})'], 'assurance': 'tested'},
-            {'n': '7', 'text': '`rule_eval::authorize` maps rules, records, contexts, choices, signers, ledger and generation '
+            {'n': '7', 'text': '`rule_eval::check_auth` maps rules, records, contexts, choices, signers, ledger and generation '
              'to the next records. It reads no storage and checks no signature.',
              'exits': ['stale grant: `StaleGrant` ({{fact:auth-error-stale-scope}})',
                        'otherwise `RuleEvalRefused` ({{fact:auth-error-rule-eval-refused}})'],
