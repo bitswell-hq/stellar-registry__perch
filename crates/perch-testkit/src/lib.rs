@@ -1,9 +1,8 @@
 //! `perch-testkit` — one-call bootstrap of the perch registry + constructorless infra
 //! + account for tests.
 //!
-//! Every perch e2e suite used to re-implement a `struct World`/`fn setup()` to
-//! register the doc-compiler, interpreter, ed25519 verifier and account and
-//! wire them together. This crate gives them one call:
+//! Registering the doc-compiler, interpreter, ed25519 verifier and account and
+//! wiring them together is one call:
 //!
 //! ```no_run
 //! use perch_testkit::{Bootstrap, FIXTURE_NETWORK};
@@ -78,8 +77,8 @@ pub struct Bootstrap {
 }
 
 impl Bootstrap {
-    /// Native mode: register the four contract types into a unit `Env`. The
-    /// fast, ship-first path with no upstream dependency.
+    /// Native mode: register the four contract types into a unit `Env`, with
+    /// no upstream dependency.
     pub fn native() -> Self {
         Self {
             mode: Mode::Native,

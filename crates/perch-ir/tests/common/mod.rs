@@ -1,6 +1,6 @@
 //! Shared builders and checksum-valid strkey constants for the perch-ir test
 //! suite. All addresses are real strkeys (valid CRC16) derived from fixed
-//! seeds, so they stay valid if shape checks ever grow checksum verification.
+//! seeds, since validation checks the checksum.
 #![allow(dead_code)]
 
 use perch_ir::{AllPrincipals, PolicyDoc, Principals, Rule, Scope, SignerDecl, SignerMethod};

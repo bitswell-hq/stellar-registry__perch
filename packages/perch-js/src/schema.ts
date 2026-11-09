@@ -180,7 +180,7 @@ export function parsePolicyDoc(value: unknown): PolicyDoc {
   return policyDocSchema.parse(value);
 }
 
-/** Parse from a JSON string. Note: JSON.parse silently keeps the last of any
+/** Parse from a JSON string. JSON.parse silently keeps the last of any
  *  duplicate keys — raw-text duplicate rejection is a tracked follow-up. */
 export function parsePolicyDocJson(json: string): PolicyDoc {
   return parsePolicyDoc(JSON.parse(json));

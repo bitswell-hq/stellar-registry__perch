@@ -8,8 +8,7 @@
 //! wasm-hash-as-salt derivation and the resolver macro's runtime mode against
 //! real hashes, exactly as production does.
 //!
-//! It is deliberately not implemented yet. It has three hard prerequisites, all
-//! out of scope for the native-mode ship:
+//! It is not implemented. It has three prerequisites:
 //!
 //! 1. **`deploy_stateless`** — the upstream `StatelessDeployable` trait from
 //!    epic #37 workstream A (issue #38): wasm hash = deploy salt.

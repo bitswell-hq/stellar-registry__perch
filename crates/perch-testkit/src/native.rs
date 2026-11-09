@@ -1,7 +1,6 @@
-//! Native mode: the bare-minimum, ship-first bootstrap. Registers the four
-//! perch contract *types* directly into a unit [`Env`], wires their addresses,
-//! binds the network, mocks auth, and hands back a fully wired [`World`] with
-//! typed clients.
+//! Native mode: registers the four perch contract *types* directly into a
+//! unit [`Env`], wires their addresses, binds the network, mocks auth, and
+//! hands back a fully wired [`World`] with typed clients.
 //!
 //! The compiler and interpreter are registered at exactly the content addresses
 //! the account's `apply_doc` resolves them to: each infra address is
@@ -145,8 +144,7 @@ impl World {
 /// The compiler + interpreter live at content-addressed derivations rather than
 /// sequential `register()` ids, so their addresses (and any snapshot that embeds
 /// them) are a function of the derived `constructorless` id, the pinned infra
-/// hashes, and the fixture network — stable across runs, but not the old
-/// sequential ids.
+/// hashes, and the fixture network, so they are stable across runs.
 pub(crate) fn build(cfg: Bootstrap) -> World {
     let env = Env::default();
     env.mock_all_auths_allowing_non_root_auth();

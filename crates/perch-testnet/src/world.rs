@@ -183,8 +183,6 @@ impl<'a> World<'a> {
         }
     }
 
-    // --- fresh keys --------------------------------------------------------
-
     pub fn passkey(&self, tag: &str) -> SoftPasskey {
         let mut seed = tagged(&self.secret, tag);
         seed[0] &= 0x7f; // below the P-256 group order
@@ -210,8 +208,6 @@ impl<'a> World<'a> {
         self.c.friendbot(&key.account())?;
         Ok(key)
     }
-
-    // --- accounts ----------------------------------------------------------
 
     /// A passkey account from the factory, funded with 10 XLM for activity.
     pub fn new_account(&self, label: &str, owner: SoftPasskey) -> Result<Acct> {
@@ -280,8 +276,6 @@ impl<'a> World<'a> {
             rule: self.rule_id(a, rule)?,
         })
     }
-
-    // --- documents ---------------------------------------------------------
 
     pub fn commitment(zk: &Zk) -> [u8; 32] {
         perch_zk_prover::commitment(&perch_zk_prover::host(), &zk.secret)
@@ -388,8 +382,6 @@ impl<'a> World<'a> {
         )?;
         Ok(compiled.recovery.get(0).context("no recovery")?.config_hash)
     }
-
-    // --- account calls -----------------------------------------------------
 
     fn apply_args(&self, doc: &Bytes, valid_until: u32) -> std::vec::Vec<ScVal> {
         std::vec![self.c.sc(doc.clone()), self.c.sc(valid_until), ScVal::Void]
@@ -565,8 +557,6 @@ impl<'a> World<'a> {
         );
         Ok(())
     }
-
-    // --- recovery ----------------------------------------------------------
 
     pub fn replacements(&self, new_owner: &SoftPasskey, zk: Option<&Zk>) -> ReplacementSet {
         let e = &self.c.env;
@@ -790,8 +780,6 @@ impl<'a> World<'a> {
             Entries::Root(a.address.clone()),
         )
     }
-
-    // --- proofs ------------------------------------------------------------
 
     fn leaves(&self, tree_id: u32, size: u64) -> Result<std::vec::Vec<[u8; 32]>> {
         let mut out = std::vec::Vec::new();

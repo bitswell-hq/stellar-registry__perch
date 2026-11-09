@@ -8,7 +8,7 @@
 //!
 //! The contracts are the real ones (`PerchAccount`, the doc compiler and
 //! interpreter at their pinned content addresses, the `PerchRecovery`
-//! controller, the WS2 membership pool), except:
+//! controller, the membership pool), except:
 //!
 //! - the owner's key and the guardians are [`Key`] stand-ins: custom
 //!   accounts whose `__check_auth` approves until [`Key::deny`] is called.
