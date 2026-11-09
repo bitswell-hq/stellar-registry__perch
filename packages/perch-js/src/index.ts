@@ -114,7 +114,7 @@ export {
   assertRevision,
   assertSignable,
   frozenAt,
-  appliesGrants,
+  grantMode,
   checkCapabilities,
   checkDocumentCapabilities,
   LedgerClock,

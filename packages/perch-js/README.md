@@ -197,7 +197,10 @@ host render errors, so transports should attach the events.
 compiler would refuse. `readSnapshot` refuses with `UnsupportedCapability`
 an account whose document identity, authorization digest, or snapshot
 format this version does not implement, and a limits format it does not
-know.
+know. `grantMode(snapshot.capabilities)` returns `'grant_v1'` for an account
+that `readGrantDoc` and `apply_grant` serve, `'scoped_v1'` for one built
+before the rename (only its `apply_scope` family applies grants), and
+`null` for one that applies no grant documents.
 
 ### Applying a document
 

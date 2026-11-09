@@ -2,7 +2,7 @@
 // (`packages/perch-contracts/src/{account,doc-compiler}.ts`) return them.
 
 import { describe, expect, it } from 'vitest';
-import { accountReader, appliesGrants, CompilerMismatch, readSnapshot, selectRules, UnsupportedCapability } from '../src/index.js';
+import { accountReader, CompilerMismatch, grantMode, readSnapshot, selectRules, UnsupportedCapability } from '../src/index.js';
 
 const ACCOUNT = 'CC5QACNC45UM2FLTKPXD2TME7647YHUPF4PGHQBFRP26PHHDQ6LWAPBF';
 const TOKEN = 'CA3D5KRYM6CB7OWQ6TWYRR3Z4T7GNZLKERYNZGGA5SOAOPIFY6YQGAXE';
@@ -107,15 +107,19 @@ describe('accountReader over the generated bindings', () => {
   });
 });
 
-describe('appliesGrants', () => {
+describe('grantMode', () => {
   const caps = (applyModes: string[]) => ({ interfaceVersion: 3, docIdentity: 'canon_v1', authDigest: 'addr_oz_v1', applyModes, snapshotVersion: 2 });
 
-  it('reads grant_v1 and the earlier scoped_v1 alike', () => {
-    expect(appliesGrants(caps(['one_tx', 'grant_v1']))).toBe(true);
-    expect(appliesGrants(caps(['one_tx', 'scoped_v1']))).toBe(true);
+  it('names grant_v1, preferring it when both are listed', () => {
+    expect(grantMode(caps(['one_tx', 'grant_v1']))).toBe('grant_v1');
+    expect(grantMode(caps(['one_tx', 'scoped_v1', 'grant_v1']))).toBe('grant_v1');
   });
 
-  it('is false for an account that applies only its account document', () => {
-    expect(appliesGrants(caps(['one_tx']))).toBe(false);
+  it('names scoped_v1 for an account built before the rename', () => {
+    expect(grantMode(caps(['one_tx', 'scoped_v1']))).toBe('scoped_v1');
+  });
+
+  it('is null for an account that applies only its account document', () => {
+    expect(grantMode(caps(['one_tx']))).toBeNull();
   });
 });
