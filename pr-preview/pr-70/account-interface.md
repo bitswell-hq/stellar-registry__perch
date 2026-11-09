@@ -105,10 +105,11 @@ rules that differ, and returns the canonical `doc_hash`.
 the owner chooses (one per app grant, say), and returns its `doc_hash`
 (spec §7.6). Owner authorization.
 
-- It refuses (`ScopeEscalation`) a `recovery` member, a `self-admin` rule, or
-  a rule scoped to the account, its recovery controller, or its ZK adapter or
-  pool, so no scoped document reaches the admin document's rules, recovery,
-  or upgrades.
+- It refuses (`ScopeEscalation`) a `recovery` member, a `self-admin` rule, a
+  rule scoped to the account, its recovery controller, or its ZK adapter or
+  pool, or a rule whose `functions` names a guardian approval, so no scoped
+  document reaches the admin document's rules, recovery, upgrades, or
+  guardian approvals.
 - It refuses (`NotNormalForm`) a document that is not in normal form. The
   compiler reports what the text shows (`CompiledDoc::normal_form`,
   `perch_ir::normal_form`): keys in lowercase hex, cap limits written as
@@ -327,9 +328,11 @@ their docs land in the account's spec too.
   never-expiring self-admin rule with a signer could lock the admin out, so
   it is refused (anti-brick).
 - **`ScopeEscalation`.** `apply_scope` was given a document a scoped document
-  may not be: it has a `recovery` member, a `self-admin` rule, or a rule
-  scoped to the account itself, its recovery controller, or its ZK adapter or
-  pool (spec §7.6).
+  may not be: it has a `recovery` member, a `self-admin` rule, a rule scoped
+  to the account itself, its recovery controller, or its ZK adapter or pool,
+  or a rule whose `functions` names a guardian approval (spec §7.6).
+  `__check_auth` also refuses a scoped rule selected for a guardian approval
+  on any contract, with `PerchAuthError::ScopeEscalation`.
 - **`ModelInvalid`.** The compiled document carries no model, more than one,
   a model soroban-facade cannot read, or one whose rules or recovery do not
   match the compiled rules one for one.

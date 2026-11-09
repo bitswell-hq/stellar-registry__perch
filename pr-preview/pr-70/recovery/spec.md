@@ -49,12 +49,12 @@ Other documents cite these requirements by ID.
 | D9 | Nullifiers | One nullifier per enrolled ZK credential, owned by that `(account, enrollment)`. It is either unspent or spent. Only a completion of that account spends it; nothing ever un-spends it. Proofs for any action need it unspent. Nullifiers are never reserved, so there is nothing to release. | §11 |
 | D10 | Stale state | Leaves and nullifiers bind an enrollment id the configuration names, and the account refuses to re-enroll an id it used before. Every configuration change and every completion bumps the per-account epoch, and evidence or attempts from an older epoch are dead. | §3, §11 |
 | D11 | Upgrades | Owner authorization (plus, under `Protected`, condition evidence over an `Upgrade` statement binding the Wasm hash and the epoch). Executable after 120 960 ledgers. An account-owned **recovery generation** invalidates the request whenever recovery configuration changes, including across unenrolled → enrolled → unenrolled. Executing an upgrade advances it. Blocked during an authorized attempt. | §12 |
-| D12 | Invoker-only hooks | The account never authorizes a reserved hook name (`install`, `uninstall`, `enforce`, `rcv_sync`, `rcv_cancel`, `rcv_upgrade`, `rcv_install`, `rcv_complete`, `rcv_insert`, `rcv_gate`) through `__check_auth`, and never calls one through `execute`. Controller, pool, and policy hooks are reachable only from the account's own controlled flows. That name guard, not a ban on rules scoped to the controller, is what protects the controller: a document may scope rules to its own controller so the account can act as a guardian there. Guardian and ZK evidence is always submitted through non-reserved entry points and recorded; hooks only read the records. | §2, §5, §15 |
+| D12 | Invoker-only hooks | The account never authorizes a reserved hook name (`install`, `uninstall`, `enforce`, `rcv_sync`, `rcv_cancel`, `rcv_upgrade`, `rcv_install`, `rcv_complete`, `rcv_insert`, `rcv_gate`) through `__check_auth`, and never calls one through `execute`. Controller, pool, and policy hooks are reachable only from the account's own controlled flows. That name guard, not a ban on rules scoped to the controller, is what protects the controller: the admin document may scope rules to a controller so the account can act as a guardian there. No scoped document's rule may cast a guardian approval at any controller (D17). Guardian and ZK evidence is always submitted through non-reserved entry points and recorded; hooks only read the records. | §2, §5, §15 |
 | D13 | Statement | One `RecoveryStatement`, encoded at fixed width and hashed with SHA-256. Guardians authorize the digest and the circuit binds it. | §4 |
 | D14 | ZK boundary | The controller passes the structured statement to an adapter. The adapter checks the circuit id, field canonicality, root membership in the enrolled pool, and the proof. Public inputs are `root, nullifier, statement_hash`. | §13 |
 | D15 | Pool | Depth 32 (chosen by `budgets.md`'s depth rule; a depth-24 build is the fallback). A full tree rolls over automatically. Roots are accepted as `(tree_id, root)`, and every root a tree has ever had stays acceptable. | §14 |
 | D16 | No re-entry | Soroban refuses to re-enter a contract already on the call stack. No hook calls back into the account; the account passes what hooks need. The `Protected` freeze is a mirror in the account's own storage, set by the controller through the account's invoker-only `rcv_gate`, never a cross-contract read from `__check_auth`. | §9, §15 |
-| D17 | Scoped documents | Grants may live in scoped documents beside the applied document. A scoped document has no recovery member and no rule scoped to the account, to its recovery controller, or to its ZK adapter or pool. Its rules authorize only under the scope generation they were applied in, and every completion advances it, wiping every scope in one write. A credential a wiped scope named is never named again by any later document but a completion's target. Scoped documents are part of no recovery source, target, or baseline. | §7.6 |
+| D17 | Scoped documents | Grants may live in scoped documents beside the applied document. A scoped document has no recovery member and no rule scoped to the account, to its recovery controller, or to its ZK adapter or pool, and none of its rules casts a guardian approval at any controller. Its rules authorize only under the scope generation they were applied in, and every completion advances it, wiping every scope in one write. A credential a wiped scope named is never named again by any later document but a completion's target. Scoped documents are part of no recovery source, target, or baseline. | §7.6 |
 
 ## 1. Scope and vocabulary
 
@@ -123,12 +123,16 @@ account built without recovery support cannot enroll in place.
   attempt (Transitions T4), and only compromise recovery is immune to that.
   The protocol keeps `baseline` optional; wallets should require one for
   `Protected`.
-- **A rule scoped to the account's own controller is safe, and needed.** An
-  account that is a guardian of other accounts at the controller it uses
-  itself signs those approvals in contexts naming that controller
-  (`submit_guardian`, `approve_change`). Its document therefore needs a
-  rule scoped to the controller, or a `Default` rule. Only the admin
-  document may hold one: a scoped document may not (§7.6).
+- **A rule scoped to a controller is safe in the admin document, and
+  needed.** An account that is a guardian of other accounts signs those
+  approvals in contexts naming the controller the guarded account uses
+  (`submit_guardian`, `approve_change`). That may be the controller the
+  account uses itself, another deployment, or one it never adopted. Its
+  admin document therefore needs a rule scoped to that controller, or a
+  `Default` rule. A guardian approval is owner-level authority over the
+  guarded account, so only the admin document may cast one: no scoped
+  document's rule may cast a guardian approval at any controller, whatever
+  controller the account itself adopted (§7.6).
 
   The reserved-name guard (§15, invariant I1) is what keeps such a rule's
   signers away from the controller's sensitive entry points. It refuses all
@@ -1078,21 +1082,36 @@ with:
 - a `self-admin` rule, or a `contract` rule naming the account itself: a
   rule scoped to the account authorizes every account entry point (owner
   authority);
-- a rule scoped to the adopted recovery controller: the account's guardian
-  approvals for other accounts (`submit_guardian`, `approve_change`, which
-  are not reserved names) are owner-level authority over those accounts,
-  which only the admin document may hold (§2);
+- a rule scoped to the adopted recovery controller;
 - a rule scoped to the ZK adapter or pool of the applied recovery member
-  (§15 rule 3, which the compiler can check only within one document).
+  (§15 rule 3, which the compiler can check only within one document);
+- a rule whose `functions` names a guardian approval (`submit_guardian`,
+  `approve_change`), whatever contract it is scoped to.
 
-These are the **excluded set**: the account, then its recovery controller
-and the adapter and pool of its ZK factor, all read from the applied admin
-document. A scope applied before the admin document adopts that controller
-or enrolls that adapter or pool is refused at authorization instead
-(below). So no scoped document can change the admin document's rules,
-recovery, or upgrades, or act at the account's recovery, whoever approves
-it. The compiler never emits OZ's `Default` or `CreateContract` rules; a
-`Default` rule in a scoped document would match calls on the account too.
+The contracts these name are the **excluded set**: the account, then its
+recovery controller and the adapter and pool of its ZK factor, all read
+from the applied admin document. A scope applied before the admin document
+adopts that controller or enrolls that adapter or pool is refused at
+authorization instead (below).
+
+**Guardian approvals.** The account's guardian approvals for other
+accounts (`submit_guardian`, `approve_change`, which are not reserved
+names) are owner-level authority over those accounts, which only the admin
+document may hold (§2). No scoped document's rule may cast a guardian
+approval at any controller, whatever controller the account itself
+adopted: the account approves at the controller the guarded account uses,
+which need not be its own, so the excluded set does not cover it. Besides
+the `functions` refusal above, `__check_auth` refuses a tagged rule
+selected for a context naming either entry point on any contract (below),
+which covers a rule that leaves its functions unrestricted. The names are
+`account::GUARDIAN_APPROVAL_FNS`; a rule on an unrelated contract that
+exports one of them is refused too.
+
+So no scoped document can change the admin document's rules, recovery, or
+upgrades, act at the account's recovery, or cast its guardian approvals,
+whoever approves it. The compiler never emits OZ's `Default` or
+`CreateContract` rules; a `Default` rule in a scoped document would match
+calls on the account too.
 
 **Normal form.** The account keeps no scoped document's text, only what
 the document lowers to and its signer ids, so it applies only documents
@@ -1119,7 +1138,8 @@ recovery, lost-key or compromise, and on nothing else; a completion that
 would advance it past `u64::MAX` refuses (`GenerationExhausted`), and every
 advance emits `ScopesWiped { gen }`. `__check_auth` refuses a tagged rule
 selected for a call on a contract of the excluded set: the recovery
-controller, or the ZK adapter or pool of the applied recovery member
+controller, or the ZK adapter or pool of the applied recovery member; and
+one selected for a guardian approval on any contract
 (`PerchAuthError::ScopeEscalation`), after the reserved-name guard and the
 freeze and before any rule is evaluated. So the `apply_scope` guard above
 also holds for a scope applied before that member, without `apply_doc`
@@ -1174,7 +1194,8 @@ is never read as an admin rule.
 `apply_scope`, with an argument constraint on the scope id, cannot touch the
 admin document or another scope id, but it is not a confined sub-owner:
 through its own scope it can grant itself any authority over other
-contracts outside the excluded set, an uncapped token transfer included.
+contracts outside the excluded set but guardian approvals, an uncapped
+token transfer included.
 Nor is a credential confined to one scope: several live scopes may name the
 same credential, and each authorizes it under its own rules. The credential
 index records only the generation that last named it.
@@ -1745,7 +1766,8 @@ The account must therefore:
    account that is a guardian at the controller it uses itself must
    authorize `submit_guardian` and `approve_change` there (§2). Rule 1 is
    what protects the controller's sensitive entry points, not this
-   compile-time check. A scoped document may hold none of the three (§7.6).
+   compile-time check. A scoped document may hold none of the three, and
+   no scoped rule casts a guardian approval at any controller (§7.6).
 
 `cap-0071.md` pins the host behaviour this relies on (properties C5, C6,
 and C7).
@@ -1785,11 +1807,14 @@ them against the digest the on-chain `check_auth` actually hands a verifier.
 - **I2.** Every other controller entry point that takes an address's
   authorization takes it as a guardian (`submit_guardian`,
   `approve_change`), bound to another account's statement digest. Signing
-  one never changes the signer's own recovery state.
+  one never changes the signer's own recovery state. Adding such an entry
+  point without adding its name to `GUARDIAN_APPROVAL_FNS` breaks the spec
+  (§7.6).
 - **I3.** By I1 and I2, a signature path into the controller, whether
   through a rule scoped to it or a `Default` rule, can reach only guardian
-  approvals. A rule scoped to the document's own controller is therefore
-  allowed, and the reserved-name guard alone protects the hooks.
+  approvals. A rule scoped to a controller is therefore allowed in the
+  admin document, and the reserved-name guard alone protects the hooks. A
+  scoped document's rules reach no guardian approval (§7.6).
 
 **No re-entry (D16).** Soroban refuses any call into a contract already on
 the call stack (`cap-0071.md` C8). The rules that follow from it:
