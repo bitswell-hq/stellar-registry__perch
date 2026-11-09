@@ -209,7 +209,7 @@
       ['t5', 'transfer 5 to the shop', transfer(SHOP, 5), ['app']],
       ['else', 'transfer 1 elsewhere', transfer(ELSEWHERE, 1), ['app']],
       ['approve', '`approve` on XLM', { contract: XLM, fn: 'approve', args: [ACCOUNT, SHOP, 5, 2000] }, ['app']],
-      ['account', 'a call to the account', { contract: ACCOUNT, fn: 'apply_grant', args: ['grant'] }, ['app']],
+      ['account', 'a call to the account', { contract: ACCOUNT, fn: 'apply_scope', args: ['grant'] }, ['app']],
       ['helper', 'a transfer signed by `helper` alone', transfer(SHOP, 1), ['helper']],
     ],
     steps: [['restrict_functions', 0, ['guess'], 'restrict `play` to `guess`'],
@@ -263,7 +263,7 @@
       const right = named === 'right';
       if (req === 'guess') return { contexts: [{ contract: GAME, fn: 'guess', args: [ACCOUNT, 7] }, transfer(GAME, 1)], choices: right ? [1, 2] : [0, 2] };
       if (req === 'within' || req === 'over') return { contexts: [transfer(SHOP, req === 'within' ? 4 : 5)], choices: right ? [0] : [2] };
-      if (req === 'account') return { contexts: [{ contract: ACCOUNT, fn: 'apply_grant', args: ['grant'] }], choices: right ? [0] : [1] };
+      if (req === 'account') return { contexts: [{ contract: ACCOUNT, fn: 'apply_scope', args: ['grant'] }], choices: right ? [0] : [1] };
       throw new Error(`unknown request ${req}`);
     },
     run(req, signer, grant, named) {
@@ -491,14 +491,16 @@
       h('label', { class: 'xp-check' }, percall, ' Check each call alone'),
       h('label', { class: 'xp-check' }, zero, ' Allow ledger 0 (no Stellar ledger has sequence 0; the theorem\u2019s bound over any P consecutive ledgers assumes ledger 1 or later)'),
       replace, reset, clear);
+    params.append(toggles);
     const plot = el('div', { class: 'xp-plot-wrap' });
     const inspect = el('input', { type: 'range', step: 1, name: `${fig.id}-inspect` });
     const inspectOut = el('output', { class: 'xp-out' });
     const fullest = el('p', { class: 'xp-result' });
     const history = el('ol', { class: 'xp-log', 'aria-label': 'Transfers, in order' });
-    panel.append(params, toggles, plot,
+    panel.append(params, plot,
       h('div', { class: 'xp-row' }, h('label', { class: 'xp-field xp-grow' }, h('span', {}, 'Inspect the window at ledger L'), inspect)),
-      inspectOut, fullest, h('p', { class: 'xp-sub' }, 'In the plot, as in the figure: a charge inside the inspected window is amber, one outside it is plain; a refused transfer is dashed red with a bar end and changes nothing.'), h('p', { class: 'xp-sub' }, 'Every transfer, in order:'), history);
+      inspectOut, fullest, h('p', { class: 'xp-sub' }, 'In the plot, as in the figure: a charge inside the inspected window is amber, one outside it is plain; a refused transfer is dashed red with a bar end and changes nothing.'),
+      h('details', {}, el('summary', {}, 'Every transfer, in order'), history));
 
     function run() {
       const base = st.zero ? 0 : BASE;
@@ -561,7 +563,7 @@
       const text = `Ledger ${lab(L)}; window (${lab(M.sat(L, st.period))}, ${lab(L)}]; ${W} of ${st.lambda} XLM`;
       inspect.setAttribute('aria-valuetext', text);
       inspectOut.textContent = `${text}.`;
-      params.querySelector('summary').textContent = `Cap: ${st.lambda} XLM per ${st.period} ledgers (change)`;
+      params.querySelector('summary').textContent = `Cap: ${st.lambda} XLM per ${st.period} ledgers · settings and edge cases`;
       advP.textContent = `+${st.period}`;
       advP.setAttribute('aria-label', `Advance ${st.period} ledgers`);
       adv10.setAttribute('aria-label', 'Advance 10 ledgers');
@@ -1560,7 +1562,26 @@
   // anything left out keeps its heading and lede and gets an Expand button. A link or a URL hash
   // into a shortened section expands it and lands on the target. Print shows everything.
   const RP_KEY = 'perch-reading-path';
-  let rpReveal = () => {};
+  let revealReadingSection = () => false;
+  // Native disclosures are independent of the optional reading-path controls. A
+  // deep link must work on a page with <details> even when it has no reading paths.
+  function rpReveal(target) {
+    if (!target) return false;
+    let changed = revealReadingSection(target);
+    // Section headings and legacy aliases sit outside their disclosure body.
+    // Landing on either should reveal that section, just like a body deep link.
+    const section = target.closest('main section[id]');
+    const disclosure = section && section.querySelector(':scope > details.section-disclosure');
+    if (disclosure && !disclosure.open) {
+      disclosure.open = true;
+      changed = true;
+    }
+    for (let d = target.closest('details:not([open])'); d; d = d.parentElement && d.parentElement.closest('details:not([open])')) {
+      d.open = true;
+      changed = true;
+    }
+    return changed;
+  }
   function readingPaths(nav) {
     if (nav.dataset.ready || !document.querySelector('[data-path]')) return;
     nav.dataset.ready = '1';
@@ -1602,14 +1623,12 @@
       if (say) live.textContent = v === 'all' ? 'Whole paper: every section shown.' : `${v}-minute path: ${collapsed} sections shortened; each keeps its heading, its summary and an Expand button. Links into a shortened section expand it.`;
       try { sessionStorage.setItem(RP_KEY, v); } catch { /* storage unavailable */ }
     }
-    // Expand the shortened section (and any closed <details>) holding `target`.
-    rpReveal = (target) => {
-      if (!target) return false;
+    // Reading paths add section expansion to the generic disclosure reveal.
+    revealReadingSection = (target) => {
       const s = target.closest('main section[id]');
-      let changed = false;
-      if (s && target.closest('.rp-hide')) { expand(s, false); changed = true; }
-      for (let d = target.closest('details:not([open])'); d; d = d.parentElement && d.parentElement.closest('details:not([open])')) { d.open = true; changed = true; }
-      return changed;
+      if (!s || !target.closest('.rp-hide')) return false;
+      expand(s, false);
+      return true;
     };
     let start = 'all';
     try { start = sessionStorage.getItem(RP_KEY) || 'all'; } catch { /* storage unavailable */ }

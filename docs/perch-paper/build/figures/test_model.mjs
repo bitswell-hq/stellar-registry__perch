@@ -144,3 +144,7 @@ if (fails.length) {
   process.exit(1);
 }
 console.log(`model test: ${n} checks passed`);
+
+// Keep browser-flow regressions under the existing paper CI entry point.
+await import("../test_journey.mjs");
+await import("../test_disclosures.mjs");
