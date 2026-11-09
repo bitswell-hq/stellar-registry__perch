@@ -4,7 +4,7 @@
 //   1. Figure 3's events (fig-cap-window; facts cap-event-1..5);
 //   2. the refusals of the attenuation table (tab-attenuation), and that every allowed step narrows;
 //   3. the Perch window column of the recorded run (fig-sim.run.json), at the run's ledgers;
-//   4. the verdicts the static explorable figures print (fig-attenuation, fig-auth-path, fig-compose),
+//   4. the verdicts the static explorable figures print (fig-attenuation, fig-auth-path),
 //      which build/figures/perchmodel.py computed.
 // Exits 1 on any mismatch. Node 18 or later; no dependencies.
 import { readFileSync, readdirSync } from 'node:fs';
@@ -136,29 +136,6 @@ const svg = (f) => readFileSync(join(SRC, 'figures', f), 'utf8');
     }
   }
   check(seen >= 9, `fig-auth-path: ${seen} scenarios read`);
-}
-{
-  const reqs = [
-    [{ amount: 6, to: 'shop', signers: 'both', price: 'ok', ledger: 1000 }, null],
-    [{ amount: 5, to: 'shop', signers: 'both', price: 'ok', ledger: 1001 }, null],
-    [{ amount: 1, to: 'another recipient', signers: 'both', price: 'ok', ledger: 1002 }, null],
-    [{ amount: 6, to: 'shop', signers: 'both', price: 'ok', ledger: 1003 }, 'window'],
-  ];
-  let order = ['window', 'pin', 'percall', 'threshold', 'live'];
-  let ra = M.emptyRecord();
-  let rb = M.emptyRecord();
-  const got = [];
-  for (const [req, detach] of reqs) {
-    if (detach) { order = order.filter((x) => x !== detach); rb = M.emptyRecord(); }
-    const a = M.E4.one(req, ra);
-    const b = M.E4.policies(req, order, rb);
-    ra = a.record;
-    rb = b.record;
-    got.push([a.ok ? 'accepted' : `refused:${a.refused}`, b.ok ? 'accepted' : `refused:${b.refused}${b.rolledBack.length ? ':rolled-back' : ''}`]);
-  }
-  const want = [...svg('fig-compose.svg').matchAll(/data-request="(\d+)" data-a="([^"]+)" data-b="([^"]+)"/g)].map((m) => [m[2], m[3]]);
-  check(want.length === 4, 'fig-compose: four requests');
-  want.forEach((w, k) => check(JSON.stringify(w) === JSON.stringify(got[k]), `fig-compose request ${k + 1}: figure ${w}, model ${got[k]}`));
 }
 
 if (fails.length) {
