@@ -117,7 +117,6 @@ body {
 .notes { display: none; }
 
 /* live stages: a frame of a real page */
-.stage-live { grid-template-rows: minmax(0, 1fr) auto; gap: 10px; }
 .frame-wrap {
   position: relative; min-height: 0;
   border: 1px solid var(--rule); border-radius: 14px; overflow: hidden;
@@ -385,7 +384,7 @@ body {
   </div>
   <div class="stage"><svg role="img" aria-label="An account at the centre of a dial of ledgers. A bracket marks a window of ledgers holding two charges; older charges lie outside it. An app key and an agent reach the account only through the window."></svg></div>
   <aside class="notes">
-    <p>Perch is a Stellar smart account that gives an app or agent a grant, a permission with limits, and enforces those limits itself at one decision point. Perch accounts run on Stellar through the Nido wallet. The dial is the deck's motif: the account at the centre, a ring of ledgers, and a window that holds the charges a grant has made. Solid cyan in an engraved frame is how Perch works at the paper's pinned build. Dashed magenta, with printer's marks, is where it could go.</p>
+    <p>Perch is a Stellar smart account that gives an app or agent a grant, a permission with limits, and enforces those limits itself at one decision point. Perch accounts run on Stellar through the Nido wallet. The dial is the deck's motif: the account at the centre, a ring of ledgers, and a window that holds the charges a grant has made. Solid cyan in an engraved frame is what Perch does, as the main paper presents it. Dashed magenta, with printer's marks, is where it could go.</p>
     <p class="src">docs/perch-paper/source/facts/paper.json (subtitle, authors, affiliation, wallet-name); source/html/abstract.html; source/html/sections/motivation.html.</p>
   </aside>
 </section>
@@ -452,9 +451,9 @@ body {
 
 <section class="slide" data-status="now" data-draw="install" aria-roledescription="slide" aria-label="Install the grant">
   <header class="head"><h2>Install the grant</h2></header>
-  <div class="stage"><svg role="img" aria-label="The Nido sign dialog asks you to install the app's grant; you approve with your passkey under the admin rule. One install call: the document compiler checks the grant and the account installs it. The grant covers the game's guess and the stake it asks for, and the shop's order and the payment it pulls."></svg></div>
+  <div class="stage"><svg role="img" aria-label="The Nido sign dialog asks you to install the app's grant; you approve with your passkey under the admin rule. One install call: the document compiler checks the grant and the account installs it. The grant covers the game, any function, and the stake its guess asks for, and the shop's order and the payment it pulls."></svg></div>
   <aside class="notes">
-    <p>The owner installs the app's grant with one call, <code>apply_scope</code>, approved in the Nido sign dialog and signed by the passkey under the account's <code>admin</code> rule. The document compiler validates the grant document, and the account installs its rules. For the demo the grant covers two rooms and the payment asked inside each: a rule for <code>game.guess</code> and a transfer rule rooted at it for the XLM stake, and a rule for <code>shop.order</code> and a transfer rule rooted at it for the simulated EURC payment. Slides 9 and 10 show how each node is checked.</p>
+    <p>The owner installs the app's grant with one call, <code>apply_scope</code>, approved in the Nido sign dialog and signed by the passkey under the account's <code>admin</code> rule. The document compiler validates the grant document, and the account installs its rules. For the demo the grant covers two rooms and the payment asked inside each: a game rule (any game function) and a transfer rule rooted at <code>game.guess</code> for the XLM stake, and a shop rule (<code>order</code>) and a transfer rule rooted at <code>shop.order</code> for the simulated EURC payment. Slides 9 and 10 show how each node is checked.</p>
     <p class="src">docs/perch-paper/source/html/sections/motivation.html (apply_scope, the document compiler); docs/auth-root.md; docs/nido-sim/README.md (the grant the simulation installs).</p>
   </aside>
 </section>
@@ -465,7 +464,7 @@ body {
   <aside class="notes">
     <p>A grant covers a root call and the calls it makes on the account's behalf, and the account checks every node of the authorization tree against the rule the payload names for it. In the guess scenario, <code>game.guess</code> calls <code>guesser.require_auth()</code>, and a loss pays the stake with the XLM token's <code>transfer(account, game, stake)</code> inside it, so the account's entry is <code>[game.guess, token.transfer]</code>. The grant has a <code>game</code> rule and a <code>transfer</code> rule. The root passes the game rule. The nested transfer passes the transfer rule only if it is from the account itself (is-self on argument 0), within the cap (argument 2 is charged to the window; in the test, 2 XLM per 100 ledgers with a 1 XLM stake, so the cap refuses a third loss), and its entry's root is exactly <code>game.guess</code> (the rule's <code>auth-root</code>). The same transfer made directly, or under another root, is refused. A win is paid by the game itself, so the account's entry holds only <code>game.guess</code> and uses no allowance. The root check names an exact contract and function; it does not inspect root arguments or other ancestors.</p>
     <p>Theorem 11 (authorization-tree coverage, in the host model): every call an account's entry approves is allowed by the rules its <code>__check_auth</code> checks, and those see the whole tree. The exact-root condition itself is tested (<code>auth_root.rs</code>), not proved.</p>
-    <p class="src">crates/integration-tests/tests/auth_root.rs (Game::guess; signed_game_loss_and_win_and_document_round_trip; direct_under_cap_and_fabricated_game_root_are_refused; wrong_root_function_contract_omitted_root_auth_and_reordered_tree_are_refused); docs/auth-root.md; crates/perch-ir/src/doc.rs (AuthRoot); docs/perch-paper/index.html, "A grant covers the calls a request makes" (#step-nested); docs/perch-paper/source/statements.json (T11).</p>
+    <p class="src">crates/integration-tests/tests/auth_root.rs (Game::guess; signed_game_loss_and_win_and_document_round_trip; direct_under_cap_and_fabricated_game_root_are_refused; wrong_root_function_contract_omitted_root_auth_and_reordered_tree_are_refused); docs/auth-root.md; crates/perch-ir/src/doc.rs (AuthRoot); docs/perch-paper/source/statements.json (T11).</p>
   </aside>
 </section>
 
@@ -1543,7 +1542,7 @@ B.install = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   c.rect(kx, ky, kw, kh, { k: 'now', rx: 16, w: 1.1, fill: 'paper' });
   c.rect(kx, ky + kh * .1, kw, kh * .08, { k: 'now', w: .15, fill: 'now', fillOp: .2 });
   c.rect(kx + 26, ky + kh * .3, 44, 34, { k: 'now', rx: 4, w: .5 });
-  const lines = [['game.guess', ''], ['XLM.transfer', 'only inside the game room'], ['shop.order', ''], ['EURC.transfer', 'only inside the shop']];
+  const lines = [['game', 'any function'], ['XLM.transfer', 'only inside the game room'], ['shop.order', ''], ['EURC.transfer', 'only inside the shop']];
   lines.forEach(([a, b], i) => {
     const y = ky + kh * (T ? .34 : .34) + i * (T ? 62 : 54);
     c.text(kx + 100, y, a, { anchor: 'start', size: T ? .54 : .56, font: 'code', step: 80 });
@@ -2183,7 +2182,7 @@ function statusChip(s) {
   head.appendChild(chip);
 }
 const svgOf = s => $('.stage > svg', s);
-function enter(s) { const b = B[s.dataset.draw]; const svg = svgOf(s); if (b && b.enter && svg) b.enter(svg); loadFrame(s); }
+function enter(s) { const b = B[s.dataset.draw]; const svg = svgOf(s); if (b && b.enter && svg) b.enter(svg); }
 function leave(s) { const b = B[s.dataset.draw]; const svg = svgOf(s); if (b && b.leave && svg) b.leave(svg); }
 
 function render() {
@@ -2207,7 +2206,7 @@ function render() {
   if (s && s.classList.contains('active')) { s.classList.remove('on'); void s.offsetWidth; s.classList.add('on'); enter(s); }
 }
 
-/* Live frames: the dialog loads when its slide opens; the simulation loads on request. */
+/* Live frame: the simulation loads on request. */
 function themeParam() { const t = root.dataset.theme; return t ? (t === 'dark' ? 'dark' : 'light') : ''; }
 function syncFrameTheme(f) {
   try {
@@ -2228,7 +2227,6 @@ function startFrame(f) {
   f.addEventListener('load', () => { syncFrameTheme(f); const w = f.parentNode.querySelector('.frame-wait'); if (w) w.remove(); });
   f.setAttribute('src', src);
 }
-function loadFrame(s) { if (s.dataset.live) startFrame($('iframe', s)); }
 $$('[data-run]').forEach(b => b.addEventListener('click', e => {
   e.stopPropagation();
   const st = b.closest('.stage-sim');

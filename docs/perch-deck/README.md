@@ -8,7 +8,7 @@ Controls:
 - `N` shows each slide's speaker notes, which carry its sources. `T` switches between light and dark; until then the deck follows the OS.
 - `#n` opens slide n, and `?still=1` shows every slide's final drawing without motion. Reduced motion has the same effect.
 
-Solid cyan in an engraved frame is how Perch works at the paper's pinned build. Dashed magenta with printer's marks is where it could go. Slides 17–19, on a zero-knowledge email proof as a recovery credential, are of that kind.
+Solid cyan in an engraved frame is what Perch does, as the main paper presents it. Dashed magenta with printer's marks is where it could go. Slides 17–19, on a zero-knowledge email proof as a recovery credential, are of that kind.
 
 ## Sources
 
@@ -21,7 +21,7 @@ Solid cyan in an engraved frame is how Perch works at the paper's pinned build. 
 | 6 | `source/html/sections/authorization.html`; `source/figures/fig-auth-path.steps.json`; `crates/perch-smart-account/src/auth.rs` |
 | 7 | Nido 97105a0b `contracts/factory/src/contract.rs`, `packages/frontend/src/lib/policy/docDraft.ts`, `DEPLOYED.md`; `crates/perch-smart-account/src/lib.rs` (the admin rule); `docs/nido-sim/README.md` |
 | 8 | `motivation.html` (`apply_scope`, the document compiler); `docs/auth-root.md`; `docs/nido-sim/README.md` |
-| 9 | `crates/integration-tests/tests/auth_root.rs`; `docs/auth-root.md`; `crates/perch-ir/src/doc.rs` (`AuthRoot`); the main paper's step "A grant covers the calls a request makes" (`#step-nested`) |
+| 9 | `crates/integration-tests/tests/auth_root.rs`; `docs/auth-root.md`; `crates/perch-ir/src/doc.rs` (`AuthRoot`) |
 | 10 | The simulation's coffee shop and its simulated EURC test token (`docs/nido-sim/`; simulation and demos only); the rule conditions from `docs/auth-root.md` |
 | 11 | `docs/nido-sim/index.html`, the Nido simulation page, and its `README.md` |
 | 12 | `motivation.html`, `grants.html`, `source/html/sign-dialog.html`; `docs/sign-dialog/nido.html`, `NOTICE.md` |
