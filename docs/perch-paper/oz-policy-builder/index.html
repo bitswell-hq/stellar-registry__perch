@@ -131,7 +131,7 @@ nav .nav-links a[href="#repro"]::after{content:" · detail";font-size:.66rem;let
 /* Print from either theme: figures use the light theme's figure tokens. */
 @media print{:root,:root[data-theme]{--fig-stroke:#7d8a91;--fig-fill:#f1f2ee;--fig-proved:#e6f1ea;--fig-deny:#f8e6e2;--tint:#ebede7;--line:#d9dcd6;--btn:#fff;--on-amber:#fff}
 .fig-head,.fig-bar,.fig-live,.fig-detail{display:none}.fig [data-print=no]{display:none!important}.fig .off:not([data-print=no]){display:revert!important}}
-/* Explorables (E1-E4), theorem instances and the simulation embed (figures.js). On screen an
+/* Explorables (E1-E3), theorem instances and the simulation embed (figures.js). On screen an
    explorable replaces its static form; print and no-JS readers get the static form only. */
 .xp{min-width:0;margin:.6rem 0 0;font-size:.9rem}
 .xp p{margin:.5rem 0;max-width:none}
@@ -200,13 +200,6 @@ nav .nav-links a[href="#repro"]::after{content:" · detail";font-size:.66rem;let
 .xp-verdict{font-weight:650}
 .xp-witness{margin-top:.4rem}
 .xp-points{margin:.3rem 0;padding-left:1.1rem}
-.xp-slot{list-style:none;margin-left:-1.1rem;border:1.5px dashed var(--fig-stroke);border-radius:4px;padding:.3rem .5rem;color:var(--muted)}
-.xp-policies{list-style:none;padding:0;margin:.3rem 0}
-.xp-policies li{display:flex;flex-wrap:wrap;gap:.3rem .6rem;align-items:center;justify-content:space-between;border:1px solid var(--fig-stroke);border-radius:5px;padding:.25rem .5rem;margin:.3rem 0}
-.xp-policies li.xp-detached{border-style:dashed;color:var(--muted)}
-.xp-pname{min-width:0;overflow-wrap:anywhere}
-.xp-pbtns{display:inline-flex;flex-wrap:wrap;gap:.3rem}
-.xp-guarantee{font-size:.85rem;border-top:1px solid var(--line);padding-top:.4rem}
 .xp-replay .xp-log{max-height:none}
 .thm-instance{margin:.4rem 0}
 .thm-try{border-top:1px dashed var(--line);margin:.5rem 0;padding-top:.3rem}
@@ -234,7 +227,7 @@ nav .nav-links a[href="#repro"]::after{content:" · detail";font-size:.66rem;let
 @media print{.xp,.sim-actions,.sim-frame,.thm-try,.sim-try{display:none!important}}
 [data-explorable].xp-on{container:fig/inline-size}
 .thm-try:has(>.thm-instance:empty){display:none}
-@container fig (max-width:560px){.xp-compose .fig-head,.xp-att .fig-head{position:static}.xp-policies li{padding:.2rem .4rem}}
+@container fig (max-width:560px){.xp-att .fig-head{position:static}}
 /* Reading paths (figures.js): a radio group over the blocks tagged data-path; print shows everything. */
 .reading-paths .rp{display:flex;flex-wrap:wrap;gap:.2rem 1rem;align-items:center;border:1px solid var(--line);border-radius:6px;padding:.1rem .8rem .3rem;margin:1rem 0 0}
 .reading-paths .rp legend{font-size:.75rem;color:var(--muted);padding:0 .3rem}
@@ -243,19 +236,7 @@ nav .nav-links a[href="#repro"]::after{content:" · detail";font-size:.66rem;let
 .rp-expand{min-height:44px;font:inherit;font-size:.85rem;padding:.4rem .8rem;border:1px solid var(--edge);border-radius:6px;background:var(--btn);color:var(--text)}
 @media screen{.rp-hide{display:none!important}}
 @media print{.rp-expand,.reading-paths{display:none!important}}
-/* r4 panel fixes. Compose: for the newest request, a point that ran is solid, the refusing one is
-   red with a bar end, one that did not run is dashed (the figure's shapes). */
-.xp-policies li.xp-pt-ran{border-style:solid;border-color:var(--text)}
-.xp-policies li.xp-pt-refused{border-color:var(--deny);border-width:2px;border-right-width:6px}
-.xp-policies li.xp-pt-skip{border-style:dashed;color:var(--muted)}
-.xp-policies li.xp-pt-off{border-style:dashed;color:var(--muted)}
-.xp-ptag{font:600 .66rem var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-left:auto}
-.xp-pt-refused .xp-ptag{color:var(--deny)}
-.xp-checks{list-style:none;padding:0}
-.xp-checks .xp-slot{margin-left:0}
-.xp-newest{border-left:3px solid var(--amber);padding-left:.6rem;margin:.4rem 0}
-.xp-newest .xp-entry{margin:.2rem 0}
-.xp-entry{margin:0;overflow-wrap:anywhere}
+/* r4 panel fixes. */
 .xp-why{font-size:.78rem;color:var(--muted);overflow-wrap:anywhere}
 .xp-caption{font-size:.8rem;line-height:1.6;color:var(--muted);margin-top:.8rem}
 /* Simulation embed: the rule, then Start and the presets above the frame; the recorded figure
@@ -513,7 +494,7 @@ nav .nav-links a[href="#repro"]::after{content:" · detail";font-size:.66rem;let
 // data-explorable="<controller>" (for example a div around an unnumbered table) gets the
 // same controller.
 //
-// Explorables (E1-E4) and theorem instances compute from PerchModel, a plain transcription
+// Explorables (E1-E3) and theorem instances compute from PerchModel, a plain transcription
 // of rule-core cbabe59 (definitions D2-D6), and say so with a MODEL chip; what comes from a
 // recorded run says RECORDED; the embedded simulation says EXECUTED. A model panel never
 // prints an account error code or describes OpenZeppelin behaviour. The static figure stays
@@ -771,47 +752,9 @@ nav .nav-links a[href="#repro"]::after{content:" · detail";font-size:.66rem;let
     },
   };
 
-  // E4: five checks; (a) one decision point holding four of them and the window record,
-  // (b) one policy per check, each with its own state, run in order until one refuses.
-  const E4 = {
-    limit: 10, period: 100,
-    check(name, req, rec) {
-      if (name === 'pin') return { ok: req.to === SHOP };
-      if (name === 'percall') return { ok: req.amount <= this.limit };
-      if (name === 'threshold') return { ok: req.signers === 'both' };
-      if (name === 'live') return { ok: req.price === 'ok' };
-      if (name === 'window') {
-        const c = charge(rec, this.limit, this.period, req.ledger, req.amount);
-        return { ok: c.ok, record: c.ok ? c.record : null, charge: c };
-      }
-      throw new Error(`unknown check ${name}`);
-    },
-    one(req, rec) {
-      // a Perch rule has no live read and cannot bound one call's amount: neither has a slot here
-      for (const name of ['pin', 'threshold', 'window']) {
-        const c = this.check(name, req, rec);
-        if (!c.ok) return { ok: false, ran: ['decision'], refused: name, written: [], rolledBack: [], record: rec, charge: c.charge };
-        if (name === 'window') return { ok: true, ran: ['decision'], refused: null, written: ['window'], rolledBack: [], record: c.record };
-      }
-      return null;
-    },
-    policies(req, order, rec) {
-      const ran = [];
-      const written = [];
-      let next = rec;
-      for (const name of order) {
-        ran.push(name);
-        const c = this.check(name, req, rec);
-        if (!c.ok) return { ok: false, ran, refused: name, written: [], rolledBack: written, record: rec, charge: c.charge };
-        if (c.record) { written.push(name); next = c.record; }
-      }
-      return { ok: true, ran, refused: null, written, rolledBack: [], record: next };
-    },
-  };
-
   globalThis.PerchModel = {
     sat, allows, allowsChecks, charge, authorize, accepts, acceptingRule, attenuate, lowerScoped, inWindow, windowTotal,
-    emptyRecord, REFUSAL, STEPS, E1, E3, E4, replay, transfer, consts: { ACCOUNT, GAME, XLM, SHOP, ELSEWHERE, PIN_SHOP, PIN_GAME },
+    emptyRecord, REFUSAL, STEPS, E1, E3, replay, transfer, consts: { ACCOUNT, GAME, XLM, SHOP, ELSEWHERE, PIN_SHOP, PIN_GAME },
   };
 })();
 
@@ -1711,152 +1654,6 @@ nav .nav-links a[href="#repro"]::after{content:" · detail";font-size:.66rem;let
     paint();
     setOff(next, false);
     setOff(end, true);
-  };
-
-  // ---------------------------------------------------------------- E4: composition
-  // fig-compose. Opens on the figure's four requests; both columns mark, for the newest request,
-  // the points that ran (solid), the one that refused (red, bar end) and those not run (dashed).
-  const E4_NAME = { pin: 'recipient pin', percall: 'per-call bound', window: 'window cap', threshold: 'two signers', live: 'live read', decision: 'decision point' };
-  const E4_A = ['pin', 'threshold', 'window'];
-  const E4_SCRIPT = [
-    ['Pay 6 to the shop', { amount: 6, to: 'shop', signers: 'both', price: 'ok' }, null],
-    ['Pay 5 more to the shop', { amount: 5, to: 'shop', signers: 'both', price: 'ok' }, null],
-    ['Pay 1 elsewhere', { amount: 1, to: 'another recipient', signers: 'both', price: 'ok' }, null],
-    ['Detach the window cap in (b); pay 6 to the shop', { amount: 6, to: 'shop', signers: 'both', price: 'ok' }, 'window'],
-  ];
-  const PT_WORD = { ran: 'ran', refused: 'refused', skip: 'not run', off: 'detached' };
-  function ptState(name, ran, refused) {
-    if (name === refused) return 'refused';
-    return ran.includes(name) ? 'ran' : 'skip';
-  }
-  function ptItem(label, state, extra) {
-    return h('li', { class: `xp-pt xp-pt-${state}` }, h('span', { class: 'xp-pname' }, label),
-      state ? h('span', { class: 'xp-ptag' }, PT_WORD[state]) : null, extra || null);
-  }
-  CONTROLLERS.compose = (fig) => {
-    const panel = mount(fig, 'xp-compose');
-    const BASE = 1000;
-    const fresh = () => ({ now: BASE, recA: M.emptyRecord(), recB: M.emptyRecord(), movedA: [], movedB: [], order: ['window', 'pin', 'percall', 'threshold', 'live'], attached: new Set(['window', 'pin', 'percall', 'threshold', 'live']), log: [], last: null, n: 0 });
-    let st = fresh();
-    const { bar, live } = head(fig, panel);
-    bar.setAttribute('aria-label', 'Requests');
-    const amount = number(uid('cmp-amount'), 6, 0, 100);
-    const to = select(uid('cmp-to'), [['shop', 'the shop'], ['else', 'elsewhere']]);
-    const signers = select(uid('cmp-signers'), [['both', 'the app and the co-signer'], ['app', 'the app alone']]);
-    const price = select(uid('cmp-price'), [['ok', 'above the floor'], ['low', 'below the floor']]);
-    const pay = button('Pay', { class: 'primary' });
-    const again = button('Send again');
-    const adv = button('Advance 100 ledgers');
-    const reset = button('Reset to the figure’s requests');
-    const clear = button('Clear');
-    bar.append(labelled('Amount', amount), labelled('To', to), labelled('Signed by', signers), labelled('Oracle price', price), pay, again, adv, reset, clear);
-    panel.append(banner('MODEL', 'This model adds a co-signer and an oracle price floor to the shop grant, to show where each arrangement places a check. A request passes when every point that runs permits it, and writes commit only if it passes. No verdict here names a contract; the simulation runs the real ones.'));
-    // The oracle example: (b) can read a price and refuse; (a) has no slot for a read.
-    const oracle = button('Pay 1 to the shop with the oracle price below the floor');
-    panel.append(h('div', { class: 'xp-row' }, h('span', { class: 'xp-sub' }, 'Try:'), oracle));
-    const newest = el('div', { class: 'xp-newest' });
-    const colA = el('section', { class: 'xp-card' });
-    const colB = el('section', { class: 'xp-card' });
-    panel.append(newest, h('p', { class: 'xp-sub' }, 'For the newest request: solid, the point ran; red with a bar end, it refused; dashed, it did not run.'),
-      h('div', { class: 'xp-cards' }, colA, colB));
-    const log = el('ol', { class: 'xp-log xp-log-rev', 'aria-label': 'Requests, newest first' });
-    panel.append(h('p', { class: 'xp-sub' }, 'Every request, newest first:'), log);
-    const winB = () => M.windowTotal(st.movedB, st.now, 100);
-    function drawCols() {
-      const last = st.log[0];
-      const aRan = last ? (last.aRes.ok ? E4_A : E4_A.slice(0, E4_A.indexOf(last.aRes.refused))) : [];
-      const aItems = E4_A.map((name) => ptItem(name === 'window' ? `window cap: record ${M.windowTotal(st.recA.history, st.now, 100)} of 10` : E4_NAME[name],
-        last ? ptState(name, aRan, last.aRes.refused) : ''));
-      colA.replaceChildren(h('h4', {}, '(a) Shaped like a Perch account'), h('p', { class: 'xp-sub' }, 'One decision point holds every check and the window record.'),
-        h('ol', { class: 'xp-policies xp-checks' }, aItems, h('li', { class: 'xp-slot' }, 'per-call bound and live read: a Perch rule has neither')),
-        h('p', { class: 'xp-guarantee' }, 'Window at most 10: holds while the rule keeps its cap.'));
-      const items = st.order.map((name, i) => {
-        const on = st.attached.has(name);
-        const up = button('Up', { 'aria-label': `Move ${E4_NAME[name]} up` });
-        const down = button('Down', { 'aria-label': `Move ${E4_NAME[name]} down` });
-        const tog = button(on ? 'Detach' : 'Attach', { 'aria-label': `${on ? 'Detach' : 'Attach'} ${E4_NAME[name]}` });
-        setOff(up, i === 0);
-        setOff(down, i === st.order.length - 1);
-        up.onclick = () => { if (isOff(up)) return; [st.order[i - 1], st.order[i]] = [st.order[i], st.order[i - 1]]; drawCols(); focusLater(`Move ${E4_NAME[name]} up`); live.textContent = `${E4_NAME[name]} moved up: position ${i}.`; };
-        down.onclick = () => { if (isOff(down)) return; [st.order[i + 1], st.order[i]] = [st.order[i], st.order[i + 1]]; drawCols(); focusLater(`Move ${E4_NAME[name]} down`); live.textContent = `${E4_NAME[name]} moved down: position ${i + 2}.`; };
-        tog.onclick = () => {
-          if (on) st.attached.delete(name); else st.attached.add(name);
-          if (name === 'window') st.recB = M.emptyRecord();
-          drawCols();
-          focusLater(`${on ? 'Attach' : 'Detach'} ${E4_NAME[name]}`);
-          live.textContent = `${E4_NAME[name]} ${on ? 'detached' : 'attached'}${name === 'window' ? (on ? '; its record is gone' : '; its record starts empty') : ''}.`;
-        };
-        const state = name === 'window' && on ? `: record ${M.windowTotal(st.recB.history, st.now, 100)} of 10` : '';
-        const mark = !on ? 'off' : last ? ptState(name, last.bRes.ran, last.bRes.refused) : '';
-        return ptItem(`${i + 1}. ${E4_NAME[name]}${state}`, mark, h('span', { class: 'xp-pbtns' }, tog, up, down));
-      });
-      const winOn = st.attached.has('window');
-      const moved = winB();
-      colB.replaceChildren(h('h4', {}, '(b) Shaped like a policy-composed OpenZeppelin account'), h('p', { class: 'xp-sub' }, 'One policy per check, each with its own state, run in order; the first to refuse stops the call.'),
-        h('ol', { class: 'xp-policies' }, items),
-        h('p', { class: 'xp-guarantee' }, 'Window at most 10: holds while the window-cap policy is attached.',
-          winOn ? '' : ` Detached now: moved in the last 100 ledgers: ${moved}${moved > 10 ? ', over 10' : ''}.`));
-      newest.replaceChildren(...(last ? [h('p', { class: 'xp-sub' }, `Newest request (${last.n}):`), entry(last)] : [h('p', { class: 'xp-sub' }, 'No request yet.')]));
-    }
-    function focusLater(label) {
-      const b = [...colB.querySelectorAll('button')].find((x) => x.getAttribute('aria-label') === label);
-      if (b) b.focus();
-    }
-    const arith = (c) => (c && c.why === 'limit' ? ` (${c.remaining} + ${c.amount} = ${c.total} > ${c.limit})` : '');
-    function request(req, label) {
-      req.ledger = st.now;
-      const a = M.E4.one(req, st.recA);
-      const order = st.order.filter((n) => st.attached.has(n));
-      const b = M.E4.policies(req, order, st.recB);
-      st.recA = a.record;
-      if (a.ok) st.movedA.push({ ledger: st.now, amount: req.amount });
-      if (b.ok) { st.recB = b.record; st.movedB.push({ ledger: st.now, amount: req.amount }); }
-      const what = label || `Pay ${req.amount} to ${req.to === 'shop' ? 'the shop' : 'another recipient'}${req.signers === 'app' ? ', the app alone signing' : ''}${req.price === 'low' ? ', price below the floor' : ''}`;
-      const ta = a.ok ? `(a) decision point: accepted; written: the window record, now ${M.windowTotal(st.recA.history, st.now, 100)} of 10.`
-        : `(a) decision point: refused, ${E4_NAME[a.refused]}${arith(a.charge)}; nothing written.`;
-      const ran = `ran ${b.ran.length ? b.ran.map((n) => E4_NAME[n]).join(' → ') : 'no policy'}`;
-      const tb = b.ok ? `(b) ${ran}: accepted; ${b.written.length ? `written: the window cap’s record, now ${M.windowTotal(b.record.history, st.now, 100)} of 10` : `nothing written; moved in the last 100 ledgers: ${winB()}${winB() > 10 ? ', over 10' : ''}`}.`
-        : `(b) ${ran}: refused by the ${E4_NAME[b.refused]}${arith(b.charge)}; ${b.rolledBack.length ? 'the window cap had written: rolled back with the call' : 'nothing written'}.`;
-      st.n += 1;
-      st.log.unshift({ n: st.n, what, ta, tb, a: a.ok, b: b.ok, aRes: a, bRes: b });
-      st.last = { ...req };
-      return `${what}. ${ta} ${tb}`;
-    }
-    const entry = (x) => h('p', { class: 'xp-entry' }, h('strong', {}, `${x.n}. ${x.what}`), h('br', {}),
-      h('span', { class: x.a ? 'xp-ok' : 'xp-refused' }, el('span', { class: 'xp-mark', 'aria-hidden': 'true' }, x.a ? '✓' : '✕'), ` ${x.ta}`), h('br', {}),
-      h('span', { class: x.b ? 'xp-ok' : 'xp-refused' }, el('span', { class: 'xp-mark', 'aria-hidden': 'true' }, x.b ? '✓' : '✕'), ` ${x.tb}`));
-    function drawLog() {
-      log.replaceChildren(...st.log.map((x) => h('li', {}, entry(x))));
-      setOff(again, !st.last);
-    }
-    const redraw = (say) => { drawCols(); drawLog(); if (say != null) live.textContent = say; };
-    function script() {
-      st = fresh();
-      E4_SCRIPT.forEach(([label, req, detach], k) => {
-        st.now = BASE + k;
-        if (detach) { st.attached.delete(detach); if (detach === 'window') st.recB = M.emptyRecord(); }
-        request({ ...req }, label);
-      });
-    }
-    pay.onclick = () => {
-      const v = Math.round(Number(amount.value));
-      if (!Number.isFinite(v) || v < 0 || v > 100) { live.textContent = 'Enter a whole amount from 0 to 100.'; return; }
-      redraw(request({ amount: v, to: to.value === 'shop' ? 'shop' : 'another recipient', signers: signers.value, price: price.value }));
-    };
-    again.onclick = () => { if (!isOff(again)) redraw(request({ ...st.last })); };
-    oracle.onclick = () => {
-      amount.value = 1; to.value = 'shop'; signers.value = 'both'; price.value = 'low';
-      const say = request({ amount: 1, to: 'shop', signers: 'both', price: 'low' });
-      const x = st.log[0];
-      const why = x.aRes.ok && !x.bRes.ok && x.bRes.refused === 'live'
-        ? ' (b) refuses at the live read and (a) accepts, because a Perch rule cannot read another contract.' : '';
-      redraw(say + why);
-    };
-    adv.onclick = () => { st.now += 100; redraw(`100 ledgers later: (a) the window record holds ${M.windowTotal(st.recA.history, st.now, 100)} of 10; (b) moved in the window: ${winB()}.`); };
-    reset.onclick = () => { script(); redraw('Back to the figure’s four requests.'); };
-    clear.onclick = () => { st = fresh(); redraw('Cleared: both arrangements empty, every policy attached.'); };
-    script();
-    redraw();
   };
 
   // ---------------------------------------------------------------- the dual simulation
