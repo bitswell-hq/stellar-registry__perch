@@ -2,7 +2,7 @@
 // (`packages/perch-contracts/src/{account,doc-compiler}.ts`) return them.
 
 import { describe, expect, it } from 'vitest';
-import { accountReader, CompilerMismatch, readSnapshot, selectRules, UnsupportedCapability } from '../src/index.js';
+import { accountReader, appliesGrants, CompilerMismatch, readSnapshot, selectRules, UnsupportedCapability } from '../src/index.js';
 
 const ACCOUNT = 'CC5QACNC45UM2FLTKPXD2TME7647YHUPF4PGHQBFRP26PHHDQ6LWAPBF';
 const TOKEN = 'CA3D5KRYM6CB7OWQ6TWYRR3Z4T7GNZLKERYNZGGA5SOAOPIFY6YQGAXE';
@@ -104,5 +104,18 @@ describe('accountReader over the generated bindings', () => {
     const reader = accountReader(ACCOUNT, client, { options: { contractId: TOKEN }, limits: () => sim(limits) });
     expect(reader.compiler).toBe(TOKEN);
     await expect(readSnapshot(reader)).rejects.toEqual(new CompilerMismatch(VERIFIER, TOKEN));
+  });
+});
+
+describe('appliesGrants', () => {
+  const caps = (applyModes: string[]) => ({ interfaceVersion: 3, docIdentity: 'canon_v1', authDigest: 'addr_oz_v1', applyModes, snapshotVersion: 2 });
+
+  it('reads grant_v1 and the earlier scoped_v1 alike', () => {
+    expect(appliesGrants(caps(['one_tx', 'grant_v1']))).toBe(true);
+    expect(appliesGrants(caps(['one_tx', 'scoped_v1']))).toBe(true);
+  });
+
+  it('is false for an account that applies only its account document', () => {
+    expect(appliesGrants(caps(['one_tx']))).toBe(false);
   });
 });

@@ -128,6 +128,13 @@ export function checkCapabilities(c: AccountCapabilities): void {
   if (c.snapshotVersion !== 1 && c.snapshotVersion !== 2) throw new UnsupportedCapability(`snapshot format ${c.snapshotVersion}`);
 }
 
+/** Whether the account applies grant documents: its `applyModes` lists
+ *  `grant_v1` (`apply_grant`), or `scoped_v1`, which earlier builds of this
+ *  interface report for the same documents under `apply_scope`. */
+export function appliesGrants(c: AccountCapabilities): boolean {
+  return c.applyModes.includes('grant_v1') || c.applyModes.includes('scoped_v1');
+}
+
 /**
  * Read a consistent snapshot: `configuration()`, the capabilities and
  * limits, optionally the document, then the revision again. All of it must
