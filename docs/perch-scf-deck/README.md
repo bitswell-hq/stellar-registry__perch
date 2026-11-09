@@ -1,6 +1,6 @@
 # Perch Agent Grants deck
 
-`index.html` is a 17-slide deck for The Aha Company's SCF Build Award submission (Open Track): "Perch Agent Grants: subagent budgets enforced by Stellar smart accounts". It uses the Perch deck's engine, palette and seals and is a separate deck, so `../perch-deck/` is unchanged. Everything is in one file, with inline SVG, CSS and JS and system fonts, and the deck makes no network requests. The stellar.expert, deployment-record and GitHub links are plain links.
+`index.html` is a 17-slide deck for The Aha Company's SCF Build Award submission (Open Track): "Perch Agent Grants: subagent budgets enforced by Stellar smart accounts". It uses the Perch deck's engine, palette and seals and is a separate deck, so `../perch-deck/` is unchanged. Everything is in one file, with inline SVG, CSS and JS and system fonts, and the deck makes no network requests, except that slide 11's "Run it here" loads the sibling page `../nido-sim/index.html?embed=1` into its live frame when pressed, and nothing else. The stellar.expert, deployment-record and GitHub links are plain links.
 
 Controls:
 

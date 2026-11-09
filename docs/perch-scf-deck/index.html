@@ -328,7 +328,7 @@ html[data-rec-frame] .stage-links .act { display: none; }
 #notes-panel p, #sources-panel p { margin: 0 0 .7em; }
 #notes-panel p:last-child, #sources-panel p:last-child { margin-bottom: 0; }
 #notes-panel { font-size: 17px; }
-#notes-panel .np-h, #sources-panel .sp-h { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
+#sources-panel .sp-h { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
 #sources-panel {
   position: fixed; left: 22px; right: 22px; bottom: 70px;
   max-height: 42vh; overflow: auto;
@@ -1437,15 +1437,15 @@ B.nido = { vb: ['0 0 1600 760', '0 0 800 1200'], draw(c) {
 function example(c, d) {
   const T = c.tall;
   const P = T
-    ? { lab: [36, 44], box: [30, 62, 740, 52 + d.code.length * 34], code: [52, 104, 34, .37], note: [36, 0], req: [30, 0], tx: 120, cap: [400, 0] }
-    : { lab: [70, 58], box: [60, 76, 800, 56 + d.code.length * 38], code: [86, 124, 38, .45], note: [70, 0], req: [930, 132], tx: 1010, cap: [800, 0] };
+    ? { lab: [36, 44], box: [30, 62, 740, 52 + d.code.length * 34], code: [52, 104, 34, .37], note: 36, tx: 120 }
+    : { lab: [70, 58], box: [60, 76, 800, 56 + d.code.length * 38], code: [86, 124, 38, .45], note: 70, req: [930, 132], tx: 1010 };
   c.at(80);
   c.text(P.lab[0], P.lab[1], 'planned: the runtime enforces this Cedar policy', { anchor: 'start', size: T ? .46 : .52, k: 'next' });
   const [bx, by, bw, bh] = P.box;
   c.rect(bx, by, bw, bh, { k: 'next', rx: 14, w: .8 });
   // Leading spaces become no-break spaces, so the policy keeps its indentation in SVG.
   d.code.forEach((s, i) => c.text(P.code[0], P.code[1] + i * P.code[2], s.replace(/^ +/, m => '\u00a0'.repeat(m.length)), { anchor: 'start', font: 'code', size: P.code[3], k: s.startsWith('//') ? 'soft' : undefined, step: 30 }));
-  c.text(P.note[0], by + bh + (T ? 30 : 34), 'the names are the planned runtime’s request vocabulary, not an existing API', { anchor: 'start', size: T ? .38 : .44, k: 'soft' });
+  c.text(P.note, by + bh + (T ? 30 : 34), 'the names are the planned runtime’s request vocabulary, not an existing API', { anchor: 'start', size: T ? .38 : .44, k: 'soft' });
   // One request it allows, one it refuses.
   c.at(1400);
   const ry0 = T ? by + bh + 100 : P.req[1];
@@ -1453,8 +1453,8 @@ function example(c, d) {
     const y = ry0 + i * (T ? 106 : 130);
     const x = T ? 60 : P.req[0];
     if (ok) c.check(x, y - 8, T ? 34 : 38, { k: 'next' }); else c.cross(x, y - 8, T ? 28 : 32, { k: 'ink' });
-    c.text(T ? P.tx : P.tx, y - 6, a, { anchor: 'start', size: T ? .5 : .66, step: 0 });
-    c.text(T ? P.tx : P.tx, y + (T ? 28 : 32), b, { anchor: 'start', size: T ? .4 : .5, k: 'soft', step: 0 });
+    c.text(P.tx, y - 6, a, { anchor: 'start', size: T ? .5 : .66, step: 0 });
+    c.text(P.tx, y + (T ? 28 : 32), b, { anchor: 'start', size: T ? .4 : .5, k: 'soft', step: 0 });
   });
   // The on-chain grant, where money is involved: a grant as Perch has them today.
   let yb = T ? ry0 + d.reqs.length * 106 : by + bh + 90;
@@ -1847,7 +1847,8 @@ function toggleNotes() {
     if (!$('#sources-panel').hidden) toggleSources();
   }
 }
-$('#np-reset').addEventListener('click', () => {
+$('#np-reset').addEventListener('click', e => {
+  e.currentTarget.blur();
   const on = !!NT.since;
   Object.assign(NT, { acc: 0, slideAcc: 0, since: on ? ntNow() : 0, slideSince: on ? ntNow() : 0 });
   ntPaint();
