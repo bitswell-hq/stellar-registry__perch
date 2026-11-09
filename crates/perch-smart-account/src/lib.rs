@@ -1406,6 +1406,14 @@ pub fn is_token_admin(e: &Env, fn_name: &Symbol) -> bool {
         .any(|name| Symbol::new(e, name) == *fn_name)
 }
 
+/// The token functions whose argument 0 is the address whose authority
+/// they use: the owner, or the spender of `transfer_from` and `burn_from`.
+/// They are matched by name on any contract, since a grant cannot know
+/// whether a contract is a SEP-41 token: under a grant, a call on a
+/// non-token contract exporting one of these names with another argument 0
+/// is refused.
+pub const OWNER_FNS: [&str; 5] = ["transfer", "transfer_from", "approve", "burn", "burn_from"];
+
 /// Whether `contract` is in the applied admin document's excluded set,
 /// beyond the account itself: its adopted recovery controller and its ZK
 /// factor's adapter and pool (spec §7.6). No scoped rule may reach them.

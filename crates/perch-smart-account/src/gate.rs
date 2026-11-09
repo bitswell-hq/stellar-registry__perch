@@ -53,7 +53,9 @@ use perch_account_types::{AuthPayload, SmartAccountError};
 use crate::auth::{
     authenticate, SMART_ACCOUNT_EXTEND_AMOUNT as EXTEND, SMART_ACCOUNT_TTL_THRESHOLD as THRESHOLD,
 };
-use crate::{extend_persistent, scope_generation, PerchAuthError, PerchStorage, RuleRecord};
+use crate::{
+    extend_persistent, scope_generation, PerchAuthError, PerchStorage, RuleRecord, OWNER_FNS,
+};
 
 fn refused() -> soroban_sdk::Error {
     PerchAuthError::RuleEvalRefused.into()
@@ -141,24 +143,10 @@ pub(crate) fn authorize(
     Ok(())
 }
 
-/// The token functions whose argument 0 is the address whose authority
-/// they use: the owner, or the spender of `transfer_from` and `burn_from`.
-/// They are matched by name on any contract, since a grant cannot know
-/// whether a contract is a SEP-41 token: under a grant, a call on a
-/// non-token contract exporting one of these names with another argument 0
-/// is refused.
-const OWNER_FNS: [&[u8]; 5] = [
-    b"transfer",
-    b"transfer_from",
-    b"approve",
-    b"burn",
-    b"burn_from",
-];
-
 /// Whether `ctx` calls one of [`OWNER_FNS`].
 fn owner_fn(ctx: &rule_eval::Context) -> bool {
     matches!(ctx, rule_eval::Context::Call { function, .. }
-        if OWNER_FNS.contains(&function.as_slice()))
+        if OWNER_FNS.iter().any(|n| function.as_slice() == n.as_bytes()))
 }
 
 /// Whether `ctx` is a call whose argument 0 is the address `me`.

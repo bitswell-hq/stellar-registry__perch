@@ -1319,8 +1319,9 @@ pub fn expected(v: &Verdict) -> Got {
 /// The verdicts the account gives `t`'s authorizations: `t`'s own, refined
 /// as the account refines the model (`gate.rs`): an authorization choosing
 /// a capped rule, or a scoped document's rule (one carrying a generation)
-/// for a token function whose argument 0 is the owner ([`OWNER_FNS`]), for
-/// a context whose argument 0 is not `t`'s account is refused, with the
+/// for a token function whose argument 0 is the owner
+/// ([`perch_smart_account::OWNER_FNS`]), for a context whose argument 0 is
+/// not `t`'s account is refused, with the
 /// records unchanged, and so is one choosing a scoped document's rule for a
 /// token-admin function ([`admin_fn`], `__check_auth`'s `ScopeEscalation`).
 /// Once that refuses an authorization `t` accepts,
@@ -1382,16 +1383,6 @@ pub fn refined(t: &Trace) -> Vec<Got> {
     out
 }
 
-/// The token functions whose argument 0 is the address whose authority they
-/// use, as `gate.rs` lists them.
-const OWNER_FNS: [&[u8]; 5] = [
-    b"transfer",
-    b"transfer_from",
-    b"approve",
-    b"burn",
-    b"burn_from",
-];
-
 /// Whether `c` calls one of the token-admin functions
 /// (`perch_smart_account::TOKEN_ADMIN_FNS`), which no scoped document's
 /// rule authorizes (`__check_auth`, `ScopeEscalation`).
@@ -1402,10 +1393,12 @@ fn admin_fn(c: &rule_eval::Context) -> bool {
             .any(|n| function.as_slice() == n.as_bytes()))
 }
 
-/// Whether `c` calls one of [`OWNER_FNS`].
+/// Whether `c` calls one of [`perch_smart_account::OWNER_FNS`].
 fn owner_fn(c: &rule_eval::Context) -> bool {
     matches!(c, rule_eval::Context::Call { function, .. }
-        if OWNER_FNS.contains(&function.as_slice()))
+        if perch_smart_account::OWNER_FNS
+            .iter()
+            .any(|n| function.as_slice() == n.as_bytes()))
 }
 
 /// Whether `c` is a call whose argument 0 is the address `account`.
