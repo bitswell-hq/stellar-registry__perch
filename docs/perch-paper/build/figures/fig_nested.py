@@ -1,7 +1,7 @@
 """fig-nested: one grant covers a game's guess and the stake transfer inside it (HTML only).
 
-The scenario is crates/integration-tests/tests/auth_root.rs: rule `game` scopes the game contract;
-rule `stake` allows the XLM token's `transfer` only from the account (argument 0), only when the
+The scenario is auth_root.rs (integration tests) and docs/nido-sim/: rule `game` scopes the game contract;
+rule `pay-game` allows the XLM token's `transfer` only from the account (argument 0), only when the
 entry's root call is exactly `game.guess`, within a cap. The account checks every call of the
 signed tree against the rule the payload names for it (rule-core authorize.rs:105-136)."""
 import html
@@ -13,14 +13,14 @@ FID = 'fig-nested'
 STAKE, CAP, PERIOD = fact('nested-stake-xlm'), fact('nested-cap-xlm'), fact('nested-period-ledgers')
 
 GRANT_A = [('Rule `game`', 't'), ('any function of the game contract, signed by the app’s key', 'm')]
-GRANT_B = [('Rule `stake`', 't'), ('the XLM token’s `transfer` only', 'x'),
+GRANT_B = [('Rule `pay-game`', 't'), ('the XLM token’s `transfer` only', 'x'),
            ('argument 0 is the account itself', 'x'),
            ('only when the entry’s root call is exactly `game.guess`', 'x'),
            (f'at most {CAP} XLM in any {PERIOD} ledgers', 'x')]
-NODE_1 = [('1  root call', 'm'), ('`game.guess(7, account)`', 'x'),
+NODE_1 = [('1  root call', 'm'), ('`game.guess(3, account)`', 'x'),
           ('✓ rule `game`: a call to the game contract', 'g')]
 NODE_2 = [('2  call inside it, on a loss', 'm'), (f'`XLM.transfer(account, game, {STAKE} XLM)`', 'x'),
-          ('✓ rule `stake`: from the account', 'g'),
+          ('✓ rule `pay-game`: from the account', 'g'),
           ('✓ the entry’s root is exactly `game.guess`', 'g'),
           (f'✓ {STAKE} of {CAP} XLM in the window', 'g')]
 REFUSED = [('Refused, with nothing written', 'd'),
@@ -97,7 +97,7 @@ def text_alt():
             f'<li>{code(GRANT_B[0][0])}: ' + '; '.join(code(t) for t, _ in GRANT_B[1:]) + '.</li></ul>'
             f'<p>The entry the app signs holds a tree of two calls, and the account checks each against its rule.</p>'
             f'<ol><li>{code(NODE_1[1][0])}, the root call: rule <code>game</code> accepts a call to the game contract.</li>'
-            f'<li>{code(NODE_2[1][0])}, made by the game on a loss: rule <code>stake</code> accepts it because it '
+            f'<li>{code(NODE_2[1][0])}, made by the game on a loss: rule <code>pay-game</code> accepts it because it '
             f'is from the account, the entry’s root is exactly <code>game.guess</code>, and it brings the window '
             f'to {STAKE} of {CAP} XLM.</li></ol>'
             f'<p>{code(REFUSED[0][0])}:</p><ul>{items(REFUSED[1:])}</ul>')
