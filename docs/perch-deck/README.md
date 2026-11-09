@@ -1,6 +1,6 @@
 # Perch deck
 
-`index.html` is a 20-slide deck on Perch. It is one self-contained file with inline SVG, CSS and JS and system fonts, and it makes no network requests. Two slides frame relative pages in this tree, each loading only when "Run it here" is pressed: the Nido simulation (`../nido-sim/index.html?embed=1`) and the dual simulation (`../perch-paper/sim/index.html?embed=1`). The café slide links to the sign dialog demo in Nido's look (`../sign-dialog/nido.html`).
+`index.html` is a 23-slide deck on Perch. It is one self-contained file with inline SVG, CSS and JS and system fonts, and it makes no network requests. Two slides frame relative pages in this tree, each loading only when "Run it here" is pressed: the Nido simulation (`../nido-sim/index.html?embed=1`) and the dual simulation (`../perch-paper/sim/index.html?embed=1`). The café slide links to the sign dialog demo in Nido's look (`../sign-dialog/nido.html`).
 
 Controls:
 
@@ -8,7 +8,7 @@ Controls:
 - `N` shows each slide's speaker notes, which carry its sources. `T` switches between light and dark; until then the deck follows the OS.
 - `#n` opens slide n, and `?still=1` shows every slide's final drawing without motion. Reduced motion has the same effect.
 
-Solid cyan in an engraved frame is what Perch does, as the main paper presents it. Dashed magenta with printer's marks is where it could go. Slides 17–19, on a zero-knowledge email proof as a recovery credential, are of that kind.
+Solid cyan in an engraved frame is what Perch does, as the main paper presents it. Dashed magenta with printer's marks is where it could go. Slide 19, the planned agent runtime, and slides 20–22, on a zero-knowledge email proof as a recovery credential, are of that kind. Slide 17, marked "a cited study", draws another team's published experiment in plain ink and links the paper.
 
 ## Thumbnail
 
@@ -32,4 +32,7 @@ Solid cyan in an engraved frame is what Perch does, as the main paper presents i
 | 13–14 | `source/html/sections/simulation.html`, `conclusion.html`; `source/facts/sim.json`; `source/figures/fig-sim.run.json` (commands 2–8) |
 | 15 | `source/html/sections/proofs.html`; `source/statements.json` (T1, T2, T4, T6, T8, T10; P1 is argued) |
 | 16 | `simulation.html`, `repro.html`; `source/facts/sim.json`; `fig-sim.run.json` (pins) |
-| 17–19 | Perch side: `crates/perch-smart-account/src/auth.rs`, `crates/perch-recovery-interface/src/{credential,config}.rs`, `crates/perch-recovery/src/contract.rs` (`submit_guardian`), `docs/recovery/statement.md`, vision paper §02 and §05. Email side (proposed for Perch): the ZK signer deck's report, citing Nido's `docs/email-recovery/spec.md` |
+| 17 | Breckenridge, Vilardell, Wang, Zhang and Juels, "I-HITL: Inalienable Human-in-the-Loop", [arXiv:2610.35835](https://arxiv.org/abs/2610.35835) (v3, 30 October 2026): p. 4 (Setup, Experiments, Key Findings), p. 5 (Results), Appendix D (p. 18). The models are not named. |
+| 18 | `source/statements.json` (T8, grant target containment); `crates/perch-smart-account/src/lib.rs` (the admin rule, `apply_scope`, `remove_scope`); `docs/nido-sim/README.md` (step 1, the passkey); `source/facts/example.json` (the shop's cap). This is not the paper's I-HITL protocol. |
+| 19 | Proposed, not built: vision paper §08 "Agents, budgets and payments (proposed)" and §09 "Cedar as an authoring language (proposed)" (`source/papers/vision/html/sections/agents.html`, `cedar.html`); `docs/cedar-walkthrough/`; `source/statements.json` (T4, T5) |
+| 20–22 | Perch side: `crates/perch-smart-account/src/auth.rs`, `crates/perch-recovery-interface/src/{credential,config}.rs`, `crates/perch-recovery/src/contract.rs` (`submit_guardian`), `docs/recovery/statement.md`, vision paper §02 and §05. Email side (proposed for Perch): the ZK signer deck's report, citing Nido's `docs/email-recovery/spec.md` |
