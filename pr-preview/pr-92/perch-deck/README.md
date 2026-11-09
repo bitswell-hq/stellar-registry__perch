@@ -10,6 +10,10 @@ Controls:
 
 Solid cyan in an engraved frame is what Perch does, as the main paper presents it. Dashed magenta with printer's marks is where it could go. Slides 17–19, on a zero-knowledge email proof as a recovery credential, are of that kind.
 
+## Thumbnail
+
+`thumbnail.svg` is a 16:9 card for the deck: the title slide's dial and the deck's two guilloché seals, drawn with the deck's own seal code (the same digests and geometry) in its dark palette. `thumbnail.py` writes it (`python3 thumbnail.py thumbnail.svg`, standard library only). `thumbnail.png` (1280×720) and `thumbnail-1920.png` (1920×1080) are Chromium renders of it at 1× and 1.5×. Its text uses the deck's system fonts, Didot and Optima; other systems substitute the deck's fallbacks.
+
 ## Sources
 
 | Slides | Source |
