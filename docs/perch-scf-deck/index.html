@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Perch Agent Grants</title>
-<meta name="description" content="Perch Agent Grants, an SCF Build Award submission: subagent budgets enforced by Stellar smart accounts. What exists today, the funded work in three tranches, the budget and the team.">
+<meta name="description" content="Perch Agent Grants, an SCF Build Award submission: subagent budgets enforced by Stellar smart accounts. What exists today, the funded work in three tranches with their dates, and the team.">
 <link rel="icon" href="data:,">
 <style>
 :root {
@@ -438,37 +438,37 @@ body {
 
 <section class="slide" data-status="next" data-draw="t1" aria-roledescription="slide" aria-label="Tranche 1: MVP">
   <header class="head"><h2>Tranche 1: MVP</h2></header>
-  <div class="stage"><svg role="img" aria-label="Tranche 1, an agent runtime rooted in a Perch grant, 42,000 dollars by 29 January 2027: agent runtime core, 12,000; verified Cedar-to-Perch compiler and two-engine test harness, 15,000; Cedar policy engine as an import-free WebAssembly component, 9,000; public MVP demo, 6,000."></svg></div>
+  <div class="stage"><svg role="img" aria-label="Tranche 1, an agent runtime rooted in a Perch grant, by 29 January 2027: agent runtime core; verified Cedar-to-Perch compiler and two-engine test harness; Cedar policy engine as an import-free WebAssembly component; public MVP demo."></svg></div>
   <aside class="notes">
-    <p>1. Agent runtime core ($12,000): a Rust runtime whose root authority is an installed grant on a Perch account, read from Stellar testnet; a subagent is spawned only with a grant derived through rule-core's attenuation steps, and a wider spawn is refused; agents hold no keys. 2. Verified Cedar-to-Perch compiler and two-engine test harness ($15,000), as on the previous slide. 3. Cedar policy engine as an import-free WebAssembly component ($9,000): official Cedar 4.14.x, zero imports, any policy error refuses, a subagent's request must be permitted by its own policies and every ancestor's. 4. Public MVP demo ($6,000): a root agent and one subagent, with refused attempts to read outside the granted folder, reach an unapproved website and spawn a child wider than its parent; a reproducible script and a recorded video.</p>
+    <p>Complete by 2027-01-29. 1. Agent runtime core: a Rust runtime whose root authority is an installed grant on a Perch account, read from Stellar testnet; a subagent is spawned only with a grant derived through rule-core's attenuation steps, and a wider spawn is refused; agents hold no keys. 2. Verified Cedar-to-Perch compiler and two-engine test harness, as on the previous slide. 3. Cedar policy engine as an import-free WebAssembly component: official Cedar 4.14.x, zero imports, any policy error refuses, a subagent's request must be permitted by its own policies and every ancestor's. 4. Public MVP demo: a root agent and one subagent, with refused attempts to read outside the granted folder, reach an unapproved website and spawn a child wider than its parent; a reproducible script and a recorded video.</p>
     <p class="src">SCF Build submission, Tranche #1 Deliverables and Completion Date; items 2 and 3 as agreed 2026-11-09.</p>
   </aside>
 </section>
 
 <section class="slide" data-status="next" data-draw="t2" aria-roledescription="slide" aria-label="Tranche 2: testnet">
   <header class="head"><h2>Tranche 2: testnet</h2></header>
-  <div class="stage"><svg role="img" aria-label="Tranche 2, agent payments on Stellar, 36,000 dollars by 26 March 2027: attenuated grants on the account and subagent signing, 12,000; x402 payer flow for Perch accounts, 6,000; grant review views for wallets, 9,000; threat model and monitoring plan, 9,000."></svg></div>
+  <div class="stage"><svg role="img" aria-label="Tranche 2, agent payments on Stellar, by 26 March 2027: attenuated grants on the account and subagent signing; x402 payer flow for Perch accounts; grant review views for wallets; threat model and monitoring plan."></svg></div>
   <aside class="notes">
-    <p>1. Attenuated grants on the account and subagent signing ($12,000): an entry point that installs a grant derived from an existing grant, checked on chain to be no wider than its parent; testnet transactions in which a subagent payment within its cap succeeds and one over its cap is refused by the account, including with the runtime's own check switched off. 2. x402 payer flow ($6,000): an agent pays an x402-protected endpoint from a Perch account under its grant, through an existing Stellar x402 facilitator; testnet links for one allowed payment and one over-cap refusal. 3. Grant review views for wallets ($9,000): embeddable views of a grant, a derived subagent grant and the budget left, with an enforcing-simulation preview, built on the existing open-source sign dialog component; a published npm package. 4. Threat model and monitoring plan ($9,000): a STRIDE threat model and a monitoring plan with alerts on grant installs and removals, recovery wipes, refusals and spending near caps, running against testnet.</p>
-    <p class="src">SCF Build submission, Tranche #2 Deliverables and Completion Date; budgets as revised 2026-11-09.</p>
+    <p>Complete by 2027-03-26. 1. Attenuated grants on the account and subagent signing: an entry point that installs a grant derived from an existing grant, checked on chain to be no wider than its parent; testnet transactions in which a subagent payment within its cap succeeds and one over its cap is refused by the account, including with the runtime's own check switched off. 2. x402 payer flow: an agent pays an x402-protected endpoint from a Perch account under its grant, through an existing Stellar x402 facilitator; testnet links for one allowed payment and one over-cap refusal. 3. Grant review views for wallets: embeddable views of a grant, a derived subagent grant and what it has left to spend, with an enforcing-simulation preview, built on the existing open-source sign dialog component; a published npm package. 4. Threat model and monitoring plan: a STRIDE threat model and a monitoring plan with alerts on grant installs and removals, recovery wipes, refusals and spending near caps, running against testnet.</p>
+    <p class="src">SCF Build submission, Tranche #2 Deliverables and Completion Date.</p>
   </aside>
 </section>
 
 <section class="slide" data-status="next" data-draw="t3" aria-roledescription="slide" aria-label="Tranche 3: mainnet">
   <header class="head"><h2>Tranche 3: mainnet</h2></header>
-  <div class="stage"><svg role="img" aria-label="Tranche 3, mainnet launch, 45,000 dollars by 28 May 2027: mainnet release of the account and agent-grant contracts, 9,000; runtime 1.0 release, 18,000; mainnet agent payment demonstration, 9,000; developer documentation, 9,000."></svg></div>
+  <div class="stage"><svg role="img" aria-label="Tranche 3, mainnet launch, by 28 May 2027: mainnet release of the account and agent-grant contracts; runtime 1.0 release; mainnet agent payment demonstration; developer documentation."></svg></div>
   <aside class="notes">
-    <p>1. Mainnet release of the account and agent-grant contracts ($9,000): deploy the Tranche 2 account changes to Stellar mainnet through the repository's release workflow, after the Audit Bank audit, with fixes for all critical and high findings; verified source for each contract; a documented upgrade path for existing accounts. 2. Runtime 1.0 release ($18,000): versioned runtime and evaluator component packages, with an integration guide for agent frameworks. 3. Mainnet agent payment demonstration ($9,000): an agent under a Perch grant on mainnet pays an x402 endpoint, and an over-cap attempt is refused on chain. 4. Developer documentation ($9,000): one site covering the account, grants, the runtime, the threat model, the test plan and an operations runbook.</p>
-    <p class="src">SCF Build submission, Tranche #3 Deliverables and Completion Date; budgets as revised 2026-11-09.</p>
+    <p>Complete by 2027-05-28. 1. Mainnet release of the account and agent-grant contracts: deploy the Tranche 2 account changes to Stellar mainnet through the repository's release workflow, after the Audit Bank audit, with fixes for all critical and high findings; verified source for each contract; a documented upgrade path for existing accounts. 2. Runtime 1.0 release: versioned runtime and evaluator component packages, with an integration guide for agent frameworks. 3. Mainnet agent payment demonstration: an agent under a Perch grant on mainnet pays an x402 endpoint, and an over-cap attempt is refused on chain. 4. Developer documentation: one site covering the account, grants, the runtime, the threat model, the test plan and an operations runbook.</p>
+    <p class="src">SCF Build submission, Tranche #3 Deliverables and Completion Date.</p>
   </aside>
 </section>
 
-<section class="slide" data-status="next" data-draw="budget" aria-roledescription="slide" aria-label="Budget and timeline">
-  <header class="head"><h2>Budget and timeline</h2></header>
-  <div class="stage"><svg role="img" aria-label="123,000 dollars, 41 engineer-weeks at 3,000 dollars a week, over three tranches: 42,000 by 29 January 2027, 36,000 by 26 March 2027 and 45,000 by 28 May 2027, each split across its four deliverables."></svg></div>
+<section class="slide" data-status="next" data-draw="timeline" aria-roledescription="slide" aria-label="Timeline">
+  <header class="head"><h2>Timeline</h2></header>
+  <div class="stage"><svg role="img" aria-label="Three tranches on a calendar from December 2026 to June 2027. Tranche 1, MVP, by 29 January 2027: agent runtime core; verified Cedar-to-Perch compiler and two-engine test harness; Cedar policy engine as an import-free WebAssembly component; public MVP demo. Tranche 2, testnet, by 26 March 2027: attenuated grants on the account and subagent signing; x402 payer flow for Perch accounts; grant review views for wallets; threat model and monitoring plan. Tranche 3, mainnet launch, by 28 May 2027: mainnet release of the account and agent-grant contracts; runtime 1.0 release; mainnet agent payment demonstration; developer documentation."></svg></div>
   <aside class="notes">
-    <p>$123,000, estimated as 41 engineer-weeks at $3,000 a week, in three tranches: Tranche 1, $42,000, by 2027-01-29; Tranche 2, $36,000, by 2027-03-26; Tranche 3, $45,000, by 2027-05-28. Per deliverable: 12,000, 15,000, 9,000 and 6,000; 12,000, 6,000, 9,000 and 9,000; 9,000, 18,000, 9,000 and 9,000. The budget covers development only: no marketing, no audit costs (the Audit Bank covers those) and no past work. SCF pays a fixed 10% / 20% / 30% / 40% whatever the per-deliverable split.</p>
-    <p class="src">SCF Build submission, Budget table and SCF Build Tranche Deliverables ("Rate and total", "Payment schedule", "Excluded costs"), with the budget as revised 2026-11-09 (x402 payer flow $6,000, mainnet release $9,000, 41 engineer-weeks at $3,000); the three Completion Dates.</p>
+    <p>Three tranches, each with four deliverables and a completion date. Tranche 1, MVP, by 2027-01-29: agent runtime core; verified Cedar-to-Perch compiler and two-engine test harness; Cedar policy engine as an import-free WebAssembly component; public MVP demo. Tranche 2, testnet, by 2027-03-26: attenuated grants on the account and subagent signing; x402 payer flow for Perch accounts; grant review views for wallets; threat model and monitoring plan. Tranche 3, mainnet launch, by 2027-05-28: mainnet release of the account and agent-grant contracts; Runtime 1.0 release; mainnet agent payment demonstration; developer documentation.</p>
+    <p class="src">SCF Build submission, Tranche #1, #2 and #3 Deliverables and Completion Dates; Tranche 1 items 2 and 3 as agreed 2026-11-09.</p>
   </aside>
 </section>
 
@@ -972,56 +972,57 @@ B.engines = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   c.text(P.frag[0] + 34, P.frag[1] + 8, 'a prototype proof for a small fragment', { anchor: 'start', size: T ? .5 : .56 });
 } };
 
-// One tranche: its four deliverables, each with its budget and how it completes.
+// The three tranches: each deliverable's title, how it completes, and its icon.
+const TR = [
+  { name: 'Tranche 1: MVP', sub: 'an agent runtime rooted in a Perch grant', date: '2027-01-29', items: [
+    ['Agent runtime core', 'a subagent is spawned only with a narrower grant; wider spawns refused; agents hold no keys', 'agent'],
+    ['Verified Cedar-to-Perch compiler and two-engine test harness', 'refuses what it cannot translate exactly; 64-bit bounds; a Lean theorem; zero disagreements with official Cedar', 'doc'],
+    ['Cedar policy engine as an import-free WebAssembly component', "official Cedar 4.14.x; zero imports; any policy error refuses; every ancestor's policies must permit", 'proof'],
+    ['Public MVP demo', 'refused: outside the folder, an unapproved website, a wider spawn; a script and a video', 'controller'],
+  ] },
+  { name: 'Tranche 2: testnet', sub: 'agent payments on Stellar', date: '2027-03-26', items: [
+    ['Attenuated grants on the account and subagent signing', "a grant no wider than its parent, installed on chain; over-cap refused by the account, even with the runtime's check off", 'key'],
+    ['x402 payer flow for Perch accounts', 'an agent pays an x402 endpoint under its grant; testnet links: one allowed, one over-cap refusal', 'coin'],
+    ['Grant review views for wallets', 'a grant, a derived subagent grant and what it has left to spend, with a preview; an npm package', 'doc'],
+    ['Threat model and monitoring plan', 'a STRIDE threat model; monitoring of grant events, refusals and near-cap spending on testnet', 'warn'],
+  ] },
+  { name: 'Tranche 3: mainnet', sub: 'mainnet launch', date: '2027-05-28', items: [
+    ['Mainnet release of the account and agent-grant contracts', 'after the Audit Bank audit, critical and high findings fixed; verified source; an upgrade path', 'account'],
+    ['Runtime 1.0 release', 'versioned runtime and evaluator component packages; an integration guide for agent frameworks', 'policy'],
+    ['Mainnet agent payment demonstration', 'an agent pays an x402 endpoint on mainnet; an over-cap attempt refused on chain', 'coin'],
+    ['Developer documentation', 'one site: account, grants, runtime, threat model, test plan, runbook', 'doc'],
+  ] },
+];
+
+// One tranche: its four deliverables and how each completes.
 function tranche(c, d) {
   const T = c.tall;
   c.at(60);
-  c.text(T ? 40 : 80, T ? 44 : 72, d.name, { anchor: 'start', size: T ? .58 : .74 });
-  c.text(T ? 40 : 1520, T ? 88 : 72, `${d.amount} · by ${d.date}`, { anchor: T ? 'start' : 'end', size: T ? .54 : .66, k: 'next', font: 'code' });
-  d.items.forEach(([title, budget, crit, ic], i) => {
+  c.text(T ? 40 : 80, T ? 44 : 72, d.sub, { anchor: 'start', size: T ? .58 : .74 });
+  c.text(T ? 40 : 1520, T ? 88 : 72, `by ${d.date}`, { anchor: T ? 'start' : 'end', size: T ? .54 : .66, k: 'next', font: 'code' });
+  d.items.forEach(([title, crit, ic], i) => {
     const [x, y, w, h] = T ? [40, 128 + i * 290, 720, 268] : [80 + (i % 2) * 740, 118 + Math.floor(i / 2) * 322, 700, 296];
     c.at(260 + i * 380);
     c.rect(x, y, w, h, { k: 'next', rx: 16, w: .8 });
     c.circle(x + 36, y + 40, 18, { k: 'next', w: .6 });
     c.text(x + 36, y + 41, String(i + 1), { size: .54, base: 'central', k: 'next' });
     c.icon(ic, x + 38, y + (T ? 132 : 150), T ? 50 : 54, { k: 'next' });
-    const tl = wrapText(title, T ? 30 : 36), lh = T ? 34 : 34;
+    const tl = wrapText(title, T ? 40 : 46), lh = 34;
     tl.forEach((s, j) => c.text(x + 80, y + 48 + j * lh, s, { anchor: 'start', size: T ? .6 : .7, step: 0 }));
-    c.text(x + w - 24, y + 48, budget, { anchor: 'end', font: 'code', size: T ? .52 : .6, k: 'next' });
     const cl = wrapText(crit, T ? 48 : 54);
     const y0 = y + 48 + tl.length * lh + (T ? 20 : 24);
     cl.forEach((s, j) => c.text(x + 80, y0 + j * (T ? 30 : 34), s, { anchor: 'start', size: T ? .5 : .62, k: 'soft', step: 40 }));
   });
 }
-B.t1 = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
-  tranche(c, { name: 'an agent runtime rooted in a Perch grant', amount: '$42,000', date: '2027-01-29', items: [
-    ['Agent runtime core', '$12,000', 'a subagent is spawned only with a narrower grant; wider spawns refused; agents hold no keys', 'agent'],
-    ['Verified Cedar-to-Perch compiler and two-engine test harness', '$15,000', 'refuses what it cannot translate exactly; 64-bit bounds; a Lean theorem; zero disagreements with official Cedar', 'doc'],
-    ['Cedar policy engine as an import-free WebAssembly component', '$9,000', "official Cedar 4.14.x; zero imports; any policy error refuses; every ancestor's policies must permit", 'proof'],
-    ['Public MVP demo', '$6,000', 'refused: outside the folder, an unapproved website, a wider spawn; a script and a video', 'controller'],
-  ] });
-} };
-B.t2 = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
-  tranche(c, { name: 'agent payments on Stellar', amount: '$36,000', date: '2027-03-26', items: [
-    ['Attenuated grants on the account and subagent signing', '$12,000', "a grant no wider than its parent, installed on chain; over-cap refused by the account, even with the runtime's check off", 'key'],
-    ['x402 payer flow for Perch accounts', '$6,000', 'an agent pays an x402 endpoint under its grant; testnet links: one allowed, one over-cap refusal', 'coin'],
-    ['Grant review views for wallets', '$9,000', 'a grant, a derived subagent grant and the budget left, with a preview; an npm package', 'doc'],
-    ['Threat model and monitoring plan', '$9,000', 'a STRIDE threat model; monitoring of grant events, refusals and near-cap spending on testnet', 'warn'],
-  ] });
-} };
-B.t3 = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
-  tranche(c, { name: 'mainnet launch', amount: '$45,000', date: '2027-05-28', items: [
-    ['Mainnet release of the account and agent-grant contracts', '$9,000', 'after the Audit Bank audit, critical and high findings fixed; verified source; an upgrade path', 'account'],
-    ['Runtime 1.0 release', '$18,000', 'versioned runtime and evaluator component packages; an integration guide for agent frameworks', 'policy'],
-    ['Mainnet agent payment demonstration', '$9,000', 'an agent pays an x402 endpoint on mainnet; an over-cap attempt refused on chain', 'coin'],
-    ['Developer documentation', '$9,000', 'one site: account, grants, runtime, threat model, test plan, runbook', 'doc'],
-  ] });
-} };
+B.t1 = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) { tranche(c, TR[0]); } };
+B.t2 = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) { tranche(c, TR[1]); } };
+B.t3 = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) { tranche(c, TR[2]); } };
 
-B.budget = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
+// The tranches on a calendar, each with its completion date and deliverables.
+B.timeline = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   const T = c.tall;
   const day = s => (Date.parse(s) - Date.parse('2026-12-01')) / 864e5, span = day('2027-07-01');
-  const A = T ? { x0: 60, x1: 740, y: 170 } : { x0: 140, x1: 1460, y: 200 };
+  const A = T ? { x0: 60, x1: 740, y: 120 } : { x0: 140, x1: 1460, y: 110 };
   const X = s => A.x0 + (A.x1 - A.x0) * day(s) / span;
   c.at(80);
   c.line(A.x0, A.y, A.x1, A.y, { k: 'soft', w: .6 });
@@ -1029,34 +1030,26 @@ B.budget = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
     c.line(X(m), A.y - 6, X(m), A.y + 6, { k: 'soft', w: .5, step: 0 });
     if (i < 7) c.text(X(m) + (X('2027-01-01') - X('2026-12-01')) / 2, A.y - 16, ['Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'][i], { size: T ? .42 : .5, k: 'soft', step: 20 });
   });
-  const tr = [['Tranche 1', '2027-01-29', '$42,000', [12, 15, 9, 6]], ['Tranche 2', '2027-03-26', '$36,000', [12, 6, 9, 9]], ['Tranche 3', '2027-05-28', '$45,000', [9, 18, 9, 9]]];
-  c.at(600);
-  tr.forEach(([n, date, amt], i) => {
-    const x = X(date);
-    c.circle(x, A.y, T ? 11 : 10, { k: 'next', fill: 'next', w: .3 });
-    c.text(x, A.y + (T ? 42 : 44), T ? `T${i + 1}` : `${n} by ${date}`, { size: T ? .48 : .54 });
-    c.text(x, A.y + (T ? 74 : 78), T ? date : amt, { size: T ? .42 : .6, font: 'code', k: 'next' });
-  });
-  // Each tranche, split across its four deliverables.
-  c.at(1200);
-  const B0 = T ? { x0: 60, sc: 620 / 45, y: i => 380 + i * 130, lh: 34 } : { x0: 300, sc: 860 / 45, y: i => 360 + i * 96, lh: 40 };
-  tr.forEach(([n, , amt, parts], i) => {
-    const y = B0.y(i);
-    if (T) c.text(B0.x0, y - 14, `${n}, ${amt}`, { anchor: 'start', size: .52 });
-    else { c.text(B0.x0 - 24, y + 26, n, { anchor: 'end', size: .62 }); }
-    let x = B0.x0;
-    parts.forEach((p, j) => {
-      const w = p * B0.sc;
-      c.rect(x, y, w - 4, B0.lh, { k: 'next', rx: 6, w: .5, fill: 'hatch-next', step: 60 });
-      c.text(x + (w - 4) / 2, y + B0.lh / 2 + 1, `$${p}k`, { size: T ? .44 : .5, base: 'central', font: 'code', step: 0 });
-      x += w;
+  TR.forEach((d, i) => {
+    const dx = X(d.date);
+    c.at(500 + i * 500);
+    c.circle(dx, A.y, T ? 11 : 10, { k: 'next', fill: 'next', w: .3 });
+    c.text(dx, A.y + (T ? 40 : 40), T ? `T${i + 1}` : d.date, { size: T ? .48 : .5, font: T ? undefined : 'code', k: T ? undefined : 'next' });
+    if (T) c.text(dx, A.y + 70, d.date, { size: .42, font: 'code', k: 'next' });
+    const [x, y, w, h] = T ? [40, 240 + i * 340, 720, 314] : [70 + i * 492, 236, 470, 440];
+    if (!T) c.curve(dx, A.y + 52, x + w / 2, y - 6, { k: 'next', w: .6, dir: 'v', head: true });
+    c.rect(x, y, w, h, { k: 'next', rx: 16, w: .8 });
+    c.text(x + 30, y + (T ? 50 : 54), d.name, { anchor: 'start', size: T ? .62 : .74 });
+    c.text(T ? x + w - 28 : x + 30, T ? y + 50 : y + 92, `by ${d.date}`, { anchor: T ? 'end' : 'start', size: T ? .5 : .56, font: 'code', k: 'next' });
+    let iy = y + (T ? 110 : 158);
+    d.items.forEach(([title], j) => {
+      c.circle(x + 44, iy - 6, T ? 13 : 14, { k: 'next', w: .5, step: 60 });
+      c.text(x + 44, iy - 5, String(j + 1), { size: T ? .42 : .46, base: 'central', k: 'next', step: 0 });
+      const tl = wrapText(title, T ? 60 : 34), lh = T ? 30 : 32;
+      tl.forEach((s, k) => c.text(x + 74, iy + k * lh, s, { anchor: 'start', size: T ? .52 : .6, step: 0 }));
+      iy += tl.length * lh + (T ? 18 : 26);
     });
-    if (!T) c.text(x + 20, y + 27, amt, { anchor: 'start', size: .62, font: 'code', k: 'next' });
   });
-  c.at(2200);
-  c.text(T ? 400 : 800, T ? 860 : 700, '$123,000', { font: 'disp', size: T ? 1.8 : 2.0 });
-  if (T) { c.text(400, 914, '41 engineer-weeks at $3,000 a week;', { size: .52, k: 'soft' }); c.text(400, 950, 'three tranches, the last by 2027-05-28', { size: .52, k: 'soft' }); }
-  else c.text(800, 744, '41 engineer-weeks at $3,000 a week; three tranches, the last by 2027-05-28', { size: .54, k: 'soft' });
 } };
 
 /* Attenuation as nested regions: the helper's grant shrinks inside the app's, one step at a time. */
