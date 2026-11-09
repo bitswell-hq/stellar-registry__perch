@@ -155,7 +155,6 @@ toolchain), stellar-cli 27.0.0 (`stellar contract build`).
 | nido_factory.wasm (rebuilt, account pin a6d7604e…) | d5a6aa11569db6ca2d49ea98e579d20ce71f53f309b5b5d1ea5ce121c714f2f6 |
 | nido_sim_game.wasm | 7c04ff93e363811ccdd35e08f2a30d93e541b164baac96d12a34c939b6a73874 |
 | nido_sim_shop.wasm | d433a64029bf2b09a86bc7b1fd18a7dbf0d1015f557684b82e21215daad6efd4 |
-
 | reactor (driver, wasm32-wasip1) | 1d1e2094363cfa2fe5d6d944dbbb346031ec5571c7ea5bcdeb33e261d83841eb |
 | reference replies minus timings (native = WASI = browser) | 9ec27d1662a8999436d0961eb5ac122c4aefb28f2d7a405bad7e02b5e5aa7db7 |
 | recorded run `evidence/native-golden.jsonl` | a77586fa99248c75855a2dcf75e056c0bac8d7b88feb4c3c277ec850e9980850 |
