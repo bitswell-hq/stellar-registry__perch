@@ -10,8 +10,9 @@
 //! Real `PerchAccount`s, the real compiler and a Stellar Asset Contract,
 //! under enforcing authorization (`set_auths`), never mocked auth. A's capped
 //! rule is a scoped document's: XLM `transfer`, capped at 10 XLM per 100
-//! ledgers, signed by an app key; the same document's uncapped XLM rule for
-//! that key authorizes B's transfer through the same delegated path.
+//! ledgers, signed by an app key. A's admin document also holds an uncapped
+//! XLM rule for A's owner key, which authorizes B's transfer through the same
+//! delegated path.
 
 mod support;
 
@@ -103,15 +104,17 @@ fn a_capped_rule_meters_only_the_accounts_own_transfers() {
     let app = w.new_key();
     let sink = w.new_key();
 
-    // A: a Perch account whose owner holds its admin rule and applies a
-    // scoped document with a capped XLM rule for the app key.
+    // A: a Perch account whose owner holds its admin rule and an uncapped
+    // XLM rule, and applies a scoped document with a capped XLM rule for the
+    // app key.
     let a_owner = w.new_key();
     let a = e.register(PerchAccount, (vec![e, Signer::Delegated(a_owner.clone())],));
     let a_doc = json(
         &w,
         format!(
-            r#"{{"version":1,"network":"{net}","signers":[{{"id":"owner","address":"{}"}}],"rules":[{{"name":"admin","scope":{{"type":"self-admin"}},"principals":{{"type":"all","signers":["owner"]}}}}]}}"#,
-            strkey(&a_owner)
+            r#"{{"version":1,"network":"{net}","signers":[{{"id":"owner","address":"{}"}}],"rules":[{{"name":"admin","scope":{{"type":"self-admin"}},"principals":{{"type":"all","signers":["owner"]}}}},{{"name":"xlm-owner","scope":{{"type":"contract","address":"{}"}},"principals":{{"type":"all","signers":["owner"]}},"functions":["transfer"]}}]}}"#,
+            strkey(&a_owner),
+            strkey(&xlm)
         ),
     );
     as_owner(
@@ -128,11 +131,10 @@ fn a_capped_rule_meters_only_the_accounts_own_transfers() {
     let grant = json(
         &w,
         format!(
-            r#"{{"version":1,"network":"{net}","signers":[{{"id":"app","address":"{}"}}],"rules":[{{"name":"xlm","scope":{{"type":"contract","address":"{}"}},"principals":{{"type":"all","signers":["app"]}},"functions":["transfer"],"cap":{{"limit":"{}","period-ledgers":100}}}},{{"name":"xlm-open","scope":{{"type":"contract","address":"{}"}},"principals":{{"type":"all","signers":["app"]}},"functions":["transfer"]}}]}}"#,
+            r#"{{"version":1,"network":"{net}","signers":[{{"id":"app","address":"{}"}}],"rules":[{{"name":"xlm","scope":{{"type":"contract","address":"{}"}},"principals":{{"type":"all","signers":["app"]}},"functions":["transfer"],"cap":{{"limit":"{}","period-ledgers":100}}}}]}}"#,
             strkey(&app),
             strkey(&xlm),
-            10 * UNIT,
-            strkey(&xlm)
+            10 * UNIT
         ),
     );
     as_owner(
@@ -148,7 +150,7 @@ fn a_capped_rule_meters_only_the_accounts_own_transfers() {
     PerchAccountClient::new(e, &a).apply_scope(&SCOPE, &grant);
     e.set_auths(&[]);
     let grant_rule = w.rule_id(&a, "xlm");
-    let open_rule = w.rule_id(&a, "xlm-open");
+    let owner_rule = w.rule_id(&a, "xlm-owner");
 
     // B (the world's account): its owner names A as the signer of B's rule
     // on the XLM contract, so A is B's CAP-0071 delegated signer there.
@@ -214,20 +216,20 @@ fn a_capped_rule_meters_only_the_accounts_own_transfers() {
     );
     assert_eq!(token.balance(&b), FUNDS);
 
-    // A's uncapped rule on the XLM contract authorizes the same transfer
-    // through the same delegated path.
+    // A's owner's uncapped rule on the XLM contract authorizes the same
+    // transfer through the same delegated path.
     e.set_auths(&[via_delegate(
         &w,
         900_002,
         &b,
         b_rule,
         &a,
-        open_rule,
-        &app,
+        owner_rule,
+        &a_owner,
         transfer(&b),
     )]);
-    let open = token.try_transfer(&b, &sink, &UNIT);
+    let by_owner = token.try_transfer(&b, &sink, &UNIT);
     e.set_auths(&[]);
-    assert!(open.is_ok(), "A's uncapped rule approves B's transfer");
+    assert!(by_owner.is_ok(), "A's owner rule approves B's transfer");
     assert_eq!(token.balance(&b), FUNDS - UNIT);
 }
