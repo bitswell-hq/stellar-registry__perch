@@ -11,7 +11,7 @@
    "id": "motivation",
    "title_html": "Apps and agents need authority with limits",
    "title_latex": "Introduction",
-   "nav": "Introduction",
+   "nav": "The request",
    "figures": [
     "fig-overview",
     "fig-shop-grant"
@@ -25,18 +25,15 @@
    "title_html": "How does a Soroban account approve a call?",
    "title_latex": "Background",
    "nav": "Background",
-   "figures": [
-    "fig-contexts"
-   ],
    "editions": [
     "latex"
    ]
   },
   {
    "id": "grants",
-   "title_html": "A grant says what an app may call and how much it may spend",
+   "title_html": "The sign dialog shows the whole request and previews it",
    "title_latex": "Grants and Spending Windows",
-   "nav": "Grants",
+   "nav": "Review and preview",
    "figures": [
     "fig-cap-window"
    ],
@@ -48,15 +45,17 @@
   },
   {
    "id": "authorization",
-   "title_html": "The account decides every call at one point",
+   "title_html": "The user signs or refuses, and the account decides",
    "title_latex": "The Authorization Path",
-   "nav": "How it decides",
+   "nav": "Sign or refuse",
    "figures": [
     "fig-auth-path"
    ],
    "aliases": [
     "gate",
-    "background"
+    "background",
+    "threat-model",
+    "limits"
    ]
   },
   {
@@ -67,8 +66,8 @@
    "tables": [
     "tab-grantee"
    ],
-   "aliases": [
-    "limits"
+   "editions": [
+    "latex"
    ]
   },
   {
@@ -76,18 +75,18 @@
    "title_html": "Perch and oz-policy-builder place the same checks differently",
    "title_latex": "Perch and oz-policy-builder",
    "nav": "Comparison",
-   "figures": [
-    "fig-compose"
-   ],
    "tables": [
     "tab-choose"
+   ],
+   "editions": [
+    "latex"
    ]
   },
   {
    "id": "simulation",
-   "title_html": "soroban-sim runs both accounts in this page",
+   "title_html": "The same request runs against an OpenZeppelin account",
    "title_latex": "Both Designs in soroban-sim",
-   "nav": "Run both",
+   "nav": "Against OpenZeppelin",
    "figures": [
     "fig-sim"
    ],
@@ -95,7 +94,8 @@
     "tab-sim"
    ],
    "aliases": [
-    "experiment"
+    "experiment",
+    "compare"
    ]
   },
   {

@@ -42,7 +42,7 @@
 /* Print from either theme: figures use the light theme's figure tokens. */
 @media print{:root,:root[data-theme]{--fig-stroke:#7d8a91;--fig-fill:#f1f2ee;--fig-proved:#e6f1ea;--fig-deny:#f8e6e2;--tint:#ebede7;--line:#d9dcd6;--btn:#fff;--on-amber:#fff}
 .fig-head,.fig-bar,.fig-live,.fig-detail{display:none}.fig [data-print=no]{display:none!important}.fig .off:not([data-print=no]){display:revert!important}}
-/* Explorables (E1-E4), theorem instances and the simulation embed (figures.js). On screen an
+/* Explorables (E1-E3), theorem instances and the simulation embed (figures.js). On screen an
    explorable replaces its static form; print and no-JS readers get the static form only. */
 .xp{min-width:0;margin:.6rem 0 0;font-size:.9rem}
 .xp p{margin:.5rem 0;max-width:none}
@@ -111,13 +111,6 @@
 .xp-verdict{font-weight:650}
 .xp-witness{margin-top:.4rem}
 .xp-points{margin:.3rem 0;padding-left:1.1rem}
-.xp-slot{list-style:none;margin-left:-1.1rem;border:1.5px dashed var(--fig-stroke);border-radius:4px;padding:.3rem .5rem;color:var(--muted)}
-.xp-policies{list-style:none;padding:0;margin:.3rem 0}
-.xp-policies li{display:flex;flex-wrap:wrap;gap:.3rem .6rem;align-items:center;justify-content:space-between;border:1px solid var(--fig-stroke);border-radius:5px;padding:.25rem .5rem;margin:.3rem 0}
-.xp-policies li.xp-detached{border-style:dashed;color:var(--muted)}
-.xp-pname{min-width:0;overflow-wrap:anywhere}
-.xp-pbtns{display:inline-flex;flex-wrap:wrap;gap:.3rem}
-.xp-guarantee{font-size:.85rem;border-top:1px solid var(--line);padding-top:.4rem}
 .xp-replay .xp-log{max-height:none}
 .thm-instance{margin:.4rem 0}
 .thm-try{border-top:1px dashed var(--line);margin:.5rem 0;padding-top:.3rem}
@@ -145,7 +138,7 @@
 @media print{.xp,.sim-actions,.sim-frame,.thm-try,.sim-try{display:none!important}}
 [data-explorable].xp-on{container:fig/inline-size}
 .thm-try:has(>.thm-instance:empty){display:none}
-@container fig (max-width:560px){.xp-compose .fig-head,.xp-att .fig-head{position:static}.xp-policies li{padding:.2rem .4rem}}
+@container fig (max-width:560px){.xp-att .fig-head{position:static}}
 /* Reading paths (figures.js): a radio group over the blocks tagged data-path; print shows everything. */
 .reading-paths .rp{display:flex;flex-wrap:wrap;gap:.2rem 1rem;align-items:center;border:1px solid var(--line);border-radius:6px;padding:.1rem .8rem .3rem;margin:1rem 0 0}
 .reading-paths .rp legend{font-size:.75rem;color:var(--muted);padding:0 .3rem}
@@ -154,19 +147,7 @@
 .rp-expand{min-height:44px;font:inherit;font-size:.85rem;padding:.4rem .8rem;border:1px solid var(--edge);border-radius:6px;background:var(--btn);color:var(--text)}
 @media screen{.rp-hide{display:none!important}}
 @media print{.rp-expand,.reading-paths{display:none!important}}
-/* r4 panel fixes. Compose: for the newest request, a point that ran is solid, the refusing one is
-   red with a bar end, one that did not run is dashed (the figure's shapes). */
-.xp-policies li.xp-pt-ran{border-style:solid;border-color:var(--text)}
-.xp-policies li.xp-pt-refused{border-color:var(--deny);border-width:2px;border-right-width:6px}
-.xp-policies li.xp-pt-skip{border-style:dashed;color:var(--muted)}
-.xp-policies li.xp-pt-off{border-style:dashed;color:var(--muted)}
-.xp-ptag{font:600 .66rem var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-left:auto}
-.xp-pt-refused .xp-ptag{color:var(--deny)}
-.xp-checks{list-style:none;padding:0}
-.xp-checks .xp-slot{margin-left:0}
-.xp-newest{border-left:3px solid var(--amber);padding-left:.6rem;margin:.4rem 0}
-.xp-newest .xp-entry{margin:.2rem 0}
-.xp-entry{margin:0;overflow-wrap:anywhere}
+/* r4 panel fixes. */
 .xp-why{font-size:.78rem;color:var(--muted);overflow-wrap:anywhere}
 .xp-caption{font-size:.8rem;line-height:1.6;color:var(--muted);margin-top:.8rem}
 /* Simulation embed: the rule, then Start and the presets above the frame; the recorded figure

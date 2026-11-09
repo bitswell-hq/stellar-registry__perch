@@ -26,14 +26,6 @@
    }
   ]
  },
- "fig-contexts": {
-  "title": "One authorization, several contexts, using a game grant.",
-  "caption": "The game grant lets the app key call the game's `guess` and transfer at most {{fact:grant3-cap-xlm}} XLM per {{fact:grant3-period-ledgers}} ledgers to any recipient; it pins no recipient, which case (c) shows. The auth payload names one installed rule per context. (a) A lost guess: the game's `guess` and the transfer it makes from the account; the capped rule charges the transfer. (b) A win authorizes only the root, and the game pays from its own balance. (c) A direct transfer within the cap, with no game call, is also allowed, because each context is checked alone. Draft changes after the pinned build ({{fact:exact-roots-prs}}) would let a rule require its entry's root ({{ref:sec:agents}}).",
-  "editions": [
-   "html"
-  ],
-  "short": "the game-grant diagram"
- },
  "fig-cap-window": {
   "title": "The shop grant's cap, {{fact:shop-cap-xlm}} XLM per {{fact:shop-period-ledgers}} ledgers, on illustrative ledgers.",
   "caption": "At ledger *L* the window holds charges made after *L* − 100 and through *L*. Charges inside the window at *t* + 100 are highlighted. A refused transfer leaves the spending record unchanged. A charge stops counting exactly 100 ledgers after it was made.",
@@ -50,16 +42,6 @@
   "editions": [
    "latex"
   ]
- },
- "fig-compose": {
-  "title": "The same five checks, arranged two ways.",
-  "caption": "MODEL. The model adds a co-signer and an oracle price floor to the shop grant, to show where each arrangement places a check. (a) One decision point holding the recipient pin, the signer threshold and the window cap with its record, shaped like a Perch account; a Perch rule has neither a per-call bound nor a live read, so (a) leaves them a dashed slot. (b) Checks split across policies, shaped like a policy-composed OpenZeppelin account; oz-policy-builder itself keeps the recipient pin, the per-call bound and the read in one predicate, beside `spending_limit` and a threshold policy. The static figure plays four requests: a bar end marks the refusing point; points after it did not run and are not drawn. Computed from the paper's definitions; {{ref:sec:simulation}} runs the real contracts.",
-  "interactive": "compose",
-  "editions": [
-   "html"
-  ],
-  "short": "the composition explorable",
-  "caption_html": "MODEL, computed from the paper's definitions; [the simulation](#simulation) runs the real contracts. (a) Shaped like a Perch account: there is no slot for a per-call bound or a live read. (b) Shaped like a policy-composed OpenZeppelin account; oz-policy-builder itself keeps the recipient pin, the per-call bound and the read in one predicate. In the static figure, a bar end marks the check that refused."
  },
  "fig-sim": {
   "title": "Both designs, one scenario, from soroban-sim's native run.",
