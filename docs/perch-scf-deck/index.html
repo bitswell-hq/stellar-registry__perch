@@ -1960,7 +1960,8 @@ function stopRecording() {
   R.acc = elapsed(); R.since = 0;
   R.rec.stop();
 }
-// MediaRecorder writes WebM without a duration; add one to the Info element so players can seek.
+// MediaRecorder writes WebM with no duration (Chrome) or a zero one (Firefox); set it in the Info
+// element so players can seek.
 async function webmDuration(blob, ms) {
   const h = new Uint8Array(await blob.slice(0, Math.min(blob.size, 1 << 16)).arrayBuffer());
   const vlen = b => { for (let i = 0; i < 8; i++) if (b & (0x80 >> i)) return i + 1; return 9; };
@@ -1977,12 +1978,18 @@ async function webmDuration(blob, ms) {
     const body = q + cl + cs, end = body + cz;
     if (ci === 0x1F43B675 || end > h.length) return blob;
     if (ci === 0x1549A966) {
-      let scale = 1e6;
+      let scale = 1e6, dq = 0, dz = 0;
       for (let r = body; r < end;) {
         const [ei, el] = id(r), [ez, es] = size(r + el);
-        if (ei === 0x4489) return blob;
+        if (ei === 0x4489) { dq = r + el + es; dz = ez; }
         if (ei === 0x2AD7B1) { scale = 0; for (let k = 0; k < ez; k++) scale = scale * 256 + h[r + el + es + k]; }
         r += el + es + ez;
+      }
+      const ticks = ms * 1e6 / (scale || 1e6);
+      if (dq) {
+        const dv = new DataView(h.buffer);
+        if (dz === 8) dv.setFloat64(dq, ticks); else if (dz === 4) dv.setFloat32(dq, ticks); else return blob;
+        return new Blob([h.subarray(0, end), blob.slice(end)], { type: blob.type });
       }
       const nz = cz + 11;
       if (nz >= 2 ** (7 * cs) - 1) return blob;
@@ -1992,7 +1999,7 @@ async function webmDuration(blob, ms) {
       hdr[cl] |= 0x80 >> (cs - 1);
       const dur = new Uint8Array(11);
       dur.set([0x44, 0x89, 0x88]);
-      new DataView(dur.buffer).setFloat64(3, ms * 1e6 / (scale || 1e6));
+      new DataView(dur.buffer).setFloat64(3, ticks);
       return new Blob([h.subarray(0, q), hdr, h.subarray(body, end), dur, blob.slice(end)], { type: blob.type });
     }
     q = end;

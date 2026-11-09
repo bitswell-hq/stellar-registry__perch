@@ -32,7 +32,7 @@ The Record button in the controls, or `R`, records the deck with your voice and 
 
 The video is 1920×1080 at 30 frames a second. The deck lays itself out at 1920×1080 in a hidden frame and paints each slide in its final state onto a canvas: the drawings as images, the text at the positions the browser laid out. The recording is that canvas plus the microphone, through `MediaRecorder`. Slides change with a short crossfade; the arrival animations are not recorded.
 
-The file is MP4 (H.264 and AAC) where the browser can write it, as in Safari and recent Chrome, and WebM (VP9 or VP8 with Opus) otherwise. YouTube and Vimeo accept both. The deck adds the duration that WebM files from `MediaRecorder` lack. The recording uses the theme in effect when it starts.
+The file is MP4 (H.264 and AAC) where the browser can write it, as in Safari and recent Chrome, and WebM (VP9 or VP8 with Opus) otherwise. YouTube and Vimeo accept both. The deck sets the duration that WebM files from `MediaRecorder` lack or leave at zero. The recording uses the theme in effect when it starts.
 
 ## Sources
 
