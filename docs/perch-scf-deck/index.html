@@ -172,7 +172,12 @@ html[data-nido-live] .nido-slot[data-show], html[data-nido-live] [data-show] .ni
 .nido-reset:focus-visible { outline: 2px solid var(--now); outline-offset: 2px; }
 html[data-nido-live] .nido-reset { display: inline-block; }
 html[data-rec-frame] .nido-reset { display: none !important; }
-@media print { .nido-live { display: none !important; } }
+/* print: the live frame does not print, so each Nido slot prints its still and labels */
+@media print {
+  .nido-live, .nido-reset { display: none !important; }
+  html[data-nido-live] [data-show] .nido-still, html[data-nido-live] .nido-pair[data-show] .nido-label { visibility: visible; }
+  html[data-nido-live] .nido-slot[data-show], html[data-nido-live] [data-show] .nido-slot { border-color: var(--rule); }
+}
 .nido-cap { margin: 0; font-size: clamp(15px, 1.4vw, 20px); color: var(--ink); text-align: center; }
 html.tall .stage-nido-a { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; }
 html.tall .stage-nido-a > svg { grid-row: auto; max-height: 38vh; }
@@ -746,7 +751,7 @@ html.tight .count { margin-right: auto; text-align: left; }
     <p>I lose twice: the second loss is over the cap, so it is refused. So is paying the game's owner.</p>
   </aside>
   <aside class="sources">
-    <p>The window holds 2 XLM of losses. After the earlier guess, the first press of "Lose past the cap" is a loss that fills it, and the second is refused by the cap; a stake the game's owner redirects to itself fails the recipient check ("the payment must go to Game"). The state is the Nido simulation's, offline in this page: a simulated passkey, a test euro token, and a game and a shop written for the demo. On this slide the presenter acts in the live simulation, the same session as the slides before; the still, a screenshot of the same page at this step with its sign sheet open, shows when the live frame cannot load, and in the recording.</p>
+    <p>The window holds 2 XLM of losses. After the guess on slide 14, the first press of "Lose past the cap" is a loss that fills it, and the second is refused by the cap; a stake the game's owner redirects to itself fails the recipient check ("the payment must go to Game"). The state is the Nido simulation's, offline in this page: a simulated passkey, a test euro token, and a game and a shop written for the demo. On this slide the presenter acts in the live simulation, the same session as the slides before; the still, a screenshot of the same page at this step with its sign sheet open, shows when the live frame cannot load, and in the recording.</p>
     <p class="src">docs/nido-sim/index.html and README.md (the states and their sheets); the stills in stills-2/ are screenshots of that page (README, "Nido stills"). SCF Build submission, Traction Evidence (context).</p>
   </aside>
 </section>
@@ -2080,6 +2085,8 @@ function showNotes() {
 }
 function toggleNotes() {
   const p = $('#notes-panel'), btn = $('#notes-btn');
+  // While recording, the presenter panel shows the script in the same place; the script panel would open under it.
+  if (p.hidden && R.state !== 'idle') return;
   p.hidden = !p.hidden;
   btn.setAttribute('aria-pressed', String(!p.hidden));
   ntRun(!p.hidden);

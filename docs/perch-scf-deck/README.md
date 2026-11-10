@@ -29,7 +29,7 @@ The Record button in the controls, or `R`, records the deck with your voice and 
 
 1. Use a desktop browser. Press `R` and allow the microphone. If it is blocked, the deck says so and records nothing; allow it in the site settings and press `R` again.
 2. The deck prepares the slides, then counts down 3, 2, 1. `R` or `Escape` cancels the countdown.
-3. Present as usual with the arrow keys. A presenter panel beside the slide shows the script for the current slide, the time against 3:00, the time on this slide against its target, and the next slide. The panel is not in the video.
+3. Present as usual with the arrow keys. A presenter panel beside the slide shows the script for the current slide, the time against 3:00, the time on this slide against its target, and the next slide. The panel is not in the video. The script panel (`N`) stays closed while recording, since the presenter panel shows the same script; open it again after you stop.
 4. `P` pauses and resumes. `R`, or "Stop and save", ends the recording and downloads `perch-agent-grants-<date>-<time>.mp4`, or `.webm`. The message names the format, size and length.
 
 The video is 1920×1080 at 30 frames a second. The deck lays itself out at 1920×1080 in a hidden frame and paints each slide in its final state onto a canvas: the drawings as images, the text at the positions the browser laid out. The recording is that canvas plus the microphone, through `MediaRecorder`. Slides change with a short crossfade; the arrival animations are not recorded. The Nido slides (12–17) show the simulation's states as stills, which the recorder draws (see "Nido stills"). Once you click inside the live frame, the arrow and Page keys still move the deck (the frame passes them on); the deck's other keys (Space, `P`, `R`) wait until focus returns, so click the slide outside the frame first.
@@ -67,6 +67,16 @@ They are screenshots of the simulation page in its `present=sheet` URL form. For
 4. Convert each PNG with `cwebp -quiet -q 80 -m 6 <in>.png -o stills-2/<theme>-<state>-<wide|narrow>.webp`.
 
 The current set was captured from `docs/nido-sim/index.html` with SHA-256 `4f3056d0…`.
+
+## Test
+
+`test/side-panel.test.mjs` checks the script panel and the recorder in headless Chromium, with a fake microphone. It opens the script (`N`), records (`R`), presses `N` while recording, stops, then opens the script and the sources again. It checks which panels show, the layout around them and the script panel's timer. It serves `docs/` itself on a free local port and exits 1 on a failure:
+
+    cd docs/perch-scf-deck/test
+    npm install && npx playwright install chromium
+    npm test
+
+Set `CHROMIUM` to a browser binary to use one Playwright did not download.
 
 ## Sources
 
