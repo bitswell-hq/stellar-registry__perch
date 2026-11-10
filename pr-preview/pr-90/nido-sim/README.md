@@ -165,16 +165,66 @@ every request.
   `{op:"order", cents:1–5000}`, `{op:"transfer", token:"xlm"|"eurc",
   cents:1–5000}`, `{op:"advance", ledgers:1–10000}`, `{op:"install_grant"}`;
   at most 40. Anything else is ignored.
+- `&review=<base64url JSON request>`: starts from a new ledger, runs
+  `scenario` (if any) as above, then opens the sheet for this one request and
+  leaves it open: nothing is approved and nothing takes focus (the sheet opens
+  without a modal, over a backdrop drawn by its shadow). A review of
+  `{op:"install_grant"}` needs only the account; any other review installs
+  the grant first if the scenario did not. A refusal shows its refusal sheet.
+  If the presenter presses Approve, Reject or "Sign anyway", the request is
+  applied or discarded as usual. `&step=<name>` names the state in the ready
+  message.
+- `&present=sheet` (implies `embed=1`): for a 16:9 slide frame (about 1300×620
+  or 360×640, light or dark): only the sheet, over a quiet backdrop, under one
+  small line: "Simulated · Your Nido account: 10 XLM · 20 EURC (test) · Left
+  this period: 2 of 2 XLM, 10 of 10 EURC". With no sheet open (after
+  `autostart`, or once the presenter decides) it shows the latest step result
+  instead, such as "✓ Created: your Nido account, with 10 XLM and 20 EURC
+  (test)".
 - In an iframe the page posts `{type:"nido-sim:height", height}` to its parent
-  when its height changes, and accepts `{type:"nido-sim:load", commands:[…]}`
-  (the same requests; `commands: []` only creates the account).
+  when its height changes, and accepts `{type:"nido-sim:load", commands:[…],
+  review?, step?, fresh?}`: the same requests; `commands: []` only creates
+  the account; `review` as above; `fresh: true` starts from a new ledger
+  without a review. A new load closes a sheet left open by the last one
+  (rejecting it). After each load the page posts `{type:"nido-sim:ready",
+  step, verdict}` once the sheet shows its check (`verdict`: `ok` or
+  `refused` for a review, `unknown` if the check could not run, `null`
+  without a review; `step`: the load's `step`, or the reviewed request's
+  `op`), and sets `data-nido-ready` on `<html>` to the verdict, or `done`;
+  an invalid load or a failure posts `{type:"nido-sim:error", step, error}`
+  and sets it to `error`. The URL forms do the same, except that an invalid
+  `scenario` or `review` parameter is ignored with a note on the page: the
+  page does not start, and posts and sets nothing.
+- One state per slide, as `index.html?embed=1&present=sheet&theme=dark&…`
+  (each opens in under a second once the reactor is compiled):
+
+  | Slide | Parameters |
+  | --- | --- |
+  | Account created | `autostart=1&step=create` |
+  | Install the grant | `review=eyJvcCI6Imluc3RhbGxfZ3JhbnQifQ&step=grant` |
+  | Play a guess (3) | `review=eyJvcCI6Imd1ZXNzIiwibnVtYmVyIjozfQ&step=guess` |
+  | Buy a coffee | `review=eyJvcCI6Im9yZGVyIiwiY2VudHMiOjM1MH0&step=coffee` |
+  | Pay the game directly | `review=eyJvcCI6InRyYW5zZmVyIiwidG9rZW4iOiJ4bG0iLCJjZW50cyI6MTAwfQ&step=direct` |
+  | Lose through game.other | `review=eyJvcCI6Imd1ZXNzIiwibnVtYmVyIjoyLCJlbnRyeSI6Im90aGVyIn0&step=other` |
+  | Lose past the cap | `scenario=W3sib3AiOiJndWVzcyIsIm51bWJlciI6M30seyJvcCI6Imd1ZXNzIiwibnVtYmVyIjo1fV0&review=eyJvcCI6Imd1ZXNzIiwibnVtYmVyIjoxfQ&step=overcap` |
+  | Lose to the game's owner | `review=eyJvcCI6Imd1ZXNzIiwibnVtYmVyIjoyLCJzdGFrZV90byI6Im93bmVyIn0&step=owner` |
+
+  The same states by message to one frame loaded with
+  `index.html?embed=1&present=sheet`: `{type:"nido-sim:load", commands:[],
+  fresh:true, step:"create"}`; `{…, commands:[], review:{op:"install_grant"},
+  step:"grant"}`; `review:{op:"guess", number:3}`; `review:{op:"order",
+  cents:350}`; `review:{op:"transfer", token:"xlm", cents:100}`;
+  `review:{op:"guess", number:2, entry:"other"}`; `commands:[{op:"guess",
+  number:3}, {op:"guess", number:5}], review:{op:"guess", number:1}`;
+  `review:{op:"guess", number:2, stake_to:"owner"}`.
 - Without a parameter the page loads nothing heavy: the 3.4 MB reactor is
   compiled on the first press.
 - Element ids: `#nido-controls`, `#nido-result-1` to `#nido-result-4` (each
   step's one-line result), `#nido-status` (visually hidden polite live
   region), `#nido-totals`, `#nido-log` (collapsed cards `#nido-request-N`),
   `#nido-reference`, `#nido-sources`, `#nido-notices`, `#nido-sheet` (the
-  approval sheet, a native `<dialog>`).
+  approval sheet, a native `<dialog>`), `#nido-present-line` and
+  `#nido-present-result` (the `present=sheet` line and result).
 
 ## Pins
 
@@ -205,7 +255,7 @@ toolchain), stellar-cli 27.0.0 (`stellar contract build`).
 | reactor (driver, wasm32-wasip1) | d8377b548a242e2ab833469e4f39986e1e1af27adb53277f2237b9de1a2c4224 |
 | reference replies minus timings (native = WASI = browser) | 5ec17f91692e417a25990f84547e25b7228624fa0ac7e4ce13c872aacfad47e2 |
 | recorded run `evidence/native-golden.jsonl` | 5fe0796a1118eda818384ff889b4e02ac24d6eaf2a84c2a57e018d68ed1a2b30 |
-| index.html (5352637 bytes) | a9082c5c1154af35d63d39ffd94d6521ddfc66a4a4695f390aad6d853f1ed0f9 |
+| index.html (5361638 bytes) | a3149583b20b62b534dcd938b85e28454102c43be0dbb89220eb02ca244be99f |
 
 None of the Perch artifacts is a deployed contract: the account is built
 from 2c64fe4 with its compiler, interpreter and spending-limit pins staged
