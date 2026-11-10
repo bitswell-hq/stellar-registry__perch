@@ -78,7 +78,7 @@ every consumer reads.
 | `scripts/publish-wasm.sh` | Publishes one wasm under its name and version and deploys its content-addressed instance, or (`--plan`) simulates each transaction for its fee. The stack deploy and the mainnet publishes both run it. |
 | `scripts/derive-id.py` | The contract-id derivation every release script uses, in the Python standard library: `content`, `name`, the `registry` and `root` a `registry.path` derives on a network, and its whole `chain`; `key` prints the ed25519 key inside a `G…` address. CI checks it against the account's own (`perch-derive-id`) on every network and every recorded address. |
 | `scripts/bootstrap-registry.sh --network <n> --source <id> <step>` | Creates a network's registry chain, the four tier-0 an author needs, and the perch and nido authors, then binds every name; a dry run unless `--send`. See [Bootstrapping a network's registry chain](#bootstrapping-a-networks-registry-chain). |
-| `scripts/rehearse-bootstrap.sh` | Runs that bootstrap with `--send` on a soroban-sim fork of testnet and mainnet, with throwaway keys, and checks every derived address and the fork's report. Sends nothing to a network. |
+| `scripts/rehearse-migration.sh` | Rehearses the release's migration on soroban-sim forks of testnet and mainnet, with throwaway keys: that bootstrap with `--send`, then the release path's own scripts (the testnet publishes and stack deploy, then the mainnet ones on testnet's bytes), what Nido and the current deployment read, and each fork's report. Sends nothing to a network. See [Rehearsing the migration on forks](#rehearsing-the-migration-on-forks). |
 | `scripts/registry-target.sh <network> <passphrase>` | The registry a network's publishes go to: the derived one, or the recorded one while `deployments/pending-registry.json` declares a migration that has not switched; and whether the stack deploys (only into the derived one). See [Registry migration](#registry-migration). |
 | `scripts/verify-deployment.sh` | Read-only, by hash and address only: the registry's code; each contract at its content address, running its recorded wasm, served by the registry for its name and version; the account installed; `perch/verifiers`'s code and each verifier the manifest records there at its content address, running and served as the stack's bytes; the manifest's recorded pins equal to the deployed hashes; and what consumers resolve on-chain, from the factory's `account_wasm_hash`/`webauthn_verifier` (the WebAuthn verifier's content address in `perch/verifiers`, or its copy in `registry` for a manifest without `verifiers`), the adapter's `circuit_id`/`tree_depth` against the pool's `depth`, to the code hash and `infra()` of every account the exercise report lists. A report from another stack commit is skipped with a notice. |
 | `scripts/fetch-infra-wasm.sh` | Fetches the account's and factory's pinned wasm from the manifest and rewrites their committed hash pins (`<name>.sha256`), refusing a manifest whose registry is not the one `registry.path` derives on its network, unless `deployments/pending-registry.json` declares that migration. Each wasm is fetched by its recorded address (the account by its hash) and refused unless its sha256 and content address match. `--stack <dir>` fetches every deployed artifact with a `build.json`. |
@@ -732,35 +732,18 @@ real publish of each name is not refused as `#11 HashAlreadyPublished`.
 
 ### Rehearsing on a fork
 
-[`scripts/rehearse-bootstrap.sh`](../../scripts/rehearse-bootstrap.sh) runs
-the bootstrap with `--send` against
-[soroban-sim](https://github.com/theahaco/soroban-sim), installed from the
-commit the script pins. `soroban-sim serve --fork <network>` is a Stellar RPC
-facade over a forked ledger: it validates every transaction, checks real
-signatures, and applies it locally, and nothing reaches the network. Throwaway
-keys stand in for every signer. The operator key is added to the account that
-holds the role (`fork_addSigner`), and that account and the admin key are
-funded (`fork_setBalance`). The stellar CLI gets a profile holding only those
-keys. The script then checks every derived address on the fork, and that a
-dry rerun of `all` finds nothing left to do. It also checks the fork's
-report: it passed, no envelope carries a signature the real network would
-accept, and it lists exactly the overrides the run made.
+The bootstrap is the first step of
+[the migration rehearsal](#rehearsing-the-migration-on-forks), on forks of
+both networks. The operator key is added to the account that holds the
+role (`fork_addSigner`), that account and the admin key are funded
+(`fork_setBalance`), and the bootstrap runs with `--send`. The rehearsal then
+checks every derived address on the fork, and that a dry rerun of `all` finds
+nothing left to do. `--bootstrap-only` stops there.
 
 `--account-wasm` and `--constructorless-wasm` pass through to the bootstrap.
 Without them it uses the testnet deployment's bytes. With `build`, a testnet
 rehearsal passes `--allow-unattested` for that wasm; a mainnet rehearsal
 stops instead, because mainnet takes only attested wasm.
-
-```sh
-scripts/rehearse-bootstrap.sh                     # testnet, then mainnet
-scripts/rehearse-bootstrap.sh --network mainnet   # reports under target/rehearse-bootstrap/mainnet
-```
-
-The `Rehearse bootstrap` workflow runs it for both networks on
-`workflow_dispatch` and on pull requests that touch the bootstrap, the
-rehearsal, `derive-id.py` or `registry.path`, and uploads each report. The
-fork reads the live public RPC, so a run reflects the chains as they are
-then. It is not a required check.
 
 ### Afterwards
 
@@ -875,6 +858,178 @@ from a job that compiled: it fetches every byte it publishes from testnet
 itself and checks each against the testnet deployment's manifest and
 attestations, so the mainnet delegate never signs for bytes a build runner
 handed it.
+
+## Rehearsing the migration on forks
+
+[`scripts/rehearse-migration.sh`](../../scripts/rehearse-migration.sh) runs
+a release's whole migration against
+[soroban-sim](https://github.com/theahaco/soroban-sim) forks of testnet and
+mainnet: the bootstrap, then `release.yml`'s testnet legs, then
+`release-mainnet.yml` on testnet's bytes. `soroban-sim serve --fork
+<network>` is a Stellar RPC facade over a forked ledger: it validates every
+transaction, checks real signatures, and applies it locally. Nothing reaches
+either network and no real key is used. The release path's own scripts run
+unchanged against the facade, throwaway keys stand in for every signer, and
+each substitution is an override the fork's report lists.
+
+| Step | Testnet | Mainnet | Stands for |
+| --- | --- | --- | --- |
+| Bootstrap | `bootstrap-registry.sh create-registry` and `all --send` as the account holding the role, then every derived address and a dry rerun | the same | [Bootstrapping](#bootstrapping-a-networks-registry-chain) |
+| Versions | a scratch clone of the checkout (HEAD and its uncommitted changes) at the versions `release-pr` would pick now: git-cliff over each contract's `paths_for()` scope against `stellar-registry/perch`'s release tags, with its pin and lockfile sync | the testnet leg's | the release PR |
+| Tier-0 | each released `ALLOW` contract built with `stellar scaffold build` and published, authored by the perch author, into the registry `registry-target.sh` names | the same bytes, checked against their testnet hash and `binver`; `mainnet-settings.sh`, `publish-wasm.sh --plan`, then `publish-wasm.sh` | `constructorless-build` and `constructorless-publish`; `mainnet-publish` |
+| Stack | `build-stack.sh --reuse`, [the bridge](#known-gap-the-releases-webauthn-verifier-in-perchverifiers) while the gap is real, `deploy-stack.sh --plan`, `deploy-stack.sh` | the testnet fork's deployment fetched by hash (`fetch-infra-wasm.sh --stack`), the bridge while the gap is real, `deploy-stack.sh --plan`, `deploy-stack.sh` | `deploy-stack-build` and `deploy-stack`; `mainnet-deploy-stack` |
+| Record | `manifest-registry.sh` and `verify-deployment.sh` on the new manifest | the same | `deploy-stack-record`; `mainnet-deploy-stack-record` |
+| Consumers | Nido's receiver (`fetch-infra-wasm.sh --stack` on the new manifest); the factory's `account_wasm_hash` and `webauthn_verifier`; a simulated `create_passkey`; the `perch-deployed` payload; `deployments/<network>.json` and the accounts its exercise report lists, still verifying | the same | [Notifying Nido](#notifying-nido-nido-dispatchyml) |
+| Report | passed, no failures, no envelope a real signer signed, exactly this run's overrides | the same | |
+
+The overrides, all listed in each fork's report:
+
+- `fork_addSigner`: the operator key signs for the account that holds the
+  bootstrap's role (perch's manager). The fork sets that account's master key
+  weight to 0, so no real signature counts.
+- `fork_setBalance`: that account, the admin key and the ci key are funded.
+- `fork_setLedgerEntry`: the perch author's `ci-publish` delegate becomes the
+  ci key. The `theahaco/stellar-cli` fork signs an author's authorization
+  only for a key that one of the author's rules names, and the rehearsal
+  holds no real key. So the one entry that stores the author's ci signer
+  (`SignerData`) names the ci key instead. The author's code, the rule's
+  registry, functions, `is-self` argument and expiry, and its policy are the
+  chain's.
+- `fork_setLedgerEntry` and `fork_removeLedgerEntry`, only when
+  `testdata/deploy/perch-author-<network>.json` exists: the perch author's
+  admin key becomes the throwaway admin key in the entries that store it
+  (`SignerData`, `SignerLookup`, `InstalledRules`), so that the document can
+  be applied to the author on the fork (below).
+- `fork_setLedgerEntry`, labelled `KNOWN GAP, fork only`, only while the
+  perch author has no rule on `perch/verifiers`: `perch/verifiers` binds
+  `perch-webauthn-verifier` to the ci key, so that the release's version can
+  be published there. It stands in for a step the real migration has no way
+  to take (below). The registry's own `publish_hash` and `deploy_stateless`
+  then run, through `publish-wasm.sh`.
+
+### Known gap: the release's WebAuthn verifier in `perch/verifiers`
+
+`deploy-stack.sh` refuses a stack whose WebAuthn verifier
+`perch/verifiers` does not serve, because the factory pins it there. Before
+the perch author's `ci-publish-verifiers`, a release that changes the
+verifier's bytes (the next release bumps it from 0.1.2 to 0.1.3) had no way
+to publish it there:
+
+- the bootstrap seeds `perch/verifiers` from `deployments/testnet.json`, with
+  the current deployment's verifiers, and that first publish binds each name
+  to the perch author;
+- a later version of a bound name needs that author's authorization (the
+  manager approves only a name's first publish);
+- the perch authors on testnet and mainnet hold `admin` (on the account
+  itself), and `ci-publish` and `admin-registry` (on `perch/constructorless`).
+  No rule covers `perch/verifiers`.
+
+[The perch author's rule on `perch/verifiers`](#the-perch-authors-rule-on-perchverifiers)
+closes it: `ci-publish-verifiers`, and `deploy-stack.sh` publishing the
+stack's verifiers there as the author. On the live networks the gap stays
+until the admin key applies `testdata/deploy/perch-author-<network>.json`;
+until then the release's `deploy-stack` stops at that check on both, and
+the mainnet stack, which takes testnet's, cannot follow.
+
+A rehearsal whose perch author has no such rule bridges the gap on the fork.
+The bridge lets every later step run, on both networks, and the script then
+exits with status 3 (a failed step exits 1) and this message, which is also
+the first line of `summary.md` and, in CI, an error annotation:
+
+```
+migration blocked: perch/verifiers has no publish path for perch-webauthn-verifier 0.1.3 - see docs/deploy/README.md Known gap
+```
+
+The version is the one the run bridged. The gap is detected, not assumed:
+the bridge runs only while the perch author has no `ci-publish-verifiers`
+rule on `perch/verifiers`. The author's document with that rule,
+`testdata/deploy/perch-author-<network>.json`, is committed for both
+networks. While that file exists, the rehearsal
+applies it to the author on the fork before the bootstrap (`perch-deploy
+apply`, then `perch-deploy verify --legacy-no-rule-set`, whose PARTIAL exit
+3 is the expected result on these authors), with the throwaway admin key
+substituted for the author's admin key, and checks the rule among the
+derived addresses. Those substitutions are overrides the fork's report
+lists. The release path then publishes the verifier itself, nothing is
+bridged, and the rehearsal passes. To inspect a run locally despite the
+gap, pass `--accept-known-gaps` or set `REHEARSE_ACCEPT_KNOWN_GAPS=verifiers`:
+the message becomes a warning and the exit status 0. The workflow sets
+neither.
+
+### Running it
+
+Locally, from a full clone (not a shallow one), with on `PATH`:
+
+- the `theahaco/stellar-cli` fork as `stellar` (the release
+  `.github/actions/setup-stellar-fork` installs, for your platform) and its
+  `stellar-scaffold` plugin;
+- `git-cliff`;
+- `gh`, logged in: the bootstrap verifies attestations;
+- `cargo`: the script installs soroban-sim under `target/soroban-sim/`.
+
+```sh
+scripts/rehearse-migration.sh                     # testnet, then mainnet on testnet's bytes
+scripts/rehearse-migration.sh --network testnet   # testnet only
+scripts/rehearse-migration.sh --bootstrap-only    # the bootstrap on both networks, no release
+scripts/rehearse-migration.sh --accept-known-gaps # exit 0 over the known gap, with a warning
+```
+
+Without `--accept-known-gaps` (or `REHEARSE_ACCEPT_KNOWN_GAPS=verifiers`), a
+run that passes every step still exits 3 while
+[the known gap](#known-gap-the-releases-webauthn-verifier-in-perchverifiers)
+is real. `--bootstrap-only` bridges nothing, so it is unaffected.
+
+Everything lands under `target/rehearse-migration/`. `<network>/` holds each
+fork's report (`report.md`, `report.json`), the bootstrap and release logs,
+the address and consumer checks, the new `deployment.json`, and
+`nido-payload.json`. `release/` holds the versions, the tier-0 builds, and the
+stack. `summary.md` sums up both networks, under the known gap's message
+when a fork was bridged.
+
+In CI, the `Rehearse migration` workflow runs it on `workflow_dispatch` and
+on pull requests that touch the release path's scripts, `registry.path` or
+`verifiers.path`, the manifests, the perch author's document, or the release
+workflows (its `paths` is the list). It runs both networks in one job, because the mainnet leg fetches from the testnet fork.
+It writes the summary to the job's page and uploads `target/rehearse-migration`,
+without the throwaway keys or the scratch clone. It uses no secret, only
+`github.token` for `gh attestation verify`. While the known gap is real the
+job fails, with the gap's message as an error annotation and at the top of
+the summary, after every step has run; it never accepts the gap. It is not a
+required check: the forks read the live public RPCs, so a run reflects the
+chains as they are then.
+
+### soroban-sim and protocols
+
+soroban-sim links one host protocol and refuses to fork a network on any
+other. The script reads each network's protocol from its public RPC. For
+protocol 29 it installs the commit it pins (`SOROBAN_SIM_REV`). For protocol
+30 it installs that commit with `scripts/soroban-sim/protocol-30.patch`
+(`soroban-env-host`, `soroban-simulation` and `stellar-xdr` 30.0.0, and the
+lockfile), until soroban-sim releases a protocol-30 build. A network on a
+protocol no build covers stops the rehearsal with that message.
+`SOROBAN_SIM=<binary>` forks every network with that one binary.
+
+### What it does not cover
+
+- **The release's bytes.** Its versions are the ones the release PR would
+  pick on the day it runs, and its tier-0 are its own `stellar scaffold
+  build`s. Contract-release's attested builds are other bytes, so every hash,
+  address and account pin differs from the real release's. No attestation
+  check runs on them: not `release-mainnet.yml`'s, and not the bootstrap's.
+- **Real signers and settings:** the manager's, admin's and delegates' keys,
+  the GitHub environments and their reviewers, `vars.PERCH_DEPLOY_STACK`,
+  `PERCH_AUTHOR_ADDRESS` and `PERCH_MAINNET_AUTHOR_ADDRESS`.
+- **Everything off-chain:** the release PR itself, tags, GitHub releases,
+  npm, the `deploy(<network>)` PRs, the regenerated bindings, the
+  perch-artifacts bump, and notify-nido's dispatch (only its payload is
+  written). Nido's own factory redeploy and repin are Nido's.
+- **Accounts already deployed.** They move only through their own delayed
+  upgrade. The rehearsal checks that they still verify, not an upgrade.
+- **The chain on the day.** The forks read live state, so the real run meets
+  whatever has changed since. Fees charged on a fork come from its own
+  simulation.
+- The multisig and timelock path, and a durable store for the deployed
+  bytes.
 
 ## Release-path settings
 
