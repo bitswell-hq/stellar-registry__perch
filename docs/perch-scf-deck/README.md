@@ -1,6 +1,6 @@
 # Perch Agent Grants deck
 
-`index.html` is a 10-slide deck for The Aha Company's SCF Build Award submission (Open Track): "Perch Agent Grants: subagent budgets enforced by Stellar smart accounts". It is cut to fit SCF's three-minute video. It uses the Perch deck's engine, palette and seals and is a separate deck, so `../perch-deck/` is unchanged. Everything is in one file, with inline SVG, CSS and JS and system fonts, and the deck makes no network requests, except that it loads the sibling page `../nido-sim/index.html?embed=1&present=live&preload=1&grant=shop` into one frame for slide 8 (a moment after it opens), and the stills in `stills-2/`, and nothing else. The deployment-record and GitHub links are plain links.
+`index.html` is a 10-slide deck for The Aha Company's SCF Build Award submission (Open Track): "Perch Agent Grants: subagent budgets enforced by Stellar smart accounts". It is cut to fit SCF's three-minute video. It uses the Perch deck's engine, palette and seals and is a separate deck, so `../perch-deck/` is unchanged. Everything is in one file, with inline SVG, CSS and JS and system fonts, and the deck makes no network requests, except that it loads the sibling page `../nido-sim/index.html?embed=1&present=live&preload=1&grant=shop` into one frame for slide 8 (a moment after it opens), and the stills in `stills-2/`, and nothing else. The arXiv and GitHub links are plain links.
 
 Controls:
 
@@ -84,7 +84,7 @@ The slide leads with Nido's status, as context: pre-release on Stellar mainnet (
 
 ## Nido stills
 
-If the frame never posts `preloaded` (a copy without `../nido-sim`, a slow device), each step shows its still instead and the slide stays usable. The recording always draws the stills, because a canvas cannot capture a live frame, and print shows the current step's still beside the list of steps. Each step has four, `stills-2/<light|dark>-shop-<state>-<wide|narrow>.webp`, for the states `account`, `grant`, `coffee` and `cap`: 16 files, about 400 KB. The folder still holds the earlier game-and-shop stills, which nothing uses now.
+If the frame never posts `preloaded` (a copy without `../nido-sim`, a slow device), each step shows its still instead and the slide stays usable. The recording always draws the stills, because a canvas cannot capture a live frame, and print shows the current step's still beside the list of steps. Each step has four, `stills-2/<light|dark>-shop-<state>-<wide|narrow>.webp`, for the states `account`, `grant`, `coffee` and `cap`: 16 files, about 400 KB.
 
 They are screenshots of the simulation page in its shop-only `present=sheet` URL form. For each theme and state:
 

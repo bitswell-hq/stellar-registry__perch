@@ -157,22 +157,6 @@ html[data-rec-frame] .stage-links .act { display: none; }
 .slide[data-step="4"] .nido-cap [data-k="4"] { display: inline; }
 .slide[data-step="4"] .nido-steps [data-k="4"] { color: var(--now); }
 .slide[data-step="4"] .nido-steps [data-k="4"] .sn { border-color: var(--now); border-width: 2px; }
-.slide[data-step="5"] .nido-shot[data-k="5"] { display: grid; }
-.slide[data-step="5"] .nido-cap [data-k="5"] { display: inline; }
-.slide[data-step="5"] .nido-steps [data-k="5"] { color: var(--now); }
-.slide[data-step="5"] .nido-steps [data-k="5"] .sn { border-color: var(--now); border-width: 2px; }
-.slide[data-step="6"] .nido-shot[data-k="6"] { display: grid; }
-.slide[data-step="6"] .nido-cap [data-k="6"] { display: inline; }
-.slide[data-step="6"] .nido-steps [data-k="6"] { color: var(--now); }
-.slide[data-step="6"] .nido-steps [data-k="6"] .sn { border-color: var(--now); border-width: 2px; }
-.slide[data-step="7"] .nido-shot[data-k="7"] { display: grid; }
-.slide[data-step="7"] .nido-cap [data-k="7"] { display: inline; }
-.slide[data-step="7"] .nido-steps [data-k="7"] { color: var(--now); }
-.slide[data-step="7"] .nido-steps [data-k="7"] .sn { border-color: var(--now); border-width: 2px; }
-.slide[data-step="8"] .nido-shot[data-k="8"] { display: grid; }
-.slide[data-step="8"] .nido-cap [data-k="8"] { display: inline; }
-.slide[data-step="8"] .nido-steps [data-k="8"] { color: var(--now); }
-.slide[data-step="8"] .nido-steps [data-k="8"] .sn { border-color: var(--now); border-width: 2px; }
 .nido-slot .nido-still { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
 /* one still at a time: the theme's, wide or (tall layouts) narrow */
 .nido-slot .nido-still { display: none; }
@@ -1264,7 +1248,6 @@ B.contained = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   } else c.text(P.overT[0], P.overT[1], 'even if the runtime fails, the account refuses an over-cap payment', { anchor: 'start', size: .62 });
 } };
 
-/* Traction through Nido: the facts, beside the simulation's account. */
 /* Two uses of the contained policy runtime we will build: a Cedar policy, one request it allows, one it refuses. */
 function example(c, d) {
   const T = c.tall;
@@ -1624,7 +1607,7 @@ function next() {
   else go(cur + 1, false, { open: true });
 }
 function prev() { const s = slides[cur], n = stepsOf(s); if (n && stepOf(s) > 1) setStep(stepOf(s) - 1); else go(cur - 1, false, { back: true }); }
-$$('.nido-steps [data-k]').forEach(b => b.addEventListener('click', () => { const s = b.closest('.slide'); if (s === slides[cur]) setStep(parseInt(b.dataset.k, 10)); }));
+$$('.nido-steps [data-k]').forEach(b => b.addEventListener('click', e => { const s = b.closest('.slide'); if (s === slides[cur]) setStep(parseInt(b.dataset.k, 10)); if (e.detail > 0) b.blur(); }));
 
 // The script panel's timer runs while the panel is shown: the talk so far against 3:00, and this slide against its target.
 const NT = { acc: 0, since: 0, slideAcc: 0, slideSince: 0, slide: -1, tick: 0 };
@@ -2251,7 +2234,7 @@ function nidoReset() {
   nido.state = null;
   nido.held = null;
   nidoPost({ type: 'nido-sim:reset' });
-  if (cur !== nidoFirst) go(nidoFirst); else setStep(1);
+  setStep(1);
 }
 $$('[data-nido-reset]').forEach(b => b.addEventListener('click', e => { nidoReset(); if (e.detail > 0) b.blur(); }));
 addEventListener('message', e => {
