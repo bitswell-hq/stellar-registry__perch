@@ -27,7 +27,8 @@
 #      perch/verifiers to serve the release's WebAuthn verifier, and no real
 #      path publishes it there (docs/deploy/README.md, "Rehearsing the
 #      migration on forks"). One labelled fork_setLedgerEntry per fork stands
-#      in for that missing step, and the summary names it.
+#      in for that missing step, so every later step is still rehearsed, and
+#      the run then fails (below).
 #        testnet  release.yml. In a scratch clone of this checkout, the
 #                 versions release-pr computes (git-cliff over each
 #                 contract's paths_for() scope, against
@@ -57,9 +58,17 @@
 # summary.md under --out sums up each network (the workflow shows it), and a
 # failure's reason.
 #
+# Exit status: 0, every step passed and nothing was bridged; 1, a step
+# failed; 3, every step passed but a fork had to bridge the known gap, so
+# the real migration cannot complete: "migration blocked: perch/verifiers
+# has no publish path for perch-webauthn-verifier <version>", which is also
+# summary.md's first line and, under GitHub Actions, an error annotation.
+# The gap is detected, not assumed: once perch/verifiers serves the stack's
+# WebAuthn verifier, nothing is bridged and the run exits 0.
+#
 # Usage: scripts/rehearse-migration.sh [--network testnet|mainnet] [--out DIR]
-#            [--bootstrap-only] [--account-wasm F|TAG|build]
-#            [--constructorless-wasm F|TAG|build]
+#            [--bootstrap-only] [--accept-known-gaps]
+#            [--account-wasm F|TAG|build] [--constructorless-wasm F|TAG|build]
 #   --network  one network (default: testnet, then mainnet). The mainnet
 #              release takes testnet's bytes, so --network mainnet alone
 #              needs --bootstrap-only
@@ -67,12 +76,16 @@
 #              <network>/ for each fork's report, logs and manifest, and
 #              release/ for the scratch clone, the versions and the tier-0
 #   --bootstrap-only   steps 1, 2 and 5
+#   --accept-known-gaps   for a local run or an inspection: a bridged known
+#              gap is a warning and the exit status 0. The workflow never
+#              passes it. REHEARSE_ACCEPT_KNOWN_GAPS=verifiers does the same
 #   --account-wasm, --constructorless-wasm   passed to the bootstrap. Without
 #              one, the bootstrap uses the bytes the testnet deployment runs
 #              (deployments/testnet.json). `build` builds that wasm from this
 #              checkout, and a testnet rehearsal then passes --allow-unattested
 #              for it; mainnet takes only attested wasm.
-# Env: SOROBAN_SIM, a soroban-sim binary to fork every network with;
+# Env: REHEARSE_ACCEPT_KNOWN_GAPS=verifiers, as --accept-known-gaps.
+#      SOROBAN_SIM, a soroban-sim binary to fork every network with;
 #      otherwise the script installs SOROBAN_SIM_REV below, built for each
 #      network's protocol, under target/soroban-sim/. The release (step 3)
 #      needs the theahaco/stellar-cli fork as `stellar`
@@ -117,11 +130,14 @@ sha256_file() { if command -v sha256sum >/dev/null; then sha256sum "$1" | cut -d
 sha256_text() { printf '%s' "$1" | if command -v sha256sum >/dev/null; then sha256sum; else shasum -a 256; fi | cut -d' ' -f1; }
 
 networks=(testnet mainnet) out_base="$REPO/target/rehearse-migration" account_wasm="" registry_wasm="" bootstrap_only=false
+accept_gaps=false
+[ "${REHEARSE_ACCEPT_KNOWN_GAPS:-}" != verifiers ] || accept_gaps=true
 while [ $# -gt 0 ]; do
     case "$1" in
         --network) networks=("$2"); shift 2 ;;
         --out) out_base="$2"; shift 2 ;;
         --bootstrap-only) bootstrap_only=true; shift ;;
+        --accept-known-gaps) accept_gaps=true; shift ;;
         --account-wasm) account_wasm="$2"; shift 2 ;;
         --constructorless-wasm) registry_wasm="$2"; shift 2 ;;
         -h|--help) awk 'NR>1 && /^#/{sub(/^# ?/,""); print; next} NR>1{exit}' "$0"; exit 0 ;;
@@ -225,7 +241,7 @@ asset_of() { echo "$rel/dist/$1_v$(released "$1").wasm"; }
 # its paths_for() scopes, its pins exclusions, scripts/release-deps.py, and
 # git-cliff --bumped-version. Prints "<contract> <current> <next>".
 release_versions() {
-    local fn contracts c d next cur deps inc pins=()
+    local fn contracts c d next cur deps deps_out inc pins=()
     fn="$(awk '/paths_for\(\) \{ case/,/esac; \}/' "$RELEASE_YML")"
     [ -n "$fn" ] || die "no paths_for() in ${RELEASE_YML#"$REPO"/}"
     eval "$fn"
@@ -236,8 +252,10 @@ release_versions() {
         for d in $(paths_for "$c"); do
             case "$d" in */*) inc+=(--include-path "$d/**") ;; *) inc+=(--include-path "crates/$d/**") ;; esac
         done
+        deps_out="$(cd "$src" && python3 scripts/release-deps.py cliff-args "$c")" \
+            || die "release: scripts/release-deps.py failed for $c"
         deps=()
-        while IFS= read -r d; do [ -z "$d" ] || deps+=("$d"); done < <(cd "$src" && python3 scripts/release-deps.py cliff-args "$c")
+        while IFS= read -r d; do [ -z "$d" ] || deps+=("$d"); done <<<"$deps_out"
         next="$(cd "$src" && git cliff --config cliff.toml --tag-pattern "$c-v.*" "${inc[@]}" "${pins[@]}" \
             ${deps[@]+"${deps[@]}"} --bumped-version 2>/dev/null)" || true
         next="${next#"$c"-v}"
@@ -252,7 +270,7 @@ release_versions() {
 # checkout (HEAD and its uncommitted changes) with the release PR's bumps,
 # and each released ALLOW-listed tier-0 built from it.
 prepare_release() {
-    local head f c cur next
+    local head f c cur next moved
     rm -rf "$rel"
     mkdir -p "$rel/dist" "$rel/build"
     head="$(git -C "$REPO" rev-parse HEAD)"
@@ -290,6 +308,8 @@ prepare_release() {
         done
     done <"$rel/versions"
     (cd "$src" && cargo update --workspace --quiet) || die "release: cargo update --workspace failed"
+    moved="$(git -C "$src" diff -U0 Cargo.lock | grep -E '^[-+]' | grep -vE '^(---|\+\+\+) ' | grep -vE '^[-+]version = "' || true)"
+    [ -z "$moved" ] || die "release: refreshing Cargo.lock changed more than workspace member versions: $(tr '\n' ' ' <<<"$moved")"
     (cd "$src" && cargo metadata --locked --format-version 1 >/dev/null) || die "release: Cargo.lock is stale after the bumps"
     git -C "$src" -c user.name=rehearsal -c user.email=rehearsal@localhost commit --quiet -am "chore: release (rehearsal)"
     release_ready=true
@@ -313,9 +333,17 @@ stop_servers() {
     for pid in ${SERVER_PIDS[@]+"${SERVER_PIDS[@]}"}; do kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; done
     SERVER_PIDS=()
 }
-trap stop_servers EXIT
+GAP_STATUS=3
+on_exit() {
+    local status=$?
+    stop_servers
+    [ "$status" = 0 ] || [ "$status" = "$GAP_STATUS" ] || [ ! -f "$out_base/summary.md" ] \
+        || grep -q '^- \*\*Failed:\*\*' "$out_base/summary.md" \
+        || printf -- '- **Failed:** the rehearsal stopped with status %s and gave no reason: see its log\n' "$status" >>"$out_base/summary.md"
+}
+trap on_exit EXIT
 
-testnet_deployment=""
+testnet_deployment="" bridged_verifier=""
 rehearse() {
     local network="$1" out passphrase url line role_source root perch constructorless verifiers nido role protocol sim pid
     out="$out_base/$network"
@@ -674,9 +702,11 @@ bridge_verifiers() { # stack
     version="$(jq -r '.artifacts[] | select(.package == "perch-webauthn-verifier") | .version' "$1/build.json")"
     hash="$(sha256_file "$wasm")"
     [ "$(read_call "$verifiers" fetch_hash --wasm_name perch-webauthn-verifier --version "\"$version\"")" != "$hash" ] || return 0
+    bridged_verifier="$version"
     key="$(stellar xdr encode --type ScVal <<<'{"vec":[{"symbol":"WA"},{"string":"perch-webauthn-verifier"}]}')"
     got="$(stellar ledger entry fetch contract-data "${net[@]}" --contract "$verifiers" --durability persistent \
-        --key-xdr "$key" --output xdr </dev/null 2>/dev/null)"
+        --key-xdr "$key" --output xdr </dev/null 2>/dev/null)" \
+        || die "$network: cannot read perch/verifiers' perch-webauthn-verifier binding"
     [ -n "$(jq -r '.entries[0].xdr // empty' <<<"$got")" ] || die "$network: perch/verifiers has no perch-webauthn-verifier binding to bridge"
     label="KNOWN GAP, fork only: perch/verifiers binds perch-webauthn-verifier to the ci key, standing in for a publish of the release's $version that no real path can make"
     rpc fork_setLedgerEntry "$(jq -cn --arg lb "$label" --argjson l "$(jq -r '.entries[0].liveUntilLedgerSeq' <<<"$got")" \
@@ -739,7 +769,8 @@ consumers() {
         # The deployment already there: its contracts, and its exercised
         # accounts' code and infra, untouched by the release.
         current="$out/current-deployment.json"
-        jq --arg u "$url" '.rpc_url = $u' "$REPO/deployments/$network.json" >"$current"
+        jq --arg u "$url" '.rpc_url = $u' "$REPO/deployments/$network.json" >"$current" \
+            || die "$network: cannot read deployments/$network.json"
         [ ! -f "$REPO/deployments/$network-exercise.json" ] || cp "$REPO/deployments/$network-exercise.json" "${current%.json}-exercise.json"
         if (cd "$src" && scripts/verify-deployment.sh --manifest "$current") >"$out/verify-current.log" 2>&1; then
             echo "  ok    deployments/$network.json still verifies on the fork"
@@ -775,3 +806,18 @@ fork_report_check() {
 for n in "${networks[@]}"; do rehearse "$n"; done
 stop_servers
 log "rehearsed ${networks[*]}$($bootstrap_only && echo " (bootstrap only)"): everything under $out_base"
+
+# Every step ran, but only over the bridge: the real migration stops there.
+if [ -n "$bridged_verifier" ]; then
+    gap="migration blocked: perch/verifiers has no publish path for perch-webauthn-verifier $bridged_verifier - see docs/deploy/README.md Known gap"
+    if $accept_gaps; then level=warning first="warning (known gap accepted): $gap"; else level=error first="$gap"; fi
+    rest="$(cat "$out_base/summary.md")"
+    printf '%s\n\n%s\n' "$first" "$rest" >"$out_base/summary.md"
+    [ -z "${GITHUB_ACTIONS:-}" ] || echo "::$level::$gap"
+    if $accept_gaps; then
+        printf '\033[1;33mwarning:\033[0m %s\n' "$gap" >&2
+    else
+        printf '\033[1;31merror:\033[0m %s\n' "$gap" >&2
+        exit "$GAP_STATUS"
+    fi
+fi

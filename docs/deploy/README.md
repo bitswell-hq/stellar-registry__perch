@@ -829,8 +829,24 @@ release that changes the verifier's bytes (the next release bumps it from
 
 So on both networks the release's `deploy-stack` stops at that check, and
 the mainnet stack, which takes testnet's, cannot follow. Closing the gap
-changes who may publish verifiers, so it is a decision of its own; until it
-is made, the rehearsal's summary names this gap on every run.
+changes who may publish verifiers, so it is a decision of its own.
+
+Until it is made, the rehearsal fails. The bridge lets every later step
+run, on both networks, and the script then exits with status 3 (a failed
+step exits 1) and this message, which is also the first line of
+`summary.md` and, in CI, an error annotation:
+
+```
+migration blocked: perch/verifiers has no publish path for perch-webauthn-verifier 0.1.3 - see docs/deploy/README.md Known gap
+```
+
+The version is the one the run bridged. The gap is detected, not assumed:
+the script bridges only when `perch/verifiers` does not already serve the
+stack's WebAuthn verifier, so once a real path publishes it there, nothing
+is bridged and the rehearsal passes. To inspect a run locally despite the
+gap, pass `--accept-known-gaps` or set `REHEARSE_ACCEPT_KNOWN_GAPS=verifiers`:
+the message becomes a warning and the exit status 0. The workflow sets
+neither.
 
 ### Running it
 
@@ -847,13 +863,20 @@ Locally, from a full clone (not a shallow one), with on `PATH`:
 scripts/rehearse-migration.sh                     # testnet, then mainnet on testnet's bytes
 scripts/rehearse-migration.sh --network testnet   # testnet only
 scripts/rehearse-migration.sh --bootstrap-only    # the bootstrap on both networks, no release
+scripts/rehearse-migration.sh --accept-known-gaps # exit 0 over the known gap, with a warning
 ```
+
+Without `--accept-known-gaps` (or `REHEARSE_ACCEPT_KNOWN_GAPS=verifiers`), a
+run that passes every step still exits 3 while
+[the known gap](#known-gap-the-releases-webauthn-verifier-in-perchverifiers)
+is real. `--bootstrap-only` bridges nothing, so it is unaffected.
 
 Everything lands under `target/rehearse-migration/`. `<network>/` holds each
 fork's report (`report.md`, `report.json`), the bootstrap and release logs,
 the address and consumer checks, the new `deployment.json`, and
 `nido-payload.json`. `release/` holds the versions, the tier-0 builds, and the
-stack. `summary.md` sums up both networks.
+stack. `summary.md` sums up both networks, under the known gap's message
+when a fork was bridged.
 
 In CI, the `Rehearse migration` workflow runs it on `workflow_dispatch` and
 on pull requests that touch the release path's scripts, `registry.path` or
@@ -861,9 +884,11 @@ on pull requests that touch the release path's scripts, `registry.path` or
 networks in one job, because the mainnet leg fetches from the testnet fork.
 It writes the summary to the job's page and uploads `target/rehearse-migration`,
 without the throwaway keys or the scratch clone. It uses no secret, only
-`github.token` for `gh attestation verify`. It is not a required check: the
-forks read the live public RPCs, so a run reflects the chains as they are
-then.
+`github.token` for `gh attestation verify`. While the known gap is real the
+job fails, with the gap's message as an error annotation and at the top of
+the summary, after every step has run; it never accepts the gap. It is not a
+required check: the forks read the live public RPCs, so a run reflects the
+chains as they are then.
 
 ### soroban-sim and protocols
 
