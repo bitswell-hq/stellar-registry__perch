@@ -134,7 +134,8 @@ pub enum Check {
     StaleGrant,
     /// rule-eval refuses otherwise (`gate.rs:115-126`).
     RuleEval(EvalReason),
-    /// A signer does not authenticate (`gate.rs:133-135`).
+    /// A signer does not authenticate (`gate.rs:133-135`): the account's
+    /// error is then the signer's ([`Refusal::error`]).
     Signature,
 }
 
@@ -204,8 +205,15 @@ pub enum Error {
     /// A contract error the account raises: `PerchAuthError` (`1..=5`) or
     /// `SmartAccountError` (`3000..`).
     Contract(u32),
-    /// A host error: the host's CAP-0071 delegate check fails.
+    /// A host error: the host's CAP-0071 delegate check finds no delegate
+    /// for a `Delegated` signer.
     Host,
+    /// A signer's own refusal: `ExternalVerificationFailed` (3003) when an
+    /// `External` signer's verifier returns `false`, otherwise the error
+    /// its verifier, or a `Delegated` signer's own authorization, fails
+    /// with (an ed25519 verifier traps on a bad signature, for one). The
+    /// refusal is certain; its code depends on that contract.
+    Signer,
 }
 
 impl Check {
@@ -283,18 +291,30 @@ pub struct Refusal {
     pub rule: Option<u32>,
     /// For [`Check::Signature`]: the signer's position in the payload.
     pub signer: Option<u32>,
-    /// Whether a [`Check::Signature`] refusal is the host's delegate check.
-    pub delegate: bool,
+    /// For [`Check::Signature`]: whether the signer is a `Delegated` one the
+    /// entry carries no delegate for, which the host's delegate check
+    /// refuses, rather than one marked unverified.
+    pub missing_delegate: bool,
 }
 
 impl Refusal {
     /// The error the account's `__check_auth` fails with.
     #[must_use]
     pub fn error(&self) -> Error {
-        if self.delegate {
-            Error::Host
-        } else {
-            self.check.error()
+        match self.check {
+            Check::Signature if self.missing_delegate => Error::Host,
+            Check::Signature => Error::Signer,
+            c => c.error(),
+        }
+    }
+
+    /// The name of the error the account fails with.
+    #[must_use]
+    pub fn error_name(&self) -> &'static str {
+        match self.error() {
+            Error::Host => "HostError",
+            Error::Signer => "SignerRefused",
+            Error::Contract(_) => self.check.error_name(),
         }
     }
 }
@@ -411,7 +431,7 @@ impl Review {
             context: context.map(|c| c as u32),
             rule,
             signer: None,
-            delegate: false,
+            missing_delegate: false,
         });
         self
     }
@@ -660,19 +680,21 @@ fn review_rules(
         Err(EvalRefusal::StaleGeneration) => return Ok(out.refused(Check::StaleGrant, None, None)),
         Err(e) => return Ok(out.refused(Check::RuleEval(EvalReason::of(&e)), None, None)),
     };
-    // gate.rs:133-135: every signer authenticates, in the payload's order.
+    // gate.rs:133-135: every signer authenticates, in the payload's order:
+    // a `Delegated` one through the host's delegate check, which needs a
+    // delegate for it in the entry.
     for (k, c) in r.signers.iter().enumerate() {
-        let delegate = match &c.signer {
+        let missing_delegate = match &c.signer {
             Signer::Delegated(a) => !r.delegates.as_ref().is_some_and(|ds| ds.contains(a)),
             Signer::External(..) => false,
         };
-        if c.verified == Verified::No || delegate {
+        if missing_delegate || c.verified == Verified::No {
             out.outcome = Outcome::Refused(Refusal {
                 check: Check::Signature,
                 context: None,
                 rule: None,
                 signer: Some(k as u32),
-                delegate: matches!(c.signer, Signer::Delegated(_)),
+                missing_delegate,
             });
             return Ok(out);
         }

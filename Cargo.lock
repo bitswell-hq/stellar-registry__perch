@@ -1794,6 +1794,7 @@ dependencies = [
  "perch-recovery",
  "perch-recovery-interface",
  "perch-registry-resolve",
+ "perch-review-core",
  "perch-rule-eval",
  "perch-smart-account",
  "perch-spending-limit",

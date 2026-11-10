@@ -97,7 +97,9 @@ pub fn rules_eq(xs: &[Rule], ys: &[Rule]) -> bool {
     xs.len() == ys.len() && xs.iter().zip(ys).all(|(x, y)| rule_eq(x, y))
 }
 
-fn rule_eq(x: &Rule, y: &Rule) -> bool {
+/// Structural equality of two rules ([`rules_eq`]).
+#[must_use]
+pub fn rule_eq(x: &Rule, y: &Rule) -> bool {
     x.contract == y.contract
         && functions_eq(&x.functions, &y.functions)
         && x.conds.len() == y.conds.len()

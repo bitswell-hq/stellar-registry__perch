@@ -20,12 +20,19 @@ The verdict depends on four assumptions:
 
 - **Signatures.** The core does not verify signatures. It accepts a
   `verified` flag for each payload signer (`no`, `yes`, or `assumed`, the
-  default). If rule-eval accepts and a signer is marked `no`, the core
-  refuses as the account would: `ExternalVerificationFailed` (3003) for an
-  `External` signer, a host error for a `Delegated` one. A `Delegated` signer
-  that has no delegate in the entry's CAP-0071 credentials fails the same
-  way, because the host's delegate check finds nothing to check. Every
-  verdict lists the signers it assumed (`assumed`).
+  default), and every verdict lists the signers it assumed (`assumed`).
+  If rule-eval accepts and a signer is marked `no`, the core refuses, as the
+  account would. The error code then comes from the signer's side:
+  - an `External` signer's verifier that returns `false` gives
+    `ExternalVerificationFailed` (3003);
+  - an ed25519 verifier traps on a bad signature, so the code is the
+    verifier's own;
+  - a `Delegated` signer's code is that of its own authorization.
+
+  The core reports this as `SignerRefused`, without a code. A `Delegated`
+  signer that has no delegate in the entry's CAP-0071 credentials fails
+  with a host error, because the host's delegate check finds nothing to
+  check.
 - **Snapshot.** The ledger entries must include every entry `__check_auth`
   reads for this authorization, and each must be live:
   - the account's instance entry;
@@ -40,6 +47,14 @@ The verdict depends on four assumptions:
   Storage can also change between review and inclusion: another spend, an
   `apply_doc` or `apply_grant`, or a recovery completion that advances the
   grant generation. Any of these can change the answer.
+- **Network limits.** The core does not model the network's resource
+  limits, so a transaction can fail on them even when the account accepts.
+  These include instructions, footprint, and the size of a contract-data
+  entry. One case is reachable through the account's own state: a capped
+  rule's spending record holds up to 1,000 spends in its window
+  (rule-eval's `MAX_HISTORY_ENTRIES`), but at about 72 bytes per spend, the
+  network's 64 KiB entry limit is reached at about 900. A charge that grows
+  a record past that limit fails when the account stores it.
 - **Recovery completion.** The account checks a completion against its own
   record of the recovery rule, and the core ports those checks. The
   recovery controller then decides through `rcv_complete`, and that verdict
@@ -120,6 +135,45 @@ included). rule-core proves that each step narrows (`attenuate_narrower`,
 not. The witness does not decide whether two unrelated rule sets are
 ordered. `tests/witness.rs` replays all 425 attenuation cases in rule-core's
 vectors.
+
+## Differential tests
+
+`perch-integration-tests` compares the core with the account on the same
+state, using the account's native build through the host:
+
+- The account's contract-data entries are read from the host
+  (`rule_core::account_entries`), as `getLedgerEntries` would return them.
+- The core runs on those entries and the authorization entry.
+- The same authorization then goes through the account's real
+  `__check_auth`, with real ed25519 signatures and CAP-0071 delegates.
+
+The core must give the account's verdict and error code, and after an
+acceptance, the records the account stored.
+
+| Suite (`tests/`) | What runs | Compared | Agree |
+|---|---|---|---|
+| `review_core_differential.rs`, document traces | rule-core's 58 document traces and Perch's 3, each on a fresh account and after a predecessor document, applied with the real `apply_doc`/`apply_grant`; each authorization is a real invocation under `set_auths` | 390 (128 accepted, 10 record writes checked) | 390 |
+| `review_core_differential.rs`, authorization traces | rule-core's 77 authorization traces, with rules installed as stored rules and starting records written; each authorization goes through `try_invoke_contract_check_auth` | 350 (73 accepted, 38 record writes checked) | 350 |
+| `review_core_differential.rs`, gate cases | reserved functions; the freeze and completions; a stale grant generation; a wiped credential; guardian approvals and token-admin functions under a grant; the excluded set (controller, ZK adapter, pool); unknown ids; own funds under a cap and under a grant, with the window's edges; a creation; a missing delegate; external signatures | 52 (14 accepted, 3 record writes checked, 1 completion deferred to the controller) | 52 |
+| `review_core_reader.rs` | stored rules and records read by `stored` and by `perch_rule_eval::mirror`, generated and changed | 1,500 rules + 12,000 changed values; 500 records + 1,500 changed values | all |
+
+Where the account refuses an authorization that rule-core's model accepts,
+the refusal comes from Perch's checks outside rule-eval:
+
+- 11 by own funds under a cap;
+- 11 by a delegated signer that a direct `__check_auth` call carries no
+  delegate for.
+
+One authorization trace does not run: its starting record is 72,076 bytes,
+over the 64 KiB entry limit, so no ledger can hold it. Two authorizations
+in other traces sit at ledgers within the host's entry TTL of `u32::MAX`,
+where the host cannot extend an entry. The authorization traces rename
+opaque `other` payloads and symbols the host does not hold onto host
+values injectively; rule-eval only compares those for equality. Each batch
+is checked to be read by the account exactly as the renamed trace states it.
+`a_wrong_snapshot_or_ledger_is_reported` checks that the comparison is not
+vacuous: a snapshot without the freeze entry, or another ledger, gives a
+reported difference.
 
 ## Interface
 

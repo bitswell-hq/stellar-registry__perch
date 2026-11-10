@@ -21,7 +21,7 @@ use alloc::vec::Vec;
 use soroban_facade::Val;
 
 use crate::stored::{address, field, fields, u32_of, u64_of, vec_of};
-use crate::xdr::{self, PERSISTENT};
+use crate::xdr::{self, Kind};
 
 /// Why a snapshot or an entry could not be read.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -83,25 +83,23 @@ impl Snapshot {
         let mut persistent: Vec<(Val, Val)> = Vec::new();
         for bytes in entries {
             let e = xdr::ledger_entry(bytes).ok_or(Unreadable::LedgerEntry)?;
-            if e.contract != account || e.durability != PERSISTENT {
+            if e.contract != account {
                 continue;
             }
-            match e.key {
-                None => {
+            match e.kind {
+                Kind::Instance(storage) => {
                     if instance.is_some() {
                         return Err(Unreadable::LedgerEntry);
                     }
-                    let Val::Map(storage) = e.val else {
-                        return Err(Unreadable::LedgerEntry);
-                    };
                     instance = Some(storage);
                 }
-                Some(k) => {
+                Kind::Persistent(k, v) => {
                     if persistent.iter().any(|(x, _)| *x == k) {
                         return Err(Unreadable::LedgerEntry);
                     }
-                    persistent.push((k, e.val));
+                    persistent.push((k, v));
                 }
+                Kind::Temporary => {}
             }
         }
         Ok(Snapshot {

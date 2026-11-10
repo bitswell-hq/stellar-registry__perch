@@ -30,7 +30,7 @@ const SCV_LEDGER_KEY_NONCE: u32 = 21;
 /// `LedgerEntryType::ContractData`.
 const CONTRACT_DATA: u32 = 6;
 /// `ContractDataDurability::Persistent`.
-pub(crate) const PERSISTENT: u32 = 1;
+const PERSISTENT: u32 = 1;
 
 /// A cursor over XDR bytes.
 pub(crate) struct R<'a> {
@@ -356,14 +356,22 @@ pub fn entry(b: &[u8]) -> Option<Entry> {
     })
 }
 
-/// One contract-data ledger entry: its contract, durability, and key and
-/// value as facade values. The instance entry's value is its storage map.
+/// One contract-data ledger entry: its contract, and its key and value as
+/// facade values.
 pub struct DataEntry {
     pub contract: Vec<u8>,
-    pub durability: u32,
-    /// `None` for the instance entry.
-    pub key: Option<Val>,
-    pub val: Val,
+    pub kind: Kind,
+}
+
+/// What a contract-data entry is to the account.
+pub enum Kind {
+    /// The instance entry: its storage map.
+    Instance(Vec<(Val, Val)>),
+    /// A persistent entry: its key and value.
+    Persistent(Val, Val),
+    /// A temporary entry (the host's nonces among them), which
+    /// `__check_auth` never reads: left unread.
+    Temporary,
 }
 
 /// A `LedgerEntryData` of type contract data, or `None` for any other bytes.
@@ -376,7 +384,14 @@ pub fn ledger_entry(b: &[u8]) -> Option<DataEntry> {
     let contract = r.address()?.to_vec();
     let key = r.scval(0)?;
     let durability = r.u32()?;
-    let out = if key == SCV_LEDGER_KEY_CONTRACT_INSTANCE.to_be_bytes() {
+    if durability != PERSISTENT {
+        r.scval(0)?;
+        return r.done().then_some(DataEntry {
+            contract,
+            kind: Kind::Temporary,
+        });
+    }
+    let kind = if key == SCV_LEDGER_KEY_CONTRACT_INSTANCE.to_be_bytes() {
         if r.u32()? != SCV_CONTRACT_INSTANCE {
             return None;
         }
@@ -389,19 +404,9 @@ pub fn ledger_entry(b: &[u8]) -> Option<DataEntry> {
                 storage.push((k, v));
             }
         }
-        DataEntry {
-            contract,
-            durability,
-            key: None,
-            val: Val::Map(storage),
-        }
+        Kind::Instance(storage)
     } else {
-        DataEntry {
-            contract,
-            durability,
-            key: Some(fxdr::decode(key)?),
-            val: r.val()?,
-        }
+        Kind::Persistent(fxdr::decode(key)?, r.val()?)
     };
-    r.done().then_some(out)
+    r.done().then_some(DataEntry { contract, kind })
 }

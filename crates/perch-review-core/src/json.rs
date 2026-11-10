@@ -191,13 +191,9 @@ pub fn review(account: &[u8], ledger: u32, r: &Review) -> Vec<u8> {
             o.key("code");
             match f.error() {
                 Error::Contract(c) => o.num(u64::from(c)),
-                Error::Host => o.raw("null"),
+                Error::Host | Error::Signer => o.raw("null"),
             };
-            o.key("error").str(if f.delegate {
-                "HostError"
-            } else {
-                f.check.error_name()
-            });
+            o.key("error").str(f.error_name());
             o.key("detail");
             match f.check {
                 Check::RuleEval(e) => o.str(e.name()),
