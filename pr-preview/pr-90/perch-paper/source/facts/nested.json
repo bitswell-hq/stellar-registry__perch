@@ -18,10 +18,10 @@
   },
   "nido-sim-page-mb": {
     "value": "5.3",
-    "source": "docs/nido-sim/index.html, 5,312,307 bytes (V)"
+    "source": "docs/nido-sim/index.html, 5,331,561 bytes (V)"
   },
   "nido-sim-page-sha256": {
-    "value": "4c4b1281fd5642649192e40c8b15bc702d433ccc8cd1ede8162da17624fedea0",
+    "value": "aa87fa18e4ebbf589280562fdb78ab8ced1624456e08091aa700ce6e850bdb8a",
     "source": "docs/nido-sim/README.md (pins, hashes, \"What it runs\"; V)"
   },
   "nido-sim-replies-sha256": {
