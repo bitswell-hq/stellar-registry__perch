@@ -118,6 +118,13 @@ for (const name of engines) {
         check(after !== before, `${tag}: the presenter's click moves the balances line: "${before}" -> "${after}"`);
       }
     }
+    // Reset demo, then Next at once: the passkey prompt opens on the new ledger, on step 1.
+    await page.locator('.slide:has(.nido-slot) [data-nido-reset]').click();
+    await page.keyboard.press('ArrowRight');
+    const prompt = frame.locator('#nido-sheet button').filter({ hasText: /^Continue$/ });
+    const opened = await prompt.first().waitFor({ state: 'visible', timeout: 60000 }).then(() => true, () => false);
+    check(opened, `${name}: Next right after Reset demo opens the passkey prompt`);
+    check(await page.evaluate(() => document.querySelector('.slide:has(.nido-slot)').dataset.step) === '1', `${name}: Next right after Reset demo stays on step 1`);
     check(errors.length === 0, `${name}: no page errors ${JSON.stringify(errors)}`);
   } catch (e) {
     check(false, `${name}: ${e.message.split('\n')[0]}`);
