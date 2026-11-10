@@ -266,8 +266,9 @@ every request.
   `{type:"nido-sim:state", step, controls, done:{create, grant, guess, coffee,
   direct, other, owner, overcap, advance}, balances:{xlm, eurc} | null,
   left:{"pay-game", "pay-shop"}, last:{control, ok, text} | null}`
-  (`done.create` and `done.grant` from the ledger; the others true once that
-  control's request was applied or refused, not rejected). Slide keys
+  (`done.create` and `done.grant` from the ledger; `done.advance` once it has
+  run; the others true once that control's request was applied or refused,
+  not rejected). Slide keys
   (ArrowLeft, ArrowRight, PageUp, PageDown) pressed inside the frame are posted
   as `{type:"nido-sim:key", key}`. `load`, `ready`, `error` and `height` work
   as above.
@@ -311,7 +312,7 @@ toolchain), stellar-cli 27.0.0 (`stellar contract build`).
 | reactor (driver, wasm32-wasip1) | d8377b548a242e2ab833469e4f39986e1e1af27adb53277f2237b9de1a2c4224 |
 | reference replies minus timings (native = WASI = browser) | 5ec17f91692e417a25990f84547e25b7228624fa0ac7e4ce13c872aacfad47e2 |
 | recorded run `evidence/native-golden.jsonl` | 5fe0796a1118eda818384ff889b4e02ac24d6eaf2a84c2a57e018d68ed1a2b30 |
-| index.html (5378576 bytes) | 4f3056d0220fa9eca50b1433f97406a06cc48c68e56f0486f194b79ee93c44ed |
+| index.html (5378731 bytes) | 7bcf4a887d93b1e9dc9f241a1fc6ff42f8eb37b96252b78736421d0f4cb8a529 |
 
 None of the Perch artifacts is a deployed contract: the account is built
 from 2c64fe4 with its compiler, interpreter and spending-limit pins staged
