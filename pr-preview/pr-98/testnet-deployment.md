@@ -1,91 +1,138 @@
-# Canonical testnet deployment — verified status
+# Canonical testnet registry and author account
 
-Read-only verification of the state `scripts/bootstrap-testnet.sh` owns,
-performed 2026-09-08 with the probes that script uses (`stellar registry
-fetch-contract-id` / `current-version` and read-only `stellar contract invoke`
-simulations against `https://soroban-testnet.stellar.org`). Every phase of the
-bootstrap is live; nothing needs `--execute`. The constructorless-registry
-versions and the infra-pin observation were re-checked on 2026-10-01, after
-the 0.3.0 releases (see "Published versions" below).
+**Scope.** This is the testnet state `scripts/bootstrap-testnet.sh` creates:
+the `unverified/perch` registries and the author account that
+`.github/workflows/release.yml` published into until the testnet move to
+`perch/constructorless` (`CDZGU4AI…BZTM`,
+[`deploy/README.md`](deploy/README.md#registry-migration)). It is an
+operational reference outside the audit reading order. Since that move,
+release publishes go to the registry `crates/*/wasm/registry.path` derives,
+and the audited recovery-stack deployment,
+[`deployments/testnet.json`](../deployments/testnet.json) (2026-10-22), lives
+there ([`audit-scope.md`](audit-scope.md#deployment-provenance)). An account
+built against that manifest resolves none of its infra through the
+registries listed here; accounts built against earlier manifests still do.
 
-Testnet resets quarterly — after a reset, re-run the bootstrap and refresh this
-table. Consumers (e.g. nido) should resolve addresses by name through the
-registry (or use `vars.PERCH_AUTHOR_ADDRESS` / `vars.PERCH_REGISTRY_CONTRACT_ID`,
-repo-level Actions variables) rather than hardcoding them.
+The table was last verified read-only on 2026-09-08, with the probes
+`bootstrap-testnet.sh` uses (`stellar registry fetch-contract-id` /
+`current-version` and read-only `stellar contract invoke` simulations
+against `https://soroban-testnet.stellar.org`). Testnet resets quarterly;
+after a reset, re-run the bootstrap and re-verify this table. Consumers
+should resolve these addresses by name through the registry rather than
+hardcode them; the current release target is the registry
+`scripts/registry-target.sh` computes and the author
+`PERCH_AUTHOR_ADDRESS` names.
 
-## Live contracts
+## Contracts
 
 | Component | Address | Notes |
 | --- | --- | --- |
-| `unverified/perch` registry (phase 1) | `CASB2M4JQSGP3QHFBGK5U6DGJXJX34GX37C2JFBU73LKKDXXNNIZHCP7` | resolves from the root registry by name |
-| `stateless` registry (phase 1b) | `CC6ELNH6YVRRO4WIETIURY3PZLD7NHSDXHRMTJQUT7D733SYVQFYB26O` | name `stateless` under unverified/perch |
-| `constructorless` registry | `CDX2DMYMMEYU6FGN3HPJ2GQSSL5EZHIAMEJD4SPF55FZE5LEUBPPPDA7` | = `vars.PERCH_REGISTRY_CONTRACT_ID`; target of the CI release chain |
+| `unverified/perch` registry (bootstrap phase 1) | `CASB2M4JQSGP3QHFBGK5U6DGJXJX34GX37C2JFBU73LKKDXXNNIZHCP7` | resolves from the root registry by name |
+| `stateless` registry (phase 1b) | `CC6ELNH6YVRRO4WIETIURY3PZLD7NHSDXHRMTJQUT7D733SYVQFYB26O` | name `stateless` under `unverified/perch`; **retired**: holds `perch-spending-limit` 0.1.1 and earlier, and nothing new is published here |
+| `constructorless` registry | `CDX2DMYMMEYU6FGN3HPJ2GQSSL5EZHIAMEJD4SPF55FZE5LEUBPPPDA7` | name `constructorless` under `unverified/perch`; the canonical registry until the move to `perch/constructorless`: `release.yml` published and `deploy_stateless`d every released infra contract here (interpreter, doc compiler, ed25519 verifier, spending limit), and the deployments before 2026-10-22 resolve their infra here |
 | perch-ed25519-verifier (phase 2) | `CA4G72A6XEIYPORY7UKZB3WFRJYX564UAQB5I7ASZMEAEST7PRHT4PSF` | v0.1.0 name-salted instance |
 | perch-doc-compiler (phase 2) | `CA7I42XDFRDQZQ4QMGOGM2QYRECLZRPE5ILS6CFQNNIPVLHPA2DSEPHT` | v0.1.0 name-salted instance |
-| perch-account smart account (phase 2) | `CDIFS3JDMVQBVANOSHEL6AUAKRYLFZFQQVX37QKQGJGQVQXQEHJCJ6PG` | = `vars.PERCH_AUTHOR_ADDRESS`; live, 2 context rules |
-| perch-interpreter (phases 3–4) | `CDPDROKNEEGMGXSX7MVJWZP2NHTP53PUI36UFU2DVD5J7YIP45UTMZJN` | v0.1.0 name-salted instance; v0.1.2 published in the constructorless registry by CI (2026-09-04) |
-| perch-doc-compiler 0.3.0 | `CAUAFGIAAN6KE4WPMKPVDMWYBG6PWS5EBG5P63ZWVOP4D57ELA6T46M6` | serves the 0.3.0 wasm below (recovery-capable); verified 2026-10-01 by fetching and hashing the code at this id |
+| perch author account (phase 2) | `CDIFS3JDMVQBVANOSHEL6AUAKRYLFZFQQVX37QKQGJGQVQXQEHJCJ6PG` | a `perch-account`; authors every name published in these registries |
+| perch-interpreter (phases 3–4) | `CDPDROKNEEGMGXSX7MVJWZP2NHTP53PUI36UFU2DVD5J7YIP45UTMZJN` | v0.1.0 name-salted instance |
 
-## Published versions (constructorless registry, verified 2026-10-01)
+## State
 
-`stellar registry current-version` / `fetch-hash` against both registries,
-with `STELLAR_REGISTRY_CONTRACT_ID` set to each:
-
-| Wasm | constructorless (`CDX2DMYM…PDA7`, CI target) | stateless (`CC6ELNH6…B26O`, account pins) |
-| --- | --- | --- |
-| perch-doc-compiler | 0.3.0 — `6b73841894cb8de5d0a0d960f5248430b5d3b6c735bad6119595872d0e159e77` | 0.1.0 — `3645bd0de34f4896c5e6fd8ca141713eb9f8658728bf16d82026418d4ab0b27f` |
-| perch-interpreter | 0.1.2 — `f63cae53fff084183181a220121de3394442ac4a2704e78896c07af8196f3651` | 0.1.0 — `f8320d3031e7dffe51fac14177c5353b8818f8e6df3bda6c4c1b714f5ce1d858` |
-| perch-recovery | not published | not published |
-| perch-account | not published | not published |
-
-`perch-recovery` 0.1.0 and `perch-account` 0.3.0 are tagged but deliberately
-absent from `release.yml`'s `publish-plan` `ALLOW` list, so CI does not
-publish them on-chain (see `AGENTS.md`, "Release pipeline").
-
-## Phase-by-phase
-
-- **Phases 1–4: live.** All registries and infra contracts resolve by name and
-  serve reads.
-- **Phase 5 (policy document): applied.** The smart account reports
+- **Phases 1–4.** Every registry and infra contract above resolves by name
+  and serves reads.
+- **Phase 5 (policy document).** The author account reports
   `get_context_rules_count = 2`: rule 2 `admin` (no expiry) and rule 3
-  `ci-publish` (`valid_until` ledger 6999999). Rule ids 2/3 rather than 0/1
-  because `apply_doc` assigns fresh ids on every apply.
-- **Phase 6 (CI rehearsal + manager rotation): CI path proven end-to-end** —
-  the Release workflow published `perch-interpreter` 0.1.2 to the
-  constructorless registry four days before this check, authored by the smart
-  account and signed by the delegated CI key. The `set_manager(smart account)`
-  rotation has **not** been performed: `manager()` on all three registries
-  (unverified/perch, stateless, constructorless) still returns the human
-  deployer key `GA327GGWT6747B57DRWJJ3SWBVIQ354TTDRHR76CVAWO6OBPZ4Z57YGA`.
-  Rotating requires that deployer key (human-held) and is a policy-hardening
-  step, not a blocker for consuming the deployment.
+  `ci-publish` (`valid_until` ledger 6999999). The ids are 2 and 3 because
+  earlier applies replaced the rules, and OZ never reuses a rule id. The
+  filled document the bootstrap writes, `testdata/deploy/perch-testnet.json`,
+  is not committed; only its template is.
+- **Phase 6 (CI publishing and manager rotation).** The author account
+  authored the release publishes here, and the delegated CI key signed them
+  (for example, `perch-interpreter` 0.1.2 into `constructorless`,
+  2026-09-04).
+  The `set_manager(author account)` rotation has **not** been performed:
+  `manager()` on all three registries returns the deployer key
+  `GA327GGWT6747B57DRWJJ3SWBVIQ354TTDRHR76CVAWO6OBPZ4Z57YGA`. Rotating needs
+  that human-held key. It hardens the registries and does not block
+  consuming them.
 
-## Observations
+## Secrets and environments
 
-- **The account's infra pins lag the CI release chain
-  ([#95](https://github.com/stellar-registry/perch/issues/95)).**
-  `scripts/fetch-infra-wasm.sh` fetches the compiler and interpreter from
-  their name-salted instances under `unverified/perch`, which are still
-  v0.1.0 and live in the stateless registry's lineage. CI publishes new
-  releases to the constructorless registry instead. As a result, a
-  `perch-account` built from this repo today pins compiler `3645bd0d…b27f`,
-  which predates the `recovery` schema, and cannot compile or enroll
-  recovery, even though the 0.3.0 compiler is live on testnet.
-  `crates/integration-tests/tests/testnet_pins.rs` asserts those v0.1.0
-  addresses, so it passes while this gap exists. Closing it means choosing
-  which registry the account build resolves infra from, then updating the
-  fetch script, `testnet_pins.rs`, and this file together. External
-  consumers (nido pins the 0.3.0 compiler hash above) already resolve from
-  the constructorless registry.
+| Name | Kind | Where it lives | Read by |
+| --- | --- | --- | --- |
+| `CI_PUBLISH_SECRET_KEY` | secret | `testnet` environment only (a repository-level copy predates this and is to be deleted) | `deploy-stack`; `constructorless-publish`, through `registry-publish`'s job, which runs in `testnet` |
+| `CI_PUBLISH_MAINNET_SECRET_KEY` | secret | `mainnet` environment only | `release-mainnet.yml`'s `mainnet-publish` and `mainnet-deploy-stack`, run only by a manual dispatch ([`deploy/README.md`](deploy/README.md#mainnet)) |
+| npm | none | trusted publishing (OIDC): each package's npm settings trust `release.yml` in the `npm` environment | `npm-publish` |
+| `PERCH_AUTHOR_ADDRESS`, `PERCH_DEPLOY_STACK` | variables | repository | `constructorless-publish` (`with:` input), the `deploy-stack` jobs (job `if:` and steps) |
+| `PERCH_MAINNET_AUTHOR_ADDRESS` | variable | `mainnet` environment only | `release-mainnet.yml`'s `mainnet-publish`, `mainnet-deploy-stack` |
 
-- The smart account is **not** name-resolvable as `perch-account` in the
-  registry (`fetch_contract_id("perch-account")` fails with `Error(Contract,
-  #4)` even though the wasm is published at v0.1.0), and its address does not
-  match the offline-derived `deployer(perch, sha256("perch-account"))` id — it
-  was evidently deployed outside the name-salted registry path. The repo var
-  `PERCH_AUTHOR_ADDRESS` is the authoritative pointer.
-- `perch-ed25519-verifier` in the constructorless registry reports
-  `current-version = 9.9.9` (a manual test publish); the name-salted v0.1.0
-  instance under unverified/perch is the one consumers resolve.
-- `testdata/deploy/perch-testnet.json` (the filled policy document phase 5
-  writes "for provenance") was never committed; only the template exists.
+No registry id is a setting: every release job computes it from
+`crates/*/wasm/registry.path` and `deployments/pending-registry.json`
+([`deploy/README.md`](deploy/README.md#registry-migration)).
+
+`CI_PUBLISH_SECRET_KEY` is the seed of the account's `ci-publish` delegate, so
+whoever can read it can publish as `perch-author` until the rule expires. A
+repository-level secret is readable by a workflow on any branch, so the seed
+belongs only in the `testnet` environment, whose branch policy admits `main`
+alone. `deploy-stack` declares `environment: testnet`.
+`constructorless-publish` calls the reusable `registry-publish`, which runs
+its signing job in the environment `release.yml` passes it (`testnet`).
+Whether that job read the environment's copy or the repository's was never
+established while both existed; deleting the repository copy settles it, and
+[`deploy/README.md`](deploy/README.md#release-path-settings) has the check
+to run afterward.
+
+Only five jobs can reach a release credential, and none of them builds: the
+`deploy-stack` job publishes a stack an earlier job compiled,
+`mainnet-deploy-stack` publishes the testnet deployment's bytes an earlier
+job fetched, the `registry-publish` and `mainnet-publish` jobs publish an
+attested release asset, and `npm-publish` publishes a tarball an earlier job
+packed. `scripts/test-release-scripts.py`
+fails if a job holding the seed compiles anything or passes it in argv.
+
+The testnet variables stay at repository level: a job's `if:` is evaluated
+before its environment is entered, and a reusable-workflow caller has no
+environment, so neither would see an environment variable. The mainnet jobs
+(`release-mainnet.yml`) call no reusable workflow and gate on dispatch inputs
+alone, so their variables live in the `mainnet` environment, under names no
+testnet job reads.
+
+Once the [release-path settings](deploy/README.md#release-path-settings) are
+applied, the `testnet` and `mainnet` environments each allow only `main` and
+require a reviewer, and the `npm` environment allows only `main`. The
+delegate's expiry and fee bounds limit what a leaked testnet key can do; the
+reviewer is what stops a dispatch republish from running unattended. The
+`mainnet` environment holds a separate delegate key on its own context rule of
+the mainnet author account; the testnet key is never used on mainnet.
+
+**Open: renewal owner for the `ci-publish` rule.** The rule's `valid_until`
+is ledger 6999999 on the author account above, and the bootstrap's
+`--ci-expiry-ledger` on an author `bootstrap-registry.sh` creates, whose
+`ci-publish-verifiers` carries the same expiry. After that
+ledger every CI publish fails authorization until
+someone re-applies the delegate rule with a later `valid_until`, using the
+account's `admin` rule (human-held). No one is assigned to watch the expiry or
+renew it yet.
+
+## Constraints
+
+- **One registry per account.** An account derives one registry per
+  network and derives its compiler, interpreter, and spending-limit addresses from it
+  (`deployer(registry, sha256(wasm))`), so every infra contract an account
+  resolves must be published in that one registry: `constructorless` above
+  for an account built before the move, `perch/constructorless` after it.
+- **Version numbers only increase.** A registry refuses a version that is
+  not above the current one (`#8 VersionMustBeGreaterThanCurrent`).
+  `constructorless` holds a 9.9.9 test publish of `perch-ed25519-verifier`,
+  so that contract's canonical releases are numbered from 10.0.0. Consumers
+  that resolve the verifier by name through `unverified/perch` get the v0.1.0
+  name-salted instance above.
+- **The author account is not name-resolvable.**
+  `fetch_contract_id("perch-account")` fails with `Error(Contract, #4)`
+  although the wasm is published at v0.1.0, and the account's address is not
+  the offline-derived `deployer(perch, sha256("perch-account"))`: it was
+  deployed outside the registry's name-salted path. The table above is the
+  authoritative pointer.
+- **Canonical and deployment builds differ.** The same contract version can
+  have different bytes here and in the recovery-stack deployment's registry
+  instance ([`deploy/README.md`](deploy/README.md#the-canonical-registry-and-publishing-the-stack-to-it)).
+  Resolve by hash or address, never by `(name, version)` across registries.
