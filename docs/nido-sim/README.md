@@ -278,7 +278,9 @@ every request.
   region), `#nido-totals`, `#nido-log` (collapsed cards `#nido-request-N`),
   `#nido-reference`, `#nido-sources`, `#nido-notices`, `#nido-sheet` (the
   approval sheet, a native `<dialog>`), `#nido-present-line` and
-  `#nido-present-result` (the `present=sheet` line and result).
+  `#nido-present-result` (the `present=sheet` line and result),
+  `#nido-live-hint` and `#nido-live-result` (the `present=live` hint and
+  results, which replace `#nido-present-result` there).
 
 ## Pins
 
