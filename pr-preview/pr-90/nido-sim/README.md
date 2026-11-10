@@ -27,7 +27,15 @@ else is behind one Details control.
   transfer large ("1 XLM", "to Game"), one line for what the call does ("Play
   guess 3 on Game"), and the budget left in small type ("1 of 2 XLM left for
   ~8 min after this"; "Over the limit: …" in the danger colour). A call that
-  moves no money says so.
+  moves no money says so. When the account makes more than one payment, the
+  others are listed right under the first ("+ 1 more payment: 3.50 EURC to
+  Coffee shop"), and the primary label gives the total, or "Approve 2
+  payments" across tokens. The budget line counts every payment a request
+  charges to one rule against that rule's window, one line per rule. Units
+  come from the token's contract (the driver's token addresses, or a cap's
+  `token`), never from a display name. The simulation's own requests make one
+  payment each; the browser checks cover these cases on hand-built facts
+  (`window.nidoSheetCheck`).
 - **Verdict:** a quiet "✓ Checked" line when the check passes. A filled box
   only on refusal or failure ("✕ Your account would refuse this: the payment
   must happen inside Game › guess", "… the payment must go to Game"); then
@@ -187,16 +195,27 @@ every request.
   the account; `review` as above; `fresh: true` starts from a new ledger
   without a review. A new load closes a sheet left open by the last one
   (rejecting it). After each load the page posts `{type:"nido-sim:ready",
-  step, verdict}` once the sheet shows its check (`verdict`: `ok` or
-  `refused` for a review, `unknown` if the check could not run, `null`
-  without a review; `step`: the load's `step`, or the reviewed request's
-  `op`), and sets `data-nido-ready` on `<html>` to the verdict, or `done`;
-  an invalid load or a failure posts `{type:"nido-sim:error", step, error}`
-  and sets it to `error`. The URL forms do the same, except that an invalid
-  `scenario` or `review` parameter is ignored with a note on the page: the
-  page does not start, and posts and sets nothing.
-- One state per slide, as `index.html?embed=1&present=sheet&theme=dark&…`
-  (each opens in under a second once the reactor is compiled):
+  step, verdict}` (`step`: the load's `step`, or the reviewed request's
+  `op`) and sets `data-nido-ready` on `<html>` to the verdict, or to `done`
+  when it is `null`. `verdict` is one of:
+  - `ok`: the sheet is showing and its check passed;
+  - `refused`: the sheet is showing the account's refusal;
+  - `failed`: the call itself fails before any authorization (for example an
+    order or a transfer above the account's balance), so no sheet opens and
+    the step result says why; also the sheet's own state when the check
+    finds that an authorized call would fail;
+  - `unknown`: the sheet is showing but its check could not run;
+  - `null`: a load without a review, once its requests are done.
+
+  An invalid load or an error posts `{type:"nido-sim:error", step, error}`
+  and sets `data-nido-ready` to `error`. The URL forms do the same; an
+  invalid `scenario` or `review` parameter is also named in a note on the
+  page ("The review parameter is not one valid request, so it was ignored.
+  Not started."), and the page does not start.
+- One state per slide, as `index.html?embed=1&present=sheet&theme=dark&…`,
+  for stills (the recorder's frames, and the fallback when the live frame
+  below cannot load); each opens in under a second once the reactor is
+  compiled:
 
   | Slide | Parameters |
   | --- | --- |
@@ -217,6 +236,41 @@ every request.
   `review:{op:"guess", number:2, entry:"other"}`; `commands:[{op:"guess",
   number:3}, {op:"guess", number:5}], review:{op:"guess", number:1}`;
   `review:{op:"guess", number:2, stake_to:"owner"}`.
+- `index.html?embed=1&present=live&preload=1&theme=dark|light`: one
+  continuous session for slides (one frame, kept across them; not reloaded,
+  not reset). It shows the one-line balances and windows, the controls the
+  embedding page names, and a sheet where one opens (not modal; it takes no
+  focus; the controls hide under it), at 1300×620 and 360×640. `preload=1`
+  compiles the reactor and sets up the ledger without an account, then posts
+  `{type:"nido-sim:preloaded"}`. Messages to the frame:
+  - `{type:"nido-sim:show", controls:[…], step}` shows those controls. Names:
+    `create`, `grant`, `guess` (the number picker, at 3, a loss, and Play
+    guess), `coffee`, `direct`, `other`, `owner`, `overcap`, `advance`;
+    `&controls=create` sets the first. Showing never resets, never runs
+    anything and never closes a sheet: a sheet left open stays open on the
+    next step until the presenter decides. A control that has done its job
+    (`create`, `grant`) shows its result instead ("✓ Created: your Nido
+    account, with 10 XLM and 20 EURC (test)"); the others show their latest
+    result under them. A control not possible yet stays disabled under "Create
+    the account first" or "Install the grant first".
+  - `{type:"nido-sim:reset"}` starts a new ledger without an account (the
+    compiled reactor is kept), rejecting an open sheet.
+
+  Create opens a simulated passkey prompt in Nido's look first ("Create a
+  passkey for Nido"; "Simulated: a software key in this page, not your
+  device"; Cancel, Continue); the account is created only after Continue. A
+  press during preload waits for it. Lose past the cap is refused once the
+  window holds 2 XLM: after one guess, the first press is a loss that fills
+  the window and the second is refused. After every change (preload, create,
+  each decision, reset) and every `show`, the frame posts
+  `{type:"nido-sim:state", step, controls, done:{create, grant, guess, coffee,
+  direct, other, owner, overcap, advance}, balances:{xlm, eurc} | null,
+  left:{"pay-game", "pay-shop"}, last:{control, ok, text} | null}`
+  (`done.create` and `done.grant` from the ledger; the others true once that
+  control's request was applied or refused, not rejected). Slide keys
+  (ArrowLeft, ArrowRight, PageUp, PageDown) pressed inside the frame are posted
+  as `{type:"nido-sim:key", key}`. `load`, `ready`, `error` and `height` work
+  as above.
 - Without a parameter the page loads nothing heavy: the 3.4 MB reactor is
   compiled on the first press.
 - Element ids: `#nido-controls`, `#nido-result-1` to `#nido-result-4` (each
@@ -224,7 +278,9 @@ every request.
   region), `#nido-totals`, `#nido-log` (collapsed cards `#nido-request-N`),
   `#nido-reference`, `#nido-sources`, `#nido-notices`, `#nido-sheet` (the
   approval sheet, a native `<dialog>`), `#nido-present-line` and
-  `#nido-present-result` (the `present=sheet` line and result).
+  `#nido-present-result` (the `present=sheet` line and result),
+  `#nido-live-hint` and `#nido-live-result` (the `present=live` hint and
+  results, which replace `#nido-present-result` there).
 
 ## Pins
 
@@ -255,7 +311,7 @@ toolchain), stellar-cli 27.0.0 (`stellar contract build`).
 | reactor (driver, wasm32-wasip1) | d8377b548a242e2ab833469e4f39986e1e1af27adb53277f2237b9de1a2c4224 |
 | reference replies minus timings (native = WASI = browser) | 5ec17f91692e417a25990f84547e25b7228624fa0ac7e4ce13c872aacfad47e2 |
 | recorded run `evidence/native-golden.jsonl` | 5fe0796a1118eda818384ff889b4e02ac24d6eaf2a84c2a57e018d68ed1a2b30 |
-| index.html (5361638 bytes) | a3149583b20b62b534dcd938b85e28454102c43be0dbb89220eb02ca244be99f |
+| index.html (5378576 bytes) | 4f3056d0220fa9eca50b1433f97406a06cc48c68e56f0486f194b79ee93c44ed |
 
 None of the Perch artifacts is a deployed contract: the account is built
 from 2c64fe4 with its compiler, interpreter and spending-limit pins staged
