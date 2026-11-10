@@ -149,6 +149,58 @@ body {
 .stage-sim .when-live { display: none; }
 .stage-sim.live .when-live { display: inline-block; }
 .stage-sim.live .when-still { display: none; }
+/* the Nido steps: a slot per slide, holding its still, under the one live frame */
+.stage-nido { grid-template-rows: minmax(0, 1fr) auto; gap: 10px; }
+.nido-pane { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; min-width: 0; gap: 6px; }
+.nido-pane > .nido-label { grid-row: 1; }
+.nido-pane > .nido-slot { grid-row: 2; }
+.nido-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; min-height: 0; }
+.nido-label { margin: 0; font-size: clamp(13px, 1.1vw, 16px); color: var(--ink-2); text-align: center; }
+.nido-slot { position: relative; min-height: 0; min-width: 0; border: 1px solid var(--rule); border-radius: 14px; overflow: hidden; background: var(--paper-2); }
+.nido-slot .nido-still { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
+/* one still at a time: the theme's, wide or (portrait) narrow */
+.nido-slot .nido-still { display: none; }
+.nido-slot .nido-still.s-light.s-wide { display: block; }
+:root[data-theme="dark"] .nido-slot .nido-still.s-light.s-wide { display: none; }
+:root[data-theme="dark"] .nido-slot .nido-still.s-dark.s-wide { display: block; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .nido-slot .nido-still.s-light.s-wide { display: none; }
+  :root:not([data-theme="light"]) .nido-slot .nido-still.s-dark.s-wide { display: block; }
+}
+/* html.tall: the deck draws its tall layouts (set by render()) */
+html.tall .nido-slot .nido-still.s-wide { display: none !important; }
+html.tall .nido-slot .nido-still.s-light.s-narrow { display: block; }
+html.tall[data-theme="dark"] .nido-slot .nido-still.s-light.s-narrow { display: none; }
+html.tall[data-theme="dark"] .nido-slot .nido-still.s-dark.s-narrow { display: block; }
+@media (prefers-color-scheme: dark) {
+  html.tall:not([data-theme="light"]) .nido-slot .nido-still.s-light.s-narrow { display: none; }
+  html.tall:not([data-theme="light"]) .nido-slot .nido-still.s-dark.s-narrow { display: block; }
+}
+/* the live simulation: one frame, laid over the current Nido slide's slot once it has preloaded */
+.nido-live {
+  position: fixed; left: 0; top: 0; z-index: 4; border: 0; border-radius: 14px; background: var(--paper-2);
+  transform-origin: 0 0;
+  opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .3s ease, visibility 0s linear .3s;
+}
+.nido-live.on {
+  opacity: 1; visibility: visible; pointer-events: auto;
+  transition: opacity .3s ease, visibility 0s, left .5s ease, top .5s ease, width .5s ease, height .5s ease, transform .5s ease;
+}
+/* with the live session, a Nido slot is the frame's place: its still and labels give way to it */
+html[data-nido-live] [data-show] .nido-still, html[data-nido-live] .nido-pair[data-show] .nido-label { visibility: hidden; }
+html[data-nido-live] .nido-slot[data-show], html[data-nido-live] [data-show] .nido-slot { border-color: transparent; }
+.nido-reset {
+  display: none; appearance: none; font: inherit; font-size: 13px; cursor: pointer; align-self: center;
+  border: 1px solid var(--rule); background: transparent; color: var(--ink-2); border-radius: 999px; padding: 4px 12px;
+}
+.nido-reset:hover { color: var(--ink); }
+.nido-reset:focus-visible { outline: 2px solid var(--now); outline-offset: 2px; }
+html[data-nido-live] .nido-reset { display: inline-block; }
+@media print { .nido-live { display: none !important; } }
+.nido-cap { margin: 0; font-size: clamp(15px, 1.4vw, 20px); color: var(--ink); text-align: center; }
+html.tall .nido-pair { grid-template-columns: minmax(0, 1fr); }
+.head .nido-reset { order: 3; margin-left: 12px; }
+.head:has(.nido-reset) .status { margin-left: auto; }
 
 /* title slide */
 .slide-title {
@@ -436,7 +488,7 @@ body {
   <div class="stage"><svg role="img" aria-label="One authorization in six stages: the host calls __check_auth, guards, rule lookup, the decision function rule_eval::authorize, the verifier's signature check, and storing the new spending records. A refusal at any stage writes nothing."></svg></div>
   <aside class="notes">
     <p>If the user signs, the wallet submits the transaction and the account decides in a fixed order. The host calls <code>__check_auth</code>. Guards refuse requests the account never allows through a grant. The account looks up each rule the transaction names and its spending record; it does not search. The decision function, <code>rule_eval::authorize</code> in rule-core, checks every call against its rule and computes the new records; it reads no storage and checks no signature, and it is the part the proofs cover. Only if it accepts does a verifier contract check the app's signature, which binds the account and the rule IDs the transaction names, so a relayer cannot move the payment to another rule the key belongs to. Only then does the account store the new records.</p>
-    <p>A refusal at any stage writes nothing; the decision function reports contract error 5 (<code>RuleEvalRefused</code>). Theorems 1, 2 and 6 are about the decision function (slide 15).</p>
+    <p>A refusal at any stage writes nothing; the decision function reports contract error 5 (<code>RuleEvalRefused</code>). Theorems 1, 2 and 6 are about the decision function (slide 20).</p>
     <p class="src">docs/perch-paper/source/html/sections/authorization.html; source/figures/fig-auth-path.steps.json; crates/perch-smart-account/src/auth.rs (authenticate); source/facts/limits.json (auth-error-rule-eval-refused).</p>
   </aside>
 </section>
@@ -480,16 +532,76 @@ body {
   </aside>
 </section>
 
-<section class="slide" data-status="now" data-draw="nidorun" aria-roledescription="slide" aria-label="Nido in soroban-sim">
-  <header class="head"><h2>Nido in soroban-sim</h2></header>
-  <div class="stage stage-sim">
-    <svg role="img" aria-label="The Nido flow, run offline in soroban-sim: create your account, install the grant, whose payments go only to the game and the shop, play guess and see its nested XLM transfer checked, buy a coffee and see its nested EURC transfer checked. Each signature goes through the Nido sign dialog. Simulated: the passkey, the factory build and the EURC token."></svg>
-    <div class="frame-wrap"><span class="frame-wait">Loading the Nido simulation…</span><iframe data-src="../nido-sim/index.html?embed=1" title="Nido in soroban-sim: create an account, install a grant, play guess, buy a coffee"></iframe></div>
-    <p class="stage-links"><button class="act when-still" type="button" data-run>Run it here (5.4 MB)</button><button class="act ghost when-live" type="button" data-unrun>Back to the drawing</button><a class="act ghost" href="../nido-sim/index.html" target="_blank" rel="noopener">Open the Nido simulation</a></p>
+<section class="slide" data-status="now" data-draw="nidocreate" aria-roledescription="slide" aria-label="Try it: create your account">
+  <header class="head"><h2>Try it: create your account</h2><button class="nido-reset" type="button" data-nido-reset title="A new ledger with no account (D)">Reset demo</button></header>
+  <div class="stage stage-nido">
+    <div class="nido-pane"><div class="nido-slot" data-nido="account" data-show="create"><img class="nido-still s-light s-wide" src="nido-stills/light-account-wide.webp" alt="The Nido simulation: your account, just created, with 10 XLM and 20 test EURC" decoding="async"><img class="nido-still s-light s-narrow" src="nido-stills/light-account-narrow.webp" alt="The Nido simulation: your account, just created, with 10 XLM and 20 test EURC" decoding="async"><img class="nido-still s-dark s-wide" src="nido-stills/dark-account-wide.webp" alt="The Nido simulation: your account, just created, with 10 XLM and 20 test EURC" decoding="async"><img class="nido-still s-dark s-narrow" src="nido-stills/dark-account-narrow.webp" alt="The Nido simulation: your account, just created, with 10 XLM and 20 test EURC" decoding="async"></div></div>
+    <p class="nido-cap">Create a Nido account: a passkey stand-in, then Nido’s factory (simulated, offline in this page)</p>
   </div>
   <aside class="notes">
-    <p>The Nido flow run offline in soroban-sim, in order: create your Nido account, install the grant (its transfers go only to the game and the shop), play guess and see its nested XLM transfer checked, then buy a coffee and see its nested transfer of the simulated EURC test token checked. Every signature goes through the Nido-branded sign dialog. Simulated, and labelled so in the page: the passkey (a software P-256 key), the factory build (Nido's factory on this stack's account Wasm) and the EURC token. "Run it here" loads the 5.4 MB page into this slide, and its WebAssembly compiles on the first press inside it; "Open the Nido simulation" opens it on its own, which suits phones. While the frame has focus, keys go to the frame; use the arrows at the bottom to move on.</p>
-    <p class="src">docs/nido-sim/index.html (the simulation page) and docs/nido-sim/README.md; slides 7–10 for the facts it runs.</p>
+    <p>This slide and the next five run one live session of the Nido simulation (5.4 MB, offline in soroban-sim), loaded once in the background and kept across the slides: what you do on one slide is there on the next, and going back keeps it. Here you create the account. A simulated passkey prompt comes first ("Create a passkey for Nido"; a software P-256 key in this page, not your device); on Continue, Nido's factory, rebuilt on this stack's account Wasm, deploys the account with its admin rule, and the page funds it with 10 XLM and 20 EURC, a simulated test token. Simulated, and labelled so in the page: the passkey, the factory build and the EURC token.</p>
+    <p>"Reset demo", or <code>D</code>, starts a new ledger with no account and returns here. If the simulation page cannot load (a copy without <code>../nido-sim</code>, a slow device), the slide shows a still of this step instead, a screenshot of the same page with its sign sheet open.</p>
+    <p class="src">docs/nido-sim/index.html and docs/nido-sim/README.md ("Embedding": the live view, its messages and the still URLs); slide 7 for the factory and the admin rule.</p>
+  </aside>
+</section>
+
+<section class="slide" data-status="now" data-draw="nidogrant" aria-roledescription="slide" aria-label="Try it: install the grant">
+  <header class="head"><h2>Try it: install the grant</h2><button class="nido-reset" type="button" data-nido-reset title="A new ledger with no account (D)">Reset demo</button></header>
+  <div class="stage stage-nido">
+    <div class="nido-pane"><div class="nido-slot" data-nido="grant" data-show="grant"><img class="nido-still s-light s-wide" src="nido-stills/light-grant-wide.webp" alt="The Nido sheet: let Guess & Coffee spend without asking you; 2 XLM to Game every ~8 min, in Game › guess; 10 EURC to Coffee shop every ~8 min, in Coffee shop › order" decoding="async"><img class="nido-still s-light s-narrow" src="nido-stills/light-grant-narrow.webp" alt="The Nido sheet: let Guess & Coffee spend without asking you; 2 XLM to Game every ~8 min, in Game › guess; 10 EURC to Coffee shop every ~8 min, in Coffee shop › order" decoding="async"><img class="nido-still s-dark s-wide" src="nido-stills/dark-grant-wide.webp" alt="The Nido sheet: let Guess & Coffee spend without asking you; 2 XLM to Game every ~8 min, in Game › guess; 10 EURC to Coffee shop every ~8 min, in Coffee shop › order" decoding="async"><img class="nido-still s-dark s-narrow" src="nido-stills/dark-grant-narrow.webp" alt="The Nido sheet: let Guess & Coffee spend without asking you; 2 XLM to Game every ~8 min, in Game › guess; 10 EURC to Coffee shop every ~8 min, in Coffee shop › order" decoding="async"></div></div>
+    <p class="nido-cap">Approve the grant: two limits, each with its recipient</p>
+  </div>
+  <aside class="notes">
+    <p>Install the app's grant on Nido's sign sheet, approved with the passkey under the admin rule. The sheet states its two limits in plain words: 2 XLM to the game every ~8 minutes, only inside <code>game.guess</code>, and 10 EURC to the coffee shop every ~8 minutes, only inside <code>shop.order</code>. Each transfer rule pins its recipient, so the game's stake is paid only to the game and the shop's payment only to the shop. The sheet checks the call before it is signed ("✓ Checked"). If the simulation page cannot load (a copy without <code>../nido-sim</code>, a slow device), the slide shows a still of this step instead, a screenshot of the same page with its sign sheet open.</p>
+    <p class="src">docs/nido-sim/index.html and docs/nido-sim/README.md ("Embedding": the live view, its messages and the still URLs); slide 8 for the install; docs/auth-root.md.</p>
+  </aside>
+</section>
+
+<section class="slide" data-status="now" data-draw="nidoguess" aria-roledescription="slide" aria-label="Try it: play a guess">
+  <header class="head"><h2>Try it: play a guess</h2><button class="nido-reset" type="button" data-nido-reset title="A new ledger with no account (D)">Reset demo</button></header>
+  <div class="stage stage-nido">
+    <div class="nido-pane"><div class="nido-slot" data-nido="guess" data-show="guess"><img class="nido-still s-light s-wide" src="nido-stills/light-guess-wide.webp" alt="The Nido sheet: 1 XLM to Game, play guess 3 on Game, 1 of 2 XLM left for ~8 min after this" decoding="async"><img class="nido-still s-light s-narrow" src="nido-stills/light-guess-narrow.webp" alt="The Nido sheet: 1 XLM to Game, play guess 3 on Game, 1 of 2 XLM left for ~8 min after this" decoding="async"><img class="nido-still s-dark s-wide" src="nido-stills/dark-guess-wide.webp" alt="The Nido sheet: 1 XLM to Game, play guess 3 on Game, 1 of 2 XLM left for ~8 min after this" decoding="async"><img class="nido-still s-dark s-narrow" src="nido-stills/dark-guess-narrow.webp" alt="The Nido sheet: 1 XLM to Game, play guess 3 on Game, 1 of 2 XLM left for ~8 min after this" decoding="async"></div></div>
+    <p class="nido-cap">Play: the account checks the rule and the cap</p>
+  </div>
+  <aside class="notes">
+    <p>Play guess at 3, a loss: the 1 XLM stake is a transfer nested inside <code>game.guess</code>, from the account itself, only to the game, within the 2 XLM window, under exactly the <code>game.guess</code> root. The sheet shows what is left of the window after it. If the simulation page cannot load (a copy without <code>../nido-sim</code>, a slow device), the slide shows a still of this step instead, a screenshot of the same page with its sign sheet open.</p>
+    <p class="src">docs/nido-sim/index.html and docs/nido-sim/README.md ("Embedding": the live view, its messages and the still URLs); slide 9 for each node of the tree; crates/integration-tests/tests/auth_root.rs.</p>
+  </aside>
+</section>
+
+<section class="slide" data-status="now" data-draw="nidocoffee" aria-roledescription="slide" aria-label="Try it: buy a coffee">
+  <header class="head"><h2>Try it: buy a coffee</h2><button class="nido-reset" type="button" data-nido-reset title="A new ledger with no account (D)">Reset demo</button></header>
+  <div class="stage stage-nido">
+    <div class="nido-pane"><div class="nido-slot" data-nido="coffee" data-show="coffee"><img class="nido-still s-light s-wide" src="nido-stills/light-coffee-wide.webp" alt="The Nido sheet: 3.50 EURC to Coffee shop, order on Coffee shop, within its cap" decoding="async"><img class="nido-still s-light s-narrow" src="nido-stills/light-coffee-narrow.webp" alt="The Nido sheet: 3.50 EURC to Coffee shop, order on Coffee shop, within its cap" decoding="async"><img class="nido-still s-dark s-wide" src="nido-stills/dark-coffee-wide.webp" alt="The Nido sheet: 3.50 EURC to Coffee shop, order on Coffee shop, within its cap" decoding="async"><img class="nido-still s-dark s-narrow" src="nido-stills/dark-coffee-narrow.webp" alt="The Nido sheet: 3.50 EURC to Coffee shop, order on Coffee shop, within its cap" decoding="async"></div></div>
+    <p class="nido-cap">Buy a coffee: the shop’s own limit, in test EURC</p>
+  </div>
+  <aside class="notes">
+    <p>Buy a coffee: <code>shop.order</code> pulls 3.50 EURC, the simulated test token, from the account, only to the shop, within the shop's 10 EURC window, under exactly the <code>shop.order</code> root. No EURC token exists outside the simulation and demos. If the simulation page cannot load (a copy without <code>../nido-sim</code>, a slow device), the slide shows a still of this step instead, a screenshot of the same page with its sign sheet open.</p>
+    <p class="src">docs/nido-sim/index.html and docs/nido-sim/README.md ("Embedding": the live view, its messages and the still URLs); slide 10 for the coffee order.</p>
+  </aside>
+</section>
+
+<section class="slide" data-status="now" data-draw="nidorefuse1" aria-roledescription="slide" aria-label="Refused: outside the game">
+  <header class="head"><h2>Refused: outside the game</h2><button class="nido-reset" type="button" data-nido-reset title="A new ledger with no account (D)">Reset demo</button></header>
+  <div class="stage stage-nido">
+    <div class="nido-pair" data-show="direct,other"><div class="nido-pane"><p class="nido-label">pay the game directly</p><div class="nido-slot" data-nido="direct"><img class="nido-still s-light s-wide" src="nido-stills/light-direct-wide.webp" alt="The Nido sheet: paying the game directly; your account would refuse this" decoding="async"><img class="nido-still s-light s-narrow" src="nido-stills/light-direct-narrow.webp" alt="The Nido sheet: paying the game directly; your account would refuse this" decoding="async"><img class="nido-still s-dark s-wide" src="nido-stills/dark-direct-wide.webp" alt="The Nido sheet: paying the game directly; your account would refuse this" decoding="async"><img class="nido-still s-dark s-narrow" src="nido-stills/dark-direct-narrow.webp" alt="The Nido sheet: paying the game directly; your account would refuse this" decoding="async"></div></div><div class="nido-pane"><p class="nido-label">lose through game.other</p><div class="nido-slot" data-nido="other"><img class="nido-still s-light s-wide" src="nido-stills/light-other-wide.webp" alt="The Nido sheet: a stake taken by another game function; your account would refuse this" decoding="async"><img class="nido-still s-light s-narrow" src="nido-stills/light-other-narrow.webp" alt="The Nido sheet: a stake taken by another game function; your account would refuse this" decoding="async"><img class="nido-still s-dark s-wide" src="nido-stills/dark-other-wide.webp" alt="The Nido sheet: a stake taken by another game function; your account would refuse this" decoding="async"><img class="nido-still s-dark s-narrow" src="nido-stills/dark-other-narrow.webp" alt="The Nido sheet: a stake taken by another game function; your account would refuse this" decoding="async"></div></div></div>
+    <p class="nido-cap">Try to pay outside game.guess: refused before anyone signs</p>
+  </div>
+  <aside class="notes">
+    <p>Pay the game directly, or lose a stake through another game function, <code>game.other</code>: neither transfer sits under the <code>game.guess</code> root the grant names, so the transfer rule refuses it. The sheet shows that the account would refuse it before anything is signed; Reject discards it. If the simulation page cannot load (a copy without <code>../nido-sim</code>, a slow device), the slide shows a still of this step instead, a screenshot of the same page with its sign sheet open.</p>
+    <p class="src">docs/nido-sim/index.html and docs/nido-sim/README.md ("Embedding": the live view, its messages and the still URLs); docs/auth-root.md; crates/integration-tests/tests/auth_root.rs (direct and wrong-root refusals).</p>
+  </aside>
+</section>
+
+<section class="slide" data-status="now" data-draw="nidorefuse2" aria-roledescription="slide" aria-label="Refused: the cap and the recipient">
+  <header class="head"><h2>Refused: the cap and the recipient</h2><button class="nido-reset" type="button" data-nido-reset title="A new ledger with no account (D)">Reset demo</button></header>
+  <div class="stage stage-nido">
+    <div class="nido-pair" data-show="overcap,owner"><div class="nido-pane"><p class="nido-label">lose past the cap</p><div class="nido-slot" data-nido="overcap"><img class="nido-still s-light s-wide" src="nido-stills/light-overcap-wide.webp" alt="The Nido sheet: 1 XLM to Game, over the limit, 0 of 2 XLM left; your account would refuse this: over the cap" decoding="async"><img class="nido-still s-light s-narrow" src="nido-stills/light-overcap-narrow.webp" alt="The Nido sheet: 1 XLM to Game, over the limit, 0 of 2 XLM left; your account would refuse this: over the cap" decoding="async"><img class="nido-still s-dark s-wide" src="nido-stills/dark-overcap-wide.webp" alt="The Nido sheet: 1 XLM to Game, over the limit, 0 of 2 XLM left; your account would refuse this: over the cap" decoding="async"><img class="nido-still s-dark s-narrow" src="nido-stills/dark-overcap-narrow.webp" alt="The Nido sheet: 1 XLM to Game, over the limit, 0 of 2 XLM left; your account would refuse this: over the cap" decoding="async"></div></div><div class="nido-pane"><p class="nido-label">lose to the game’s owner</p><div class="nido-slot" data-nido="owner"><img class="nido-still s-light s-wide" src="nido-stills/light-owner-wide.webp" alt="The Nido sheet: 1 XLM to Game owner; your account would refuse this: the payment must go to Game" decoding="async"><img class="nido-still s-light s-narrow" src="nido-stills/light-owner-narrow.webp" alt="The Nido sheet: 1 XLM to Game owner; your account would refuse this: the payment must go to Game" decoding="async"><img class="nido-still s-dark s-wide" src="nido-stills/dark-owner-wide.webp" alt="The Nido sheet: 1 XLM to Game owner; your account would refuse this: the payment must go to Game" decoding="async"><img class="nido-still s-dark s-narrow" src="nido-stills/dark-owner-narrow.webp" alt="The Nido sheet: 1 XLM to Game owner; your account would refuse this: the payment must go to Game" decoding="async"></div></div></div>
+    <p class="nido-cap">Lose past the cap (press twice: the second loss is over it), or lose to the game’s owner</p>
+  </div>
+  <aside class="notes">
+    <p>The window holds 2 XLM of losses. After the guess two slides back, the first press of "Lose past the cap" is a loss that fills it, and the second is refused by the cap. "Lose to the game's owner" has the owner redirect the stake to itself, and the recipient pin refuses it: the payment must go to the game. If the simulation page cannot load (a copy without <code>../nido-sim</code>, a slow device), the slide shows a still of this step instead, a screenshot of the same page with its sign sheet open.</p>
+    <p class="src">docs/nido-sim/index.html and docs/nido-sim/README.md ("Embedding": the live view, its messages and the still URLs); docs/auth-root.md (the recipient pin).</p>
   </aside>
 </section>
 
@@ -606,7 +718,7 @@ body {
   <div class="stage"><svg role="img" aria-label="Could be. Perch's recovery today: an attempt opens, guardians approve the statement digest at the controller until a quorum of 2 of 3, a delay runs during which the attempt can be cancelled, then it completes and replaces the lost key. The email credential would cast one of the guardian votes."></svg></div>
   <aside class="notes">
     <p>Today (solid): anyone may open a recovery attempt. Each guardian approves by authorizing the controller's <code>submit_guardian</code> with <code>require_auth_for_args((digest,))</code>, for exactly one statement. At quorum the attempt is authorized; completion waits for the delay and must land inside the completion window, and it replaces the designated credentials. Under the Loss profile the owner can cancel during the delay; under Protected only the condition's evidence can.</p>
-    <p>Could be (dashed): the email credential, checked through the External verifier slot, acts as one guardian. It approves the same digest with a proof and counts as one vote. It never skips the delay, and with a quorum above one it never authorizes alone. So an agent that reads the owner's inbox, as on slide 17, still cannot recover or take over the account: its email proof is one vote among several. The owner should not give an agent the inbox used for recovery.</p>
+    <p>Could be (dashed): the email credential, checked through the External verifier slot, acts as one guardian. It approves the same digest with a proof and counts as one vote. It never skips the delay, and with a quorum above one it never authorizes alone. So an agent that reads the owner's inbox, as on slide 22, still cannot recover or take over the account: its email proof is one vote among several. The owner should not give an agent the inbox used for recovery.</p>
     <p class="src">Today: crates/perch-recovery/src/contract.rs (submit_guardian); crates/perch-recovery-interface/src/config.rs (CompiledGuardianSet, quorum, recovery modes); vision paper §05, "Two threat profiles" and "An attempt, from opening to completion". The email vote: the ZK signer deck's report ("Proofs as guardians"). Proposed.</p>
   </aside>
 </section>
@@ -1584,40 +1696,6 @@ B.install = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   });
 } };
 
-B.nidorun = { vb: ['0 0 1600 760', '0 0 800 1200'], draw(c) {
-  const T = c.tall;
-  const cx = T ? [205, 595, 205, 595] : [230, 610, 990, 1370], cy = T ? [300, 300, 760, 760] : [360, 360, 360, 360];
-  const tw = T ? 360 : 340, th = T ? 420 : 400;
-  c.at(60);
-  c.text(T ? 400 : 800, T ? 40 : 100, 'in soroban-sim, offline; every signature in the Nido sign dialog', { size: T ? .48 : .62, k: 'soft' });
-  const tiles = [['1', 'create your account', 'a passkey as admin'], ['2', 'install the grant', 'one install call'], ['3', 'play guess', 'the nested XLM transfer'], ['4', 'buy a coffee', 'the nested EURC transfer']];
-  tiles.forEach(([n, a, b], i) => {
-    const x = cx[i], y = cy[i], d = 200 + i * 500;
-    c.at(d);
-    c.rect(x - tw / 2, y - th / 2, tw, th, { k: 'now', rx: 18, w: .9 });
-    c.circle(x - tw / 2 + 34, y - th / 2 + 34, 18, { k: 'now', w: .7 });
-    c.text(x - tw / 2 + 34, y - th / 2 + 35, n, { size: .6, base: 'central', k: 'now' });
-    const gy = y - 70;
-    if (i === 0) { c.icon('factory', x - 50, gy, 54, { k: 'ink' }); c.arrow(x - 18, gy, x + 14, gy, { k: 'now', w: .6 }); c.icon('account', x + 52, gy, 56, { k: 'now' }); }
-    else if (i === 1) { c.rect(x - 70, gy - 40, 140, 80, { k: 'now', rx: 10, w: .9 }); c.rect(x - 70, gy - 26, 140, 10, { k: 'now', w: .1, fill: 'now', fillOp: .2 }); c.rect(x - 56, gy - 4, 22, 16, { k: 'now', rx: 3, w: .4 }); }
-    else {
-      const [r, k2] = i === 2 ? ['game.guess', 'XLM.transfer'] : ['shop.order', 'EURC.transfer'];
-      c.rect(x - 130, gy - 62, 170, 40, { k: 'ink', rx: 6, w: .7 });
-      c.text(x - 118, gy - 35, r, { anchor: 'start', size: .44, font: 'code' });
-      c.path(`M${x - 110} ${gy - 22}V${gy + 22}H${x - 84}`, { k: 'ink', w: .5 });
-      c.rect(x - 82, gy + 2, 194, 40, { k: 'ink', rx: 6, w: .7 });
-      c.text(x - 70, gy + 29, k2, { anchor: 'start', size: .44, font: 'code' });
-      c.check(x + 136, gy + 22, 22, { k: 'now' });
-      c.check(x + 64, gy - 42, 22, { k: 'now' });
-    }
-    c.text(x, y + 46, a, { size: T ? .66 : .72 });
-    c.text(x, y + 84, b, { size: T ? .5 : .54, k: 'soft' });
-    c.chip(x, y + th / 2 - 46, i === 0 ? 'in Nido' : 'signed in Nido', { k: 'now', tk: 'now', size: .48 });
-  });
-  c.at(2400);
-  simChip(c, T ? 400 : 800, T ? 1080 : 640, 'simulated: the passkey, the factory build, the EURC token', { size: T ? .46 : .52 });
-} };
-
 // A grant covers the root call and the calls it makes: a keycard, a room, and the tree.
 function nestedScene(c, cfg) {
   const T = c.tall;
@@ -2386,6 +2464,7 @@ function leave(s) { const b = B[s.dataset.draw]; const svg = svgOf(s); if (b && 
 
 function render() {
   const tall = innerHeight > innerWidth * 1.1;
+  root.classList.toggle('tall', tall);
   if (tall === tallMode) return;
   if (tallMode !== null && slides[cur]) leave(slides[cur]);
   tallMode = tall;
@@ -2480,6 +2559,7 @@ function go(i, fromHash) {
   $('#bar').style.width = ((i + 1) / slides.length * 100) + '%';
   if (!fromHash) history.replaceState(null, '', '#' + (i + 1));
   if (!$('#notes-panel').hidden) showNotes();
+  nidoGo(fresh);
 }
 const next = () => go(cur + 1), prev = () => go(cur - 1);
 
@@ -2529,6 +2609,7 @@ addEventListener('keydown', e => {
   else if (k === 'End') { e.preventDefault(); go(slides.length - 1); }
   else if (k === 'n' || k === 'N') toggleNotes();
   else if (k === 't' || k === 'T') toggleTheme();
+  else if ((k === 'd' || k === 'D') && nidoTargets[cur]) nidoReset();
 });
 
 // Swipe in any direction; a tap on the right of the stage advances, on the left goes back.
@@ -2555,6 +2636,99 @@ reduce.addEventListener('change', () => { const s = slides[cur]; leave(s); enter
 
 slides.forEach(s => { s.setAttribute('aria-hidden', 'true'); s.inert = true; });
 render();
+/* ---------- Nido: one live session across the Nido slides ----------
+   One frame of the Nido simulation (present=live) loads once, preloads its reactor and a ledger, and is never
+   reloaded or moved to another parent: it lies in a fixed layer over the current Nido slide's slot
+   ([data-show]) and is hidden, not removed, on the other slides. Entering a Nido slide shows that step's
+   controls, so the presenter creates the account, approves and tries the refusals in one session; going back
+   shows the earlier step again, with the state kept. Until the frame reports preloaded (a file:// copy without
+   ../nido-sim, a slow device), each slide shows its still. */
+const nidoTargets = slides.map(s => $('[data-show]', s));
+const nidoFirst = nidoTargets.findIndex(Boolean);
+const nidoOn = nidoFirst >= 0 && !root.classList.contains('still');
+const nido = { el: null, pre: false, shown: null, resetting: false, state: null };
+let nidoTimer, nidoSettled = 0;
+function nidoStart() {
+  if (!nidoOn || nido.el) return;
+  const el = document.createElement('iframe');
+  el.className = 'nido-live';
+  el.title = 'The Nido simulation, live';
+  el.src = `../nido-sim/index.html?embed=1&present=live&preload=1&theme=${isDark() ? 'dark' : 'light'}`;
+  el.addEventListener('load', () => syncFrameTheme(el));
+  document.body.appendChild(el);
+  nido.el = el;
+}
+function nidoPost(m) { try { nido.el.contentWindow.postMessage(m, '*'); } catch (_) { /* the stills stay */ } }
+// Each Nido slide names its controls in data-show; the step is the slide's drawing name.
+function nidoShow() {
+  const t = nidoTargets[cur];
+  if (!nido.pre || !t) return;
+  const step = slides[cur].dataset.draw;
+  if (nido.shown === step) return;
+  nido.shown = step;
+  nidoPost({ type: 'nido-sim:show', controls: t.dataset.show.split(','), step });
+}
+// The frame takes the slot's own size and the slide's scale, so a scaled slide (the script panel) scales it too.
+function nidoPlace() {
+  const el = nido.el, t = nidoTargets[cur];
+  if (!el) return;
+  if (!nido.pre || !t) { el.classList.remove('on'); return; }
+  const on = el.classList.contains('on');
+  if (!on && performance.now() < nidoSettled) return;
+  const r = t.getBoundingClientRect(), w = t.offsetWidth, h = t.offsetHeight;
+  if (!w || !h) return;
+  const k = r.width / w;
+  Object.assign(el.style, { left: r.left + 'px', top: r.top + 'px', width: w + 'px', height: h + 'px', transform: Math.abs(k - 1) > .002 ? `scale(${k})` : '' });
+  if (!on) { void el.offsetWidth; el.classList.add('on'); }
+}
+// From one Nido slide to the next the frame stays shown and moves; from any other slide it fades in once the slide has settled.
+function nidoGo(fresh) {
+  if (!nidoOn) return;
+  const t = nidoTargets[cur];
+  if (t || cur >= nidoFirst - 3) nidoStart();
+  if (!t) nido.shown = null;
+  if (fresh) {
+    nidoSettled = performance.now() + (still() ? 0 : 720);
+    if (!t && nido.el) nido.el.classList.remove('on');
+  }
+  nidoShow();
+  nidoPlace();
+  clearTimeout(nidoTimer);
+  nidoTimer = setTimeout(nidoPlace, Math.max(0, nidoSettled - performance.now()) + 20);
+}
+// Reset demo: a new ledger with no account (the reactor stays compiled), and back to the first Nido slide.
+function nidoReset() {
+  if (!nido.pre) return;
+  nido.resetting = true;
+  nido.shown = null;
+  nidoPost({ type: 'nido-sim:reset' });
+  if (cur !== nidoFirst) go(nidoFirst); else nidoShow();
+}
+$$('[data-nido-reset]').forEach(b => b.addEventListener('click', nidoReset));
+addEventListener('message', e => {
+  if (!nido.el || e.source !== nido.el.contentWindow) return;
+  const d = e.data;
+  if (!d || typeof d !== 'object') return;
+  if (d.type === 'nido-sim:preloaded') {
+    nido.pre = true;
+    root.dataset.nidoLive = '1';
+    nido.shown = null;
+    nidoShow();
+    nidoPlace();
+  } else if (d.type === 'nido-sim:state') {
+    nido.state = d;
+    // After a decision or a slide change the deck takes its keys back (N, T, D), without moving the page.
+    if (document.activeElement === nido.el) nido.el.blur();
+    if (nido.resetting) { nido.resetting = false; nido.shown = null; nidoShow(); }
+  } else if (d.type === 'nido-sim:key') {
+    // A click in the frame keeps the slide keys working.
+    if (d.key === 'ArrowRight' || d.key === 'PageDown') next();
+    else if (d.key === 'ArrowLeft' || d.key === 'PageUp') prev();
+  }
+});
+addEventListener('resize', nidoPlace);
+if (nidoOn) setTimeout(nidoStart, 1500);
+
 const start = parseInt(location.hash.slice(1), 10);
 go(start ? start - 1 : 0, true);
 if (qs.get('notes') === '1') toggleNotes();
