@@ -1556,12 +1556,12 @@ B.sandbox = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   ['files', 'network', 'keys', 'clock'].forEach((s, i) => {
     const [x, y] = P.caps[i];
     c.text(x, y, s, { anchor: 'end', size: T ? .46 : .52, k: 'soft', step: 40 });
-    c.cross(x + (T ? 24 : 26), y - 7, T ? 18 : 18, { k: 'soft', step: 0 });
+    c.cross(x + (T ? 24 : 26), y - 7, 18, { k: 'soft', step: 0 });
   });
   c.text(P.none[0], P.none[1], 'none unless a capability is handed in', { size: T ? .4 : .46, k: 'soft' });
   // One import crosses the boundary: the request call, into the gate.
   c.at(900);
-  c.circle(P.port[0], P.port[1], T ? 9 : 9, { k: 'now', fill: 'now', w: .4 });
+  c.circle(P.port[0], P.port[1], 9, { k: 'now', fill: 'now', w: .4 });
   c.text(P.portL[0], P.portL[1], 'request()', { anchor: 'start', size: T ? .4 : .46, font: 'code', k: 'now' });
   c.arrow(...P.toGate, { k: 'now', w: .8 });
   const [gx, gy, gw, gh] = P.gate;
@@ -1578,7 +1578,7 @@ B.sandbox = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   // The two outcomes.
   c.at(1900);
   c.arrow(...P.ok[0], { k: 'now', w: .8 });
-  c.check(P.ok[1][0] - (T ? 0 : 0), P.ok[1][1] - 8, 26, { k: 'now', step: 0 });
+  c.check(P.ok[1][0], P.ok[1][1] - 8, 26, { k: 'now', step: 0 });
   c.text(P.ok[1][0] + 26, P.ok[1][1], 'permit: the host performs it', { anchor: 'start', size: T ? .42 : .54 });
   c.text(P.okS[0] + 26, P.okS[1], 'read, fetch, sign or spawn', { anchor: 'start', size: T ? .38 : .46, k: 'soft' });
   c.arrow(...P.no[0], { k: 'ink', w: .8 });
@@ -1593,8 +1593,8 @@ B.sandbox = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   const [ax, ay, ar] = P.acc;
   c.circle(ax, ay, ar, { k: 'now', w: 1.2 });
   c.circle(ax, ay, ar - 12, { k: 'now', w: .35 });
-  c.seal(ax, ay, ar * .5, { id: 'P' });
-  c.text(ax, ay + ar + (T ? 34 : 34), 'the Perch account', { size: T ? .46 : .52, k: 'now' });
+  c.seal(ax, ay, ar * .5);
+  c.text(ax, ay + ar + 34, 'the Perch account', { size: T ? .46 : .52, k: 'now' });
   const [qx, qy, qw, qh] = P.rec;
   c.line(ax + ar * (T ? .7 : .98), ay + (T ? -ar * .7 : 0), qx, qy + qh / 2, { k: 'now', w: .5 });
   c.rect(qx, qy, qw, qh, { k: 'now', rx: 12, w: .9 });
