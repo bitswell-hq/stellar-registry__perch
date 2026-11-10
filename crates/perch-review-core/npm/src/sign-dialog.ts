@@ -7,6 +7,9 @@
 // core instead: the account's own gate checks and rule-eval's
 // `check_auth` on the account's ledger entries, and each capped rule's
 // budget with every context the entry charges to it counted together.
+// Entries are not composed: each is reviewed on the ledger entries as
+// fetched, so an entry choosing a capped rule that an earlier entry of the
+// same account charges gets an unknown verdict and budget.
 //
 // The adapter's flow:
 //
@@ -31,7 +34,7 @@ export interface DialogVerdict {
   rule?: { id: number; name: string | null; grant: number | null };
   /** The account's contract error, when it raises one. */
   code?: number | null;
-  reasonCode: 'accepted' | 'refused' | 'refused-over-cap' | 'controller' | 'failed';
+  reasonCode: 'accepted' | 'refused' | 'refused-over-cap' | 'controller' | 'failed' | 'uncomposed';
   params: Record<string, unknown>;
   reason: string;
 }
@@ -43,18 +46,20 @@ export interface DialogBudget {
   token: { code: string; decimals: number; contract?: string };
   limit: string;
   periodLedgers: number;
-  /** What the window holds before this authorization. */
+  /** What the window holds in the ledger entries given. */
   spentInWindow: string;
-  /** What this authorization charges the rule, every context summed. */
-  amount: string;
+  /** What this authorization charges the rule, every context summed; `null` when the core cannot read it. */
+  amount: string | null;
   ledger: number;
   nextReleaseLedger: number | null;
-  /** The largest amount a spend may have now: exact, where `limit - spentInWindow` is not. */
-  remaining: string;
-  /** What is left after this authorization, when the account accepts it. */
+  /** The largest amount a spend may have now: exact, where `limit - spentInWindow` is not. `null` when `uncomposed`. */
+  remaining: string | null;
+  /** What is left after this authorization, when the account accepts it. `null` when `uncomposed`. */
   remainingAfter: string | null;
   /** Why nothing fits whatever the limit, when that is so. */
   blocked: string | null;
+  /** Why what is left is unknown, when an earlier entry of the account charges this rule. */
+  uncomposed: string | null;
 }
 
 /** Plain words for each of the account's refusals. */
@@ -166,15 +171,19 @@ export function perchBudgets(
       limit: b.limit.toString(),
       periodLedgers: b.period,
       spentInWindow: b.before.spent.toString(),
-      amount: (b.requested ?? 0n).toString(),
+      amount: b.requested?.toString() ?? null,
       ledger: review.ledger,
       nextReleaseLedger: b.before.nextRelease,
       remaining: b.before.remaining.toString(),
       remainingAfter: b.after ? b.after.remaining.toString() : null,
       blocked: b.before.blocked,
+      uncomposed: null,
     };
   });
 }
+
+const UNCOMPOSED =
+  'an earlier entry of this account in this transaction charges this rule, and that charge is not counted here';
 
 export interface PreviewRequest {
   /** The transaction's authorization entries (`SorobanAuthorizationEntry`). */
@@ -194,7 +203,10 @@ export interface PreviewRequest {
 /**
  * The dialog's `verdicts` and `budgets` for every authorization entry of a
  * Perch account in `authEntries`: one verdict per entry, and one budget per
- * capped rule an entry chooses.
+ * capped rule an entry chooses. Each entry is reviewed on `ledgerEntries` as
+ * given, so when an entry chooses a capped rule that an earlier accepted
+ * entry of the same account charges, its budget for that rule is
+ * `uncomposed`, and its verdict is unknown where it would be accepted alone.
  */
 export function perchPreview(
   core: ReviewCore,
@@ -202,6 +214,7 @@ export function perchPreview(
 ): { verdicts: DialogVerdict[]; budgets: DialogBudget[] } {
   const verdicts: DialogVerdict[] = [];
   const budgets: DialogBudget[] = [];
+  const charged = new Map<string, Set<number>>();
   req.authEntries.forEach((entry, i) => {
     const chosen = core.chosen(entry);
     if ('unreadable' in chosen) return;
@@ -212,8 +225,30 @@ export function perchPreview(
       ledger: req.ledger,
       verified: req.verified?.[i],
     });
-    verdicts.push(perchVerdict(chosen.account, review));
-    budgets.push(...perchBudgets(chosen.account, review, req.tokens));
+    const verdict = perchVerdict(chosen.account, review);
+    const lines = perchBudgets(chosen.account, review, req.tokens);
+    const earlier = charged.get(chosen.account) ?? new Set<number>();
+    charged.set(chosen.account, earlier);
+    const shared = lines.filter((b) => earlier.has(b.rule.id));
+    for (const b of shared) {
+      b.remaining = null;
+      b.remainingAfter = null;
+      b.uncomposed = UNCOMPOSED;
+    }
+    if (shared.length && verdict.allowed === true) {
+      const rules = shared.map((b) => b.rule.id);
+      verdicts.push({
+        ...verdict,
+        allowed: null,
+        reasonCode: 'uncomposed',
+        params: { ...verdict.params, rules },
+        reason: `Unknown: an earlier entry of this account in this transaction charges the cap of rule ${rules.join(', ')}, and this review does not count that charge. Alone, this entry would be accepted at ledger ${req.ledger}.`,
+      });
+    } else {
+      verdicts.push(verdict);
+    }
+    budgets.push(...lines);
+    if (review.status === 'accepted') for (const b of review.budgets) earlier.add(b.rule);
   });
   return { verdicts, budgets };
 }

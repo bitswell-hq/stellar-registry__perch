@@ -46,7 +46,12 @@ The verdict depends on four assumptions:
   else. Expiry, the freeze and spending windows all depend on the sequence.
   Storage can also change between review and inclusion: another spend, an
   `apply_doc` or `apply_grant`, or a recovery completion that advances the
-  grant generation. Any of these can change the answer.
+  grant generation. Any of these can change the answer. So can a sibling
+  entry: a review covers one authorization entry, and two entries of one
+  account in one transaction that charge the same cap are not composed. Each
+  is judged on the snapshot as given, without the other's charge. The npm
+  wrapper's `perchPreview` reports the later one as unknown rather than
+  accepted.
 - **Network limits.** The core does not model the network's resource
   limits, so a transaction can fail on them even when the account accepts.
   These include instructions, footprint, and the size of a contract-data

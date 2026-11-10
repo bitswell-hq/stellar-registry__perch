@@ -35,7 +35,8 @@ It does not cover the following:
   assumed (`assumed`).
 - **Other state.** The answer can change at another ledger, or after state
   changes the entries do not hold: another spend, an apply, a recovery
-  completion.
+  completion. That includes another entry of the same account in the same
+  transaction: each review covers one entry.
 - **Network limits.** These include entry size, instructions and footprint.
 - **Recovery completion.** The recovery controller decides it
   (`status: 'controller'`).
@@ -70,7 +71,16 @@ and `budgets` from the core (`perchPreview`, `perchVerdict`,
 `perchBudgets`), in place of the dialog's Perch adapter's JavaScript
 re-derivation. A budget adds two exact fields to the dialog's shape:
 `remaining`, and `remainingAfter` when the account accepts. Its `amount`
-sums every context the entry charges to the rule.
+sums every context the entry charges to the rule, and is `null` when the
+core cannot read that sum (a context with no amount, or an overflow).
+
+`perchPreview` does not compose entries: it reviews each one on the ledger
+entries as fetched. When an entry chooses a capped rule that an earlier
+accepted entry of the same account in the same call charges, the earlier
+charge is not counted, so that budget's `remaining` and `remainingAfter` are
+`null` with the reason in `uncomposed`, and a verdict that would be accepted
+alone is unknown instead (`allowed: null`, `reasonCode: 'uncomposed'`). A
+refusal stays a refusal.
 
 ## Building and testing
 
