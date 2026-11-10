@@ -893,8 +893,8 @@ when a fork was bridged.
 
 In CI, the `Rehearse migration` workflow runs it on `workflow_dispatch` and
 on pull requests that touch the release path's scripts, `registry.path` or
-`verifiers.path`, the manifests, or the release workflows. It runs both
-networks in one job, because the mainnet leg fetches from the testnet fork.
+`verifiers.path`, the manifests, the perch author's document, or the release
+workflows (its `paths` is the list). It runs both networks in one job, because the mainnet leg fetches from the testnet fork.
 It writes the summary to the job's page and uploads `target/rehearse-migration`,
 without the throwaway keys or the scratch clone. It uses no secret, only
 `github.token` for `gh attestation verify`. While the known gap is real the
