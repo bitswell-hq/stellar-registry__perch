@@ -30,7 +30,7 @@
   },
   "nido-sim-replies": {
     "value": "45",
-    "source": "the Nido simulation's reference run: 42 replies, identical natively, under WASI and in the browser (V)"
+    "source": "the Nido simulation's reference run: 45 replies, identical natively, under WASI and in the browser (V)"
   },
   "nido-shop-cap-eurc": {
     "value": "10",
