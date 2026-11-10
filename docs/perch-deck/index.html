@@ -196,7 +196,11 @@ html[data-nido-live] .nido-slot[data-show], html[data-nido-live] [data-show] .ni
 .nido-reset:hover { color: var(--ink); }
 .nido-reset:focus-visible { outline: 2px solid var(--now); outline-offset: 2px; }
 html[data-nido-live] .nido-reset { display: inline-block; }
-@media print { .nido-live { display: none !important; } }
+@media print {
+  .nido-live { display: none !important; }
+  html[data-nido-live] [data-show] .nido-still, html[data-nido-live] .nido-pair[data-show] .nido-label { visibility: visible; }
+  html[data-nido-live] .nido-slot[data-show], html[data-nido-live] [data-show] .nido-slot { border-color: var(--rule); }
+}
 .nido-cap { margin: 0; font-size: clamp(15px, 1.4vw, 20px); color: var(--ink); text-align: center; }
 html.tall .nido-pair { grid-template-columns: minmax(0, 1fr); }
 .head .nido-reset { order: 3; margin-left: 12px; }
@@ -600,7 +604,7 @@ html.tall .nido-pair { grid-template-columns: minmax(0, 1fr); }
     <p class="nido-cap">Lose past the cap (press twice: the second loss is over it), or lose to the game’s owner</p>
   </div>
   <aside class="notes">
-    <p>The window holds 2 XLM of losses. After the guess two slides back, the first press of "Lose past the cap" is a loss that fills it, and the second is refused by the cap. "Lose to the game's owner" has the owner redirect the stake to itself, and the recipient pin refuses it: the payment must go to the game. If the simulation page cannot load (a copy without <code>../nido-sim</code>, a slow device), the slide shows a still of this step instead, a screenshot of the same page with its sign sheet open.</p>
+    <p>The window holds 2 XLM of losses. After the guess on slide 13, the first press of "Lose past the cap" is a loss that fills it, and the second is refused by the cap. "Lose to the game's owner" has the owner redirect the stake to itself, and the recipient pin refuses it: the payment must go to the game. If the simulation page cannot load (a copy without <code>../nido-sim</code>, a slow device), the slide shows a still of this step instead, a screenshot of the same page with its sign sheet open.</p>
     <p class="src">docs/nido-sim/index.html and docs/nido-sim/README.md ("Embedding": the live view, its messages and the still URLs); docs/auth-root.md (the recipient pin).</p>
   </aside>
 </section>
