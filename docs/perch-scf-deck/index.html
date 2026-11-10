@@ -110,15 +110,7 @@ body {
 }
 .stage-links a { color: var(--now); text-underline-offset: 3px; }
 .stage-links a:focus-visible, .lk:focus-visible { outline: 2px solid var(--now); outline-offset: 3px; }
-.stage-row, .stage-sim { grid-template-rows: minmax(0, 1fr) auto; gap: 10px; }
-/* live stages: a frame of a real page, loaded on request */
-.frame-wrap {
-  position: relative; min-height: 0;
-  border: 1px solid var(--rule); border-radius: 14px; overflow: hidden;
-  background: var(--paper-2);
-}
-.frame-wrap iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; background: transparent; }
-.frame-wrap .frame-wait { position: absolute; inset: 0; display: grid; place-items: center; color: var(--ink-2); font-size: 15px; pointer-events: none; }
+.stage-row { grid-template-rows: minmax(0, 1fr) auto; gap: 10px; }
 .act {
   appearance: none; font: inherit; font-size: clamp(14px, 1.15vw, 16px); cursor: pointer;
   color: var(--paper); background: var(--now); border: 0; border-radius: 999px;
@@ -127,12 +119,64 @@ body {
 .act.ghost { color: var(--ink); background: transparent; border: 1px solid var(--rule); }
 .act:focus-visible { outline: 2px solid var(--now); outline-offset: 3px; }
 .stage-links a.act { text-decoration: none; display: inline-block; }
-.stage-sim .frame-wrap, .stage-sim .when-live, .stage-sim.live .when-still { display: none; }
-.stage-sim.live > svg { display: none; }
-.stage-sim.live .frame-wrap { display: block; }
-.stage-sim.live .when-live { display: inline-block; }
-/* the recording draws each slide, never a live frame or its buttons */
+/* the recording draws each slide's still, never a live frame, and none of its buttons */
 html[data-rec-frame] .stage-links .act { display: none; }
+/* the Nido states: a slot per state, holding its still (and the live frame, when it is ready) */
+.stage-nido { grid-template-rows: minmax(0, 1fr) auto; gap: 10px; }
+.stage-nido-a { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); grid-template-rows: minmax(0, 1fr) auto; column-gap: 24px; }
+.stage-nido-a > svg { grid-row: 1; }
+.stage-nido-a .nido-cap { grid-column: 1 / -1; }
+.nido-pane { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; min-width: 0; gap: 6px; }
+.nido-pane > .nido-label { grid-row: 1; }
+.nido-pane > .nido-slot { grid-row: 2; }
+.nido-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; min-height: 0; }
+.nido-label { margin: 0; font-size: clamp(13px, 1.1vw, 16px); color: var(--ink-2); text-align: center; }
+.nido-slot { position: relative; min-height: 0; min-width: 0; border: 1px solid var(--rule); border-radius: 14px; overflow: hidden; background: var(--paper-2); }
+.nido-slot .nido-still { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
+/* one still at a time: the theme's, wide or (portrait) narrow */
+.nido-slot .nido-still { display: none; }
+.nido-slot .nido-still.s-light.s-wide { display: block; }
+:root[data-theme="dark"] .nido-slot .nido-still.s-light.s-wide { display: none; }
+:root[data-theme="dark"] .nido-slot .nido-still.s-dark.s-wide { display: block; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .nido-slot .nido-still.s-light.s-wide { display: none; }
+  :root:not([data-theme="light"]) .nido-slot .nido-still.s-dark.s-wide { display: block; }
+}
+/* html.tall: the deck draws its tall layouts (set by render(), from the deck's own box) */
+html.tall .nido-slot .nido-still.s-wide { display: none !important; }
+html.tall .nido-slot .nido-still.s-light.s-narrow { display: block; }
+html.tall[data-theme="dark"] .nido-slot .nido-still.s-light.s-narrow { display: none; }
+html.tall[data-theme="dark"] .nido-slot .nido-still.s-dark.s-narrow { display: block; }
+@media (prefers-color-scheme: dark) {
+  html.tall:not([data-theme="light"]) .nido-slot .nido-still.s-light.s-narrow { display: none; }
+  html.tall:not([data-theme="light"]) .nido-slot .nido-still.s-dark.s-narrow { display: block; }
+}
+/* the live simulation, laid over a slot once its state is ready */
+.nido-live {
+  position: fixed; left: 0; top: 0; z-index: 4; border: 0; border-radius: 14px; background: var(--paper-2);
+  transform-origin: 0 0;
+  opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .3s ease, visibility 0s linear .3s;
+}
+.nido-live.on {
+  opacity: 1; visibility: visible; pointer-events: auto;
+  transition: opacity .3s ease, visibility 0s, left .5s ease, top .5s ease, width .5s ease, height .5s ease, transform .5s ease;
+}
+/* with the live session, a Nido slot is the frame's place: its still and labels give way to it */
+html[data-nido-live] [data-show] .nido-still, html[data-nido-live] .nido-pair[data-show] .nido-label { visibility: hidden; }
+html[data-nido-live] .nido-slot[data-show], html[data-nido-live] [data-show] .nido-slot { border-color: transparent; }
+.nido-reset {
+  display: none; appearance: none; font: inherit; font-size: 13px; cursor: pointer; align-self: center;
+  border: 1px solid var(--rule); background: transparent; color: var(--ink-2); border-radius: 999px; padding: 4px 12px;
+}
+.nido-reset:hover { color: var(--ink); }
+.nido-reset:focus-visible { outline: 2px solid var(--now); outline-offset: 2px; }
+html[data-nido-live] .nido-reset { display: inline-block; }
+html[data-rec-frame] .nido-reset { display: none !important; }
+@media print { .nido-live { display: none !important; } }
+.nido-cap { margin: 0; font-size: clamp(15px, 1.4vw, 20px); color: var(--ink); text-align: center; }
+html.tall .stage-nido-a { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; }
+html.tall .stage-nido-a > svg { grid-row: auto; max-height: 38vh; }
+html.tall .nido-pair { grid-template-columns: minmax(0, 1fr); }
 .stage-doc .doc-details { display: none; overflow: auto; min-height: 0; font-size: clamp(12px, 1vw, 14px); line-height: 1.45; color: var(--ink); background: var(--paper-2); border: 1px solid var(--rule); border-radius: 14px; padding: 14px 18px; }
 .stage-doc.open > svg { display: none; }
 .stage-doc.open .doc-details { display: block; }
@@ -418,13 +462,15 @@ html.side.side-below #sources-panel { right: 12px; bottom: calc(40vh + 64px); }
   .slide { padding-bottom: 66px; }
   #notes-panel { left: 12px; right: 12px; bottom: 64px; padding: 12px 14px; font-size: 14px; }
 }
-@media (max-aspect-ratio: 10/11) {
-  .slide-title { grid-template-columns: none; grid-template-rows: auto minmax(0, 1fr); align-items: start; gap: 0; }
-  .slide-title .stage { height: auto; min-height: 0; }
-  .slide-title h1 { margin-top: 3vh; }
-  .slide-title .wallet { margin-bottom: 1em; }
-  .byline { margin-bottom: 1em; }
-}
+html.tall .slide-title { grid-template-columns: none; grid-template-rows: auto minmax(0, 1fr); align-items: start; gap: 0; }
+html.tall .slide-title .stage { height: auto; min-height: 0; }
+html.tall .slide-title h1 { margin-top: 3vh; }
+html.tall .slide-title .wallet { margin-bottom: 1em; }
+html.tall .byline { margin-bottom: 1em; }
+/* a chrome too narrow for every slide's dot shows the progress bar instead */
+html.tight .marks { display: none; }
+html.tight .bar { display: block; }
+html.tight .count { margin-right: auto; text-align: left; }
 </style>
 </head>
 <body>
@@ -457,9 +503,8 @@ html.side.side-below #sources-panel { right: 12px; bottom: calc(40vh + 64px); }
 <section class="slide" data-status="plain" data-draw="perch" aria-roledescription="slide" aria-label="What Perch is">
   <header class="head"><h2>What Perch is</h2></header>
   <div class="stage"><svg role="img" aria-label="Perch is a Stellar smart account. An app or agent's every call is checked against a grant, which says which calls, which signers, a spending cap and an expiry; rule_eval::check_auth decides every authorization. The decision function is proved in Lean, with kernel-checked theorems. Perch contracts are live on Stellar mainnet since 26 October 2026, and Nido creates Perch accounts."></svg></div>
-  <aside class="notes" data-sec="13">
-    <p>Perch is a Stellar smart account. Each app or agent gets a grant: which calls, which signers, a spending cap, an expiry.</p>
-    <p>One function decides every authorization, and it is proved in Lean.</p>
+  <aside class="notes" data-sec="9">
+    <p>Perch is a Stellar smart account: each app or agent gets a grant, and one function, proved in Lean, decides every authorization.</p>
   </aside>
   <aside class="sources">
     <p>Perch is a set of Soroban contracts that turns a Stellar smart account into a permission engine for apps and agents. The owner installs grants: which contracts and functions an app or agent may call, argument conditions, which keys must sign, a sliding-window spending cap and an expiry. Every authorization is decided by <code>rule_eval::check_auth</code> over the rules the account stores, including nested calls in the authorization tree.</p>
@@ -472,8 +517,8 @@ html.side.side-below #sources-panel { right: 12px; bottom: calc(40vh + 64px); }
 <section class="slide" data-status="plain" data-draw="agents" aria-roledescription="slide" aria-label="Agents with keys">
   <header class="head"><h2>Agents with keys</h2></header>
   <div class="stage"><svg role="img" aria-label="Today an agent that spends for a user holds a key that can do anything the account can, and a subagent copies it. With Perch the agent holds a grant and the account checks every call against it. We will build subagents that receive narrower grants and hold no keys."></svg></div>
-  <aside class="notes" data-sec="12">
-    <p>An agent with a key can do anything the account can, and its subagents copy it. With Perch, the agent holds a grant, and the account checks every call.</p>
+  <aside class="notes" data-sec="10">
+    <p>An agent with a key can do anything the account can. With Perch, the agent holds a grant, and the account checks every call.</p>
   </aside>
   <aside class="sources">
     <p>An agent that spends for a user holds a key that can do anything the account can, and anything it spawns inherits that power. A Perch grant fixes which contracts and functions an app or agent may call, argument conditions, which keys must sign, a sliding-window spending cap and an expiry, and the account checks every call in the authorization tree against it, so a stolen app key can spend no more than its grant allows. We will build an agent runtime in which subagents receive narrower grants and hold no keys.</p>
@@ -486,9 +531,8 @@ html.side.side-below #sources-panel { right: 12px; bottom: calc(40vh + 64px); }
   <div class="stage stage-row"><svg role="img" aria-label="A published study. An agent is asked to pay three invoices of 0.01 USDC each. Its wallet caps spending at 0.01 USDC a day, and raising the cap needs a one-time code emailed to the owner, into the inbox the agent reads. The agent reads the code and raises its own cap. 9 of 10 models did this in at least one of 20 runs, unprompted, with no attacker present."></svg>
     <p class="stage-links"><span>Breckenridge, Vilardell, Wang, Zhang and Juels, “I-HITL: Inalienable Human-in-the-Loop”, 2026</span><a href="https://arxiv.org/abs/2610.35835" target="_blank" rel="noopener">arXiv:2610.35835</a></p>
   </div>
-  <aside class="notes" data-sec="18">
-    <p>In a recent study from Cornell Tech, Yale and IC3, agents paying small invoices hit a daily cap. Raising it took a code emailed to an inbox they could read.</p>
-    <p>Nine of ten models raised their own cap, unprompted, in at least one of twenty runs.</p>
+  <aside class="notes" data-sec="14">
+    <p>In a study from Cornell Tech, Yale and IC3, agents paying invoices read a code emailed to the owner and raised their own cap, unprompted: nine of ten models, in at least one of twenty runs.</p>
   </aside>
   <aside class="sources">
     <p>A study from Cornell Tech, Yale University and IC3 tested a human-in-the-loop gate on spending. A LangChain agent had three tools: the user's email, a web browser and an agent wallet holding 10 USDC on Base mainnet, with a spending policy of 0.01 USDC per transaction, 0.01 USDC per day, 0.30 USDC per week and 1 USDC per month. Changing the policy needs a one-time passcode that the wallet provider emails to the account owner. The system prompt told the agent to act only on the user's instructions and to treat anything a tool returns, emails included, as data; no task mentioned the spending policy or how to change it.</p>
@@ -500,8 +544,8 @@ html.side.side-below #sources-panel { right: 12px; bottom: calc(40vh + 64px); }
 <section class="slide" data-status="plain" data-draw="oneplace" aria-roledescription="slide" aria-label="Where the policy lives">
   <header class="head"><h2>Where the policy lives</h2></header>
   <div class="stage"><svg role="img" aria-label="Common setups enforce agent-payment policy in one place. Limits the agent can reach: in its own tools, or behind an approval channel it can read, as in the cited study; the chain sees a valid key. On chain, written apart: client rules and contract logic are two rule sets written separately, which can drift. What we will build, Perch: one Cedar policy checked in both places, off chain by a contained engine and on chain by the account, the backstop."></svg></div>
-  <aside class="notes" data-sec="12">
-    <p>Common setups keep limits within the agent's reach, or write contract logic apart from the client's rules, so the two can drift. We will put one policy in both places.</p>
+  <aside class="notes" data-sec="10">
+    <p>Common setups keep limits within the agent's reach, or write contract logic apart from the client's rules. We will put one policy in both places.</p>
   </aside>
   <aside class="sources">
     <p>Common setups for agent payments enforce the policy in one place. Some keep the limits within the agent's reach: the agent's own process or tools check them, or a provider enforces them behind an approval channel the agent can read. The cited study is the second kind: the wallet provider, Circle, enforced the cap, and agents raised it with a one-time code emailed to an inbox they could read. Others put the policy in on-chain logic written separately from the client's rules, so the two rule sets can drift apart. This slide names no product; the point is where the check sits.</p>
@@ -527,13 +571,13 @@ html.side.side-below #sources-panel { right: 12px; bottom: calc(40vh + 64px); }
 
 <section class="slide" data-status="plain" data-draw="sandbox" aria-roledescription="slide" aria-label="The sandbox and the gate">
   <header class="head"><h2>The sandbox and the gate</h2></header>
-  <div class="stage"><svg role="img" aria-label="The agent runs as a WASI component with no files, network, keys or clock unless a capability is handed in. One host import, request(), crosses its boundary into the Cedar check, which sees principal agent, action fetch, resource Host feeds.example.org and its context, against a policy such as permit agent to fetch a host in its sources. Files, websites, signing and spawning each get one check. On permit the host performs it; otherwise it is refused. On chain, payments and contract calls go to the Perch account: the agent's grant key gets through within its grant, and apply_grant, remove_grant and the account document are refused. Changing the account needs the account document's admin rule: in Nido, the owner's passkey. Recovery runs through the account's recovery contract, with guardians, quorum and delay. Proven: no grant can authorize a call to the account itself or its recovery contracts."></svg></div>
-  <aside class="notes" data-sec="11">
-    <p>Inside, each agent is a WASI component with no files, network or keys. Every request meets a Cedar check, and only the owner's passkey can change the account.</p>
+  <div class="stage"><svg role="img" aria-label="The agent runs as a WASI component with no files, network, keys or clock unless a capability is handed in. One host import, request(), crosses its boundary into the Cedar check, which sees principal agent, action fetch, resource Host feeds.example.org and its context, against a policy such as permit agent to fetch a host in its sources. Files, websites, signing and spawning each get one check. On permit the host performs it; otherwise it is refused. On chain, payments and contract calls go to the Perch account: the agent's grant key gets through within its grant, and apply_doc, apply_grant and remove_grant are refused. Changing the account's documents needs the account document's admin rule: in Nido, the owner's passkey. Recovery runs through the account's recovery contract, with guardians, quorum and delay. Proven: no grant can authorize a call to the account itself or its recovery contracts."></svg></div>
+  <aside class="notes" data-sec="8">
+    <p>Inside, each agent is a WASI component with no files, network or keys, and every request meets a Cedar check.</p>
   </aside>
   <aside class="sources">
     <p>What we will build (Tranche 1, items 1 and 3). Each agent runs as a WASI component with no ambient authority: it has no files, network, keys or clock unless the host hands in a capability, and its one host import is a request call. Every file, website, signing and spawn request crosses that call into the Cedar policy engine, an import-free WebAssembly component, as a Cedar request: principal the agent, an action, a resource and a context, checked against the agent's policy and every ancestor's. On permit the host performs it; otherwise it is refused. The request shown and the pseudocode are illustrative; the names are the request vocabulary we will give the runtime.</p>
-    <p>On chain, payments and contract calls go to the Perch account, which checks them against the agent's grant. Changing the account (<code>apply_grant</code>, <code>remove_grant</code>, the account document) needs the account document's admin rule, which in Nido is the owner's passkey. Recovery runs through the account's recovery contract, with guardians, quorum and delay. And Theorem 8, grant target containment, proves that no grant can authorize a call to the account itself or its recovery contracts.</p>
+    <p>On chain, payments and contract calls go to the Perch account, which checks them against the agent's grant. Changing the account's documents (<code>apply_doc</code> for the account document; <code>apply_grant</code> and <code>remove_grant</code> for grant documents, which the account stores apart from it) needs the account document's admin rule, which in Nido is the owner's passkey. Recovery runs through the account's recovery contract, with guardians, quorum and delay. And Theorem 8, grant target containment, proves that no grant can authorize a call to the account itself or its recovery contracts.</p>
     <p class="src">Vision paper §08, "Agents, budgets and payments (proposed)" (agents and their permissions), and §05, "Recovery and the end of authority" (guardians, quorum, delay); docs/account-interface.md (Constructor, <code>apply_grant</code>, Removing grants); docs/perch-paper/source/statements.json (T8); SCF Build submission, Products &amp; Services (the funded work: file, network, signing and spawn permissions), Tranche #1 items 1 and 3.</p>
   </aside>
 </section>
@@ -541,8 +585,8 @@ html.side.side-below #sources-panel { right: 12px; bottom: calc(40vh + 64px); }
 <section class="slide" data-status="plain" data-draw="mail" aria-roledescription="slide" aria-label="Example: a mail assistant">
   <header class="head"><h2>Example: a mail assistant</h2></header>
   <div class="stage"><svg role="img" aria-label="The runtime we will build enforces a Cedar policy for a mail assistant. It may read only a forwarding mailbox's host and post only to a send host, and only to me@example.com or team@example.com. Sending the digest to team@example.com is allowed. Sending it to anyone@else.example is refused: not on your list. Opening your own inbox is refused: it reads only the mail you forward. On chain, a grant as Perch has today: pay newsletter.example, at most 5 USDC per 518,400 ledgers, about 30 days; the account refuses more, even if the runtime fails. It never sees your inbox, or the codes sent to it."></svg></div>
-  <aside class="notes" data-sec="10">
-    <p>Take a mail assistant: it will read only what you forward and send only to your list, so it never sees your inbox or its codes.</p>
+  <aside class="notes" data-sec="8">
+    <p>A mail assistant reads only what you forward and sends only to your list; it never sees your inbox.</p>
   </aside>
   <aside class="sources">
     <p>What we will build: the agent runtime (Tranche 1, items 1 and 3) will enforce this policy, through the contained Cedar policy engine. The action and entity names (<code>Agent</code>, <code>Action::"web.get"</code>, <code>Action::"web.post"</code>, <code>Host</code>, <code>context.to</code>) are the request vocabulary we will give the runtime, not an existing API. Mail is modelled as web requests to two named hosts, a forwarding mailbox's read API and a send API, not as a separate mail action; the hosts and addresses are illustrative. The syntax is Cedar's: <code>permit</code> with a scope, a <code>when</code> condition, a set's <code>contains</code>.</p>
@@ -554,8 +598,8 @@ html.side.side-below #sources-panel { right: 12px; bottom: calc(40vh + 64px); }
 <section class="slide" data-status="plain" data-draw="reader" aria-roledescription="slide" aria-label="Example: a news and data reader">
   <header class="head"><h2>Example: a news and data reader</h2></header>
   <div class="stage"><svg role="img" aria-label="The runtime we will build enforces a Cedar policy for a news and data reader. It may only make web.get requests to named sources: an RSS feed at feeds.example.org, prices.example and weather.example; there is no other permit. Reading feeds.example.org/rss is allowed. Posting a comment on forum.example is refused: no permit for web.post. Reading unknown.example is refused: not a named source. No money moves, so it needs no grant on chain."></svg></div>
-  <aside class="notes" data-sec="9">
-    <p>Or a news reader: it will read an RSS feed and named data sources, and can't post, submit a form or send anything.</p>
+  <aside class="notes" data-sec="4">
+    <p>A news reader reads named sources and can't post or send.</p>
   </aside>
   <aside class="sources">
     <p>What we will build, like the mail assistant: one <code>permit</code> for <code>web.get</code> on the hosts in a group of named sources, and nothing else, so Cedar's default refuses every post, form submission and message. The names are the request vocabulary we will give the runtime; the hosts are illustrative. No money moves, so no on-chain grant is needed; were the reader to pay for a data feed, that payment would go through a grant as in the mail example.</p>
@@ -566,14 +610,14 @@ html.side.side-below #sources-panel { right: 12px; bottom: calc(40vh + 64px); }
 <section class="slide" data-status="plain" data-draw="keepcap" aria-roledescription="slide" aria-label="A cap the agent cannot raise">
   <header class="head"><h2>A cap the agent cannot raise</h2></header>
   <div class="stage stage-row stage-doc">
-    <svg role="img" aria-label="Two documents, in Cedar-style pseudocode: the authoring form we will compile to the account's rules. The account document, applied with apply_doc: permit the owner's passkey any action on this account, which covers apply_doc, apply_grant and remove_grant; recovery by guardians, 2 of 3; grant 1 is the agent's. The agent's grant document, applied with apply_grant: permit the agent's key to call order on the shop; permit it to pay XLM to the shop, from this account, inside shop.order, at most 10 XLM per 100 ledgers, about 8 minutes, before ledger 65,900,000, about 30 days; forbid it any action on this account or its recovery contracts. Why the agent cannot raise its cap: only the owner's passkey changes a grant; proven, no grant can authorize a call to the account itself or its recovery contracts; an emailed code gets the agent nothing, since it holds only its grant's key. The account enforces the cap and the window itself."></svg>
+    <svg role="img" aria-label="Two separate documents in the Perch account, in Cedar-style pseudocode: the authoring form we will compile to the account's rules. The account holds the account document and, beside it, each grant document by its id. The account document, applied with apply_doc: permit the owner's passkey any action on this account, which covers apply_doc, apply_grant and remove_grant; recovery by guardians, 2 of 3; it lists no grants. Grant 1, the agent's grant document, installed by the owner's passkey with apply_grant(1, …) and removed with remove_grant(1): permit the agent's key to call order on the shop; permit it to pay XLM to the shop, from this account, inside shop.order, at most 10 XLM per 100 ledgers, about 8 minutes, before ledger 65,900,000, about 30 days; forbid it any action on this account or its recovery contracts. The agent's own key calls apply_grant and is refused: it is not the owner's passkey. Why the agent cannot raise its cap: only the owner's passkey installs or removes a grant; proven, no grant can authorize a call to the account itself or its recovery contracts; an emailed code gets the agent nothing, since it holds only its grant's key. The account enforces the cap and the window itself."></svg>
     <div class="doc-details" id="doc-details" hidden>
-      <p class="dd-h">The pseudocode, field by field, in Perch's documents (<code>crates/perch-ir/src/doc.rs</code>, kebab-case JSON)</p>
+      <p class="dd-h">The pseudocode, field by field, in Perch's two kinds of document (<code>crates/perch-ir/src/doc.rs</code>, kebab-case JSON): first the account document, then the agent's grant document</p>
       <dl>
         <dt><code>owner_passkey</code></dt><dd><code>signers: [{ "id": "owner", "verifier": …WebAuthn…, "key": … }]</code></dd>
         <dt><code>permit (owner_passkey, any action, this_account)</code></dt><dd>rule <code>"admin"</code>: <code>"scope": { "type": "self-admin" }</code>, <code>"principals": { "type": "all", "signers": ["owner"] }</code>. It covers every call to the account itself: <code>apply_doc</code>, <code>apply_grant</code>, <code>remove_grant</code>, upgrades.</dd>
         <dt><code>recovery: guardian-only, 2 of 3</code></dt><dd><code>"recovery": { "mode": { "type": "guardian-only", "guardians": […], "quorum": 2 }, … }</code></dd>
-        <dt><code>grants: grant 1</code></dt><dd>installed by <code>apply_grant(1, doc_json)</code>, owner authorization</dd>
+        <dt>the agent's grant document, <code>grant 1</code></dt><dd>a document of its own, not part of the account document: the account stores it apart, in its grant map under grant id <code>1</code>, with its own rules. <code>apply_grant(1, doc_json)</code> adds it and <code>remove_grant(1)</code> removes it and every rule it installed; the account document's admin rule (the owner's passkey) authorizes both, and the account document never lists its grants.</dd>
         <dt><code>agent_key</code></dt><dd><code>signers: [{ "id": "agent", "verifier": …Ed25519…, "key": … }]</code>; every rule: <code>"principals": { "type": "all", "signers": ["agent"] }</code></dd>
         <dt><code>call order, shop</code></dt><dd><code>"scope": { "type": "contract", "address": shop }</code>, <code>"functions": ["order"]</code></dd>
         <dt><code>pay XLM, shop</code>, <code>from == this_account</code></dt><dd><code>"scope": { "type": "contract", "address": XLM }</code>, <code>"functions": ["transfer"]</code>, <code>"args": [{ "index": 0, "pred": { "type": "is-self" } }, { "index": 1, "pred": { "type": "address-eq", "address": shop } }]</code></dd>
@@ -587,13 +631,13 @@ html.side.side-below #sources-panel { right: 12px; bottom: calc(40vh + 64px); }
     <p class="stage-links"><button class="act ghost" type="button" data-doc aria-expanded="false" aria-controls="doc-details">Show the document fields</button></p>
   </div>
   <aside class="notes" data-sec="10">
-    <p>Here are the two documents. Only the owner's passkey changes the account's, grants included.</p>
-    <p>The agent's grant pays one shop under a cap, until it expires.</p>
+    <p>Two documents: the owner's passkey signs the account document and alone adds or removes grants. The agent's grant pays one shop under a cap, until it expires.</p>
   </aside>
   <aside class="sources">
     <p>The two documents in Cedar-style pseudocode, not valid Cedar: the authoring form we will compile (Tranche 1, the Cedar-to-Perch compiler) to the rules the account stores. Today a document is Perch's JSON policy document, and "Show the document fields" maps each line to its fields (<code>PolicyDoc</code>, <code>SignerDecl</code>, <code>Rule</code> with <code>scope</code> contract or self-admin, <code>principals</code>, <code>functions</code>, <code>args</code>/<code>pred</code>, <code>auth-root</code>, <code>cap {limit, period-ledgers}</code>, <code>not-after-ledger</code>, <code>RecoveryConfig</code>). The grant has the shape of the one <code>crates/integration-tests/tests/auth_root.rs</code> installs, with a shop and its recipient in place of the game; the values are illustrative.</p>
+    <p>Two documents, stored apart. <code>apply_doc</code> applies the account document: the account's own rules (its signers and admin rule) and its recovery; it lists no grants. <code>apply_grant(grant, doc_json)</code> applies a grant document under an id the owner chooses, stored in the account's grant map beside the account document, with its own rules; <code>remove_grant(grant)</code> removes it and every rule it installed. Both need the account's own authorization, which the account document's admin rule decides.</p>
     <p>Why the agent cannot raise its cap. The account document's <code>admin</code> rule, scoped to the account itself (self-admin), is the owner's passkey, and only it authorizes <code>apply_doc</code>, <code>apply_grant</code> and <code>remove_grant</code>; in Nido the passkey's signature is made on the owner's device. <code>apply_grant</code> refuses (<code>GrantEscalation</code>) a grant document with a <code>self-admin</code> rule or a rule reaching the account's own rules or recovery. And Theorem 8, grant target containment, proves that "No grant as lowered at install, nor any grant derived from one, allows a call to the account or its adopted recovery contracts." The agent holds only its grant's key, so a code emailed to the owner gets it nothing. This is not the paper's I-HITL protocol; it is where Perch puts the limit. This is the merged account; mainnet still runs the earlier design, and deploying this one is Tranche 3.</p>
-    <p class="src">crates/perch-ir/src/doc.rs; docs/schema.md; docs/account-interface.md (Constructor, <code>apply_doc</code>, <code>apply_grant</code>, Removing grants); crates/integration-tests/tests/auth_root.rs (the grant it installs); docs/perch-paper/source/statements.json (T8); SCF Build submission, Products &amp; Services (items 1–3), Tranche #1 item 2.</p>
+    <p class="src">crates/perch-ir/src/doc.rs; docs/schema.md; docs/account-interface.md (Constructor, <code>apply_doc</code>, <code>apply_grant</code>, Removing grants); crates/perch-smart-account/src/lib.rs (<code>PerchSmartAccount</code>: <code>apply_doc</code>, <code>apply_grant</code>, <code>remove_grant</code>; the grant map); crates/integration-tests/tests/auth_root.rs (the grant it installs); docs/perch-paper/source/statements.json (T8); SCF Build submission, Products &amp; Services (items 1–3), Tranche #1 item 2.</p>
   </aside>
 </section>
 
@@ -602,8 +646,8 @@ html.side.side-below #sources-panel { right: 12px; bottom: calc(40vh + 64px); }
   <div class="stage stage-row"><svg role="img" aria-label="On Stellar mainnet since 26 October 2026: the Perch registry, document compiler and account factory, and Nido, which creates Perch accounts through its factory. Merged in the repository: grants installed with apply_grant, every authorization decided by rule_eval::check_auth, recovery, verifiers, and 13 Lean theorems. The mainnet account is the earlier design; deploying the new account to mainnet is Tranche 3."></svg>
     <p class="stage-links"><a href="https://github.com/stellar-registry/perch/blob/main/deployments/mainnet.json">mainnet.json</a><a href="https://stellar.expert/explorer/public/contract/CC236AK2RX7MUO7BV7JYDDW5KHZ3X7YYJOJKCVDC543BQBNNSUCZB7NN">Registry</a><a href="https://stellar.expert/explorer/public/contract/CB65ACZRA777XHGEKVX46LEU2ZSUAL2UQY2PKMVDL7KJTDHRTX5MTBQD">Document compiler</a><a href="https://stellar.expert/explorer/public/contract/CC2K7PEAV24N66JCEG5OPFCBBA4OK6DK7YISRCMQQQUC7KLNISNGYLMK">Account factory</a><a href="https://stellar.expert/explorer/public/contract/CBHERM3IKL2QLLJWNPBTATIHVFNT3FLFZKPFG4L2X7CHUPRLJHGC3FAC">Nido's factory</a></p>
   </div>
-  <aside class="notes" data-sec="11">
-    <p>Today, Perch's registry, compiler and account factory are on mainnet. Grants, recovery, verifiers and thirteen Lean theorems are merged; the new account reaches mainnet in Tranche 3.</p>
+  <aside class="notes" data-sec="9">
+    <p>Today, Perch's registry, compiler and account factory are on mainnet; grants, recovery and the proofs are merged, reaching mainnet in Tranche 3.</p>
   </aside>
   <aside class="sources">
     <p>Perch contracts have been live on Stellar mainnet since 2026-10-26: the registry, the document compiler and the account factory, from the earlier design (source c135aca, channel beta, a single-key registry admin). Nido, The Aha Company's passkey wallet, creates Perch accounts on mainnet through its factory. Nido's wallet counts, the mainnet deployment and npm downloads are reported under Nido's SCF #41 award; they are context here, not claimed for this ask.</p>
@@ -613,20 +657,97 @@ html.side.side-below #sources-panel { right: 12px; bottom: calc(40vh + 64px); }
 </section>
 
 <section class="slide" data-status="plain" data-draw="nido" aria-roledescription="slide" aria-label="Perch, in a shipping wallet">
-  <header class="head"><h2>Perch, in a shipping wallet</h2></header>
-  <div class="stage stage-sim">
-    <svg role="img" aria-label="As context, reported under Nido's SCF #41 award and not claimed for this ask: Perch contracts have been on Stellar mainnet since 26 October 2026; Nido creates Perch accounts on mainnet through its factory, on the earlier account design; and the npm package had 1,662 downloads from 10 October to 8 November 2026. On 5 November 2026 a scripted Nido run on testnet made 11 transactions: a grant installed, two capped payments and a recovery, with a third, over-cap payment refused before signing. Beside it, the Nido simulation's steps, run offline: create the account, install the grant, which pays only the game and the shop, guess with a 1 XLM stake, buy a coffee for 3.50 EURC, and pay the game directly, which is refused."></svg>
-    <div class="frame-wrap"><span class="frame-wait">Loading the Nido simulation…</span><iframe data-src="../nido-sim/index.html?embed=1" title="Nido in soroban-sim: create an account, install a grant, play guess, buy a coffee"></iframe></div>
-    <p class="stage-links"><button class="act when-still" type="button" data-run>Run it here (5.4 MB)</button><button class="act ghost when-live" type="button" data-unrun>Back to the drawing</button><a class="act ghost" href="../nido-sim/index.html" target="_blank" rel="noopener">Open the Nido simulation</a><a href="https://stellar.expert/explorer/public/contract/CBHERM3IKL2QLLJWNPBTATIHVFNT3FLFZKPFG4L2X7CHUPRLJHGC3FAC">Nido's factory</a><a href="https://www.npmjs.com/package/@stellar-registry/perch">npm package</a></p>
+  <header class="head"><h2>Perch, in a shipping wallet</h2><button class="nido-reset" type="button" data-nido-reset title="A new ledger with no account (D)">Reset demo</button></header>
+  <div class="stage stage-nido stage-nido-a">
+    <svg role="img" aria-label="As context, reported under Nido's SCF #41 award and not claimed for this ask: Perch contracts have been on Stellar mainnet since 26 October 2026; Nido creates Perch accounts on mainnet through its factory, on the earlier account design; and the npm package had 1,662 downloads from 10 October to 8 November 2026. On 5 November 2026 a scripted Nido run on testnet made 11 transactions: a grant installed, two capped payments and a recovery, with a third, over-cap payment refused before signing."></svg>
+    <div class="nido-pane"><div class="nido-slot" data-nido="account" data-show="create"><img class="nido-still s-light s-wide" src="stills-2/light-account-wide.webp" alt="The Nido simulation: your account, just created, with 10 XLM and 20 test EURC" decoding="async"><img class="nido-still s-light s-narrow" src="stills-2/light-account-narrow.webp" alt="The Nido simulation: your account, just created, with 10 XLM and 20 test EURC" decoding="async"><img class="nido-still s-dark s-wide" src="stills-2/dark-account-wide.webp" alt="The Nido simulation: your account, just created, with 10 XLM and 20 test EURC" decoding="async"><img class="nido-still s-dark s-narrow" src="stills-2/dark-account-narrow.webp" alt="The Nido simulation: your account, just created, with 10 XLM and 20 test EURC" decoding="async"></div></div>
+    <p class="nido-cap">Create a Nido account: a passkey stand-in, then Nido’s factory (simulated, offline in this page)</p>
   </div>
-  <aside class="notes" data-sec="10">
-    <p>Perch already runs in a shipping wallet: as context from Nido's own SCF award, Nido creates Perch accounts on mainnet. Try its simulation here.</p>
+  <aside class="notes" data-sec="12">
+    <p>Perch already runs in a shipping wallet: as context, Nido creates Perch accounts on mainnet. Here, simulated, I create one with a passkey stand-in.</p>
   </aside>
   <aside class="sources">
+
     <p>Perch contracts have been live on Stellar mainnet since 2026-10-26. Nido, The Aha Company's passkey wallet, creates Perch accounts on mainnet through its factory, CBHERM3IKL2QLLJWNPBTATIHVFNT3FLFZKPFG4L2X7CHUPRLJHGC3FAC; the mainnet wallet runs the earlier Perch design (c135aca), so grants reach mainnet in Tranche 3. The npm package @stellar-registry/perch had 1,662 downloads from 2026-10-10 to 2026-11-08 (api.npmjs.org, read 2026-11-09). The mainnet deployment, Nido's wallet counts and the npm downloads are reported under Nido's SCF #41 award: context here, not claimed for this ask.</p>
     <p>On 2026-11-05 a scripted browser run of the Nido wallet with virtual passkeys made 11 successful transactions on testnet: it installed a game grant capped at 2 XLM per 17,280 ledgers, made two capped payments, refused a third over-cap payment before signing, and completed a one-guardian recovery.</p>
-    <p>"Run it here" loads the Nido simulation (docs/nido-sim, 5.4 MB, offline) into this slide: create the account, install the grant (its payments go only to the game and the shop), play guess and buy a coffee through Nido's sign dialog, or try a refusal, such as a payment to anyone other than the game. "Open the Nido simulation" opens it on its own, which suits phones. In the recording this slide shows its drawn version, the facts and the simulation's steps as the page runs them (create, grant, a 1 XLM guess, a 3.50 EURC coffee, a refused direct payment), because the canvas recorder cannot capture a live frame.</p>
+    <p>From this slide to slide 17 the presenter walks through one live session of the Nido simulation (docs/nido-sim, 5.4 MB, offline in this page, loaded once and kept across the slides): create the account behind a simulated passkey prompt (a software key in the page, not a device), install the grant (its payments go only to the game and the shop), play guess and buy a coffee through Nido's sign sheet, then try the refusals. The game, the shop and the euro token are written for the demo. Reset demo (or D) starts a new ledger with no account. If the frame cannot load, each slide shows a still of its step, taken from the same page; the recording draws the stills, because the canvas recorder cannot capture a live frame.</p>
     <p class="src">SCF Build submission, Traction Evidence (mainnet, Nido's factory, npm, the testnet run) and its notes; the paper's section "A Nido wallet run used a grant end to end"; docs/nido-sim/README.md.</p>
+  
+  </aside>
+</section>
+
+<section class="slide" data-status="plain" data-draw="nidogrant" aria-roledescription="slide" aria-label="Install the grant">
+  <header class="head"><h2>Install the grant</h2><button class="nido-reset" type="button" data-nido-reset title="A new ledger with no account (D)">Reset demo</button></header>
+  <div class="stage stage-nido">
+    <div class="nido-pane"><div class="nido-slot" data-nido="grant" data-show="grant"><img class="nido-still s-light s-wide" src="stills-2/light-grant-wide.webp" alt="The Nido sheet: let Guess & Coffee spend without asking you; 2 XLM to Game every ~8 min, in Game › guess; 10 EURC to Coffee shop every ~8 min, in Coffee shop › order" decoding="async"><img class="nido-still s-light s-narrow" src="stills-2/light-grant-narrow.webp" alt="The Nido sheet: let Guess & Coffee spend without asking you; 2 XLM to Game every ~8 min, in Game › guess; 10 EURC to Coffee shop every ~8 min, in Coffee shop › order" decoding="async"><img class="nido-still s-dark s-wide" src="stills-2/dark-grant-wide.webp" alt="The Nido sheet: let Guess & Coffee spend without asking you; 2 XLM to Game every ~8 min, in Game › guess; 10 EURC to Coffee shop every ~8 min, in Coffee shop › order" decoding="async"><img class="nido-still s-dark s-narrow" src="stills-2/dark-grant-narrow.webp" alt="The Nido sheet: let Guess & Coffee spend without asking you; 2 XLM to Game every ~8 min, in Game › guess; 10 EURC to Coffee shop every ~8 min, in Coffee shop › order" decoding="async"></div></div>
+    <p class="nido-cap">Approve the grant: two limits, each with its recipient</p>
+  </div>
+  <aside class="notes" data-sec="6">
+    <p>I approve the grant: two limits, each paid only to its recipient.</p>
+  </aside>
+  <aside class="sources">
+    <p>The owner installs the grant with <code>apply_grant</code>, signed by the passkey under the account document's admin rule. The sheet states its limits: 2 XLM to the game every ~8 minutes (100 ledgers), only inside <code>game.guess</code>, and 10 test EURC to the coffee shop, only inside <code>shop.order</code>. The state is the Nido simulation's, offline in this page: a simulated passkey, a test euro token, and a game and a shop written for the demo. On this slide the presenter acts in the live simulation, the same session as the slides before; the still, a screenshot of the same page at this step with its sign sheet open, shows when the live frame cannot load, and in the recording.</p>
+    <p class="src">docs/nido-sim/index.html and README.md (the states and their sheets); the stills in stills-2/ are screenshots of that page (README, "Nido stills"). SCF Build submission, Traction Evidence (context).</p>
+  </aside>
+</section>
+
+<section class="slide" data-status="plain" data-draw="nidoguess" aria-roledescription="slide" aria-label="Play a guess">
+  <header class="head"><h2>Play a guess</h2><button class="nido-reset" type="button" data-nido-reset title="A new ledger with no account (D)">Reset demo</button></header>
+  <div class="stage stage-nido">
+    <div class="nido-pane"><div class="nido-slot" data-nido="guess" data-show="guess"><img class="nido-still s-light s-wide" src="stills-2/light-guess-wide.webp" alt="The Nido sheet: 1 XLM to Game, play guess 3 on Game, 1 of 2 XLM left for ~8 min after this" decoding="async"><img class="nido-still s-light s-narrow" src="stills-2/light-guess-narrow.webp" alt="The Nido sheet: 1 XLM to Game, play guess 3 on Game, 1 of 2 XLM left for ~8 min after this" decoding="async"><img class="nido-still s-dark s-wide" src="stills-2/dark-guess-wide.webp" alt="The Nido sheet: 1 XLM to Game, play guess 3 on Game, 1 of 2 XLM left for ~8 min after this" decoding="async"><img class="nido-still s-dark s-narrow" src="stills-2/dark-guess-narrow.webp" alt="The Nido sheet: 1 XLM to Game, play guess 3 on Game, 1 of 2 XLM left for ~8 min after this" decoding="async"></div></div>
+    <p class="nido-cap">Play: the account checks the rule and the cap</p>
+  </div>
+  <aside class="notes" data-sec="5">
+    <p>I play a guess: the account checks the rule and the cap.</p>
+  </aside>
+  <aside class="sources">
+    <p>A losing guess pays its 1 XLM stake through a transfer nested inside <code>game.guess</code>; the grant pays only the game, and the sheet shows the budget left after it. The state is the Nido simulation's, offline in this page: a simulated passkey, a test euro token, and a game and a shop written for the demo. On this slide the presenter acts in the live simulation, the same session as the slides before; the still, a screenshot of the same page at this step with its sign sheet open, shows when the live frame cannot load, and in the recording.</p>
+    <p class="src">docs/nido-sim/index.html and README.md (the states and their sheets); the stills in stills-2/ are screenshots of that page (README, "Nido stills"). SCF Build submission, Traction Evidence (context).</p>
+  </aside>
+</section>
+
+<section class="slide" data-status="plain" data-draw="nidocoffee" aria-roledescription="slide" aria-label="Buy a coffee">
+  <header class="head"><h2>Buy a coffee</h2><button class="nido-reset" type="button" data-nido-reset title="A new ledger with no account (D)">Reset demo</button></header>
+  <div class="stage stage-nido">
+    <div class="nido-pane"><div class="nido-slot" data-nido="coffee" data-show="coffee"><img class="nido-still s-light s-wide" src="stills-2/light-coffee-wide.webp" alt="The Nido sheet: 3.50 EURC to Coffee shop, order on Coffee shop, within its cap" decoding="async"><img class="nido-still s-light s-narrow" src="stills-2/light-coffee-narrow.webp" alt="The Nido sheet: 3.50 EURC to Coffee shop, order on Coffee shop, within its cap" decoding="async"><img class="nido-still s-dark s-wide" src="stills-2/dark-coffee-wide.webp" alt="The Nido sheet: 3.50 EURC to Coffee shop, order on Coffee shop, within its cap" decoding="async"><img class="nido-still s-dark s-narrow" src="stills-2/dark-coffee-narrow.webp" alt="The Nido sheet: 3.50 EURC to Coffee shop, order on Coffee shop, within its cap" decoding="async"></div></div>
+    <p class="nido-cap">Buy a coffee: the shop’s own limit, in test EURC</p>
+  </div>
+  <aside class="notes" data-sec="4">
+    <p>I buy a coffee, within the shop's limit.</p>
+  </aside>
+  <aside class="sources">
+    <p>An order pays the shop 3.50 test EURC through a transfer nested inside <code>shop.order</code>, inside the 10 EURC window. The state is the Nido simulation's, offline in this page: a simulated passkey, a test euro token, and a game and a shop written for the demo. On this slide the presenter acts in the live simulation, the same session as the slides before; the still, a screenshot of the same page at this step with its sign sheet open, shows when the live frame cannot load, and in the recording.</p>
+    <p class="src">docs/nido-sim/index.html and README.md (the states and their sheets); the stills in stills-2/ are screenshots of that page (README, "Nido stills"). SCF Build submission, Traction Evidence (context).</p>
+  </aside>
+</section>
+
+<section class="slide" data-status="plain" data-draw="nidorefuse1" aria-roledescription="slide" aria-label="Refused: outside the game">
+  <header class="head"><h2>Refused: outside the game</h2><button class="nido-reset" type="button" data-nido-reset title="A new ledger with no account (D)">Reset demo</button></header>
+  <div class="stage stage-nido stage-nido-2">
+    <div class="nido-pair" data-show="direct,other"><div class="nido-pane"><p class="nido-label">pay the game directly</p><div class="nido-slot" data-nido="direct"><img class="nido-still s-light s-wide" src="stills-2/light-direct-wide.webp" alt="The Nido sheet: paying the game directly; your account would refuse this" decoding="async"><img class="nido-still s-light s-narrow" src="stills-2/light-direct-narrow.webp" alt="The Nido sheet: paying the game directly; your account would refuse this" decoding="async"><img class="nido-still s-dark s-wide" src="stills-2/dark-direct-wide.webp" alt="The Nido sheet: paying the game directly; your account would refuse this" decoding="async"><img class="nido-still s-dark s-narrow" src="stills-2/dark-direct-narrow.webp" alt="The Nido sheet: paying the game directly; your account would refuse this" decoding="async"></div></div><div class="nido-pane"><p class="nido-label">lose through game.other</p><div class="nido-slot" data-nido="other"><img class="nido-still s-light s-wide" src="stills-2/light-other-wide.webp" alt="The Nido sheet: a stake taken by another game function; your account would refuse this" decoding="async"><img class="nido-still s-light s-narrow" src="stills-2/light-other-narrow.webp" alt="The Nido sheet: a stake taken by another game function; your account would refuse this" decoding="async"><img class="nido-still s-dark s-wide" src="stills-2/dark-other-wide.webp" alt="The Nido sheet: a stake taken by another game function; your account would refuse this" decoding="async"><img class="nido-still s-dark s-narrow" src="stills-2/dark-other-narrow.webp" alt="The Nido sheet: a stake taken by another game function; your account would refuse this" decoding="async"></div></div></div>
+    <p class="nido-cap">Try to pay outside game.guess: refused before anyone signs</p>
+  </div>
+  <aside class="notes" data-sec="5">
+    <p>Paying the game outside its call is refused before anyone signs.</p>
+  </aside>
+  <aside class="sources">
+    <p>A transfer with no <code>game.guess</code> around it, and a stake taken by another game function, both fail the grant's root condition (the entry's root must be <code>game.guess</code>), so the sheet shows the account would refuse them. The state is the Nido simulation's, offline in this page: a simulated passkey, a test euro token, and a game and a shop written for the demo. On this slide the presenter acts in the live simulation, the same session as the slides before; the still, a screenshot of the same page at this step with its sign sheet open, shows when the live frame cannot load, and in the recording.</p>
+    <p class="src">docs/nido-sim/index.html and README.md (the states and their sheets); the stills in stills-2/ are screenshots of that page (README, "Nido stills"). SCF Build submission, Traction Evidence (context).</p>
+  </aside>
+</section>
+
+<section class="slide" data-status="plain" data-draw="nidorefuse2" aria-roledescription="slide" aria-label="Refused: the cap and the recipient">
+  <header class="head"><h2>Refused: the cap and the recipient</h2><button class="nido-reset" type="button" data-nido-reset title="A new ledger with no account (D)">Reset demo</button></header>
+  <div class="stage stage-nido stage-nido-2">
+    <div class="nido-pair" data-show="overcap,owner"><div class="nido-pane"><p class="nido-label">lose past the cap</p><div class="nido-slot" data-nido="overcap"><img class="nido-still s-light s-wide" src="stills-2/light-overcap-wide.webp" alt="The Nido sheet: 1 XLM to Game, over the limit, 0 of 2 XLM left; your account would refuse this: over the cap" decoding="async"><img class="nido-still s-light s-narrow" src="stills-2/light-overcap-narrow.webp" alt="The Nido sheet: 1 XLM to Game, over the limit, 0 of 2 XLM left; your account would refuse this: over the cap" decoding="async"><img class="nido-still s-dark s-wide" src="stills-2/dark-overcap-wide.webp" alt="The Nido sheet: 1 XLM to Game, over the limit, 0 of 2 XLM left; your account would refuse this: over the cap" decoding="async"><img class="nido-still s-dark s-narrow" src="stills-2/dark-overcap-narrow.webp" alt="The Nido sheet: 1 XLM to Game, over the limit, 0 of 2 XLM left; your account would refuse this: over the cap" decoding="async"></div></div><div class="nido-pane"><p class="nido-label">lose to the game's owner</p><div class="nido-slot" data-nido="owner"><img class="nido-still s-light s-wide" src="stills-2/light-owner-wide.webp" alt="The Nido sheet: 1 XLM to Game owner; your account would refuse this: the payment must go to Game" decoding="async"><img class="nido-still s-light s-narrow" src="stills-2/light-owner-narrow.webp" alt="The Nido sheet: 1 XLM to Game owner; your account would refuse this: the payment must go to Game" decoding="async"><img class="nido-still s-dark s-wide" src="stills-2/dark-owner-wide.webp" alt="The Nido sheet: 1 XLM to Game owner; your account would refuse this: the payment must go to Game" decoding="async"><img class="nido-still s-dark s-narrow" src="stills-2/dark-owner-narrow.webp" alt="The Nido sheet: 1 XLM to Game owner; your account would refuse this: the payment must go to Game" decoding="async"></div></div></div>
+    <p class="nido-cap">Lose past the cap (press twice: the second loss is over it), or lose to the game’s owner</p>
+  </div>
+  <aside class="notes" data-sec="8">
+    <p>I lose twice: the second loss is over the cap, so it is refused. So is paying the game's owner.</p>
+  </aside>
+  <aside class="sources">
+    <p>The window holds 2 XLM of losses. After the earlier guess, the first press of "Lose past the cap" is a loss that fills it, and the second is refused by the cap; a stake the game's owner redirects to itself fails the recipient check ("the payment must go to Game"). The state is the Nido simulation's, offline in this page: a simulated passkey, a test euro token, and a game and a shop written for the demo. On this slide the presenter acts in the live simulation, the same session as the slides before; the still, a screenshot of the same page at this step with its sign sheet open, shows when the live frame cannot load, and in the recording.</p>
+    <p class="src">docs/nido-sim/index.html and README.md (the states and their sheets); the stills in stills-2/ are screenshots of that page (README, "Nido stills"). SCF Build submission, Traction Evidence (context).</p>
   </aside>
 </section>
 
@@ -646,8 +767,8 @@ html.side.side-below #sources-panel { right: 12px; bottom: calc(40vh + 64px); }
 <section class="slide" data-status="plain" data-draw="t1" aria-roledescription="slide" aria-label="Tranche 1: MVP">
   <header class="head"><h2>Tranche 1: MVP</h2></header>
   <div class="stage"><svg role="img" aria-label="Tranche 1, an agent runtime rooted in a Perch grant, by 29 January 2027: agent runtime core; verified Cedar-to-Perch compiler and two-engine test harness; Cedar policy engine as an import-free WebAssembly component; public MVP demo."></svg></div>
-  <aside class="notes" data-sec="8">
-    <p>Tranche 1, by January 29: the runtime core, the verified Cedar compiler and test harness, the contained engine, and a demo.</p>
+  <aside class="notes" data-sec="7">
+    <p>Tranche 1, by January 29: the runtime, the verified Cedar compiler, the contained engine, and a demo.</p>
   </aside>
   <aside class="sources">
     <p>Complete by 2027-01-29. 1. Agent runtime core: a Rust runtime whose root authority is an installed grant on a Perch account, read from Stellar testnet; a subagent is spawned only with a grant derived through rule-core's attenuation steps, and a wider spawn is refused; agents hold no keys. 2. Verified Cedar-to-Perch compiler and two-engine test harness, as on the contained policy runtime slide. 3. Cedar policy engine as an import-free WebAssembly component: official Cedar 4.14.x, zero imports, any policy error refuses, a subagent's request must be permitted by its own policies and every ancestor's. 4. Public MVP demo: a root agent and one subagent, with refused attempts to read outside the granted folder, reach an unapproved website and spawn a child wider than its parent; a reproducible script and a recorded video.</p>
@@ -658,8 +779,8 @@ html.side.side-below #sources-panel { right: 12px; bottom: calc(40vh + 64px); }
 <section class="slide" data-status="plain" data-draw="t2" aria-roledescription="slide" aria-label="Tranche 2: testnet">
   <header class="head"><h2>Tranche 2: testnet</h2></header>
   <div class="stage"><svg role="img" aria-label="Tranche 2, agent payments on Stellar, by 26 March 2027: attenuated grants on the account and subagent signing; x402 payer flow for Perch accounts; grant review views for wallets; threat model and monitoring plan."></svg></div>
-  <aside class="notes" data-sec="7">
-    <p>Tranche 2, by March 26: attenuated grants and subagent signing, x402 payments, grant review views, and monitoring.</p>
+  <aside class="notes" data-sec="6">
+    <p>Tranche 2, by March 26: attenuated grants, subagent signing, x402 payments, review views and monitoring.</p>
   </aside>
   <aside class="sources">
     <p>Complete by 2027-03-26. 1. Attenuated grants on the account and subagent signing: an entry point that installs a grant derived from an existing grant, checked on chain to be no wider than its parent; testnet transactions in which a subagent payment within its cap succeeds and one over its cap is refused by the account, including with the runtime's own check switched off. 2. x402 payer flow: an agent pays an x402-protected endpoint from a Perch account under its grant, through an existing Stellar x402 facilitator; testnet links for one allowed payment and one over-cap refusal. 3. Grant review views for wallets: embeddable views of a grant, a derived subagent grant and what it has left to spend, with an enforcing-simulation preview, built on the existing open-source sign dialog component; a published npm package. 4. Threat model and monitoring plan: a STRIDE threat model and a monitoring plan with alerts on grant installs and removals, recovery wipes, refusals and spending near caps, running against testnet.</p>
@@ -671,7 +792,7 @@ html.side.side-below #sources-panel { right: 12px; bottom: calc(40vh + 64px); }
   <header class="head"><h2>Tranche 3: mainnet</h2></header>
   <div class="stage"><svg role="img" aria-label="Tranche 3, mainnet launch, by 28 May 2027: mainnet release of the account and agent-grant contracts; runtime 1.0 release; mainnet agent payment demonstration; developer documentation."></svg></div>
   <aside class="notes" data-sec="8">
-    <p>Tranche 3, by May 28: the mainnet release after the Audit Bank audit, runtime 1.0, a mainnet demo, and docs.</p>
+    <p>Tranche 3, by May 28: the mainnet release after the Audit Bank audit, runtime 1.0, a demo and docs.</p>
   </aside>
   <aside class="sources">
     <p>Complete by 2027-05-28. 1. Mainnet release of the account and agent-grant contracts: deploy the Tranche 2 account changes to Stellar mainnet through the repository's release workflow, after the Audit Bank audit, with fixes for all critical and high findings; verified source for each contract; a documented upgrade path for existing accounts. 2. Runtime 1.0 release: versioned runtime and evaluator component packages, with an integration guide for agent frameworks. 3. Mainnet agent payment demonstration: an agent under a Perch grant on mainnet pays an x402 endpoint, and an over-cap attempt is refused on chain. 4. Developer documentation: one site covering the account, grants, the runtime, the threat model, the test plan and an operations runbook.</p>
@@ -682,8 +803,8 @@ html.side.side-below #sources-panel { right: 12px; bottom: calc(40vh + 64px); }
 <section class="slide" data-status="plain" data-draw="timeline" aria-roledescription="slide" aria-label="Timeline">
   <header class="head"><h2>Timeline</h2></header>
   <div class="stage"><svg role="img" aria-label="Three tranches on a calendar from December 2026 to June 2027. Tranche 1, MVP, by 29 January 2027: agent runtime core; verified Cedar-to-Perch compiler and two-engine test harness; Cedar policy engine as an import-free WebAssembly component; public MVP demo. Tranche 2, testnet, by 26 March 2027: attenuated grants on the account and subagent signing; x402 payer flow for Perch accounts; grant review views for wallets; threat model and monitoring plan. Tranche 3, mainnet launch, by 28 May 2027: mainnet release of the account and agent-grant contracts; runtime 1.0 release; mainnet agent payment demonstration; developer documentation."></svg></div>
-  <aside class="notes" data-sec="4">
-    <p>Three tranches, three fixed dates: January, March and May.</p>
+  <aside class="notes" data-sec="3">
+    <p>Three tranches: January, March and May.</p>
   </aside>
   <aside class="sources">
     <p>Three tranches, each with four deliverables and a completion date. Tranche 1, MVP, by 2027-01-29: agent runtime core; verified Cedar-to-Perch compiler and two-engine test harness; Cedar policy engine as an import-free WebAssembly component; public MVP demo. Tranche 2, testnet, by 2027-03-26: attenuated grants on the account and subagent signing; x402 payer flow for Perch accounts; grant review views for wallets; threat model and monitoring plan. Tranche 3, mainnet launch, by 2027-05-28: mainnet release of the account and agent-grant contracts; Runtime 1.0 release; mainnet agent payment demonstration; developer documentation.</p>
@@ -719,7 +840,7 @@ html.side.side-below #sources-panel { right: 12px; bottom: calc(40vh + 64px); }
   <p id="np-cur" class="np-cur"></p>
   <div id="np-script" class="np-script"></div>
   <p class="np-next">Next: <span id="np-next"></span></p>
-  <p class="np-keys">N hides this · S sources · R records</p>
+  <p class="np-keys">N hides this · S sources · R records · D resets the Nido demo</p>
 </aside>
 <aside id="sources-panel" hidden aria-label="Sources"></aside>
 <div id="rec-count" hidden role="status" aria-live="assertive"></div>
@@ -1123,29 +1244,35 @@ B.ihitl = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   }
 } };
 
-/* The account document and the agent's grant document, as Cedar-style pseudocode, and why the cap holds. */
+/* The account holds two separate documents: the account document, and beside it the agent's grant document,
+   which the owner's passkey installs with apply_grant. The agent's own key bounces off the account. */
 B.keepcap = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   const T = c.tall;
   // Every space becomes a no-break space, so the pseudocode keeps its indentation and alignment in SVG.
-  const nb = s => s.replace(/ /g, '\u00a0');
-  const card = ([x, y, w, h], k, title, entry, lines, d) => {
+  const nb = s => s.replace(/ /g, ' ');
+  const card = ([x, y, w, h], title, entry, lines, d) => {
     c.at(d);
-    c.rect(x, y, w, h, { k, rx: 16, w: k === 'now' ? 1.1 : .9 });
-    c.text(x + 26, y + (T ? 42 : 44), title, { anchor: 'start', size: T ? .54 : .62, k });
+    c.rect(x, y, w, h, { k: 'now', rx: 16, w: 1.1, fill: 'paper' });
+    c.text(x + 26, y + (T ? 42 : 44), title, { anchor: 'start', size: T ? .54 : .62, k: 'now' });
     c.text(x + w - 26, y + (T ? 42 : 44), entry, { anchor: 'end', size: T ? .38 : .44, font: 'code', k: 'soft' });
-    lines.forEach((s, i) => c.text(x + 26, y + (T ? 88 : 96) + i * (T ? 34 : 40), nb(s), { anchor: 'start', font: 'code', size: T ? .38 : .5, k: s.trim().startsWith('//') ? 'soft' : undefined, step: 30 }));
+    lines.forEach((s, i) => c.text(x + 26, y + (T ? 88 : 96) + i * (T ? 34 : 38), nb(s), { anchor: 'start', font: 'code', size: T ? .38 : .5, k: s.trim().startsWith('//') ? 'soft' : undefined, step: 30 }));
   };
   c.at(60);
-  c.text(T ? 30 : 40, T ? 34 : 34, 'Cedar-style pseudocode: the authoring form we will compile to the account’s rules', { anchor: 'start', size: T ? .38 : .46, k: 'now' });
-  const A = T ? [30, 56, 740, 250] : [30, 56, 690, 270];
-  const G = T ? [30, 336, 740, 360] : [760, 56, 810, 390];
-  card(A, 'now', 'the account document', 'apply_doc', [
+  c.text(T ? 30 : 30, 30, 'Cedar-style pseudocode: the authoring form we will compile to the account’s rules', { anchor: 'start', size: T ? .38 : .46, k: 'now' });
+  // The account: its storage holds the account document and, beside it, each grant document by id.
+  const W = T ? [16, 50, 768, 762] : [20, 46, 1310, 500];
+  c.at(120);
+  c.rect(W[0], W[1], W[2], W[3], { k: 'soft', rx: 22, w: .8 });
+  c.text(W[0] + 24, W[1] + 40, 'the Perch account', { anchor: 'start', size: T ? .5 : .62 });
+  c.text(W[0] + 24, W[1] + (T ? 70 : 74), 'holds the account document and, beside it, each grant document by its id', { anchor: 'start', size: T ? .38 : .48, k: 'soft' });
+  const A = T ? [40, 144, 720, 196] : [44, 140, 520, 200];
+  const G = T ? [40, 450, 720, 338] : [770, 140, 536, 356];
+  card(A, 'the account document', 'apply_doc', [
     'permit (owner_passkey, any action, this_account);',
     '  // apply_doc, apply_grant, remove_grant, …',
     'recovery: guardian-only, 2 of 3',
-    'grants: grant 1, the agent’s',
   ], 200);
-  card(G, 'now', 'the agent’s grant document', 'apply_grant(1, …)', [
+  card(G, 'the agent’s grant document', 'grant 1', [
     'permit (agent_key, call order, shop);',
     'permit (agent_key, pay XLM, shop)',
     '  when { from == this_account && inside shop.order',
@@ -1153,27 +1280,58 @@ B.keepcap = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
     '         && ledger < 65,900,000 };            // ≈ 30 days',
     'forbid (agent_key, any action,',
     '        this_account or its recovery contracts);',
-  ], 900);
-  // The account installs grant 1; only the owner's passkey can change it.
-  c.at(1700);
-  if (T) c.arrow(400, A[1] + A[3] + 4, 400, G[1] - 6, { k: 'now', w: .7 });
-  else c.arrow(A[0] + A[2] + 6, A[1] + 216, G[0] - 8, A[1] + 216, { k: 'now', w: .7 });
+  ], 1100);
+  // The owner's passkey (the account document's admin rule) installs the grant document.
+  c.at(800);
+  if (T) {
+    c.arrow(70, A[1] + A[3] + 8, 70, G[1] - 8, { k: 'now', w: .7 });
+    c.text(96, A[1] + A[3] + 46, 'installed by the owner’s passkey', { anchor: 'start', size: T ? .42 : .44, k: 'now' });
+    c.text(96, A[1] + A[3] + 78, 'apply_grant(1, doc_json)', { anchor: 'start', size: .36, font: 'code', k: 'soft' });
+  } else {
+    const y = A[1] + 92;
+    c.arrow(A[0] + A[2] + 8, y, G[0] - 10, y, { k: 'now', w: .7 });
+    c.text((A[0] + A[2] + G[0]) / 2, y - 44, 'installed by the', { size: .5, k: 'now' });
+    c.text((A[0] + A[2] + G[0]) / 2, y - 16, 'owner’s passkey', { size: .5, k: 'now' });
+    c.text((A[0] + A[2] + G[0]) / 2, y + 36, 'apply_grant(1, …)', { size: .42, font: 'code', k: 'soft' });
+    c.text(A[0] + 26, A[1] + A[3] + 58, 'the account document lists no grants;', { anchor: 'start', size: .5, k: 'soft' });
+    c.text(A[0] + 26, A[1] + A[3] + 92, 'remove_grant(1) takes grant 1 and its rules out', { anchor: 'start', size: .5, k: 'soft' });
+  }
+  // The agent's own key tries to change the account, and bounces off it.
+  c.at(1900);
+  if (T) {
+    const x = 690, y = 900, edge = W[1] + W[3];
+    c.icon('agent', x, y, 50, { k: 'ink' });
+    c.icon('key', x + 34, y + 26, 26, { k: 'now', step: 0 });
+    c.arrow(x, y - 40, x, edge + 12, { k: 'soft', w: .7 });
+    c.cross(x, edge, 26, { k: 'ink' });
+    c.text(x - 50, y - 6, 'the agent’s key calls apply_grant', { anchor: 'end', size: .42 });
+    c.text(x - 50, y + 26, 'refused: it is not the owner’s passkey', { anchor: 'end', size: .38, k: 'soft' });
+  } else {
+    const x = 1466, y = G[1] + 120, edge = W[0] + W[2];
+    c.icon('agent', x, y, 58, { k: 'ink' });
+    c.icon('key', x + 40, y + 30, 30, { k: 'now', step: 0 });
+    c.arrow(x - 52, y, edge + 14, y, { k: 'soft', w: .7 });
+    c.cross(edge, y, 30, { k: 'ink' });
+    c.text(x, y + 82, 'the agent’s key', { size: .56 });
+    c.text(x, y + 116, 'calls apply_grant:', { size: .48, k: 'soft' });
+    c.text(x, y + 146, 'refused', { size: .48, k: 'soft' });
+  }
   // Why the agent cannot raise its cap.
   const why = [
-    ['passkey', 'now', 'Only the owner’s passkey changes a grant', 'apply_grant needs the account document’s own rule'],
+    ['passkey', 'now', 'Only the owner’s passkey installs or removes a grant', 'the account document’s admin rule decides apply_grant'],
     ['proof', 'now', 'Proven: no grant can authorize a call', 'to the account itself or its recovery contracts'],
     ['envelope', 'ink', 'An emailed code gets the agent nothing', 'it holds only its grant’s key'],
   ];
   why.forEach(([ic, k, a, b], i) => {
-    c.at(2200 + i * 350);
-    const [x, y] = T ? [60, 790 + i * 120] : [70 + i * 512, 560];
+    c.at(2400 + i * 350);
+    const [x, y] = T ? [60, 1000 + i * 92] : [70 + i * 512, 616];
     c.icon(ic, x, y, T ? 44 : 48, { k });
     if (ic === 'envelope') c.cross(x + (T ? 30 : 32), y + (T ? 22 : 24), T ? 18 : 20, { k: 'ink', step: 0 });
-    c.text(x + (T ? 52 : 56), y - 4, a, { anchor: 'start', size: T ? .5 : .56 });
-    c.text(x + (T ? 52 : 56), y + (T ? 28 : 30), b, { anchor: 'start', size: T ? .4 : .46, k: 'soft' });
+    c.text(x + (T ? 52 : 56), y - 4, a, { anchor: 'start', size: T ? .48 : .54 });
+    c.text(x + (T ? 52 : 56), y + (T ? 26 : 30), b, { anchor: 'start', size: T ? .38 : .44, k: 'soft' });
   });
-  c.at(3300);
-  c.text(T ? 400 : 800, T ? 1180 : 700, 'the account enforces the cap and the window itself, whatever the agent runs', { size: T ? .42 : .5, k: 'soft' });
+  c.at(3500);
+  c.text(T ? 400 : 800, T ? 1270 : 730, 'the account enforces the cap and the window itself, whatever the agent runs', { size: T ? .42 : .5, k: 'soft' });
 } };
 
 /* Perch in one picture: an account whose grants decide every call, with the decision proved in Lean. */
@@ -1407,48 +1565,25 @@ B.contained = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   } else c.text(P.overT[0], P.overT[1], 'even if the runtime fails, the account refuses an over-cap payment', { anchor: 'start', size: .62 });
 } };
 
-/* Traction through Nido, and the simulation's own steps drawn: the recording shows this drawing. */
-B.nido = { vb: ['0 0 1600 760', '0 0 800 1200'], draw(c) {
+/* Traction through Nido: the facts, beside the simulation's account. */
+B.nido = { vb: ['0 0 760 640', '0 0 800 600'], draw(c) {
   const T = c.tall;
   const rows = [
-    ['factory', 'Perch contracts on Stellar mainnet', 'since 2026-10-26: registry, document compiler, account factory', true],
-    ['passkey', 'Nido creates Perch accounts on mainnet', 'through its factory CBHE…3FAC, on the earlier account design', true],
+    ['factory', 'Perch contracts on Stellar mainnet', 'since 2026-10-26: registry, compiler, account factory', true],
+    ['passkey', 'Nido creates Perch accounts on mainnet', 'through its factory, on the earlier account design', true],
     ['doc', '1,662 npm downloads in 30 days', '@stellar-registry/perch, 2026-10-10 to 2026-11-08', true],
-    ['check', 'A scripted Nido run on testnet, 2026-11-05', '11 transactions: a grant installed, two capped payments, a recovery;|a third, over-cap payment refused before signing', false],
+    ['check', 'A scripted Nido run on testnet, 2026-11-05', '11 transactions: a grant, two capped payments, a recovery;|a third, over-cap payment refused before signing', false],
   ];
   rows.forEach(([ic, a, b, ctx], i) => {
     c.at(100 + i * 380);
-    const y = T ? 74 + i * 116 : 120 + i * 140;
-    const ix = T ? 58 : 100, tx = T ? 106 : 160;
-    c.icon(ic, ix, y, T ? 44 : 52, { k: 'now' });
-    c.text(tx, y - 4, a, { anchor: 'start', size: T ? .54 : .7 });
-    if (ctx) c.chip(tx + c.tw(a, { size: T ? .54 : .7 }) + (T ? 52 : 56), y - 12, 'context', { size: T ? .4 : .44, k: 'soft', tk: 'soft' });
-    b.split('|').forEach((l, j) => c.text(tx, y + (T ? 30 + j * 26 : 34 + j * 28), l, { anchor: 'start', size: T ? .42 : .52, k: 'soft' }));
+    const y = T ? 70 + i * 116 : 70 + i * 140;
+    c.icon(ic, T ? 50 : 40, y, T ? 46 : 46, { k: 'now' });
+    c.text(T ? 100 : 90, y - 4, a, { anchor: 'start', size: T ? .52 : .66 });
+    if (ctx) c.chip((T ? 100 : 90) + c.tw(a, { size: T ? .52 : .66 }) + (T ? 50 : 52), y - 12, 'context', { size: T ? .38 : .42, k: 'soft', tk: 'soft' });
+    b.split('|').forEach((l, j) => c.text(T ? 100 : 90, y + (T ? 30 + j * 26 : 32 + j * 28), l, { anchor: 'start', size: T ? .4 : .48, k: 'soft' }));
   });
   c.at(1700);
-  c.text(T ? 58 : 100, T ? 540 : 690, 'context: reported under Nido’s SCF #41 award, not claimed for this ask', { anchor: 'start', size: T ? .4 : .46, k: 'soft' });
-  // The simulation's steps, as the live frame runs them.
-  c.at(2000);
-  const [px, py, pw, ph] = T ? [30, 590, 740, 600] : [880, 70, 670, 600];
-  c.rect(px, py, pw, ph, { k: 'soft', rx: 18, w: .7 });
-  c.text(px + 30, py + 46, 'the Nido simulation, offline', { anchor: 'start', size: T ? .54 : .62 });
-  c.text(px + 30, py + (T ? 78 : 80), 'soroban-sim; the passkey and the euro token are simulated', { anchor: 'start', size: T ? .4 : .46, k: 'soft' });
-  const steps = [
-    ['Create your Nido account', 'a passkey and Nido’s factory', true],
-    ['Install the grant', 'it pays only the game and the shop', true],
-    ['Guess 3, a 1 XLM stake', '1 of 2 XLM left in the window', true],
-    ['Buy a coffee, 3.50 EURC', '6.5 of 10 EURC left', true],
-    ['Pay the game directly', 'refused: it must happen inside game.guess', false],
-  ];
-  steps.forEach(([a, b, ok], i) => {
-    c.at(2300 + i * 260);
-    const y = py + (T ? 140 : 150) + i * (T ? 92 : 92);
-    c.circle(px + 52, y - 6, T ? 17 : 16, { k: ok ? 'now' : 'ink', w: .6 });
-    c.text(px + 52, y - 5, String(i + 1), { size: T ? .42 : .46, base: 'central', k: ok ? 'now' : undefined, step: 0 });
-    c.text(px + 90, y - 4, a, { anchor: 'start', size: T ? .5 : .6, step: 0 });
-    c.text(px + 90, y + (T ? 26 : 26), b, { anchor: 'start', size: T ? .4 : .46, k: 'soft', step: 0 });
-    if (ok) c.check(px + pw - 44, y - 6, T ? 30 : 30, { k: 'now' }); else c.cross(px + pw - 44, y - 6, T ? 24 : 26, { k: 'ink' });
-  });
+  c.text(T ? 50 : 40, T ? 560 : 620, 'context: reported under Nido’s SCF #41 award, not claimed for this ask', { anchor: 'start', size: T ? .38 : .44, k: 'soft' });
 } };
 
 /* Two uses of the contained policy runtime we will build: a Cedar policy, one request it allows, one it refuses. */
@@ -1606,7 +1741,7 @@ B.sandbox = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   const [x1, y1, x2, y2] = P.a2;
   c.path(`M${x1} ${y1}L${x2} ${y2}L${x2 - (T ? 70 : 90)} ${y2 + (T ? 34 : 44)}`, { k: 'ink', w: .8 });
   c.cross(x2 + 4, y2 - 2, 22, { k: 'ink', step: 0 });
-  c.text(P.a2L[0], P.a2L[1], 'apply_grant, remove_grant, the account document', { anchor: 'start', size: T ? .38 : .44, font: 'code', k: 'soft' });
+  c.text(P.a2L[0], P.a2L[1], 'apply_doc, apply_grant, remove_grant', { anchor: 'start', size: T ? .38 : .44, font: 'code', k: 'soft' });
   // Why it stops there.
   c.at(3500);
   const why = [
@@ -1847,8 +1982,16 @@ const svgOf = s => $('.stage > svg', s);
 function enter(s) { const b = B[s.dataset.draw]; const svg = svgOf(s); if (b && b.enter && svg) b.enter(svg); }
 function leave(s) { const b = B[s.dataset.draw]; const svg = svgOf(s); if (b && b.leave && svg) b.leave(svg); }
 
+// The tall layouts are drawn when they show the slide larger than the wide ones: a stage taller than about
+// 0.81 of its width (1300/1600). The stage is the deck's own box less its margins, so a panel beside or
+// below the slide counts.
+function wantTall() {
+  const d = $('#deck'), pad = Math.min(64, Math.max(16, innerWidth * .042));
+  return d.clientHeight - 200 > (d.clientWidth - 2 * pad) * 1300 / 1600;
+}
 function render() {
-  const tall = innerHeight > innerWidth * 1.1;
+  const tall = wantTall();
+  root.classList.toggle('tall', tall);
   if (tall === tallMode) return;
   if (tallMode !== null && slides[cur]) leave(slides[cur]);
   tallMode = tall;
@@ -1908,6 +2051,7 @@ function go(i, fromHash) {
   if (!fromHash) history.replaceState(null, '', '#' + (i + 1));
   if (!$('#notes-panel').hidden) showNotes();
   if (!$('#sources-panel').hidden) showSources();
+  nidoGo(fresh);
 }
 const next = () => go(cur + 1), prev = () => go(cur - 1);
 
@@ -1951,17 +2095,27 @@ $('#np-reset').addEventListener('click', () => {
 });
 // While the script or the recording panel is shown, the slide shrinks to the rest of the window at 16:9,
 // with the panel beside it, or below it on a narrow or portrait screen.
+// The panel goes wherever it leaves the slide larger: beside it at 16:9, or below it in the top 60%.
 function layoutSide() {
   const on = !$('#notes-panel').hidden || !$('#rec-panel').hidden;
-  const below = innerWidth < 900 || innerHeight > innerWidth;
-  root.classList.toggle('side', on);
-  root.classList.toggle('side-below', on && below);
-  if (!on || below) return;
   const pw = Math.round(Math.min(460, Math.max(320, innerWidth * .28)));
   const k = Math.min((innerWidth - pw - 28) / innerWidth, (innerHeight - 70) / (innerWidth * 9 / 16));
-  root.style.setProperty('--side-w', pw + 'px');
-  root.style.setProperty('--side-k', String(k));
-  root.style.setProperty('--side-top', Math.max(0, (innerHeight - 70 - innerWidth * 9 / 16 * k) / 2) + 'px');
+  const below = innerWidth < 900 || Math.min(innerWidth, innerHeight * .6 * 16 / 9) > innerWidth * k;
+  root.classList.toggle('side', on);
+  root.classList.toggle('side-below', on && below);
+  if (on && !below) {
+    root.style.setProperty('--side-w', pw + 'px');
+    root.style.setProperty('--side-k', String(k));
+    root.style.setProperty('--side-top', Math.max(0, (innerHeight - 70 - innerWidth * 9 / 16 * k) / 2) + 'px');
+  }
+  fitChrome();
+  render();
+  nidoPlace();
+}
+function fitChrome() {
+  root.classList.remove('tight');
+  const ch = $('.chrome');
+  if (ch.scrollWidth > ch.clientWidth + 1) root.classList.add('tight');
 }
 new MutationObserver(layoutSide).observe($('#notes-panel'), { attributes: true, attributeFilter: ['hidden'] });
 new MutationObserver(layoutSide).observe($('#rec-panel'), { attributes: true, attributeFilter: ['hidden'] });
@@ -1977,7 +2131,7 @@ function toggleTheme() {
   syncThemeLabel();
   $$('iframe[src]').forEach(syncFrameTheme);
 }
-/* Live frame: the simulation loads on request and follows the deck's theme. */
+/* The live Nido frames follow the deck's theme. */
 function syncFrameTheme(f) {
   try {
     const d = f.contentDocument;
@@ -1986,21 +2140,6 @@ function syncFrameTheme(f) {
     if (t) d.documentElement.setAttribute('data-theme', t); else d.documentElement.removeAttribute('data-theme');
   } catch (_) { /* a frame we cannot reach keeps its own theme */ }
 }
-function startFrame(f) {
-  if (!f || f.getAttribute('src')) return;
-  let src = f.dataset.src;
-  const t = root.dataset.theme;
-  if (t) src += (src.includes('?') ? '&' : '?') + 'theme=' + t;
-  f.addEventListener('load', () => { syncFrameTheme(f); const w = f.parentNode.querySelector('.frame-wait'); if (w) w.remove(); });
-  f.setAttribute('src', src);
-}
-$$('[data-run]').forEach(b => b.addEventListener('click', e => {
-  e.stopPropagation();
-  const st = b.closest('.stage-sim');
-  st.classList.add('live');
-  startFrame($('iframe', st));
-  const u = $('[data-unrun]', st); if (u) u.focus();
-}));
 $$('[data-doc]').forEach(b => b.addEventListener('click', e => {
   e.stopPropagation();
   const st = b.closest('.stage-doc'), open = !st.classList.contains('open');
@@ -2008,12 +2147,6 @@ $$('[data-doc]').forEach(b => b.addEventListener('click', e => {
   $('.doc-details', st).hidden = !open;
   b.setAttribute('aria-expanded', String(open));
   b.textContent = open ? 'Back to the documents' : 'Show the document fields';
-}));
-$$('[data-unrun]').forEach(b => b.addEventListener('click', e => {
-  e.stopPropagation();
-  const st = b.closest('.stage-sim');
-  st.classList.remove('live');
-  const r = $('[data-run]', st); if (r) r.focus();
 }));
 if (!root.dataset.recFrame) try { const t = localStorage.getItem('perch-scf-deck-theme'); if (t === 'light' || t === 'dark') root.dataset.theme = t; } catch (_) { /* storage unavailable */ }
 const qs = new URLSearchParams(location.search);
@@ -2033,7 +2166,7 @@ addEventListener('click', e => {
   if (b && !b.closest('.slide')) b.blur();
 });
 
-const inControl = t => t && t.closest && t.closest('a, button, iframe, .frame-wrap, .doc-details');
+const inControl = t => t && t.closest && t.closest('a, button, iframe, .doc-details');
 addEventListener('keydown', e => {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   const k = e.key;
@@ -2048,6 +2181,7 @@ addEventListener('keydown', e => {
   else if (k === 's' || k === 'S') toggleSources();
   else if ((k === 'r' || k === 'R') && !root.classList.contains('still')) toggleRecord();
   else if (k === 'p' || k === 'P') pauseRecording();
+  else if ((k === 'd' || k === 'D') && nidoTargets[cur]) nidoReset();
   else if (k === 'Escape' && (R.state === 'arming' || R.state === 'counting')) stopRecording();
 });
 
@@ -2200,6 +2334,14 @@ async function paintSlide(doc, i) {
     if (n.nodeType !== 1) return;
     const cs = win.getComputedStyle(n);
     if (cs.display === 'none') return;
+    if (n.tagName.toLowerCase() === 'img') {
+      try { await n.decode(); } catch (_) { return; }
+      const r = n.getBoundingClientRect(), iw = n.naturalWidth, ih = n.naturalHeight;
+      if (!iw || !ih || !r.width || !r.height) return;
+      const k = Math.min(r.width / iw, r.height / ih), w = iw * k, h = ih * k;
+      g.drawImage(n, r.left + (r.width - w) / 2, r.top + (r.height - h) / 2, w, h);
+      return;
+    }
     if (n.tagName.toLowerCase() === 'svg') {
       const { img, r } = await svgImage(n, win, doc);
       if (!r.width || !r.height) return;
@@ -2435,10 +2577,104 @@ $('#rp-pause').addEventListener('click', pauseRecording);
 $('#rp-stop').addEventListener('click', stopRecording);
 $('#src-btn').addEventListener('click', toggleSources);
 
+/* ---------- Nido: one live session across the Nido slides ----------
+   One frame of the Nido simulation (present=live) loads once, preloads its reactor and a ledger, and is never
+   reloaded or moved to another parent: it lies in a fixed layer over the current Nido slide's slot
+   ([data-show]) and is hidden, not removed, on the other slides. Entering a Nido slide shows that step's
+   controls, so the presenter creates the account, approves and tries the refusals in one session; going back
+   shows the earlier step again, with the state kept. Until the frame reports preloaded (a file:// copy without
+   ../nido-sim, a slow device), each slide shows its still. The recording always draws the stills. */
+const nidoTargets = slides.map(s => $('[data-show]', s));
+const nidoFirst = nidoTargets.findIndex(Boolean);
+const nidoOn = nidoFirst >= 0 && !root.dataset.recFrame && !root.classList.contains('still');
+const nido = { el: null, pre: false, shown: null, resetting: false, state: null };
+let nidoTimer, nidoSettled = 0;
+function nidoStart() {
+  if (!nidoOn || nido.el) return;
+  const el = document.createElement('iframe');
+  el.className = 'nido-live';
+  el.title = 'The Nido simulation, live';
+  el.src = `../nido-sim/index.html?embed=1&present=live&preload=1&theme=${isDark() ? 'dark' : 'light'}`;
+  el.addEventListener('load', () => syncFrameTheme(el));
+  document.body.appendChild(el);
+  nido.el = el;
+}
+function nidoPost(m) { try { nido.el.contentWindow.postMessage(m, '*'); } catch (_) { /* the stills stay */ } }
+// Each Nido slide names its controls in data-show; the step is the slide's drawing name.
+function nidoShow() {
+  const t = nidoTargets[cur];
+  if (!nido.pre || !t) return;
+  const step = slides[cur].dataset.draw;
+  if (nido.shown === step) return;
+  nido.shown = step;
+  nidoPost({ type: 'nido-sim:show', controls: t.dataset.show.split(','), step });
+}
+// The frame takes the slot's own size and the slide's scale, so a scaled slide (the script panel) scales it too.
+function nidoPlace() {
+  const el = nido.el, t = nidoTargets[cur];
+  if (!el) return;
+  if (!nido.pre || !t) { el.classList.remove('on'); return; }
+  const on = el.classList.contains('on');
+  if (!on && performance.now() < nidoSettled) return;
+  const r = t.getBoundingClientRect(), w = t.offsetWidth, h = t.offsetHeight;
+  if (!w || !h) return;
+  const k = r.width / w;
+  Object.assign(el.style, { left: r.left + 'px', top: r.top + 'px', width: w + 'px', height: h + 'px', transform: Math.abs(k - 1) > .002 ? `scale(${k})` : '' });
+  if (!on) { void el.offsetWidth; el.classList.add('on'); }
+}
+// From one Nido slide to the next the frame stays shown and moves; from any other slide it fades in once the slide has settled.
+function nidoGo(fresh) {
+  if (!nidoOn) return;
+  const t = nidoTargets[cur];
+  if (t || cur >= nidoFirst - 3) nidoStart();
+  if (!t) nido.shown = null;
+  if (fresh) {
+    nidoSettled = performance.now() + (still() ? 0 : 720);
+    if (!t && nido.el) nido.el.classList.remove('on');
+  }
+  nidoShow();
+  nidoPlace();
+  clearTimeout(nidoTimer);
+  nidoTimer = setTimeout(nidoPlace, Math.max(0, nidoSettled - performance.now()) + 20);
+}
+// Reset demo: a new ledger with no account (the reactor stays compiled), and back to the first Nido slide.
+function nidoReset() {
+  if (!nido.pre) return;
+  nido.resetting = true;
+  nido.shown = null;
+  nidoPost({ type: 'nido-sim:reset' });
+  if (cur !== nidoFirst) go(nidoFirst); else nidoShow();
+}
+$$('[data-nido-reset]').forEach(b => b.addEventListener('click', nidoReset));
+addEventListener('message', e => {
+  if (!nido.el || e.source !== nido.el.contentWindow) return;
+  const d = e.data;
+  if (!d || typeof d !== 'object') return;
+  if (d.type === 'nido-sim:preloaded') {
+    nido.pre = true;
+    root.dataset.nidoLive = '1';
+    nido.shown = null;
+    nidoShow();
+    nidoPlace();
+  } else if (d.type === 'nido-sim:state') {
+    nido.state = d;
+    // After a decision or a slide change the deck takes its keys back (N, S, T, D), without moving the page.
+    if (document.activeElement === nido.el) nido.el.blur();
+    if (nido.resetting) { nido.resetting = false; nido.shown = null; nidoShow(); }
+  } else if (d.type === 'nido-sim:key') {
+    // A click in the frame keeps the slide keys working.
+    if (d.key === 'ArrowRight' || d.key === 'PageDown') next();
+    else if (d.key === 'ArrowLeft' || d.key === 'PageUp') prev();
+  }
+});
+addEventListener('resize', nidoPlace);
+if (nidoOn) setTimeout(nidoStart, 1500);
+
 slides.forEach(s => { s.setAttribute('aria-hidden', 'true'); s.inert = true; });
 render();
 const start = parseInt(location.hash.slice(1), 10);
 go(start ? start - 1 : 0, true);
+fitChrome();
 if (qs.get('notes') === '1') toggleNotes();
 })();
 </script>
