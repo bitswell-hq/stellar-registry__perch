@@ -578,7 +578,7 @@ as_ci() {
 # SignerData entry that stores that signer. Then fund the ci key, which also
 # pays, as the delegate does.
 substitute_delegate() { # project author registry
-    local project="$1" author="$2" reg="$3" count id rule real="" key got json entry
+    local project="$1" author="$2" reg="$3" count id rule real="" key got json entry label live params
     count="$(read_call "$author" get_context_rules_count)"
     [[ "$count" =~ ^[0-9]+$ ]] || die "$network: cannot read the $project author's rules ($author)"
     for ((id = 0; id < count + 32; id++)); do
@@ -603,13 +603,15 @@ substitute_delegate() { # project author registry
             '{last_modified_ledger_seq: $at, ext: "v0",
               data: (.contract_data.val.map |= map(if .key.symbol == "signer" then .val.vec[1].address = $g else . end))}' <<<"$json" |
             stellar xdr encode --type LedgerEntry)"
-        rpc fork_setLedgerEntry "$(jq -cn --arg e "$entry" --argjson l "$(jq -r '.entries[0].liveUntilLedgerSeq' <<<"$got")" \
-            --arg lb "$project author's ci-publish delegate $real -> the ci key" \
-            '{entry: $e, liveUntilLedgerSeq: $l, label: $lb}')" >/dev/null
-        labels+=("fork_setLedgerEntry: $project author's ci-publish delegate $real -> the ci key")
-        rpc fork_setBalance "$(jq -cn --arg a "$ci_g" --arg l "fund the ci key, the publishes' source" \
-            '{account: $a, xlm: 1000, label: $l}')" >/dev/null
-        labels+=("fork_setBalance: fund the ci key, the publishes' source")
+        label="$project author's ci-publish delegate $real -> the ci key"
+        live="$(jq -r '.entries[0].liveUntilLedgerSeq' <<<"$got")"
+        params="$(jq -cn --arg e "$entry" --argjson l "$live" --arg lb "$label" '{entry: $e, liveUntilLedgerSeq: $l, label: $lb}')"
+        rpc fork_setLedgerEntry "$params" >/dev/null
+        labels+=("fork_setLedgerEntry: $label")
+        label="fund the ci key, the publishes' source"
+        params="$(jq -cn --arg a "$ci_g" --arg l "$label" '{account: $a, xlm: 1000, label: $l}')"
+        rpc fork_setBalance "$params" >/dev/null
+        labels+=("fork_setBalance: $label")
         log "$network: the $project author's ci-publish delegate $real is the throwaway ci key $ci_g on the fork"
         return
     done
