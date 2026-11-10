@@ -25,7 +25,7 @@ Solid cyan in an engraved frame is what Perch does, as the main paper presents i
 | 6 | `source/html/sections/authorization.html`; `source/figures/fig-auth-path.steps.json`; `crates/perch-smart-account/src/auth.rs` |
 | 7 | Nido 97105a0b `contracts/factory/src/contract.rs`, `packages/frontend/src/lib/policy/docDraft.ts`, `DEPLOYED.md`; `crates/perch-smart-account/src/lib.rs` (the admin rule); `docs/nido-sim/README.md` |
 | 8 | `motivation.html` (`apply_scope`, the document compiler); `docs/auth-root.md`; `docs/nido-sim/README.md` |
-| 9 | `crates/integration-tests/tests/auth_root.rs`; `docs/auth-root.md`; `crates/perch-ir/src/doc.rs` (`AuthRoot`) |
+| 9 | `crates/integration-tests/tests/auth_root.rs`; `docs/auth-root.md`; `crates/perch-ir/src/doc.rs` (`AuthRoot`); `docs/nido-sim/README.md` (the recipient pin) |
 | 10 | The simulation's coffee shop and its simulated EURC test token (`docs/nido-sim/`; simulation and demos only); the rule conditions from `docs/auth-root.md` |
 | 11 | `docs/nido-sim/index.html`, the Nido simulation page, and its `README.md` |
 | 12 | `motivation.html`, `grants.html`, `source/html/sign-dialog.html`; `docs/sign-dialog/nido.html`, `NOTICE.md` |
