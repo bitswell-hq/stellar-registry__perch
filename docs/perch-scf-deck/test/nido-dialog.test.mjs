@@ -112,6 +112,19 @@ for (const name of engines) {
         check(after !== before, `${tag}: the presenter's click moves the balances line: "${before}" -> "${after}"`);
       }
     }
+    // Reset demo, then Next at once: a new ledger has no account, so Next opens the passkey prompt again
+    // (and does not skip to the grant on the old session's state).
+    await page.locator('.slide.active .nido-reset').click();
+    await page.keyboard.press('ArrowRight');
+    let r = null;
+    for (let t = 0; t < 80; t++) {
+      await page.waitForTimeout(100);
+      r = await probe();
+      if (r && r.size && r.inFrame && r.inView && r.topmost && r.kind) break;
+    }
+    const step = await page.evaluate(() => document.querySelector('.slide.active').dataset.step);
+    const cont = await frame.locator('#nido-sheet button').filter({ hasText: /^Continue$/ }).first().isVisible().catch(() => false);
+    check(!!r && r.kind === 'passkey' && r.size && r.inFrame && r.inView && r.topmost && cont && step === '1', `${name}: Reset demo, then an immediate Next opens the passkey prompt (Continue visible) on step 1 (step ${step}, ${JSON.stringify(r)})`);
     check(errors.length === 0, `${name}: no page errors ${JSON.stringify(errors)}`);
   } catch (e) {
     check(false, `${name}: ${e.message.split('\n')[0]}`);

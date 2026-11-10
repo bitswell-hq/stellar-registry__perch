@@ -139,8 +139,6 @@ html[data-rec-frame] .stage-links .act { display: none; }
 .nido-main { min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: 10px; }
 .nido-slot { position: relative; min-height: 0; min-width: 0; border: 1px solid var(--rule); border-radius: 14px; overflow: hidden; background: var(--paper-2); }
 .nido-shot { position: absolute; inset: 0; display: none; }
-.nido-shot-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.nido-half { position: relative; min-width: 0; min-height: 0; }
 .nido-cap { margin: 0; font-size: clamp(15px, 1.4vw, 20px); color: var(--ink); text-align: center; }
 .nido-cap span { display: none; }
 .slide[data-step="1"] .nido-shot[data-k="1"] { display: grid; }
@@ -201,7 +199,6 @@ html.tall .nido-steps { display: flex; flex-wrap: wrap; gap: 2px 12px; }
 html.tall .nido-steps .sn { width: 18px; height: 18px; font-size: 11px; }
 html.tall .nido-steps button { gap: 5px; padding: 1px 0; }
 html.tall .nido-side .nido-sim { margin-top: 0; }
-html.tall .nido-shot-2 { grid-template-columns: none; grid-template-rows: repeat(2, minmax(0, 1fr)); }
 /* the live simulation: one frame, laid over the Nido slide's slot once it has preloaded; it stays put across the steps */
 .nido-live {
   position: fixed; left: 0; top: 0; z-index: 4; border: 0; border-radius: 14px; background: var(--paper-2);
@@ -2180,7 +2177,7 @@ $('#src-btn').addEventListener('click', toggleSources);
 const nidoTargets = slides.map(s => (stepsOf(s) ? $('.nido-slot', s) : null));
 const nidoFirst = nidoTargets.findIndex(Boolean);
 const nidoOn = nidoFirst >= 0 && !root.dataset.recFrame && !root.classList.contains('still');
-const nido = { el: null, pre: false, shown: null, opened: null, resetting: false, state: null };
+const nido = { el: null, pre: false, shown: null, opened: null, resetting: false, state: null, held: null };
 let nidoTimer, nidoSettled = 0;
 function nidoStart() {
   if (!nidoOn || nido.el) return;
@@ -2211,7 +2208,9 @@ function nidoOpen() {
   const s = slides[cur], k = stepOf(s), key = cur + '.' + k, control = stepsOf(s)[k - 1];
   if (nido.opened === key || (nido.state && nido.state.done && nido.state.done[control])) return false;
   nido.opened = key;
-  nidoPost({ type: 'nido-sim:act', control, step: `${s.dataset.draw}-${k}` });
+  // During a reset the press waits for the new ledger's state, so it is not run on the old session.
+  const act = { type: 'nido-sim:act', control, step: `${s.dataset.draw}-${k}` };
+  if (nido.resetting) nido.held = act; else nidoPost(act);
   return true;
 }
 // The frame takes the slot's own size and the slide's scale, so a scaled slide (the script panel) scales it too.
@@ -2248,6 +2247,9 @@ function nidoReset() {
   if (!nido.pre) return;
   nido.resetting = true;
   nido.shown = null;
+  // Forget the old session's state at once, so a quick Next opens the passkey prompt instead of skipping it.
+  nido.state = null;
+  nido.held = null;
   nidoPost({ type: 'nido-sim:reset' });
   if (cur !== nidoFirst) go(nidoFirst); else setStep(1);
 }
@@ -2263,10 +2265,18 @@ addEventListener('message', e => {
     nidoShow();
     nidoPlace();
   } else if (d.type === 'nido-sim:state') {
+    // During a reset, a state still from the old session (an account already created) is stale.
+    if (nido.resetting && d.done && d.done.create) return;
     nido.state = d;
     // After a decision or a slide change the deck takes its keys back (N, S, T, D), without moving the page.
     if (document.activeElement === nido.el) nido.el.blur();
-    if (nido.resetting) { nido.resetting = false; nido.shown = null; nidoShow(); }
+    if (nido.resetting) {
+      nido.resetting = false;
+      nido.shown = null;
+      nidoShow();
+      if (nido.held) nidoPost(nido.held);
+      nido.held = null;
+    }
   } else if (d.type === 'nido-sim:key') {
     // A click in the frame keeps the slide keys working, step by step.
     if (d.key === 'ArrowRight' || d.key === 'PageDown') next();
