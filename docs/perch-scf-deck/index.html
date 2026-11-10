@@ -280,8 +280,7 @@ html[data-rec-frame] .stage-links .act { display: none; }
   width: 16px; height: 16px; display: grid; place-items: center; border-radius: 50%;
 }
 .marks svg { width: 12px; height: 12px; overflow: visible; transition: transform .3s ease; }
-.marks .m-title circle, .marks .m-cited circle, .marks .m-plain circle { fill: var(--now); opacity: .45; }
-.marks .m-title circle, .marks .m-cited circle, .marks .m-plain circle { fill: var(--ink-2); }
+.marks .m-title circle, .marks .m-cited circle, .marks .m-plain circle { fill: var(--ink-2); opacity: .45; }
 .marks button[aria-current="true"] svg { transform: scale(1.55); }
 .marks button[aria-current="true"] circle { opacity: 1; }
 .count { font-variant-numeric: tabular-nums; min-width: 4.5ch; text-align: right; }
@@ -853,7 +852,6 @@ class Ctx {
     e.setAttribute('stroke-width', o.w != null ? o.w * (o.raw ? 1 : this.sw) : this.sw);
     if (o.fillOp != null) e.setAttribute('fill-opacity', o.fillOp);
     if (o.op != null) e.setAttribute('opacity', o.op);
-    if (o.dash) e.setAttribute('stroke-dasharray', o.dash);
     e.style.setProperty('--d', d + 'ms');
     return e;
   }
@@ -900,15 +898,14 @@ class Ctx {
     const g = E('g', { transform: `translate(${x} ${y}) scale(${f2(sc)})` }, o.p || this.svg);
     const d = this._d(o);
     const k = o.k || 'ink';
-    const ik = k;
     (ICONS[name] || []).forEach(([tag, a]) => {
       const e = E(tag, a, g);
       const small = tag === 'circle' && a.r != null && a.r < 3;
       const dot = { soft: 'soft', now: 'now', seal: 'seal' }[k] || 'ink';
-      this._paint(e, { k: ik, w: this.sw / sc * (o.w || 1), raw: true, fill: small ? dot : o.fill, anim: o.anim || null }, d);
+      this._paint(e, { k, w: this.sw / sc * (o.w || 1), raw: true, fill: small ? dot : o.fill, anim: o.anim || null }, d);
     });
     if (name === 'tree') TREE_DOTS.forEach(([cx, cy]) => {
-      this._paint(E('circle', { cx, cy, r: 3 }, g), { k: ik, fill: k === 'now' ? 'now' : 'soft', w: this.sw / sc, raw: true, anim: 'an-fade' }, d);
+      this._paint(E('circle', { cx, cy, r: 3 }, g), { k, fill: k === 'now' ? 'now' : 'soft', w: this.sw / sc, raw: true, anim: 'an-fade' }, d);
     });
     return g;
   }
@@ -1236,11 +1233,11 @@ B.oneplace = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
     const y0 = [70, 470, 880][i];
     if (T) {
       c.text(40, y0 + 30, h, { anchor: 'start', size: .6, k: hk === 'now' ? 'now' : undefined });
-      lines.forEach((s, j) => c.text(330, y0 + 140 + j * 38, s, { anchor: 'start', size: j ? .46 : .52, k: j ? (i === 2 ? (j === 1 ? 'next' : 'now') : 'soft') : (i === 2 ? 'now' : undefined), step: 40 }));
+      lines.forEach((s, j) => c.text(330, y0 + 140 + j * 38, s, { anchor: 'start', size: j ? .46 : .52, k: j ? (i === 2 ? 'now' : 'soft') : (i === 2 ? 'now' : undefined), step: 40 }));
     } else {
       const cx = [295, 800, 1305][i];
       c.text(cx, 116, h, { size: .66, k: hk === 'now' ? 'now' : undefined });
-      lines.forEach((s, j) => c.text(cx, 664 + j * 34, s, { size: j ? .46 : .52, k: j ? (i === 2 ? (j === 1 ? 'next' : 'now') : 'soft') : (i === 2 ? 'now' : undefined), step: 40 }));
+      lines.forEach((s, j) => c.text(cx, 664 + j * 34, s, { size: j ? .46 : .52, k: j ? (i === 2 ? 'now' : 'soft') : (i === 2 ? 'now' : undefined), step: 40 }));
     }
     c.at(400 + i * 900);
     if (i === 0) {
@@ -1323,7 +1320,7 @@ B.contained = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
     pol: [180, 10, 440, 112], polT: [400, 48], polC: [[210, 82], [210, 106]],
     p1: [300, 122, 200, 186], p2: [500, 122, 600, 186], ch1: [196, 150], ch2: [604, 150],
     E1: [30, 190, 350, 230], E2: [420, 190, 350, 230], link: [380, 305, 420, 305],
-    linkL: [[400, 466, .5, 'next', 'the same decision'], [400, 498, .42, 'soft', 'proved for the Rust translation,'], [400, 526, .42, 'soft', 'tested for the compiled contract'], [400, 556, .42, 'soft', 'caps and windows: the account alone'], [400, 588, .42, 'now', 'today: a prototype fragment proof']],
+    linkL: [[400, 466, .5, 'now', 'the same decision'], [400, 498, .42, 'soft', 'proved for the Rust translation,'], [400, 526, .42, 'soft', 'tested for the compiled contract'], [400, 556, .42, 'soft', 'caps and windows: the account alone'], [400, 588, .42, 'now', 'today: a prototype fragment proof']],
     ag: [[90, 724, 54], [160, 738, 42]], agL: [[60, 806], [60, 834]], toEng: [110, 690, 110, 426], reqL: [128, 640],
     ky: [300, 690, 440, 112], e2k: [150, 424, 316, 686], k2a: [690, 686, 600, 426],
     tested: [400, 900], proved: [400, 940], over: [96, 1024], overT: [136, 1030],
@@ -1331,7 +1328,7 @@ B.contained = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
     pol: [580, 14, 440, 112], polT: [800, 52], polC: [[612, 88], [612, 114]],
     p1: [700, 126, 320, 226], p2: [900, 126, 1280, 226], ch1: [480, 168], ch2: [1120, 168],
     E1: [90, 230, 460, 190], E2: [1050, 230, 460, 190], link: [550, 325, 1050, 325],
-    linkL: [[800, 304, .6, 'next', 'the same decision'], [800, 360, .5, 'soft', 'proved for the Rust translation · tested for the compiled contract'], [800, 392, .46, 'soft', 'covers call matching; caps and time windows: the account alone'], [800, 424, .46, 'now', 'today: a prototype proof for a small fragment']],
+    linkL: [[800, 304, .6, 'now', 'the same decision'], [800, 360, .5, 'soft', 'proved for the Rust translation · tested for the compiled contract'], [800, 392, .46, 'soft', 'covers call matching; caps and time windows: the account alone'], [800, 424, .46, 'now', 'today: a prototype proof for a small fragment']],
     ag: [[150, 548, 56], [226, 562, 42]], agL: [[290, 540], [290, 572]], toEng: [180, 496, 180, 426], reqL: [198, 470],
     ky: [610, 470, 330, 120], e2k: [470, 424, 606, 530], k2a: [940, 530, 1170, 426],
     tested: [90, 672], proved: [1050, 672], over: [470, 734], overT: [500, 742],
@@ -1348,17 +1345,17 @@ B.contained = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   c.chip(P.ch1[0], P.ch1[1], 'evaluated', { k: 'now', tk: 'now', size: T ? .42 : .48, fill: 'paper' });
   c.chip(P.ch2[0], P.ch2[1], 'compiled', { k: 'now', tk: 'now', size: T ? .42 : .48, fill: 'paper' });
   // Off chain: the runtime's contained engine. On chain: the account's compiled rule.
-  const box = ([x, y, w, h], k, ic, t1, t2, sub, uses, d) => {
+  const box = ([x, y, w, h], ic, t1, t2, sub, uses, d) => {
     c.at(d);
-    c.rect(x, y, w, h, { k, rx: 16, w: k === 'now' ? 1.1 : .9 });
-    c.icon(ic, x + (T ? 44 : 56), y + (T ? 50 : 60), T ? 46 : 52, { k });
+    c.rect(x, y, w, h, { k: 'now', rx: 16, w: 1.1 });
+    c.icon(ic, x + (T ? 44 : 56), y + (T ? 50 : 60), T ? 46 : 52, { k: 'now' });
     if (T) { c.text(x + 80, y + 46, t1, { anchor: 'start', size: .52 }); c.text(x + 80, y + 76, t2, { anchor: 'start', size: .52 }); }
     else c.text(x + 104, y + 66, t1 + ' ' + t2, { anchor: 'start', size: .68 });
-    c.text(x + (T ? 22 : 30), y + (T ? 122 : 116), sub, { anchor: 'start', size: T ? .42 : .52, k });
+    c.text(x + (T ? 22 : 30), y + (T ? 122 : 116), sub, { anchor: 'start', size: T ? .42 : .52, k: 'now' });
     uses.forEach((s, i) => c.text(x + (T ? 22 : 30), y + (T ? 166 + i * 30 : 160), s, { anchor: 'start', size: T ? .42 : .5, k: 'soft' }));
   };
-  box(P.E1, 'next', 'policy', 'contained', 'policy engine', T ? 'off chain, no imports' : 'off chain · official Cedar, no imports', T ? ['files · websites ·', 'signing · spawning'] : ['files · websites · signing · spawning'], 1000);
-  box(P.E2, 'now', 'account', 'the Perch', 'account', T ? 'on chain, the compiled rule' : 'on chain · the compiled rule', T ? ['payments, contract calls', 'and caps'] : ['payments · contract calls · caps'], 1300);
+  box(P.E1, 'policy', 'contained', 'policy engine', T ? 'off chain, no imports' : 'off chain · official Cedar, no imports', T ? ['files · websites ·', 'signing · spawning'] : ['files · websites · signing · spawning'], 1000);
+  box(P.E2, 'account', 'the Perch', 'account', T ? 'on chain, the compiled rule' : 'on chain · the compiled rule', T ? ['payments, contract calls', 'and caps'] : ['payments · contract calls · caps'], 1300);
   c.at(1800);
   c.line(...P.link, { k: 'now', w: .8 });
   c.head(P.link[0], P.link[1], Math.PI, { k: 'now', w: .8 });
@@ -1579,7 +1576,7 @@ B.timeline = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
     const dx = X(d.date);
     c.at(500 + i * 500);
     c.circle(dx, A.y, T ? 11 : 10, { k: 'now', fill: 'now', w: .3 });
-    c.text(dx, A.y + 40, T ? `T${i + 1}` : d.date, { size: T ? .48 : .5, font: T ? undefined : 'code', k: T ? undefined : 'next' });
+    c.text(dx, A.y + 40, T ? `T${i + 1}` : d.date, { size: T ? .48 : .5, font: T ? undefined : 'code', k: T ? undefined : 'now' });
     if (T) c.text(dx, A.y + 70, d.date, { size: .42, font: 'code', k: 'now' });
     const [x, y, w, h] = T ? [40, 240 + i * 340, 720, 314] : [70 + i * 492, 236, 470, 440];
     if (!T) c.curve(dx, A.y + 52, x + w / 2, y - 6, { k: 'now', w: .6, dir: 'v', head: true });
@@ -1929,7 +1926,7 @@ addEventListener('click', e => {
   if (b && !b.closest('.slide')) b.blur();
 });
 
-const inControl = t => t && t.closest && t.closest('a, button, iframe, .frame-wrap');
+const inControl = t => t && t.closest && t.closest('a, button, iframe, .frame-wrap, .doc-details');
 addEventListener('keydown', e => {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   const k = e.key;
