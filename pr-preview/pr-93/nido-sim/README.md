@@ -171,7 +171,8 @@ every request.
   Requests: `{op:"guess", number:0–9, entry?:"guess"|"other",
   stake_to?:"owner"}`,
   `{op:"order", cents:1–5000}`, `{op:"transfer", token:"xlm"|"eurc",
-  cents:1–5000}`, `{op:"advance", ledgers:1–10000}`, `{op:"install_grant"}`;
+  cents:1–5000}`, `{op:"advance", ledgers:1–10000}`, `{op:"install_grant",
+  grant?:"shop"}`;
   at most 40. Anything else is ignored.
 - `&review=<base64url JSON request>`: starts from a new ledger, runs
   `scenario` (if any) as above, then opens the sheet for this one request and
@@ -245,7 +246,8 @@ every request.
   `{type:"nido-sim:preloaded"}`. Messages to the frame:
   - `{type:"nido-sim:show", controls:[…], step}` shows those controls. Names:
     `create`, `grant`, `guess` (the number picker, at 3, a loss, and Play
-    guess), `coffee`, `direct`, `other`, `owner`, `overcap`, `advance`;
+    guess), `coffee`, `direct`, `other`, `owner`, `overcap`, `shopcap`
+    ("Order past the cap", shown only in this view), `advance`;
     `&controls=create` sets the first. Showing never resets, never runs
     anything and never closes a sheet: a sheet left open stays open on the
     next step until the presenter decides. A control that has done its job
@@ -253,6 +255,18 @@ every request.
     account, with 10 XLM and 20 EURC (test)"); the others show their latest
     result under them. A control not possible yet stays disabled under "Create
     the account first" or "Install the grant first".
+  - `{type:"nido-sim:act", control, step}` presses that control as a click
+    would: `create` opens the passkey prompt; `grant`, `guess`, `coffee`,
+    `direct`, `other`, `owner`, `shopcap` open their sheets; `overcap`
+    presses once; `advance` closes 100 ledgers. An undecided prompt or sheet
+    is rejected first, so nothing stacks. A one-shot step already done
+    (`create`, `grant`) shows its result and opens nothing. A step not
+    possible yet shows its hint and posts `{type:"nido-sim:error", step,
+    error:"not-ready"}`; a press that fails posts the error's text. During
+    preload it waits, as a press does. Once a dialog is on screen (a sheet
+    once its check is in) the frame posts `{type:"nido-sim:dialog", step,
+    kind:"passkey"|"sheet", verdict}` and sets `data-nido-dialog` on `<html>`;
+    when it closes, it removes the attribute and posts `kind: null`.
   - `{type:"nido-sim:reset"}` starts a new ledger without an account (the
     compiled reactor is kept), rejecting an open sheet.
 
@@ -261,10 +275,17 @@ every request.
   device"; Cancel, Continue); the account is created only after Continue. A
   press during preload waits for it. Lose past the cap is refused once the
   window holds 2 XLM: after one guess, the first press is a loss that fills
-  the window and the second is refused. After every change (preload, create,
+  the window and the second is refused. Order past the cap orders 1.50 EURC
+  more than `pay-shop` has left this period (at most the balance), so the cap
+  refuses it after any number of coffees: 11.50 EURC with none, 8 EURC after
+  one. The dialog stays inside the frame's visible area: the sheet's height
+  is capped to the frame (its body scrolls, its buttons stay), and an
+  `IntersectionObserver` keeps it above any part of the frame the embedding
+  page clips; checked at 1300×620, 808×489, 637×397 and 360×640. After every
+  change (preload, create,
   each decision, reset) and every `show`, the frame posts
   `{type:"nido-sim:state", step, controls, done:{create, grant, guess, coffee,
-  direct, other, owner, overcap, advance}, balances:{xlm, eurc} | null,
+  direct, other, owner, overcap, shopcap, advance}, balances:{xlm, eurc} | null,
   left:{"pay-game", "pay-shop"}, last:{control, ok, text} | null}`
   (`done.create` and `done.grant` from the ledger; `done.advance` once it has
   run; the others true once that control's request was applied or refused,
@@ -272,6 +293,26 @@ every request.
   (ArrowLeft, ArrowRight, PageUp, PageDown) pressed inside the frame are posted
   as `{type:"nido-sim:key", key}`. `load`, `ready`, `error` and `height` work
   as above.
+- `&grant=shop` (with `present=live` or `present=sheet`): the grant the page
+  installs holds only the shop's two rules, `shop` (`order`) and `pay-shop`
+  (test-EURC `transfer` from the account to the shop, `auth-root {shop,
+  order}`, 10 EURC per 100 ledgers); its sheet shows one limits row ("10 EURC
+  to Coffee shop every ~8 min · in Coffee shop › order"), and the requesting
+  app is "Coffee shop" ("Let Coffee shop spend without asking you"; "Guess &
+  Coffee" otherwise). The driver request
+  is `{op:"install_grant", grant:"shop"}`; the default grant, the reference
+  run and the full page are unchanged. Stills for the shop-only slides, as
+  `index.html?embed=1&present=sheet&theme=dark&grant=shop&…`:
+
+  | Slide | Parameters |
+  | --- | --- |
+  | Account created | `autostart=1&step=create` |
+  | Install the shop grant | `review=eyJvcCI6Imluc3RhbGxfZ3JhbnQifQ&step=grant` |
+  | Buy a coffee | `review=eyJvcCI6Im9yZGVyIiwiY2VudHMiOjM1MH0&step=coffee` |
+  | Order past the cap (8 EURC after a coffee) | `scenario=W3sib3AiOiJvcmRlciIsImNlbnRzIjozNTB9XQ&review=eyJvcCI6Im9yZGVyIiwiY2VudHMiOjgwMH0&step=shopcap` |
+
+  The live frame for them: `index.html?embed=1&present=live&preload=1&grant=shop&theme=…`,
+  with `act` on `create`, `grant`, `coffee` and `shopcap`.
 - Without a parameter the page loads nothing heavy: the 3.4 MB reactor is
   compiled on the first press.
 - Element ids: `#nido-controls`, `#nido-result-1` to `#nido-result-4` (each
@@ -309,10 +350,10 @@ toolchain), stellar-cli 27.0.0 (`stellar contract build`).
 | nido_factory.wasm (rebuilt, account pin a6d7604e…) | d5a6aa11569db6ca2d49ea98e579d20ce71f53f309b5b5d1ea5ce121c714f2f6 |
 | nido_sim_game.wasm | ca125b953a82692ea9bc7b78c354fbb83ef2e83a249aef6ac792a893afde1d27 |
 | nido_sim_shop.wasm | d433a64029bf2b09a86bc7b1fd18a7dbf0d1015f557684b82e21215daad6efd4 |
-| reactor (driver, wasm32-wasip1) | d8377b548a242e2ab833469e4f39986e1e1af27adb53277f2237b9de1a2c4224 |
+| reactor (driver, wasm32-wasip1) | 52a302fd288a55865bd2b634ee51834532ac7f3927a20b3614d06cf05e89d7eb |
 | reference replies minus timings (native = WASI = browser) | 5ec17f91692e417a25990f84547e25b7228624fa0ac7e4ce13c872aacfad47e2 |
 | recorded run `evidence/native-golden.jsonl` | 5fe0796a1118eda818384ff889b4e02ac24d6eaf2a84c2a57e018d68ed1a2b30 |
-| index.html (5378731 bytes) | 7bcf4a887d93b1e9dc9f241a1fc6ff42f8eb37b96252b78736421d0f4cb8a529 |
+| index.html (5388257 bytes) | 5fbfba50c0938c0d0f2e8e72f8549b41f2fafaa9a456ab6aac672238fa98be6c |
 
 None of the Perch artifacts is a deployed contract: the account is built
 from 2c64fe4 with its compiler, interpreter and spending-limit pins staged
