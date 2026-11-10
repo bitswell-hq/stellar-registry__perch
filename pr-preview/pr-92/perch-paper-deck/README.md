@@ -16,7 +16,7 @@ Each slide carries an "in the paper" plaque naming its section, figure, table or
 
 Brass is the card and what it allows, blue is what a theorem proves, red is a refusal, and dashed pencil is proposed.
 
-The file is self-contained: inline SVG, CSS and JS, and system fonts. It makes no network requests. Slide 11 frames the Nido simulation (`../nido-sim/index.html?embed=1`, 5.3 MB) only when "Run it here" is pressed, and links to it for phones; its passkey stand-in, rebuilt factory, EURC test token, game and shop are labelled simulated. The controls are the same as the first deck's (`../perch-deck/`): arrows, Space, PageUp and PageDown, and Home/End; swipe or tap; `N` for notes; `T` for the theme; `#n` for slide n. `?still=1` shows final drawings, and reduced motion has the same effect.
+The file is self-contained: inline SVG, CSS and JS, and system fonts. It makes no network requests. Slide 11 frames the Nido simulation (`../nido-sim/index.html?embed=1`, 5.4 MB) only when "Run it here" is pressed, and links to it for phones; its passkey stand-in, rebuilt factory, EURC test token, game and shop are labelled simulated. The controls are the same as the first deck's (`../perch-deck/`): arrows, Space, PageUp and PageDown, and Home/End; swipe or tap; `N` for notes; `T` for the theme; `#n` for slide n. `?still=1` shows final drawings, and reduced motion has the same effect.
 
 ## Sources
 
