@@ -258,16 +258,22 @@ cargo run -q -p perch-deploy -- "${net[@]}" apply --account "$author" --doc "$do
 unset PERCH_ADMIN_KEY
 
 # 3. Verify (read-only): the applied hash is the document's, and the four
-#    rules are installed by name and scope.
-cargo run -q -p perch-deploy -- "${net[@]}" verify --account "$author" --rules author.rules.json
+#    rules are installed by name and scope. Exits 3 (PARTIAL) on these
+#    authors when every row is OK.
+cargo run -q -p perch-deploy -- "${net[@]}" verify --account "$author" --rules author.rules.json --legacy-no-rule-set
 ```
 
 `verify` prints `OK` for the applied hash, `admin`, `ci-publish`,
 `admin-registry`, `ci-publish-verifiers` and the rule count. These authors
-predate the account's `rule_set` view, so it says it does not compare the
-stored rules; the applied hash still pins the whole document. Before the
+predate the account's `rule_set` view, which `verify` reads to compare each
+installed rule's signers and predicates with the reviewed ones. Without the
+view `verify` fails; `--legacy-no-rule-set`, for these two authors only,
+lets it run the other checks. Its last line is then
+`verification PARTIAL: …`, never `verification OK: installed == reviewed`,
+and it exits 3: the expected result here, where the applied hash still pins
+the whole document. Exit 1 is a mismatch or a failed read. Before the
 apply, the same command reports the old hash, `ci-publish-verifiers`
-`MISSING` and 3 rules for 4.
+`MISSING` and 3 rules for 4, and exits 1.
 
 The bootstrap writes the same document:
 `scripts/bootstrap-registry.sh --network <n> --source GAMPJROH… create-author --project perch`
