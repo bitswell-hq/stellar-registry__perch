@@ -24,11 +24,17 @@
 #      code, its ci-publish rule (registry, functions, is-self argument,
 #      expiry) and its policy stay the chain's.
 #      KNOWN GAP, bridged on the fork only: deploy-stack.sh needs
-#      perch/verifiers to serve the release's WebAuthn verifier, and no real
-#      path publishes it there (docs/deploy/README.md, "Rehearsing the
-#      migration on forks"). One labelled fork_setLedgerEntry per fork stands
-#      in for that missing step, so every later step is still rehearsed, and
-#      the run then fails (below).
+#      perch/verifiers to serve the release's WebAuthn verifier, and the
+#      perch author, which that name is bound to, has no rule on
+#      perch/verifiers to publish it with (docs/deploy/README.md, "Rehearsing
+#      the migration on forks"). When testdata/deploy/perch-author-<network>.json
+#      exists (the author's document with a ci-publish-verifiers rule), step
+#      2 first applies it to the author on the fork (perch-deploy apply, then
+#      verify), the throwaway admin key substituted for the author's admin
+#      key by overrides the report lists, and the release path publishes the
+#      verifier itself. While the author has no such rule, one labelled
+#      fork_setLedgerEntry per fork stands in for that missing step, so every
+#      later step is still rehearsed, and the run then fails (below).
 #        testnet  release.yml. In a scratch clone of this checkout, the
 #                 versions release-pr computes (git-cliff over each
 #                 contract's paths_for() scope, against
@@ -63,8 +69,9 @@
 # the real migration cannot complete: "migration blocked: perch/verifiers
 # has no publish path for perch-webauthn-verifier <version>", which is also
 # summary.md's first line and, under GitHub Actions, an error annotation.
-# The gap is detected, not assumed: once perch/verifiers serves the stack's
-# WebAuthn verifier, nothing is bridged and the run exits 0.
+# The gap is detected, not assumed: a fork is bridged only while the perch
+# author has no ci-publish-verifiers rule on perch/verifiers. Once it holds
+# one, nothing is bridged and the run exits 0.
 #
 # Usage: scripts/rehearse-migration.sh [--network testnet|mainnet] [--out DIR]
 #            [--bootstrap-only] [--accept-known-gaps]
@@ -448,6 +455,10 @@ rehearse() {
             --instance --output json </dev/null 2>/dev/null | jq -r '.entries[0].val.contract_data.val.contract_instance.executable.wasm // empty')")
     done
 
+    # The perch author's rule on perch/verifiers, as its admin key holder
+    # applies it before the migration.
+    [ -z "${prior[0]}" ] || apply_author_doc "$("$DERIVE" name "$role" perch-author "$passphrase")"
+
     local expiry flags
     expiry=$(( $(rpc getLatestLedger '{}' | jq -r .sequence) + 518400 ))
     flags=(--network "$network" --source "$role" --admin-key "$admin_g" --ci-key "$ci_g" --ci-expiry-ledger "$expiry")
@@ -539,6 +550,8 @@ rehearse() {
             fi
             i=$((i + 1))
             check "$project author ci-publish scoped to $reg" "$(has_ci_publish "$author" "$reg")" yes
+            [ "$project" != perch ] || [ ! -f "$REPO/testdata/deploy/perch-author-$network.json" ] ||
+                check "perch author ci-publish-verifiers scoped to $verifiers" "$(holds_rule "$author" "$verifiers" ci-publish-verifiers)" yes
         done
         for n in $(jq -r '.contracts | to_entries[] | select(.value.address) | .key' "$MANIFEST"); do
             case "$n" in perch-doc-compiler|perch-interpreter|perch-spending-limit|perch-ed25519-verifier) continue ;; esac
@@ -618,6 +631,115 @@ substitute_delegate() { # project author registry
     die "$network: no SignerData entry of the $project author $author stores Delegated($real)"
 }
 
+# Whether an account holds a rule of that name scoped to a contract: yes or no.
+holds_rule() { # account contract name
+    local count id rule
+    count="$(read_call "$1" get_context_rules_count)"
+    [[ "$count" =~ ^[0-9]+$ ]] || die "$network: cannot read $1's rules"
+    for ((id = 0; id < count + 32; id++)); do
+        rule="$(stellar contract invoke "${net[@]}" --id "$1" --source-account "$role_source" --send=no -- \
+            get_context_rule --context_rule_id "$id" </dev/null 2>/dev/null)" || continue
+        if [ "$(jq -r .name <<<"$rule")" = "$3" ] && [ "$(jq -r '.context_type.CallContract // empty' <<<"$rule")" = "$2" ]; then
+            echo yes
+            return
+        fi
+    done
+    echo no
+}
+
+# The perch author's ci-publish-verifiers, as its admin key holder applies it
+# (docs/deploy/README.md, "The perch author's rule on perch/verifiers"):
+# testdata/deploy/perch-author-<network>.json, the document the author
+# applied plus that rule, through perch-deploy apply, then perch-deploy
+# verify. The admin key is the human's, so the throwaway admin key takes its
+# place wherever the account stores it: its SignerData entry (which
+# __check_auth matches), its SignerLookup (sha256 of the signer's XDR, which
+# apply_doc's signer bookkeeping keys on), and the account's InstalledRules
+# (which configuration(), and so perch-deploy apply, reads). The document
+# names the real key.
+apply_author_doc() { # author
+    local author="$1" doc="$REPO/testdata/deploy/perch-author-$network.json" count id rule admin verifier real new
+    local key got json entry old_lookup new_lookup label rules
+    [ -f "$doc" ] || return 0
+    [ "$(holds_rule "$author" "$verifiers" ci-publish-verifiers)" = no ] || return 0
+    count="$(read_call "$author" get_context_rules_count)"
+    for ((id = 0; id < count + 32; id++)); do
+        rule="$(stellar contract invoke "${net[@]}" --id "$author" --source-account "$role_source" --send=no -- \
+            get_context_rule --context_rule_id "$id" </dev/null 2>/dev/null)" || continue
+        [ "$(jq -r .name <<<"$rule")" != admin ] || { admin="$(jq -c '.signers[0].External // empty' <<<"$rule")"; break; }
+    done
+    [ -n "${admin:-}" ] || die "$network: the perch author $author has no External admin signer"
+    verifier="$(jq -r '.[0]' <<<"$admin")" real="$(jq -r '.[1]' <<<"$admin")"
+    new="$("$DERIVE" key "$admin_g")"
+    signer_hash() { # key hex -> sha256 of Signer::External(verifier, key)'s XDR
+        stellar xdr encode --type ScVal <<<"{\"vec\":[{\"symbol\":\"External\"},{\"address\":\"$verifier\"},{\"bytes\":\"$1\"}]}" |
+            base64 --decode | sha256_stdin
+    }
+    sha256_stdin() { if command -v sha256sum >/dev/null; then sha256sum; else shasum -a 256; fi | cut -d' ' -f1; }
+    old_lookup="$(signer_hash "$real")" new_lookup="$(signer_hash "$new")"
+    for ((id = 0; id < 64; id++)); do
+        key="$(stellar xdr encode --type ScVal <<<"{\"vec\":[{\"symbol\":\"SignerData\"},{\"u32\":$id}]}")"
+        got="$(stellar ledger entry fetch contract-data "${net[@]}" --contract "$author" --durability persistent \
+            --key-xdr "$key" --output xdr </dev/null 2>/dev/null)" || continue
+        [ -n "$(jq -r '.entries[0].xdr // empty' <<<"$got")" ] || continue
+        json="$(jq -r '.entries[0].xdr' <<<"$got" | stellar xdr decode --type LedgerEntryData --output json)"
+        [ "$(jq -c '.contract_data.val.map[] | select(.key.symbol == "signer") | .val.vec' <<<"$json")" \
+            = "$(jq -cn --arg v "$verifier" --arg k "$real" '[{symbol: "External"}, {address: $v}, {bytes: $k}]')" ] || continue
+        label="perch author's admin key $real -> the admin key (SignerData $id)"
+        entry="$(jq -c --arg k "$new" --argjson at "$(jq -r '.entries[0].lastModifiedLedgerSeq' <<<"$got")" \
+            '{last_modified_ledger_seq: $at, ext: "v0",
+              data: (.contract_data.val.map |= map(if .key.symbol == "signer" then .val.vec[2].bytes = $k else . end))}' <<<"$json" |
+            stellar xdr encode --type LedgerEntry)"
+        rpc fork_setLedgerEntry "$(jq -cn --arg e "$entry" --argjson l "$(jq -r '.entries[0].liveUntilLedgerSeq' <<<"$got")" \
+            --arg lb "$label" '{entry: $e, liveUntilLedgerSeq: $l, label: $lb}')" >/dev/null
+        labels+=("fork_setLedgerEntry: $label")
+        # Its lookup, moved to the throwaway key's hash.
+        key="$(stellar xdr encode --type ScVal <<<"{\"vec\":[{\"symbol\":\"SignerLookup\"},{\"bytes\":\"$old_lookup\"}]}")"
+        got="$(stellar ledger entry fetch contract-data "${net[@]}" --contract "$author" --durability persistent \
+            --key-xdr "$key" --output xdr </dev/null 2>/dev/null)" || die "$network: cannot read the admin's SignerLookup"
+        [ -n "$(jq -r '.entries[0].xdr // empty' <<<"$got")" ] || die "$network: the perch author has no SignerLookup for its admin"
+        label="perch author's admin SignerLookup -> the admin key's"
+        entry="$(jq -r '.entries[0].xdr' <<<"$got" | stellar xdr decode --type LedgerEntryData --output json |
+            jq -c --arg h "$new_lookup" --argjson at "$(jq -r '.entries[0].lastModifiedLedgerSeq' <<<"$got")" \
+                '{last_modified_ledger_seq: $at, ext: "v0", data: (.contract_data.key.vec[1].bytes = $h)}' |
+            stellar xdr encode --type LedgerEntry)"
+        rpc fork_setLedgerEntry "$(jq -cn --arg e "$entry" --argjson l "$(jq -r '.entries[0].liveUntilLedgerSeq' <<<"$got")" \
+            --arg lb "$label" '{entry: $e, liveUntilLedgerSeq: $l, label: $lb}')" >/dev/null
+        labels+=("fork_setLedgerEntry: $label")
+        label="perch author's admin SignerLookup under the real key's hash"
+        rpc fork_removeLedgerEntry "$(jq -cn --arg k "$(jq -cn --arg c "$author" --arg h "$old_lookup" \
+            '{contract_data: {contract: $c, key: {vec: [{symbol: "SignerLookup"}, {bytes: $h}]}, durability: "persistent"}}' |
+            stellar xdr encode --type LedgerKey)" --arg lb "$label" '{key: $k, label: $lb}')" >/dev/null
+        labels+=("fork_removeLedgerEntry: $label")
+        break
+    done
+    [ -n "${label:-}" ] || die "$network: no SignerData entry of the perch author $author stores its admin"
+    key="$(stellar xdr encode --type ScVal <<<'{"symbol":"InstalledRules"}')"
+    got="$(stellar ledger entry fetch contract-data "${net[@]}" --contract "$author" --durability persistent \
+        --key-xdr "$key" --output xdr </dev/null 2>/dev/null)" || die "$network: cannot read the perch author's InstalledRules"
+    [ -n "$(jq -r '.entries[0].xdr // empty' <<<"$got")" ] || die "$network: the perch author has no InstalledRules"
+    label="perch author's InstalledRules: its admin key $real -> the admin key"
+    entry="$(jq -r '.entries[0].xdr' <<<"$got" | stellar xdr decode --type LedgerEntryData --output json |
+        jq -c --arg r "$real" --arg k "$new" --argjson at "$(jq -r '.entries[0].lastModifiedLedgerSeq' <<<"$got")" \
+            '{last_modified_ledger_seq: $at, ext: "v0", data: walk(if type == "object" and .bytes == $r then .bytes = $k else . end)}' |
+        stellar xdr encode --type LedgerEntry)"
+    rpc fork_setLedgerEntry "$(jq -cn --arg e "$entry" --argjson l "$(jq -r '.entries[0].liveUntilLedgerSeq' <<<"$got")" \
+        --arg lb "$label" '{entry: $e, liveUntilLedgerSeq: $l, label: $lb}')" >/dev/null
+    labels+=("fork_setLedgerEntry: $label")
+
+    log "$network: applying ${doc#"$REPO"/} to the perch author $author (perch-deploy apply), signed by the throwaway admin key"
+    rules="$out/perch-author.rules.json"
+    {
+        cargo run --locked --manifest-path "$REPO/Cargo.toml" -q -p perch-deploy -- compose --doc "$doc" --account "$author" >"$rules" &&
+            PERCH_ADMIN_KEY="$(stellar keys secret admin)" cargo run --locked --manifest-path "$REPO/Cargo.toml" -q -p perch-deploy -- \
+                --rpc-url "$url" --network-passphrase "$passphrase" apply --account "$author" --doc "$doc" </dev/null &&
+            cargo run --locked --manifest-path "$REPO/Cargo.toml" -q -p perch-deploy -- \
+                --rpc-url "$url" verify --account "$author" --rules "$rules" </dev/null
+    } >"$out/author-doc.log" 2>&1 || { cat "$out/author-doc.log" >&2; die "$network: applying ${doc#"$REPO"/} to the perch author failed"; }
+    [ "$(holds_rule "$author" "$verifiers" ci-publish-verifiers)" = yes ] || die "$network: after the apply, the perch author has no ci-publish-verifiers"
+    note "Perch author's rule on perch/verifiers: ${doc#"$REPO"/} ($(jq -r .doc_hash "$rules")) applied with perch-deploy apply, the throwaway admin key standing in for the admin key; perch-deploy verify passes"
+}
+
 # release.yml on testnet: the infra publishes, then the stack.
 release_testnet() {
     local target registry author c ver any=false
@@ -695,15 +817,18 @@ release_mainnet() {
 # verifier, the one the factory pins. Nothing can publish it there: the
 # bootstrap seeds the current deployment's verifiers, which binds the name to
 # the perch author; a later version needs that author's authorization; and
-# no rule of the author covers perch/verifiers. One fork_setLedgerEntry
+# no rule of the author covers perch/verifiers. Only while that holds (the
+# author has no ci-publish-verifiers there), one fork_setLedgerEntry
 # rebinds the name to the ci key, and the registry's own publish_hash and
 # deploy_stateless (publish-wasm.sh) then publish and deploy the release's
 # bytes there.
-bridge_verifiers() { # stack
+bridge_verifiers() { # stack author
     local wasm="$1/perch_webauthn_verifier.wasm" version hash key got label
     version="$(jq -r '.artifacts[] | select(.package == "perch-webauthn-verifier") | .version' "$1/build.json")"
     hash="$(sha256_file "$wasm")"
     [ "$(read_call "$verifiers" fetch_hash --wasm_name perch-webauthn-verifier --version "\"$version\"")" != "$hash" ] || return 0
+    # The author's ci-publish-verifiers: deploy-stack.sh publishes it there.
+    [ "$(holds_rule "$2" "$verifiers" ci-publish-verifiers)" = no ] || return 0
     bridged_verifier="$version"
     key="$(stellar xdr encode --type ScVal <<<'{"vec":[{"symbol":"WA"},{"string":"perch-webauthn-verifier"}]}')"
     got="$(stellar ledger entry fetch contract-data "${net[@]}" --contract "$verifiers" --durability persistent \
@@ -728,7 +853,7 @@ bridge_verifiers() { # stack
 
 # deploy-stack, then the record's checks.
 deploy_stack() { # author stack
-    bridge_verifiers "$2"
+    bridge_verifiers "$2" "$1"
     log "$network: deploy-stack.sh --plan"
     (cd "$src" && as_ci scripts/deploy-stack.sh --plan --author "$1" --reuse "$REUSE" --stack "$2" \
         --receipts "$out/stack-plan.jsonl") >>"$out/release.log" 2>&1 \
