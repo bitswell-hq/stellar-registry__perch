@@ -115,6 +115,57 @@ try {
   s = await state();
   check(s.notes && !s.sources && s.side, `N shows the script panel and closes the sources: ${JSON.stringify(s)}`);
 
+  // 7. The appendix after the close is outside the timed run: the script panel's clock stops there.
+  await page.goto(URL0 + '#1');
+  const timed = await page.evaluate(() => [...document.querySelectorAll('.slide')].filter((x) => !x.hasAttribute('data-appendix')).length);
+  const total = await page.evaluate(() => document.querySelectorAll('.slide').length);
+  check(timed < total, `the deck has an appendix after slide ${timed} (${total} slides)`);
+  await page.goto(`${URL0}#${timed}`);
+  await page.waitForTimeout(400);
+  if (await page.evaluate(() => document.getElementById('notes-panel').hidden)) await page.keyboard.press('n');
+  await page.keyboard.press('ArrowRight');
+  await page.waitForTimeout(300);
+  const a1 = await state();
+  await page.waitForTimeout(1300);
+  const a2 = await state();
+  check(/^Appendix 1 of \d+, not timed$/.test(a2.cur) && a1.time === a2.time, `in the appendix the script panel says so and its clock stops: "${a2.cur}", ${a1.time} then ${a2.time}`);
+  await page.keyboard.press('n');
+
+  // 8. A recording covers the timed slides only: Next on the last one ends it there, and no appendix slide shows.
+  await page.goto(`${URL0}#${timed}`);
+  await page.waitForTimeout(400);
+  await page.evaluate(() => {
+    window.__count = 0;
+    window.__appendixWhileRecording = 0;
+    new MutationObserver(() => {
+      const m = /Preparing slides \d+ \/ (\d+)/.exec(document.getElementById('rec-count').textContent);
+      if (m) window.__count = +m[1];
+    }).observe(document.getElementById('rec-count'), { childList: true, characterData: true, subtree: true });
+    new MutationObserver(() => {
+      if (document.documentElement.dataset.recording && document.querySelector('.slide.active[data-appendix]')) window.__appendixWhileRecording++;
+    }).observe(document.querySelector('#deck'), { attributes: true, subtree: true, attributeFilter: ['class'] });
+  });
+  await page.keyboard.press('r');
+  await page.waitForFunction(() => document.documentElement.dataset.recording === 'recording', null, { timeout: 30000 });
+  await page.waitForTimeout(600);
+  const end = page.waitForEvent('download', { timeout: 30000 });
+  await page.keyboard.press('ArrowRight');
+  const saved = await end;
+  await page.waitForTimeout(300);
+  const after = await page.evaluate(() => ({
+    recording: document.documentElement.dataset.recording || '',
+    slide: [...document.querySelectorAll('.slide')].findIndex((x) => x.classList.contains('active')) + 1,
+    count: window.__count,
+    appendix: window.__appendixWhileRecording,
+    snaps: [...document.querySelectorAll('.slide')].reduce((a, x) => a + (x.hasAttribute('data-appendix') ? 0 : (x.dataset.steps ? x.dataset.steps.split('|').length : 1)), 0),
+  }));
+  check(!!saved.suggestedFilename() && !after.recording && after.slide === timed && after.appendix === 0, `Next on slide ${timed} ends the recording there, with no appendix slide shown: ${JSON.stringify(after)}`);
+  check(after.count === after.snaps, `the recording prepares the timed slides only: ${after.count} pictures for ${after.snaps} slides and steps`);
+  await page.keyboard.press('ArrowRight');
+  await page.waitForTimeout(400);
+  const next = await page.evaluate(() => [...document.querySelectorAll('.slide')].findIndex((x) => x.classList.contains('active')) + 1);
+  check(next === timed + 1, `after the recording, Next goes on into the appendix (slide ${next})`);
+
   check(errors.length === 0, `no page errors: ${JSON.stringify(errors)}`);
 } finally {
   await browser.close();

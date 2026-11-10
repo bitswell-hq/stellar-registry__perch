@@ -90,6 +90,7 @@ body {
   letter-spacing: -.012em;
   margin: 0;
 }
+.appx { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2); border: 1px solid var(--rule); border-radius: 999px; padding: 2px 10px; white-space: nowrap; align-self: center; }
 .status {
   display: inline-flex; align-items: center; gap: 8px;
   font-size: clamp(13px, 1.15vw, 16px);
@@ -701,6 +702,108 @@ html.tight .count { margin-right: auto; text-align: left; }
     <p>Four people from The Aha Company work on this submission: Willem Wyndham (CSO), Pamela Selle (Principal Engineer), Zach Fedor (Engineer) and Fabricius Zatti (Principal Engineer). Each line paraphrases the submission's team description.</p>
     <p>Why Stellar, as spoken: a Soroban custom account authorizes every call made on its behalf in its own <code>__check_auth</code>, which is where Perch decides each authorization (crates/perch-smart-account/src/lib.rs); Stellar's fees are a base fee of 100 stroops per operation plus Soroban resource fees (developers.stellar.org, "Fees").</p>
     <p class="src">SCF Build submission, Team Description; Project URL; Stellar developer documentation (smart accounts and authorization; fees).</p>
+  </aside>
+</section>
+
+<!-- Appendix: background slides after the close, outside the timed run and the recording. -->
+<section class="slide" data-status="plain" data-appendix data-draw="agents" aria-roledescription="slide" aria-label="Agents with keys">
+  <header class="head"><h2>Agents with keys</h2><span class="appx">Appendix</span></header>
+  <div class="stage"><svg role="img" aria-label="Today an agent that spends for a user holds a key that can do anything the account can, and a subagent copies it. With Perch the agent holds a grant and the account checks every call against it. We will build subagents that receive narrower grants and hold no keys."></svg></div>
+  <aside class="notes">
+    <p>Appendix, not in the timed run. An agent holding a key can do anything the account can, and a subagent copies it; with Perch the agent holds a grant, and the account checks every call in the authorization tree.</p>
+  </aside>
+  <aside class="sources">
+    <p>An agent that spends for a user holds a key that can do anything the account can, and anything it spawns inherits that power. A Perch grant fixes which contracts and functions an app or agent may call, argument conditions, which keys must sign, a sliding-window spending cap and an expiry, and the account checks every call in the authorization tree against it, so a stolen app key can spend no more than its grant allows. We will build an agent runtime in which subagents receive narrower grants and hold no keys.</p>
+    <p class="src">SCF Build submission, Products &amp; Services (items 1 and 2, and the funded work).</p>
+  </aside>
+</section>
+
+<section class="slide" data-status="plain" data-appendix data-draw="oneplace" aria-roledescription="slide" aria-label="Where the policy lives">
+  <header class="head"><h2>Where the policy lives</h2><span class="appx">Appendix</span></header>
+  <div class="stage"><svg role="img" aria-label="Common setups enforce agent-payment policy in one place. Limits the agent can reach: in its own tools, or behind an approval channel it can read, as in the cited study; the chain sees a valid key. On chain, written apart: client rules and contract logic are two rule sets written separately, which can drift. What we will build, Perch: one Cedar policy checked in both places, off chain by a contained engine and on chain by the account, the backstop."></svg></div>
+  <aside class="notes">
+    <p>Appendix, not in the timed run. Where agent-payment policy usually sits: within the agent's reach, or in on-chain logic written apart from the client's rules. What we will build puts one Cedar policy in both places.</p>
+  </aside>
+  <aside class="sources">
+    <p>Common setups for agent payments enforce the policy in one place. Some keep the limits within the agent's reach: the agent's own process or tools check them, or a provider enforces them behind an approval channel the agent can read. The cited study is the second kind: the wallet provider, Circle, enforced the cap, and agents raised it with a one-time code emailed to an inbox they could read. Others put the policy in on-chain logic written separately from the client's rules, so the two rule sets can drift apart. This slide names no product; the point is where the check sits.</p>
+    <p>What we will build combines them: one Cedar policy, evaluated by a contained policy engine in the runtime and compiled into the rules the account enforces on chain. Off chain it covers what the chain cannot see (files, websites, signing, spawning); on chain the account is the backstop for payments and contract calls.</p>
+    <p class="src">arXiv:2610.35835, p. 4 (the emailed-code finding); SCF Build submission, Products &amp; Services (the funded work), Tranche #1 items 2 and 3 (as agreed 2026-11-09).</p>
+  </aside>
+</section>
+
+<section class="slide" data-status="plain" data-appendix data-draw="sandbox" aria-roledescription="slide" aria-label="The sandbox and the gate">
+  <header class="head"><h2>The sandbox and the gate</h2><span class="appx">Appendix</span></header>
+  <div class="stage"><svg role="img" aria-label="The agent runs as a WASI component with no files, network, keys or clock unless a capability is handed in. One host import, request(), crosses its boundary into the Cedar check, which sees principal agent, action fetch, resource Host feeds.example.org and its context, against a policy such as permit agent to fetch a host in its sources. Files, websites, signing and spawning each get one check. On permit the host performs it; otherwise it is refused. On chain, payments and contract calls go to the Perch account: the agent's grant key gets through within its grant, and apply_doc, apply_grant and remove_grant are refused. Changing the account's documents needs the account document's admin rule: in Nido, the owner's passkey. Recovery runs through the account's recovery contract, with guardians, quorum and delay. Proven: no grant can authorize a call to the account itself or its recovery contracts."></svg></div>
+  <aside class="notes">
+    <p>Appendix, not in the timed run. In the runtime we will build, each agent is a WASI component with no files, network or keys, and its one request call meets a Cedar check. On chain, changing the account's documents (apply_doc, apply_grant, remove_grant) needs the account document's admin rule, the owner's passkey.</p>
+  </aside>
+  <aside class="sources">
+    <p>What we will build (Tranche 1, items 1 and 3). Each agent runs as a WASI component with no ambient authority: it has no files, network, keys or clock unless the host hands in a capability, and its one host import is a request call. Every file, website, signing and spawn request crosses that call into the Cedar policy engine, an import-free WebAssembly component, as a Cedar request: principal the agent, an action, a resource and a context, checked against the agent's policy and every ancestor's. On permit the host performs it; otherwise it is refused. The request shown and the pseudocode are illustrative; the names are the request vocabulary we will give the runtime.</p>
+    <p>On chain, payments and contract calls go to the Perch account, which checks them against the agent's grant. Changing the account's documents (<code>apply_doc</code> for the account document; <code>apply_grant</code> and <code>remove_grant</code> for grant documents, which the account stores apart from it) needs the account document's admin rule, which in Nido is the owner's passkey. Recovery runs through the account's recovery contract, with guardians, quorum and delay. And Theorem 8, grant target containment, proves that no grant can authorize a call to the account itself or its recovery contracts.</p>
+    <p class="src">Vision paper §08, "Agents, budgets and payments (proposed)" (agents and their permissions), and §05, "Recovery and the end of authority" (guardians, quorum, delay); docs/account-interface.md (Constructor, <code>apply_grant</code>, Removing grants); docs/perch-paper/source/statements.json (T8); SCF Build submission, Products &amp; Services (the funded work: file, network, signing and spawn permissions), Tranche #1 items 1 and 3.</p>
+  </aside>
+</section>
+
+<section class="slide" data-status="plain" data-appendix data-draw="reader" aria-roledescription="slide" aria-label="Example: a news and data reader">
+  <header class="head"><h2>Example: a news and data reader</h2><span class="appx">Appendix</span></header>
+  <div class="stage"><svg role="img" aria-label="The runtime we will build enforces a Cedar policy for a news and data reader. It may only make web.get requests to named sources: an RSS feed at feeds.example.org, prices.example and weather.example; there is no other permit. Reading feeds.example.org/rss is allowed. Posting a comment on forum.example is refused: no permit for web.post. Reading unknown.example is refused: not a named source. No money moves, so it needs no grant on chain."></svg></div>
+  <aside class="notes">
+    <p>Appendix, not in the timed run. A second example of the runtime we will build: a reader that may only fetch named sources. With no permit to post or send, Cedar refuses everything else; no money moves, so no grant is needed.</p>
+  </aside>
+  <aside class="sources">
+    <p>What we will build, like the mail assistant: one <code>permit</code> for <code>web.get</code> on the hosts in a group of named sources, and nothing else, so Cedar's default refuses every post, form submission and message. The names are the request vocabulary we will give the runtime; the hosts are illustrative. No money moves, so no on-chain grant is needed; were the reader to pay for a data feed, that payment would go through a grant as in the mail example.</p>
+    <p class="src">SCF Build submission, Products &amp; Services (the funded work: network permissions), Tranche #1 items 1 and 3; docs/cedar-walkthrough (the Cedar dialect).</p>
+  </aside>
+</section>
+
+<section class="slide" data-status="plain" data-appendix data-draw="today" aria-roledescription="slide" aria-label="What exists today">
+  <header class="head"><h2>What exists today</h2><span class="appx">Appendix</span></header>
+  <div class="stage stage-row"><svg role="img" aria-label="On Stellar mainnet since 26 October 2026: the Perch registry, document compiler and account factory, and Nido, which creates Perch accounts through its factory. Merged in the repository: grants installed with apply_grant, every authorization decided by rule_eval::check_auth, recovery, verifiers, and 13 Lean theorems. The mainnet account is the earlier design; deploying the new account to mainnet is Tranche 3."></svg>
+    <p class="stage-links"><a href="https://github.com/stellar-registry/perch/blob/main/deployments/mainnet.json">mainnet.json</a><a href="https://stellar.expert/explorer/public/contract/CC236AK2RX7MUO7BV7JYDDW5KHZ3X7YYJOJKCVDC543BQBNNSUCZB7NN">Registry</a><a href="https://stellar.expert/explorer/public/contract/CB65ACZRA777XHGEKVX46LEU2ZSUAL2UQY2PKMVDL7KJTDHRTX5MTBQD">Document compiler</a><a href="https://stellar.expert/explorer/public/contract/CC2K7PEAV24N66JCEG5OPFCBBA4OK6DK7YISRCMQQQUC7KLNISNGYLMK">Account factory</a><a href="https://stellar.expert/explorer/public/contract/CBHERM3IKL2QLLJWNPBTATIHVFNT3FLFZKPFG4L2X7CHUPRLJHGC3FAC">Nido's factory</a></p>
+  </div>
+  <aside class="notes">
+    <p>Appendix, not in the timed run. On Stellar mainnet since 2026-10-26: Perch's registry, document compiler and account factory, on the earlier design. Merged in the repository: grant documents installed with apply_grant, every authorization decided by rule_eval::check_auth, recovery and the Lean proofs; they reach mainnet in Tranche 3.</p>
+  </aside>
+  <aside class="sources">
+    <p>Perch contracts have been live on Stellar mainnet since 2026-10-26: the registry, the document compiler and the account factory, from the earlier design (source c135aca, channel beta, a single-key registry admin). Nido, The Aha Company's passkey wallet, creates Perch accounts on mainnet through its factory. Nido's wallet counts, the mainnet deployment and npm downloads are reported under Nido's SCF #41 award; they are context here, not claimed for this ask.</p>
+    <p>Merged in the repository and not funded here: the account with grants (<code>apply_grant</code>), every authorization decided by <code>rule_eval::check_auth</code>, recovery, and passkey and Ed25519 verifiers. The decision function is translated into Lean, and kernel-checked theorems show that it returns what a readable model returns, accepts only calls a rule allows, keeps every window within its cap, never lets a narrowed grant allow more than its parent, and never allows a call to the account or its recovery contracts. A merge is not a mainnet migration: deploying the account changes to mainnet is Tranche 3, deliverable 1.</p>
+    <p class="src">SCF Build submission, Traction Evidence; Products &amp; Services; SCF Build Tranche Deliverables ("Baseline"); Tranche #3 Deliverables, item 1.</p>
+  </aside>
+</section>
+
+<section class="slide" data-status="plain" data-appendix data-draw="t1" aria-roledescription="slide" aria-label="Tranche 1: MVP">
+  <header class="head"><h2>Tranche 1: MVP</h2><span class="appx">Appendix</span></header>
+  <div class="stage"><svg role="img" aria-label="Tranche 1, an agent runtime rooted in a Perch grant, by 29 January 2027: agent runtime core; verified Cedar-to-Perch compiler and two-engine test harness; Cedar policy engine as an import-free WebAssembly component; public MVP demo."></svg></div>
+  <aside class="notes">
+    <p>Appendix, not in the timed run. Tranche 1, the MVP, by 2027-01-29: its four deliverables and how each completes.</p>
+  </aside>
+  <aside class="sources">
+    <p>Complete by 2027-01-29. 1. Agent runtime core: a Rust runtime whose root authority is an installed grant on a Perch account, read from Stellar testnet; a subagent is spawned only with a grant derived through rule-core's attenuation steps, and a wider spawn is refused; agents hold no keys. 2. Verified Cedar-to-Perch compiler and two-engine test harness, as on the contained policy runtime slide. 3. Cedar policy engine as an import-free WebAssembly component: official Cedar 4.14.x, zero imports, any policy error refuses, a subagent's request must be permitted by its own policies and every ancestor's. 4. Public MVP demo: a root agent and one subagent, with refused attempts to read outside the granted folder, reach an unapproved website and spawn a child wider than its parent; a reproducible script and a recorded video.</p>
+    <p class="src">SCF Build submission, Tranche #1 Deliverables and Completion Date; items 2 and 3 as agreed 2026-11-09.</p>
+  </aside>
+</section>
+
+<section class="slide" data-status="plain" data-appendix data-draw="t2" aria-roledescription="slide" aria-label="Tranche 2: testnet">
+  <header class="head"><h2>Tranche 2: testnet</h2><span class="appx">Appendix</span></header>
+  <div class="stage"><svg role="img" aria-label="Tranche 2, agent payments on Stellar, by 26 March 2027: attenuated grants on the account and subagent signing; x402 payer flow for Perch accounts; grant review views for wallets; threat model and monitoring plan."></svg></div>
+  <aside class="notes">
+    <p>Appendix, not in the timed run. Tranche 2, testnet, by 2027-03-26: its four deliverables and how each completes.</p>
+  </aside>
+  <aside class="sources">
+    <p>Complete by 2027-03-26. 1. Attenuated grants on the account and subagent signing: an entry point that installs a grant derived from an existing grant, checked on chain to be no wider than its parent; testnet transactions in which a subagent payment within its cap succeeds and one over its cap is refused by the account, including with the runtime's own check switched off. 2. x402 payer flow: an agent pays an x402-protected endpoint from a Perch account under its grant, through an existing Stellar x402 facilitator; testnet links for one allowed payment and one over-cap refusal. 3. Grant review views for wallets: embeddable views of a grant, a derived subagent grant and what it has left to spend, with an enforcing-simulation preview, built on the existing open-source sign dialog component; a published npm package. 4. Threat model and monitoring plan: a STRIDE threat model and a monitoring plan with alerts on grant installs and removals, recovery wipes, refusals and spending near caps, running against testnet.</p>
+    <p class="src">SCF Build submission, Tranche #2 Deliverables and Completion Date.</p>
+  </aside>
+</section>
+
+<section class="slide" data-status="plain" data-appendix data-draw="t3" aria-roledescription="slide" aria-label="Tranche 3: mainnet">
+  <header class="head"><h2>Tranche 3: mainnet</h2><span class="appx">Appendix</span></header>
+  <div class="stage"><svg role="img" aria-label="Tranche 3, mainnet launch, by 28 May 2027: mainnet release of the account and agent-grant contracts; runtime 1.0 release; mainnet agent payment demonstration; developer documentation."></svg></div>
+  <aside class="notes">
+    <p>Appendix, not in the timed run. Tranche 3, mainnet launch, by 2027-05-28: its four deliverables and how each completes.</p>
+  </aside>
+  <aside class="sources">
+    <p>Complete by 2027-05-28. 1. Mainnet release of the account and agent-grant contracts: deploy the Tranche 2 account changes to Stellar mainnet through the repository's release workflow, after the Audit Bank audit, with fixes for all critical and high findings; verified source for each contract; a documented upgrade path for existing accounts. 2. Runtime 1.0 release: versioned runtime and evaluator component packages, with an integration guide for agent frameworks. 3. Mainnet agent payment demonstration: an agent under a Perch grant on mainnet pays an x402 endpoint, and an over-cap attempt is refused on chain. 4. Developer documentation: one site covering the account, grants, the runtime, the threat model, the test plan and an operations runbook.</p>
+    <p class="src">SCF Build submission, Tranche #3 Deliverables and Completion Date.</p>
   </aside>
 </section>
 
@@ -1361,6 +1464,333 @@ B.timeline = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   });
 } };
 
+/* ---------- Appendix drawings ---------- */
+B.agents = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
+  const T = c.tall;
+  const P = T ? {
+    h1: [400, 50], ag: [140, 190], key: [215, 214], a1: [255, 195, 418, 195], acc: [530, 195, 95], accL: [530, 334], subs: [[100, 420], [210, 452]], subL: [400, 548],
+    div: [40, 610, 760, 610], h2: [400, 670], ag2: [140, 800], card: [200, 768, 120, 64], a2: [330, 800, 418, 800], acc2: [530, 800, 95], acc2L: [530, 940], subs2: [[100, 1040], [210, 1072]], sub2L: [[400, 1176], [400, 1216]],
+  } : {
+    h1: [410, 120], ag: [170, 300], key: [252, 330], a1: [290, 310, 438, 310], acc: [560, 310, 110], accL: [560, 470], subs: [[120, 560], [235, 600]], subL: [190, 690],
+    div: [800, 100, 800, 720], h2: [1190, 120], ag2: [930, 300], card: [1000, 270, 150, 80], a2: [1160, 310, 1238, 310], acc2: [1360, 310, 110], acc2L: [1360, 470], subs2: [[930, 560], [1045, 600]], sub2L: [[1010, 690]],
+  };
+  c.at(80);
+  c.text(P.h1[0], P.h1[1], 'an agent with a key', { size: T ? .66 : .74 });
+  c.icon('agent', P.ag[0], P.ag[1], T ? 72 : 80, { k: 'soft' });
+  c.icon('key', P.key[0], P.key[1], T ? 46 : 52, { k: 'ink' });
+  c.arrow(...P.a1, { k: 'soft', w: .7 });
+  const [ax, ay, ar] = P.acc;
+  c.circle(ax, ay, ar, { k: 'soft', w: .9, fill: 'hatch' });
+  c.circle(ax, ay, ar - 14, { k: 'soft', w: .3 });
+  c.text(P.accL[0], P.accL[1], 'can do anything', { size: .64, k: 'soft' });
+  c.at(900);
+  P.subs.forEach(([x, y]) => {
+    c.line(P.ag[0], P.ag[1] + 44, x, y - 34, { k: 'soft', w: .4, step: 0 });
+    c.icon('agent', x, y, T ? 46 : 54, { k: 'soft', step: 0 });
+    c.icon('key', x + (T ? 38 : 44), y + 16, T ? 30 : 32, { k: 'ink', step: 120 });
+  });
+  c.text(P.subL[0], P.subL[1], 'a subagent copies the key', { size: .6, k: 'soft' });
+  c.at(1400);
+  c.line(...P.div, { k: 'faint', w: .5 });
+  c.text(P.h2[0], P.h2[1], 'an agent with a grant', { size: T ? .66 : .74, k: 'now' });
+  c.icon('agent', P.ag2[0], P.ag2[1], T ? 72 : 80, { k: 'now' });
+  const [kx, ky, kw, kh] = P.card;
+  c.rect(kx, ky, kw, kh, { k: 'now', rx: 10, w: .9, fill: 'hatch-now' });
+  c.rect(kx + 14, ky + kh - 26, kw * .55, 12, { k: 'now', rx: 4, w: .4, fill: 'now', fillOp: .5 });
+  c.arrow(...P.a2, { k: 'now', w: .8 });
+  const [bx, by, br] = P.acc2;
+  c.circle(bx, by, br, { k: 'now', w: 1.2 });
+  c.circle(bx, by, br - 14, { k: 'now', w: .35 });
+  c.check(bx, by, T ? 44 : 48, { k: 'now' });
+  c.text(P.acc2L[0], P.acc2L[1], 'the account checks every call', { size: .64, k: 'now' });
+  c.at(2200);
+  P.subs2.forEach(([x, y]) => {
+    c.line(P.ag2[0], P.ag2[1] + 44, x, y - 34, { k: 'now', w: .5, step: 0 });
+    c.icon('agent', x, y, T ? 46 : 54, { k: 'now', step: 0 });
+    c.rect(x + (T ? 24 : 30), y + 4, T ? 40 : 46, T ? 26 : 28, { k: 'now', rx: 5, w: .6, step: 120 });
+  });
+  if (T) { c.text(P.sub2L[0][0], P.sub2L[0][1], 'we will build: subagents with narrower grants', { size: .54, k: 'now' }); c.text(P.sub2L[1][0], P.sub2L[1][1], 'and hold no keys', { size: .54, k: 'now' }); }
+  else c.text(P.sub2L[0][0] + 120, P.sub2L[0][1], 'we will build: subagents with narrower grants and no keys', { size: .6, k: 'now' });
+} };
+
+/* Where agent-payment policy lives: within the agent's reach, on chain apart, or one policy in both. */
+B.oneplace = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
+  const T = c.tall;
+  const caps = [
+    ['limits the agent can reach', 'ink', ['in its own tools, or behind an', 'approval channel it can read,', 'as in the cited study']],
+    ['on chain, written apart', 'ink', ['two rule sets, written separately:', 'client rules and contract logic', 'can drift']],
+    ['Perch: one policy, both places', 'now', ['one policy, checked in both places', 'off chain: a contained engine', 'on chain: the account, the backstop']],
+  ];
+  c.at(60);
+  if (T) {
+    c.text(40, 44, 'common setups', { anchor: 'start', size: .46, k: 'soft' });
+    c.text(40, 866, 'what we will build', { anchor: 'start', size: .46, k: 'now' });
+    c.line(40, 452, 760, 452, { k: 'faint', w: .5 });
+    c.line(40, 840, 760, 840, { k: 'faint', w: .5 });
+  } else {
+    c.text(548, 62, 'common setups', { size: .5, k: 'soft' });
+    c.text(1305, 62, 'what we will build', { size: .5, k: 'now' });
+    c.line(548, 90, 548, 740, { k: 'faint', w: .5 });
+    c.line(1053, 40, 1053, 740, { k: 'faint', w: .5 });
+  }
+  caps.forEach(([h, hk, lines], i) => {
+    c.at(200 + i * 900);
+    const y0 = [70, 470, 880][i];
+    if (T) {
+      c.text(40, y0 + 30, h, { anchor: 'start', size: .6, k: hk === 'now' ? 'now' : undefined });
+      lines.forEach((s, j) => c.text(330, y0 + 140 + j * 38, s, { anchor: 'start', size: j ? .46 : .52, k: j ? (i === 2 ? 'now' : 'soft') : (i === 2 ? 'now' : undefined), step: 40 }));
+    } else {
+      const cx = [295, 800, 1305][i];
+      c.text(cx, 116, h, { size: .66, k: hk === 'now' ? 'now' : undefined });
+      lines.forEach((s, j) => c.text(cx, 664 + j * 34, s, { size: j ? .46 : .52, k: j ? (i === 2 ? 'now' : 'soft') : (i === 2 ? 'now' : undefined), step: 40 }));
+    }
+    c.at(400 + i * 900);
+    if (i === 0) {
+      // The limits, or their approval, sit within the agent's reach; the chain sees only a valid key.
+      if (T) {
+        c.rect(50, y0 + 70, 240, 150, { k: 'soft', rx: 14, w: .6 });
+        c.icon('agent', 120, y0 + 142, 50, { k: 'ink' });
+        c.icon('policy', 222, y0 + 142, 40, { k: 'soft' });
+        c.arrow(170, y0 + 224, 170, y0 + 282, { k: 'soft', w: .6 });
+        c.circle(170, y0 + 324, 36, { k: 'soft', w: .7, fill: 'hatch' });
+      } else {
+        c.rect(120, 150, 350, 210, { k: 'soft', rx: 16, w: .6 });
+        c.text(140, 184, "the agent's reach", { anchor: 'start', size: .44, k: 'soft' });
+        c.icon('agent', 210, 272, 64, { k: 'ink' });
+        c.icon('policy', 350, 266, 50, { k: 'soft' });
+        c.text(350, 332, 'limits or approval', { size: .44, k: 'soft' });
+        c.arrow(295, 364, 295, 446, { k: 'soft', w: .6 });
+        c.icon('key', 330, 404, 34, { k: 'ink' });
+        c.circle(295, 510, 58, { k: 'soft', w: .8, fill: 'hatch' });
+        c.text(295, 600, 'the chain sees a valid key', { size: .44, k: 'soft' });
+      }
+    } else if (i === 1) {
+      // Two rule sets, one in the client and one in a contract, kept in step by hand.
+      if (T) {
+        c.rect(40, y0 + 80, 130, 120, { k: 'soft', rx: 12, w: .6 });
+        c.icon('policy', 105, y0 + 140, 40, { k: 'soft' });
+        c.arrow(174, y0 + 140, 206, y0 + 140, { k: 'soft', w: .6 });
+        c.circle(262, y0 + 140, 52, { k: 'soft', w: .7 });
+        c.icon('policy', 262, y0 + 140, 34, { k: 'soft' });
+        c.text(170, y0 + 268, '≠', { size: 1.1 });
+      } else {
+        c.rect(590, 170, 200, 200, { k: 'soft', rx: 16, w: .6 });
+        c.icon('agent', 650, 246, 54, { k: 'ink' });
+        c.icon('policy', 742, 300, 42, { k: 'soft' });
+        c.arrow(794, 270, 826, 270, { k: 'soft', w: .6 });
+        c.circle(920, 270, 92, { k: 'soft', w: .8 });
+        c.icon('policy', 920, 270, 46, { k: 'soft' });
+        c.text(690, 404, 'client rules', { size: .46, k: 'soft' });
+        c.text(920, 404, 'contract logic', { size: .46, k: 'soft' });
+        c.text(805, 486, '≠', { size: 1.3 });
+        c.text(805, 534, 'written separately', { size: .5, k: 'soft' });
+      }
+    } else {
+      // One policy: evaluated off chain by a contained engine, compiled into the account's rules.
+      if (T) {
+        const y = y0;
+        c.rect(80, y + 60, 180, 64, { k: 'now', rx: 12, w: .7 });
+        c.text(170, y + 100, 'one policy', { size: .44, k: 'now' });
+        c.curve(130, y + 124, 90, y + 186, { k: 'now', w: .6, dir: 'v', head: true });
+        c.curve(210, y + 124, 250, y + 186, { k: 'now', w: .6, dir: 'v', head: true });
+        c.rect(30, y + 190, 120, 80, { k: 'now', rx: 12, w: .7 });
+        c.icon('policy', 90, y + 230, 36, { k: 'now' });
+        c.circle(254, y + 236, 46, { k: 'now', w: 1 });
+        c.circle(254, y + 236, 36, { k: 'now', w: .3 });
+        c.text(90, y + 304, 'off chain', { size: .4, k: 'now' });
+        c.text(254, y + 304, 'on chain', { size: .4, k: 'now' });
+      } else {
+        c.rect(1205, 150, 200, 96, { k: 'now', rx: 12, w: .8 });
+        c.text(1305, 190, 'one Cedar policy', { size: .5, k: 'now' });
+        c.text(1305, 224, 'permit (…) when { … };', { size: .4, font: 'code', k: 'soft' });
+        c.curve(1255, 246, 1180, 332, { k: 'now', w: .6, dir: 'v', head: true });
+        c.curve(1355, 246, 1430, 332, { k: 'now', w: .6, dir: 'v', head: true });
+        c.rect(1085, 338, 190, 124, { k: 'now', rx: 14, w: .8 });
+        c.icon('policy', 1180, 382, 40, { k: 'now' });
+        c.text(1180, 440, 'contained engine', { size: .44 });
+        c.circle(1430, 404, 68, { k: 'now', w: 1.1 });
+        c.circle(1430, 404, 56, { k: 'now', w: .3 });
+        c.seal(1430, 404, 34);
+        c.text(1180, 500, 'off chain', { size: .46, k: 'now' });
+        c.text(1430, 500, 'the account, on chain', { size: .46, k: 'now' });
+      }
+    }
+  });
+} };
+
+/* The sandbox and the gate: a WASI agent with no ambient authority, one request call checked by Cedar, and the account's boundary on chain. */
+B.sandbox = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
+  const T = c.tall;
+  const P = T ? {
+    box: [30, 70, 740, 260], boxL: [30, 52], ag: [120, 190], caps: [[420, 150], [420, 210], [640, 150], [640, 210]], none: [400, 300],
+    port: [400, 330], portL: [418, 368], toGate: [400, 336, 400, 386],
+    gate: [30, 390, 740, 290], ok: [[200, 684, 200, 724], [200, 748]], okS: [200, 776], no: [[560, 684, 560, 724], [560, 748]],
+    div: 800, chainL: [30, 836], key: [90, 930], keyL: [90, 990], acc: [470, 940, 80], rec: [580, 856, 200, 86],
+    a1: [130, 910, 382, 920], a1L: [250, 896], a2: [130, 954, 384, 962], a2L: [40, 1080],
+    why: [[60, 1120], [60, 1180], [60, 1240]], wx: 112,
+  } : {
+    box: [40, 90, 440, 330], boxL: [40, 70], ag: [150, 220], caps: [[370, 150], [370, 205], [370, 260], [370, 315]], none: [260, 395],
+    port: [480, 255], portL: [490, 236], toGate: [486, 255, 600, 255],
+    gate: [600, 90, 420, 330], ok: [[1020, 190, 1110, 190], [1130, 196]], okS: [1130, 226], no: [[1020, 330, 1110, 330], [1130, 336]],
+    div: 450, chainL: [40, 490], key: [110, 600], keyL: [110, 668], acc: [640, 600, 116], rec: [810, 560, 230, 96],
+    a1: [160, 570, 526, 560], a1L: [340, 546], a2: [160, 630, 522, 646], a2L: [190, 706],
+    why: [[1110, 520], [1110, 610], [1110, 700]], wx: 1160,
+  };
+  // The agent: a WASI component, nothing ambient.
+  c.at(80);
+  const [bx, by, bw, bh] = P.box;
+  c.rect(bx, by, bw, bh, { k: 'ink', rx: 18, w: 1.1 });
+  c.rect(bx + 8, by + 8, bw - 16, bh - 16, { k: 'ink', rx: 12, w: .3 });
+  c.text(P.boxL[0], P.boxL[1], 'the agent: a WASI component', { anchor: 'start', size: T ? .5 : .58 });
+  c.icon('agent', P.ag[0], P.ag[1], T ? 70 : 80, { k: 'ink' });
+  ['files', 'network', 'keys', 'clock'].forEach((s, i) => {
+    const [x, y] = P.caps[i];
+    c.text(x, y, s, { anchor: 'end', size: T ? .46 : .52, k: 'soft', step: 40 });
+    c.cross(x + (T ? 24 : 26), y - 7, 18, { k: 'soft', step: 0 });
+  });
+  c.text(P.none[0], P.none[1], 'none unless a capability is handed in', { size: T ? .4 : .46, k: 'soft' });
+  // One import crosses the boundary: the request call, into the gate.
+  c.at(900);
+  c.circle(P.port[0], P.port[1], 9, { k: 'now', fill: 'now', w: .4 });
+  c.text(P.portL[0], P.portL[1], 'request()', { anchor: 'start', size: T ? .4 : .46, font: 'code', k: 'now' });
+  c.arrow(...P.toGate, { k: 'now', w: .8 });
+  const [gx, gy, gw, gh] = P.gate;
+  c.rect(gx, gy, gw, gh, { k: 'now', rx: 18, w: 1.1 });
+  c.icon('policy', gx + 40, gy + 44, T ? 38 : 42, { k: 'now' });
+  c.text(gx + (T ? 72 : 80), gy + 52, 'the Cedar check', { anchor: 'start', size: T ? .52 : .62, k: 'now' });
+  [['principal', 'agent'], ['action', 'fetch'], ['resource', 'Host::"feeds.example.org"'], ['context', '{ method: "GET" }']].forEach(([k, v], i) => {
+    const y = gy + (T ? 100 : 106) + i * (T ? 34 : 38);
+    c.text(gx + 26, y, k, { anchor: 'start', size: T ? .36 : .44, font: 'code', k: 'soft', step: 40 });
+    c.text(gx + (T ? 124 : 138), y, v, { anchor: 'start', size: T ? .36 : .44, font: 'code', step: 0 });
+  });
+  c.text(gx + 26, gy + gh - (T ? 50 : 56), 'permit (agent, fetch, Host in sources);', { anchor: 'start', size: T ? .36 : .44, font: 'code', k: 'now' });
+  c.text(gx + 26, gy + gh - (T ? 20 : 22), 'files, websites, signing, spawning: one check each', { anchor: 'start', size: T ? .34 : .4, k: 'soft' });
+  // The two outcomes.
+  c.at(1900);
+  c.arrow(...P.ok[0], { k: 'now', w: .8 });
+  c.check(P.ok[1][0], P.ok[1][1] - 8, 26, { k: 'now', step: 0 });
+  c.text(P.ok[1][0] + 26, P.ok[1][1], 'permit: the host performs it', { anchor: 'start', size: T ? .42 : .54 });
+  c.text(P.okS[0] + 26, P.okS[1], 'read, fetch, sign or spawn', { anchor: 'start', size: T ? .38 : .46, k: 'soft' });
+  c.arrow(...P.no[0], { k: 'ink', w: .8 });
+  c.cross(P.no[1][0], P.no[1][1] - 8, 22, { k: 'ink', step: 0 });
+  c.text(P.no[1][0] + 26, P.no[1][1], 'otherwise: refused', { anchor: 'start', size: T ? .44 : .54 });
+  // On chain: the grant key reaches its grant, and stops at the account itself.
+  c.at(2500);
+  c.line(T ? 30 : 40, P.div, T ? 770 : 1560, P.div, { k: 'faint', w: .5 });
+  c.text(P.chainL[0], P.chainL[1], 'on chain: payments and contract calls', { anchor: 'start', size: T ? .46 : .52, k: 'soft' });
+  c.icon('key', P.key[0], P.key[1], T ? 52 : 56, { k: 'ink' });
+  c.text(P.keyL[0], P.keyL[1], 'the agent’s grant key', { size: T ? .42 : .46, k: 'soft' });
+  const [ax, ay, ar] = P.acc;
+  c.circle(ax, ay, ar, { k: 'now', w: 1.2 });
+  c.circle(ax, ay, ar - 12, { k: 'now', w: .35 });
+  c.seal(ax, ay, ar * .5);
+  c.text(ax, ay + ar + 34, 'the Perch account', { size: T ? .46 : .52, k: 'now' });
+  const [qx, qy, qw, qh] = P.rec;
+  c.line(ax + ar * (T ? .7 : .98), ay + (T ? -ar * .7 : 0), qx, qy + qh / 2, { k: 'now', w: .5 });
+  c.rect(qx, qy, qw, qh, { k: 'now', rx: 12, w: .9 });
+  c.text(qx + 18, qy + 38, 'recovery contract', { anchor: 'start', size: T ? .42 : .5, k: 'now' });
+  c.text(qx + 18, qy + 70, 'guardians · quorum · delay', { anchor: 'start', size: T ? .32 : .42, k: 'soft' });
+  c.at(3000);
+  c.arrow(...P.a1, { k: 'now', w: .8 });
+  c.text(P.a1L[0], P.a1L[1], 'within its grant ✓', { size: T ? .4 : .46, k: 'now' });
+  const [x1, y1, x2, y2] = P.a2;
+  c.path(`M${x1} ${y1}L${x2} ${y2}L${x2 - (T ? 70 : 90)} ${y2 + (T ? 34 : 44)}`, { k: 'ink', w: .8 });
+  c.cross(x2 + 4, y2 - 2, 22, { k: 'ink', step: 0 });
+  c.text(P.a2L[0], P.a2L[1], 'apply_doc, apply_grant, remove_grant', { anchor: 'start', size: T ? .38 : .44, font: 'code', k: 'soft' });
+  // Why it stops there.
+  c.at(3500);
+  const why = [
+    ['passkey', 'changing the account needs the account', 'document’s admin rule: in Nido, the owner’s passkey'],
+    ['stamp', 'recovery runs through the account’s recovery', 'contract, with guardians, quorum and delay'],
+    ['proof', 'proven: no grant can authorize a call to the', 'account itself or its recovery contracts'],
+  ];
+  why.forEach(([ic, a, b], i) => {
+    const [x, y] = P.why[i];
+    c.icon(ic, x, y, T ? 40 : 42, { k: 'now' });
+    c.text(P.wx, y - 6, a, { anchor: 'start', size: T ? .44 : .46 });
+    c.text(P.wx, y + (T ? 24 : 22), b, { anchor: 'start', size: T ? .44 : .46 });
+  });
+} };
+
+B.reader = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
+  example(c, {
+    code: [
+      '// news and data reader: named sources, read only',
+      'permit (principal == Agent::"reader", action == Action::"web.get",',
+      '        resource in Group::"sources");',
+      '// sources: feeds.example.org (RSS), prices.example, weather.example',
+      '// no other permit: a post, a form or a message is refused',
+    ],
+    reqs: [
+      [true, 'read feeds.example.org/rss', 'web.get on a named source'],
+      [false, 'post a comment on forum.example', 'refused: no permit for web.post'],
+      [false, 'read unknown.example', 'refused: not a named source'],
+    ],
+    grant: null,
+    caption: 'no money moves, so it needs no grant on chain',
+  });
+} };
+
+B.today = { vb: ['0 0 1600 760', '0 0 800 1240'], draw(c) {
+  const T = c.tall;
+  const P = T ? { L: [40, 70, 720, 500], R: [40, 680, 720, 520], arrow: [400, 674, 400, 576], arrowL: [420, 630, 'start'] }
+    : { L: [60, 110, 680, 530], R: [860, 110, 680, 530], arrow: [855, 600, 745, 600], arrowL: [800, 652, 'middle'] };
+  const panel = ([x, y, w, h], head, k) => {
+    c.rect(x, y, w, h, { k, rx: 18, w: 1.1 });
+    c.rect(x + 10, y + 10, w - 20, h - 20, { k, rx: 12, w: .3 });
+    c.text(x + 34, y + (T ? 54 : 52), head, { anchor: 'start', size: T ? .62 : .7, k: k === 'now' ? 'now' : undefined });
+  };
+  c.at(80);
+  panel(P.L, 'on Stellar mainnet since 2026-10-26', 'now');
+  const [lx, ly] = P.L;
+  const rowsL = [['tree', 'Registry', 'CC23…B7NN'], ['doc', 'Document compiler', 'CB65…TBQD'], ['factory', 'Account factory', 'CC2K…YLMK'], ['passkey', 'Nido creates Perch accounts', 'through its factory, CBHE…3FAC']];
+  rowsL.forEach(([ic, a, b], i) => {
+    const y = ly + 120 + i * (T ? 88 : 90) + (i === 3 ? (T ? 14 : 20) : 0);
+    c.icon(ic, lx + 70, y, 46, { k: 'now', step: 80 });
+    c.text(lx + 116, y - 2, a, { anchor: 'start', size: T ? .6 : .66, step: 0 });
+    c.text(lx + 116, y + 26, b, { anchor: 'start', size: T ? .44 : .48, font: i < 3 ? 'code' : undefined, k: 'soft', step: 60 });
+  });
+  c.text(lx + 34, ly + P.L[3] - 30, 'the earlier account design (c135aca)', { anchor: 'start', size: T ? .46 : .5, k: 'soft' });
+  c.at(1200);
+  panel(P.R, 'merged in the repository', 'now');
+  const [rx, ry] = P.R;
+  const rowsR = [['grants, installed with', 'apply_grant', 'key'], ['every authorization decided by', 'rule_eval::check_auth', 'desk'], ['a completed recovery revokes every earlier grant', '', 'stamp'], ['passkey and Ed25519 verifiers', '', 'passkey'], ['13 Lean theorems', '', 'proof']];
+  rowsR.forEach(([a, code, ic], i) => {
+    const y = ry + 116 + i * (T ? 82 : 80);
+    c.icon(ic, rx + 70, y, 44, { k: 'now', step: 80 });
+    c.text(rx + 116, y + (code ? -4 : 8), a, { anchor: 'start', size: T ? .54 : .6, step: 0 });
+    if (code) c.text(rx + 116, y + 24, code, { anchor: 'start', size: T ? .48 : .52, font: 'code', k: 'now', step: 60 });
+  });
+  c.at(2200);
+  c.arrow(...P.arrow, { k: 'now', w: .8 });
+  if (T) c.text(P.arrowL[0], P.arrowL[1], 'to mainnet: Tranche 3', { anchor: 'start', size: .5, k: 'now' });
+  else { c.text(P.arrowL[0], P.arrowL[1], 'to mainnet:', { size: .46, k: 'now' }); c.text(P.arrowL[0], P.arrowL[1] + 24, 'Tranche 3', { size: .46, k: 'now' }); }
+} };
+
+// One tranche: its four deliverables and how each completes.
+function tranche(c, d) {
+  const T = c.tall;
+  c.at(60);
+  c.text(T ? 40 : 80, T ? 44 : 72, d.sub, { anchor: 'start', size: T ? .58 : .74 });
+  c.text(T ? 40 : 1520, T ? 88 : 72, `by ${d.date}`, { anchor: T ? 'start' : 'end', size: T ? .54 : .66, k: 'now', font: 'code' });
+  d.items.forEach(([title, crit, ic], i) => {
+    const [x, y, w, h] = T ? [40, 128 + i * 290, 720, 268] : [80 + (i % 2) * 740, 118 + Math.floor(i / 2) * 322, 700, 296];
+    c.at(260 + i * 380);
+    c.rect(x, y, w, h, { k: 'now', rx: 16, w: .8 });
+    c.circle(x + 36, y + 40, 18, { k: 'now', w: .6 });
+    c.text(x + 36, y + 41, String(i + 1), { size: .54, base: 'central', k: 'now' });
+    c.icon(ic, x + 38, y + (T ? 132 : 150), T ? 50 : 54, { k: 'now' });
+    const tl = wrapText(title, T ? 40 : 46), lh = 34;
+    tl.forEach((s, j) => c.text(x + 80, y + 48 + j * lh, s, { anchor: 'start', size: T ? .6 : .7, step: 0 }));
+    const cl = wrapText(crit, T ? 48 : 54);
+    const y0 = y + 48 + tl.length * lh + (T ? 20 : 24);
+    cl.forEach((s, j) => c.text(x + 80, y0 + j * (T ? 30 : 34), s, { anchor: 'start', size: T ? .5 : .62, k: 'soft', step: 40 }));
+  });
+}
+B.t1 = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) { tranche(c, TR[0]); } };
+B.t2 = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) { tranche(c, TR[1]); } };
+B.t3 = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) { tranche(c, TR[2]); } };
+
 /* Attenuation as nested regions: the helper's grant shrinks inside the app's, one step at a time. */
 B.atten = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   const T = c.tall;
@@ -1492,6 +1922,9 @@ Anim.prototype.stop = function () { this.alive = false; this.timers.forEach(clea
 
 /* ---------- deck runtime ---------- */
 const slides = $$('.slide');
+// The appendix (data-appendix) follows the close: outside the timed run and the recording.
+const TIMED = slides.filter(s => !s.hasAttribute('data-appendix')).length;
+const inAppendix = i => i >= TIMED;
 let cur = 0, tallMode = null;
 const leaveTimers = new Map();
 
@@ -1558,6 +1991,8 @@ function hashOf() { const s = slides[cur], k = stepOf(s); return '#' + (cur + 1)
 function parseHash() { const [n, k] = location.hash.slice(1).split('.').map(x => parseInt(x, 10)); return [n || 0, k || 0]; }
 function go(i, fromHash, opt) {
   i = Math.max(0, Math.min(slides.length - 1, i));
+  // A recording covers slides 1-10: moving on into the appendix ends it there, on the last timed slide.
+  if (inAppendix(i) && R.state !== 'idle') { if (R.state === 'recording' || R.state === 'paused') stopRecording(); return; }
   const prev = slides[cur];
   if (i !== cur && prev) {
     prev.classList.remove('active');
@@ -1580,7 +2015,7 @@ function go(i, fromHash, opt) {
   if (steps && (fresh || (opt && opt.step))) s.dataset.step = String(opt && opt.step ? Math.min(steps.length, opt.step) : opt && opt.back ? steps.length : 1);
   if (fresh) enter(s);
   markBtns.forEach((b, j) => b.setAttribute('aria-current', j === i ? 'true' : 'false'));
-  $('#count').textContent = `${i + 1} / ${slides.length}`;
+  $('#count').textContent = inAppendix(i) ? `A${i + 1 - TIMED} / ${slides.length - TIMED}` : `${i + 1} / ${TIMED}`;
   $('#bar').style.width = ((i + 1) / slides.length * 100) + '%';
   if (!fromHash) history.replaceState(null, '', hashOf());
   if (!$('#notes-panel').hidden) showNotes();
@@ -1623,9 +2058,12 @@ function ntPaint() {
   const t = ntTotal(), tm = $('#np-time');
   tm.textContent = mmss(t);
   tm.classList.toggle('over', t > 180);
-  $('#np-cur').textContent = `${where()} · ${mmss(ntSlide())} here, aim for ${mmss(secOf(slides[cur]))}`;
+  $('#np-cur').textContent = inAppendix(cur) ? where() : `${where()} · ${mmss(ntSlide())} here, aim for ${mmss(secOf(slides[cur]))}`;
 }
+// The 3:00 clock runs while the script panel is shown on a timed slide, and stops in the appendix.
+function ntSync() { ntRun(!$('#notes-panel').hidden && !inAppendix(cur)); }
 function showNotes() {
+  ntSync();
   const key = stepKey();
   if (NT.slide !== key) { NT.slide = key; NT.slideAcc = 0; NT.slideSince = NT.since ? ntNow() : 0; }
   $('#np-script').innerHTML = scriptOf(slides[cur]);
@@ -1638,7 +2076,7 @@ function toggleNotes() {
   if (p.hidden && R.state !== 'idle') return;
   p.hidden = !p.hidden;
   btn.setAttribute('aria-pressed', String(!p.hidden));
-  ntRun(!p.hidden);
+  ntSync();
   if (!p.hidden) {
     showNotes();
     if (!$('#sources-panel').hidden) toggleSources();
@@ -1782,12 +2220,16 @@ const mmss = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2
 function stepLine(s) { const n = $('.notes', s); if (!n) return null; return stepsOf(s) ? $(`p[data-k="${stepOf(s)}"]`, n) : n; }
 const secOf = s => { const n = stepLine(s); return n ? parseInt(n.dataset.sec, 10) || 0 : 0; };
 function scriptOf(s) { const n = stepLine(s); return n ? (n.tagName === 'P' ? n.outerHTML : n.innerHTML) : ''; }
-function where() { const s = slides[cur], n = stepsOf(s); return `Slide ${cur + 1} of ${slides.length}` + (n ? `, step ${stepOf(s)} of ${n.length}` : ''); }
+function where() {
+  if (inAppendix(cur)) return `Appendix ${cur + 1 - TIMED} of ${slides.length - TIMED}, not timed`;
+  const s = slides[cur], n = stepsOf(s);
+  return `Slide ${cur + 1} of ${TIMED}` + (n ? `, step ${stepOf(s)} of ${n.length}` : '');
+}
 function nextLabel() {
   const s = slides[cur], n = stepsOf(s);
   if (n && stepOf(s) < n.length) { const b = $(`.nido-steps [data-k="${stepOf(s) + 1}"]`, s); return b ? b.title : `step ${stepOf(s) + 1}`; }
   const nx = slides[cur + 1];
-  return nx ? nx.getAttribute('aria-label') : 'the end';
+  return nx && !inAppendix(cur + 1) ? nx.getAttribute('aria-label') : cur === TIMED - 1 ? 'the end of the timed run' : nx ? nx.getAttribute('aria-label') : 'the end';
 }
 const stepKey = () => cur + '.' + (stepsOf(slides[cur]) ? stepOf(slides[cur]) : 0);
 
@@ -1944,7 +2386,7 @@ async function paintAll(onStep) {
   try {
     // A canvas per slide, and per step on a stepped slide, keyed as stepKey() names them.
     const ss = $$('.slide', doc), jobs = [];
-    ss.forEach((s, i) => { const n = stepsOf(s); if (n) n.forEach((_, j) => jobs.push([i, j + 1])); else jobs.push([i, 0]); });
+    ss.forEach((s, i) => { if (s.hasAttribute('data-appendix')) return; const n = stepsOf(s); if (n) n.forEach((_, j) => jobs.push([i, j + 1])); else jobs.push([i, 0]); });
     for (const [x, [i, k]] of jobs.entries()) {
       if (k) ss[i].dataset.step = String(k);
       out[i + '.' + k] = await paintSlide(doc, i);
@@ -2017,6 +2459,7 @@ async function startRecording() {
     say('This browser cannot record the deck here. Recent Chrome, Edge, Firefox and Safari can.', 'err');
     return;
   }
+  if (inAppendix(cur)) go(0);
   setState('arming');
   const run = R.run = {};
   if (!$('#notes-panel').hidden) toggleNotes();
