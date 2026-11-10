@@ -16,7 +16,7 @@ verdict equals the account's `__check_auth` result on that state at that
 ledger. The account here is `perch_smart_account::check_auth` on the fork's
 `dev` branch, which `perch-account` deploys.
 
-The verdict depends on four assumptions:
+The verdict depends on five assumptions:
 
 - **Signatures.** The core does not verify signatures. It accepts a
   `verified` flag for each payload signer (`no`, `yes`, or `assumed`, the
