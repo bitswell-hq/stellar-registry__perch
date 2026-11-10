@@ -51,7 +51,7 @@ Once the frame posts `{type:"nido-sim:preloaded"}`, entering a Nido slide sends 
 | 16 | `direct`, `other` | Either refusal, then Reject |
 | 17 | `overcap`, `owner` | Lose past the cap twice (after slide 14's guess the first is a loss that fills the 2 XLM window and the second is refused), or lose to the game's owner |
 
-A sheet left open stays open on the next slide until the presenter decides. Arrow and Page keys pressed in the frame arrive as `{type:"nido-sim:key"}` and move the deck. After each change the deck takes its other keys back. "Reset demo" or `D` sends `{type:"nido-sim:reset"}` (a new ledger, no account, the reactor kept) and returns to slide 12. A rehearsal check walks the whole session by these messages and clicks: create, grant, guess, coffee, all four refusals, going back, a key from inside the frame, the script panel and reset. Each step must wait for the sheet's own check ("✓ Checked" or a refusal), since the primary button is disabled until then.
+A sheet left open stays open on the next slide until the presenter decides. Arrow and Page keys pressed in the frame arrive as `{type:"nido-sim:key"}` and move the deck. After each change the deck takes its other keys back. "Reset demo" or `D` sends `{type:"nido-sim:reset"}` (a new ledger, no account, the reactor kept) and returns to slide 12. The full live walk-through was checked by an uncommitted browser script (not in this repository), which drove the whole session by these messages and clicks: create, grant, guess, coffee, all four refusals, going back, a key from inside the frame, the script panel and reset. Each step must wait for the sheet's own check ("✓ Checked" or a refusal), since the primary button is disabled until then.
 
 ## Nido stills
 
@@ -66,7 +66,7 @@ They are screenshots of the simulation page in its `present=sheet` URL form. For
 3. Wait until `<html data-nido-ready>` is set, which is `done`, `ok` or `refused` here; `error` means a bad URL. Then wait 700 ms and screenshot the viewport.
 4. Convert each PNG with `cwebp -quiet -q 80 -m 6 <in>.png -o stills-2/<theme>-<state>-<wide|narrow>.webp`.
 
-The current set was captured from `docs/nido-sim/index.html` with SHA-256 `4f3056d0…`.
+The current set was captured from `docs/nido-sim/index.html` with SHA-256 `4f3056d0…`, the page at commit `a24407e`. The current page (`7bcf4a88…`) differs only in the live view's `done` flag for the ledger advance and in its embedded sources, so the `present=sheet` states the stills show are unchanged.
 
 ## Test
 
