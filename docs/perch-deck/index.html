@@ -453,18 +453,18 @@ body {
 
 <section class="slide" data-status="now" data-draw="install" aria-roledescription="slide" aria-label="Install the grant">
   <header class="head"><h2>Install the grant</h2></header>
-  <div class="stage"><svg role="img" aria-label="The Nido sign dialog asks you to install the app's grant; you approve with your passkey under the admin rule. One install call: the document compiler checks the grant and the account installs it. The grant covers the game, any function, and the stake its guess asks for, and the shop's order and the payment it pulls."></svg></div>
+  <div class="stage"><svg role="img" aria-label="The Nido sign dialog asks you to install the app's grant; you approve with your passkey under the admin rule. One install call: the document compiler checks the grant and the account installs it. The grant covers the game, any function, and the stake its guess asks for, paid only to the game, and the shop's order and the payment it pulls, paid only to the shop."></svg></div>
   <aside class="notes">
-    <p>The owner installs the app's grant with one call, <code>apply_scope</code>, approved in the Nido sign dialog and signed by the passkey under the account's <code>admin</code> rule. The document compiler validates the grant document, and the account installs its rules. For the demo the grant covers two rooms and the payment asked inside each: a game rule (any game function) and a transfer rule rooted at <code>game.guess</code> for the XLM stake, and a shop rule (<code>order</code>) and a transfer rule rooted at <code>shop.order</code> for the simulated EURC payment. Slides 9 and 10 show how each node is checked.</p>
+    <p>The owner installs the app's grant with one call, <code>apply_scope</code>, approved in the Nido sign dialog and signed by the passkey under the account's <code>admin</code> rule. The document compiler validates the grant document, and the account installs its rules. For the demo the grant covers two rooms and the payment asked inside each: a game rule (any game function) and a transfer rule rooted at <code>game.guess</code> for the XLM stake, paid only to the game, and a shop rule (<code>order</code>) and a transfer rule rooted at <code>shop.order</code> for the simulated EURC payment, paid only to the shop. Each transfer rule pins the recipient (<code>address-eq</code> on argument 1), so a payment to anyone else is refused by the rule. Slides 9 and 10 show how each node is checked.</p>
     <p class="src">docs/perch-paper/source/html/sections/motivation.html (apply_scope, the document compiler); docs/auth-root.md; docs/nido-sim/README.md (the grant the simulation installs).</p>
   </aside>
 </section>
 
 <section class="slide" data-status="now" data-draw="nested" aria-roledescription="slide" aria-label="Every call in the tree">
   <header class="head"><h2>Every call in the tree</h2></header>
-  <div class="stage"><svg role="img" aria-label="The app's keycard opens the game room. Inside, a losing guess asks for the stake, a transfer from the account to the game, and the same card covers it only because it is asked from inside the game room. As a tree: the root game.guess passes the game rule; the nested transfer passes the transfer rule only if it is from the account itself, within the cap, and its entry's root is exactly game.guess. The same transfer made directly, or under another root, is refused."></svg></div>
+  <div class="stage"><svg role="img" aria-label="The app's keycard opens the game room. Inside, a losing guess asks for the stake, a transfer from the account to the game, and the same card covers it only because it is asked from inside the game room. As a tree: the root game.guess passes the game rule; the nested transfer passes the transfer rule only if it is from the account itself, only to the game, within the cap, and its entry's root is exactly game.guess. The same transfer made directly, under another root, or to anyone other than the game, is refused."></svg></div>
   <aside class="notes">
-    <p>A grant covers a root call and the calls it makes on the account's behalf, and the account checks every node of the authorization tree against the rule the payload names for it. In the guess scenario, <code>game.guess</code> calls <code>guesser.require_auth()</code>, and a loss pays the stake with the XLM token's <code>transfer(account, game, stake)</code> inside it, so the account's entry is <code>[game.guess, token.transfer]</code>. The grant has a <code>game</code> rule and a <code>transfer</code> rule. The root passes the game rule. The nested transfer passes the transfer rule only if it is from the account itself (is-self on argument 0), within the cap (argument 2 is charged to the window; in the test, 2 XLM per 100 ledgers with a 1 XLM stake, so the cap refuses a third loss), and its entry's root is exactly <code>game.guess</code> (the rule's <code>auth-root</code>). The same transfer made directly, or under another root, is refused. A win is paid by the game itself, so the account's entry holds only <code>game.guess</code> and uses no allowance. The root check names an exact contract and function; it does not inspect root arguments or other ancestors.</p>
+    <p>A grant covers a root call and the calls it makes on the account's behalf, and the account checks every node of the authorization tree against the rule the payload names for it. In the guess scenario, <code>game.guess</code> calls <code>guesser.require_auth()</code>, and a loss pays the stake with the XLM token's <code>transfer(account, game, stake)</code> inside it, so the account's entry is <code>[game.guess, token.transfer]</code>. The grant has a <code>game</code> rule and a <code>transfer</code> rule. The root passes the game rule. The nested transfer passes the transfer rule only if it is from the account itself (is-self on argument 0), only to the game (address-eq on argument 1, as the Nido simulation's grant pins it; the <code>auth_root.rs</code> test grant leaves the recipient open), within the cap (argument 2 is charged to the window; in the test, 2 XLM per 100 ledgers with a 1 XLM stake, so the cap refuses a third loss), and its entry's root is exactly <code>game.guess</code> (the rule's <code>auth-root</code>). The same transfer made directly, or under another root, is refused, and in the Nido simulation a stake the game's owner redirects to itself is refused at the recipient check ("the payment must go to Game"). A win is paid by the game itself, so the account's entry holds only <code>game.guess</code> and uses no allowance. The root check names an exact contract and function; it does not inspect root arguments or other ancestors.</p>
     <p>Theorem 11 (authorization-tree coverage, in the host model): every call an account's entry approves is allowed by the rules its <code>__check_auth</code> checks, and those see the whole tree. The exact-root condition itself is tested (<code>auth_root.rs</code>), not proved.</p>
     <p class="src">crates/integration-tests/tests/auth_root.rs (Game::guess; signed_game_loss_and_win_and_document_round_trip; direct_under_cap_and_fabricated_game_root_are_refused; wrong_root_function_contract_omitted_root_auth_and_reordered_tree_are_refused); docs/auth-root.md; crates/perch-ir/src/doc.rs (AuthRoot); docs/perch-paper/source/statements.json (T11).</p>
   </aside>
@@ -472,9 +472,9 @@ body {
 
 <section class="slide" data-status="now" data-draw="coffee" aria-roledescription="slide" aria-label="A coffee order, nested">
   <header class="head"><h2>A coffee order, nested</h2></header>
-  <div class="stage"><svg role="img" aria-label="In the simulation and demos: the app's keycard opens the coffee shop's order counter, and the order pulls payment from the account in EURC, a simulated test token. As a tree: the root shop.order passes the shop rule; the nested EURC transfer passes the transfer rule only if it is from the account itself, within the cap, and its entry's root is exactly shop.order. The same transfer made directly is refused."></svg></div>
+  <div class="stage"><svg role="img" aria-label="In the simulation and demos: the app's keycard opens the coffee shop's order counter, and the order pulls payment from the account in EURC, a simulated test token. As a tree: the root shop.order passes the shop rule; the nested EURC transfer passes the transfer rule only if it is from the account itself, only to the shop, within the cap, and its entry's root is exactly shop.order. The same transfer made directly, or to anyone other than the shop, is refused."></svg></div>
   <aside class="notes">
-    <p>The second instance, built only for the simulation and the demos: a small shop contract whose <code>order</code> pulls payment from the buyer through a EUR stablecoin token, a simulator-only Stellar Asset Contract named for EURC and labelled as a simulated test token. The grant covers the shop's <code>order</code> root and the nested token transfer, with the same rule conditions as the guess grant: the transfer from the account itself, within the cap, under exactly the <code>shop.order</code> root. The Café Perch sign dialog elsewhere in this deck pays directly in XLM and is unchanged.</p>
+    <p>The second instance, built only for the simulation and the demos: a small shop contract whose <code>order</code> pulls payment from the buyer through a EUR stablecoin token, a simulator-only Stellar Asset Contract named for EURC and labelled as a simulated test token. The grant covers the shop's <code>order</code> root and the nested token transfer, with the same rule conditions as the guess grant: the transfer from the account itself, only to the shop, within the cap, under exactly the <code>shop.order</code> root. The Café Perch sign dialog elsewhere in this deck pays directly in XLM and is unchanged.</p>
     <p>Theorem 11 (authorization-tree coverage, in the host model): every call an account's entry approves is allowed by the rules its <code>__check_auth</code> checks, and those see the whole tree. The exact-root condition itself is tested (<code>auth_root.rs</code>), not proved.</p>
     <p class="src">The scenario: the simulation's shop contract and its simulated EURC test token (docs/nido-sim/README.md and the page's build sources). The rule conditions: docs/auth-root.md; crates/integration-tests/tests/auth_root.rs; docs/perch-paper/source/statements.json (T11). No EURC token exists outside the simulation and demos.</p>
   </aside>
@@ -483,12 +483,12 @@ body {
 <section class="slide" data-status="now" data-draw="nidorun" aria-roledescription="slide" aria-label="Nido in soroban-sim">
   <header class="head"><h2>Nido in soroban-sim</h2></header>
   <div class="stage stage-sim">
-    <svg role="img" aria-label="The Nido flow, run offline in soroban-sim: create your account, install the grant, play guess and see its nested XLM transfer checked, buy a coffee and see its nested EURC transfer checked. Each signature goes through the Nido sign dialog. Simulated: the passkey, the factory build and the EURC token."></svg>
+    <svg role="img" aria-label="The Nido flow, run offline in soroban-sim: create your account, install the grant, whose payments go only to the game and the shop, play guess and see its nested XLM transfer checked, buy a coffee and see its nested EURC transfer checked. Each signature goes through the Nido sign dialog. Simulated: the passkey, the factory build and the EURC token."></svg>
     <div class="frame-wrap"><span class="frame-wait">Loading the Nido simulation…</span><iframe data-src="../nido-sim/index.html?embed=1" title="Nido in soroban-sim: create an account, install a grant, play guess, buy a coffee"></iframe></div>
-    <p class="stage-links"><button class="act when-still" type="button" data-run>Run it here (5.3 MB)</button><button class="act ghost when-live" type="button" data-unrun>Back to the drawing</button><a class="act ghost" href="../nido-sim/index.html" target="_blank" rel="noopener">Open the Nido simulation</a></p>
+    <p class="stage-links"><button class="act when-still" type="button" data-run>Run it here (5.4 MB)</button><button class="act ghost when-live" type="button" data-unrun>Back to the drawing</button><a class="act ghost" href="../nido-sim/index.html" target="_blank" rel="noopener">Open the Nido simulation</a></p>
   </div>
   <aside class="notes">
-    <p>The Nido flow run offline in soroban-sim, in order: create your Nido account, install the grant, play guess and see its nested XLM transfer checked, then buy a coffee and see its nested transfer of the simulated EURC test token checked. Every signature goes through the Nido-branded sign dialog. Simulated, and labelled so in the page: the passkey (a software P-256 key), the factory build (Nido's factory on this stack's account Wasm) and the EURC token. "Run it here" loads the 5.3 MB page into this slide, and its WebAssembly compiles on the first press inside it; "Open the Nido simulation" opens it on its own, which suits phones. While the frame has focus, keys go to the frame; use the arrows at the bottom to move on.</p>
+    <p>The Nido flow run offline in soroban-sim, in order: create your Nido account, install the grant (its transfers go only to the game and the shop), play guess and see its nested XLM transfer checked, then buy a coffee and see its nested transfer of the simulated EURC test token checked. Every signature goes through the Nido-branded sign dialog. Simulated, and labelled so in the page: the passkey (a software P-256 key), the factory build (Nido's factory on this stack's account Wasm) and the EURC token. "Run it here" loads the 5.4 MB page into this slide, and its WebAssembly compiles on the first press inside it; "Open the Nido simulation" opens it on its own, which suits phones. While the frame has focus, keys go to the frame; use the arrows at the bottom to move on.</p>
     <p class="src">docs/nido-sim/index.html (the simulation page) and docs/nido-sim/README.md; slides 7–10 for the facts it runs.</p>
   </aside>
 </section>
@@ -1556,7 +1556,7 @@ B.install = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
     acc: [672, 120, 868, 560], accL: [706, 172], cmp: [740, 236], cmpL: [778, 246], card: [740, 300, 740, 330], cardL: [740, 286],
   };
   const [dx, dy, dw, dh] = P.dlg;
-  nidoDialog(c, dx, dy, dw, dh, 'Install a grant', ['the game: guess, and its stake', 'the shop: order, and its payment', 'the full grant under Details'], 80);
+  nidoDialog(c, dx, dy, dw, dh, 'Install a grant', ['the game: guess, its stake to the game', 'the shop: order, its payment to the shop', 'the full grant under Details'], 80);
   c.at(900);
   c.icon('passkey', P.key[0], P.key[1], 56, { k: 'now' });
   c.text(P.keyL[0], P.keyL[1], 'approve with your passkey', { anchor: P.keyL[2], size: .58 });
@@ -1576,7 +1576,7 @@ B.install = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   c.rect(kx, ky, kw, kh, { k: 'now', rx: 16, w: 1.1, fill: 'paper' });
   c.rect(kx, ky + kh * .1, kw, kh * .08, { k: 'now', w: .15, fill: 'now', fillOp: .2 });
   c.rect(kx + 26, ky + kh * .3, 44, 34, { k: 'now', rx: 4, w: .5 });
-  const lines = [['game', 'any function'], ['XLM.transfer', 'only inside the game room'], ['shop.order', ''], ['EURC.transfer', 'only inside the shop']];
+  const lines = [['game', 'any function'], ['XLM.transfer', 'to the game only, inside its room'], ['shop.order', ''], ['EURC.transfer', 'to the shop only, inside the shop']];
   lines.forEach(([a, b], i) => {
     const y = ky + kh * (T ? .34 : .34) + i * (T ? 62 : 54);
     c.text(kx + 100, y, a, { anchor: 'start', size: T ? .54 : .56, font: 'code', step: 80 });
@@ -1697,21 +1697,21 @@ function nestedScene(c, cfg) {
 
 B.nested = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   nestedScene(c, {
-    card: ['game.guess', 'XLM.transfer', 'only inside the game room'],
+    card: ['game.guess', 'XLM.transfer', 'to the game, in its room'],
     room: 'the game room', door: 'door: guess', counter: 'desk', inside: ['a loss: pay the stake', 'account to game, in XLM'],
     root: ['game.guess', 'the root: passes the game rule'], kid: ['XLM.transfer, the stake'],
-    conds: ['from the account itself', 'within the cap', 'its root is exactly game.guess'],
+    conds: ['from the account, only to the game', 'within the cap', 'its root is exactly game.guess'],
     dir: 'XLM.transfer as the root', dirNote: 'refused: the transfer rule needs the game room',
   });
 } };
 
 B.coffee = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   nestedScene(c, {
-    card: ['shop.order', 'EURC.transfer', 'only inside the shop'],
+    card: ['shop.order', 'EURC.transfer', 'to the shop, inside it'],
     room: 'the coffee shop', door: 'door: order', counter: 'cup', inside: ['the order pulls payment', 'account to shop, in EURC'],
     token: 'EURC: a simulated test token',
     root: ['shop.order', 'the root: passes the shop rule'], kid: ['EURC.transfer, the payment'],
-    conds: ['from the account itself', 'within the cap', 'its root is exactly shop.order'],
+    conds: ['from the account, only to the shop', 'within the cap', 'its root is exactly shop.order'],
     dir: 'EURC.transfer as the root', dirNote: 'refused: the transfer rule needs the shop',
   });
 } };

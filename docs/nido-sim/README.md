@@ -1,6 +1,6 @@
 # Nido in soroban-sim
 
-`index.html` is one self-contained, offline page (5.3 MB; the 3.4 MB
+`index.html` is one self-contained, offline page (5.4 MB; the 3.4 MB
 simulator inside it is compiled only on the first press). The reader creates
 a Nido account in soroban-sim the way Nido does, gives an app a Perch grant,
 then plays a guessing game and buys a coffee. Each request opens an approval
@@ -16,12 +16,13 @@ else is behind one Details control.
 - **Header:** Nido, the network chip ("Local network") and the requesting
   app. No fee line and no title line.
 - **Grant install:** a short lead ("Let Guess & Coffee spend without asking
-  you"), then one row per asset with the amount, the window in human time and
-  the call it is allowed inside ("2 XLM · every ~8 min · in Game › guess").
-  The rows describe only what the rules enforce: they name no recipient,
-  because the grant's rules do not fix one. Caution chips mark the risky
-  facts the rules contain ("no end date", "any function on Game"). An "Ends"
-  row appears only when a rule has an end.
+  you"), then one row per asset with the amount, the recipient, the window in
+  human time and the call it is allowed inside ("2 XLM to Game every ~8 min ·
+  in Game › guess", "10 EURC to Coffee shop every ~8 min · in Coffee shop ›
+  order"). The rows describe only what the rules enforce: each transfer rule
+  pins its recipient with `address-eq` on the transfer's `to` argument.
+  Caution chips mark the risky facts the rules contain ("no end date", "any
+  function on Game"). An "Ends" row appears only when a rule has an end.
 - **Payment or contract call:** the amount and the recipient of the signed
   transfer large ("1 XLM", "to Game"), one line for what the call does ("Play
   guess 3 on Game"), and the budget left in small type ("1 of 2 XLM left for
@@ -29,23 +30,26 @@ else is behind one Details control.
   moves no money says so.
 - **Verdict:** a quiet "✓ Checked" line when the check passes. A filled box
   only on refusal or failure ("✕ Your account would refuse this: the payment
-  must happen inside Game › guess"); then Reject is the filled primary and
-  "Sign anyway" a text button that asks to confirm. Warnings from the
-  decoder's comparison of the signed tree with the simulation's recording
-  (an extra, differing or missing entry) are always shown as alerts.
+  must happen inside Game › guess", "… the payment must go to Game"); then
+  Reject is the filled primary and "Sign anyway" a text button that asks to
+  confirm. Warnings from the decoder's comparison of the signed tree with the
+  simulation's recording (an extra, differing or missing entry) are always
+  shown as alerts.
 - **Primary labels** name the action: "Install grant", "Play, pay 1 XLM",
   "Pay 3.50 EURC", "Pay 1 XLM", "Play".
 - **Details** (collapsed for every request): what you sign (the decoded
-  calls), the grant's rules in full (functions, conditions, root, cap in
-  ledgers and time, recipient set by the call, end, signer, how to remove
-  it), why it is allowed, or why it is refused when the account refuses it
-  (the rule matched per node and the result of its checks), the simulation
-  (balances, events, ledger and protocol) and the addresses (full ids, the
-  signer key, the network fee).
+  calls), the grant's rules in full (functions, conditions including the
+  pinned recipient, root, cap in ledgers and time, end, signer, how to remove
+  it), the account's checks (the rule matched per node and the result of its
+  checks), the simulation (balances, events, ledger and protocol) and the
+  addresses (full ids, the signer key, the network fee). The checks are
+  headed "Why it is allowed" or "Why it is refused" once the verdict is in,
+  and "The account's checks" while the check runs or when it could not run.
 - **Keyboard:** a native modal `<dialog>` labelled by the lead and described
   by the verdict; focus starts on Reject and returns to the button that opened
-  the sheet; Details is a native `<details>` with a 44 px target; Escape
-  rejects.
+  the sheet; when the check's result redraws the sheet, focus stays on the
+  control that had it (an action or Details); Details is a native `<details>`
+  with a 44 px target; Escape rejects.
 
 Windows convert ledgers to time at about 5 s per ledger (100 ledgers is about
 eight minutes), as the paper and the decks say.
@@ -85,11 +89,11 @@ From the approval-screen design applied in this version (the page renders
 its own sheet until the component offers these):
 
 6. Layouts per kind of request: for a grant install, a lead and a limits
-   block decoded from the policy (one row per asset: amount, window in human
-   time, the root call it is allowed inside; caution chips for no end date,
-   any function or any recipient); for a payment or call, the amount and the
-   recipient of the signer's transfer as the lead, one line for the call, and
-   the budget left as a secondary line.
+   block decoded from the policy (one row per asset: amount, pinned
+   recipient, window in human time, the root call it is allowed inside;
+   caution chips for no end date, any function or any recipient); for a
+   payment or call, the amount and the recipient of the signer's transfer as
+   the lead, one line for the call, and the budget left as a secondary line.
 7. A quiet success state (a one-line "✓ Checked", no filled box) beside the
    loud refused and failed states, for example the state reflected on the
    host (`data-state`) or a part per state.
@@ -114,19 +118,28 @@ its own sheet until the component offers these):
    through Perch's WebAuthn verifier, over the account itself.
 2. **Install the grant.** The passkey signs `apply_scope(1, document)` under
    the admin rule. The grant: `game` (any game function), `pay-game` (XLM
-   `transfer`, argument 0 is the account, `auth-root {game, guess}`, 2 XLM per
-   100 ledgers), `shop` (`order`), `pay-shop` (test-EURC `transfer`, argument 0
-   is the account, `auth-root {shop, order}`, 10 EURC per 100 ledgers). The app
-   key is Ed25519, checked by Perch's Ed25519 verifier.
+   `transfer`, argument 0 is the account, argument 1 is the game
+   (`address-eq`), `auth-root {game, guess}`, 2 XLM per 100 ledgers), `shop`
+   (`order`), `pay-shop` (test-EURC `transfer`, argument 0 is the account,
+   argument 1 is the shop (`address-eq`), `auth-root {shop, order}`, 10 EURC
+   per 100 ledgers). The account enforces the recipient, so each cap can pay
+   only the game or only the shop. The app key is Ed25519, checked by Perch's
+   Ed25519 verifier.
 3. **Use it.** `game.guess(n, account)`: a loss is the tree `game.guess` →
    `XLM.transfer(account, game, 1 XLM)`; a win (7) is `game.guess` alone, the
    game paying the prize itself. `shop.order(account, 3.50 EURC)` →
    `EURC.transfer(account, shop, 3.50)`.
 4. **Refusals.** A direct `XLM.transfer` (root is the transfer, not
-   `game.guess`); a loss through `game.other` (root `game.other`); a loss once
-   the window holds 2 XLM (cap). Choose "Sign anyway" in the sheet to see
-   the account refuse it (contract error 5); the page shows which node and which
-   check failed.
+   `game.guess`); a loss through `game.other` (root `game.other`); a loss the
+   game sends to its owner (recipient: the transfer inside `game.guess` pays
+   the owner, not the game); a loss once the window holds 2 XLM (cap). Choose
+   "Sign anyway" in the sheet to see the account refuse it (contract error 5);
+   the page shows which node and which check failed. For the recipient case
+   the game's owner, a throwaway key, first sends lost stakes to its own
+   address (`set_house`, the one addition to the fixture's game, written for
+   this simulation), and sends them back to the game once the request is
+   submitted or rejected; both setup transactions are listed on the request's
+   card.
 
 Each node's checks are rule-core `5a689a5`'s own functions (`functions_match`,
 `cond_holds`, `signers_met`, `auth_root_matches`, `check_spend`, and
@@ -147,7 +160,8 @@ every request.
   frame the reader opened needs no second press. Nothing takes focus.
 - `?scenario=<base64url JSON array>`: creates the account, installs the
   grant, then sends each request approved, without opening the sheet.
-  Requests: `{op:"guess", number:0–9, entry?:"guess"|"other"}`,
+  Requests: `{op:"guess", number:0–9, entry?:"guess"|"other",
+  stake_to?:"owner"}`,
   `{op:"order", cents:1–5000}`, `{op:"transfer", token:"xlm"|"eurc",
   cents:1–5000}`, `{op:"advance", ledgers:1–10000}`, `{op:"install_grant"}`;
   at most 40. Anything else is ignored.
@@ -186,12 +200,12 @@ toolchain), stellar-cli 27.0.0 (`stellar contract build`).
 | perch_ed25519_verifier.wasm | 27a733ceb0bda62fc9f645f3a708de73afccfdde9d4b2ffb30f44a2b1b862e7c |
 | perch_webauthn_verifier.wasm | bc38017e9281839ebd683341088f5e3550881b97873d350161fa4881bc3070c3 |
 | nido_factory.wasm (rebuilt, account pin a6d7604e…) | d5a6aa11569db6ca2d49ea98e579d20ce71f53f309b5b5d1ea5ce121c714f2f6 |
-| nido_sim_game.wasm | 7c04ff93e363811ccdd35e08f2a30d93e541b164baac96d12a34c939b6a73874 |
+| nido_sim_game.wasm | ca125b953a82692ea9bc7b78c354fbb83ef2e83a249aef6ac792a893afde1d27 |
 | nido_sim_shop.wasm | d433a64029bf2b09a86bc7b1fd18a7dbf0d1015f557684b82e21215daad6efd4 |
-| reactor (driver, wasm32-wasip1) | 1d1e2094363cfa2fe5d6d944dbbb346031ec5571c7ea5bcdeb33e261d83841eb |
-| reference replies minus timings (native = WASI = browser) | 9ec27d1662a8999436d0961eb5ac122c4aefb28f2d7a405bad7e02b5e5aa7db7 |
-| recorded run `evidence/native-golden.jsonl` | a77586fa99248c75855a2dcf75e056c0bac8d7b88feb4c3c277ec850e9980850 |
-| index.html (5327291 bytes) | 64ae5a4af0b9687fa315b10f95b650a5d961da5b0b40708dd21fae02e3cc887b |
+| reactor (driver, wasm32-wasip1) | d8377b548a242e2ab833469e4f39986e1e1af27adb53277f2237b9de1a2c4224 |
+| reference replies minus timings (native = WASI = browser) | 5ec17f91692e417a25990f84547e25b7228624fa0ac7e4ce13c872aacfad47e2 |
+| recorded run `evidence/native-golden.jsonl` | 5fe0796a1118eda818384ff889b4e02ac24d6eaf2a84c2a57e018d68ed1a2b30 |
+| index.html (5352637 bytes) | a9082c5c1154af35d63d39ffd94d6521ddfc66a4a4695f390aad6d853f1ed0f9 |
 
 None of the Perch artifacts is a deployed contract: the account is built
 from 2c64fe4 with its compiler, interpreter and spending-limit pins staged
