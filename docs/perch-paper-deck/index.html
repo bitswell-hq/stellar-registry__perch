@@ -512,7 +512,7 @@ body {
 
 <section class="slide" data-ref="§5" data-draw="trust" aria-roledescription="slide" aria-label="What the building trusts">
   <header class="head"><h2>What the building trusts</h2></header>
-  <div class="stage"><svg role="img" aria-label="Trusted: the host and validators, the verifiers documents name, the adopted recovery controller, the document compiler, rustc and the wallet's display, with unforgeable signatures and a collision-resistant SHA-256 assumed. Goals: containment, permission soundness and window safety are proved for lowering and the decision, with the code around them tested; recovery invalidation is proved in an account model and tested; fail-closed refusal is tested."></svg></div>
+  <div class="stage"><svg role="img" aria-label="Trusted: the host and validators, the verifiers documents name, the adopted recovery controller, the document compiler, the compiler that builds the account and the wallet's display, with unforgeable signatures and a collision-resistant SHA-256 assumed. Goals: containment, permission soundness and window safety are proved for lowering and the decision, with the code around them tested; recovery invalidation is proved in an account model and tested; fail-closed refusal is tested."></svg></div>
   <aside class="notes">
     <p>Containment (G1), permission soundness (G2) and window safety (G3) are proved for lowering and the decision function, the code around them tested; fail-closed refusal (G6) is tested; recovery invalidation (G4) is proved in an account model (Theorem 10 of the verification companion), tested and run on testnet. The paper trusts the Soroban host and validators, the verifiers documents name, the adopted recovery controller, the document compiler, rustc and the wallet's display, and assumes unforgeable signature schemes (Ed25519; ECDSA P-256 for passkeys) and a collision-resistant SHA-256. Budgets across grants, effects outside authorization, confidentiality and verifier correctness are non-goals.</p>
     <p class="src">Paper §5 (sections/threat-model.tex, "Goals and trust").</p>
@@ -561,7 +561,7 @@ body {
 
 <section class="slide" data-ref="§8 · Theorem 1 (App. B)" data-draw="inspector" aria-roledescription="slide" aria-label="The inspector">
   <header class="head"><h2>The inspector</h2></header>
-  <div class="stage"><svg role="img" aria-label="The desk's decision rule, written in Rust, is traced by Charon and Aeneas into Lean. An inspector compares the tracing with a readable blueprint. Theorem 1: on every input the tracing gives the blueprint's answer and never jams. The lock as compiled to Wasm is not inspected."></svg></div>
+  <div class="stage"><svg role="img" aria-label="The desk's decision rule, as written, is traced by machine into a form a proof checker reads. An inspector compares the tracing with a readable blueprint. Theorem 1: on every input the tracing gives the blueprint's answer and never jams. The lock as built is not inspected."></svg></div>
   <aside class="notes">
     <p>The decision function is about 2,400 lines of no_std Rust in rule-core. Charon reads its MIR and Aeneas translates it into Lean; CI regenerates the translation, fails on any difference, and pins all 940 exported theorems to Lean's standard axioms. Proved means kernel-checked. The proofs trust the Lean kernel and its standard axioms, Charon, Aeneas and its Lean model of Rust primitives, rustc's MIR, and the specification, including the denotations.</p>
     <p>Theorem 1 (Appendix B): on every input the translated evaluator succeeds, never panicking or diverging, and its value denotes the model's result on the denoted inputs; it says nothing about allocation failure or compiled Wasm.</p>
@@ -608,7 +608,7 @@ body {
 
 <section class="slide" data-ref="§10" data-draw="limits" aria-roledescription="slide" aria-label="Limitations">
   <header class="head"><h2>Limitations</h2></header>
-  <div class="stage"><svg role="img" aria-label="The inspector certified the tracing, not the lock rustc builds; the specification is trusted; the shell around the desk is tested; no single theorem covers the whole path. A record holds at most 907 spends, two pre-signed installs can land in either order, and a document holds at most 10 rules, 8 signers and 8,192 bytes. Nothing is audited."></svg></div>
+  <div class="stage"><svg role="img" aria-label="The inspector certified the tracing, not the lock as built; the specification is trusted; the shell around the desk is tested; no single theorem covers the whole path. A record holds at most 907 spends, two pre-signed installs can land in either order, and a document holds at most 10 rules, 8 signers and 8,192 bytes. Nothing is audited."></svg></div>
   <aside class="notes">
     <p>The theorems concern the translation, not the Wasm rustc builds; the specification is trusted; the shell is tested; and no single theorem covers the whole authorization path. Table 1 lists what a grantee or a relayer can still do. Beyond it, a record holds at most 907 spends; two pre-signed installs for one grant can land in either order; and document caps (10 rules, 8 signers, 8,192 canonical bytes) bound what a grant can say. Nothing is audited; the owner key, recovery and the trusted components are in the vision companion.</p>
     <p class="src">Paper §10 (sections/limits.tex); source/facts/limits.json.</p>
@@ -645,7 +645,7 @@ body {
 <section class="slide slide-close" data-ref="App. A" aria-roledescription="slide" aria-label="Artifacts">
   <header class="head"><h2>Artifacts</h2></header>
   <div class="stage">
-    <p class="pins"><span>Perch <code>f0275f4</code></span><span>rule-core <code>cbabe59</code></span><span>soroban-sim <code>d029384</code> (host 29.0.2)</span><span>OpenZeppelin <code>v0.8.0</code></span><span>oz-policy-builder <code>43b13ed</code></span><span>Lean <code>v4.35.0</code></span></p>
+    <p class="pins"><span>Perch <code>f0275f4</code></span><span>the decision core <code>cbabe59</code></span><span>soroban-sim <code>d029384</code> (host 29.0.2)</span><span>OpenZeppelin <code>v0.8.0</code></span><span>oz-policy-builder <code>43b13ed</code></span><span>the proof checker <code>v4.35.0</code></span></p>
     <ul class="links">
       <li><a class="lk" href="../perch-paper/latex/perch-paper.pdf"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M10 4h15l7 7v25H10z"/><path d="M25 4v7h7M15 18h12M15 24h12M15 30h8"/></svg><span class="lk-t">The paper (PDF)</span><span class="lk-s">the academic edition this deck follows</span></a></li>
       <li><a class="lk" href="../perch-paper/index.html"><svg viewBox="0 0 40 40" aria-hidden="true"><rect x="4" y="6" width="32" height="28" rx="3"/><path d="M4 13h32M10 20h20M10 26h14"/></svg><span class="lk-t">The paper (HTML)</span><span class="lk-s">with the sign dialog and the simulation</span></a></li>
@@ -1520,7 +1520,7 @@ B.nidorun = { vb: ['0 0 1600 760', '0 0 800 1200'], draw(c) {
 
 B.desk = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   const T = c.tall;
-  const st = [['arrival', 'the host', 'trusted', 'network'], ['guards', '', 'tested', 'guard'], ['look up', 'select rules', 'tested', 'list'], ['decide', 'rule-core', 'proved', 'desk'], ['ID check', 'authenticate', 'tested', 'magnifier', 'verifier trusted'], ['logbook', 'store records', 'tested', 'doc']];
+  const st = [['arrival', 'the host', 'trusted', 'network'], ['guards', '', 'tested', 'guard'], ['look up', 'select rules', 'tested', 'list'], ['decide', 'the desk rule', 'proved', 'desk'], ['ID check', 'authenticate', 'tested', 'magnifier', 'verifier trusted'], ['logbook', 'store records', 'tested', 'doc']];
   const P = T ? { w: 260, h: 104, xs: () => 330, ys: i => 90 + i * 168, done: [330, 1110] }
     : { w: 190, h: 128, xs: i => 118 + i * 236, ys: () => 300, done: [1520, 300] };
   st.forEach(([lab, paper, kind, ic, note], i) => {
@@ -1613,7 +1613,7 @@ B.threat = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
 
 B.trust = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   const T = c.tall;
-  const trusted = [['network', 'host and', 'validators'], ['magnifier', 'verifiers', 'documents name'], ['controller', 'the recovery', 'controller'], ['doc', 'document', 'compiler'], ['gear', 'rustc', ''], ['screen', "the wallet's", 'display']];
+  const trusted = [['network', 'host and', 'validators'], ['magnifier', 'verifiers', 'documents name'], ['controller', 'the recovery', 'controller'], ['doc', 'document', 'compiler'], ['gear', 'the compiler', ''], ['screen', "the wallet's", 'display']];
   const pos = T ? trusted.map((_, i) => [150 + (i % 3) * 250, 140 + Math.floor(i / 3) * 210]) : trusted.map((_, i) => [190 + i * 244, 200]);
   c.at(80);
   c.text(T ? 400 : 800, T ? 40 : 90, 'trusted', { size: .72, k: 'soft' });
@@ -1671,7 +1671,7 @@ B.guards = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
 B.stronger = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   const T = c.tall;
   const opb = [['maturity', 'testnet pin; audit in progress; 33 mainnet transactions tested'], ['authoring', 'record or declare, synthesise, verify'], ['expressiveness', 'reads, quantifiers, clock windows, deny codes'], ['reach', 'rules on existing OpenZeppelin accounts']];
-  const pr = [['limits over time', 'a window inside the rule'], ['one decision point', 'refuses before any verifier runs'], ['one card across contracts', 'one install, one removal'], ['a proved core', 'the decision, in Lean']];
+  const pr = [['limits over time', 'a window inside the rule'], ['one decision point', 'refuses before any verifier runs'], ['one card across contracts', 'one install, one removal'], ['a proved core', 'the decision, proved (§8)']];
   const col = (x0, y0, head, k, items, d) => {
     c.at(d);
     c.text(x0, y0, head, { anchor: 'start', size: T ? .66 : .74, k, weight: 600 });
@@ -1781,13 +1781,13 @@ B.inspector = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
     : { rust: [180, 280], rustL: [180, 370], a1: [260, 280, 470, 280], a1L: [365, 252], tr: [580, 280], trL: [580, 370], bp: [1020, 280], bpL: [1020, 370], insp: [800, 230], eq: [800, 300], th: [800, 500], th2: [800, 540], cast: [210, 600], castL: [270, 610], foot: [1000, 690], foot2: null };
   c.at(80);
   c.icon('doc', P.rust[0], P.rust[1], T ? 80 : 90, { k: 'ink' });
-  c.text(P.rustL[0], P.rustL[1], 'the desk rule, in Rust', { size: T ? .52 : .64 });
+  c.text(P.rustL[0], P.rustL[1], 'the desk rule, as written', { size: T ? .52 : .64 });
   c.text(P.rustL[0], P.rustL[1] + (T ? 34 : 36), 'about 2,400 lines', { size: T ? .46 : .54, k: 'soft' });
   c.arrow(...P.a1, { k: 'ink', w: .7 });
-  c.text(P.a1L[0], P.a1L[1], T ? 'traced' : 'traced by Charon and Aeneas', { size: T ? .48 : .54, k: 'soft' });
+  c.text(P.a1L[0], P.a1L[1], T ? 'traced' : 'traced by machine', { size: T ? .48 : .54, k: 'soft' });
   c.at(900);
   c.icon('blueprint', P.tr[0], P.tr[1], T ? 80 : 92, { k: 'plan' });
-  c.text(P.trL[0], P.trL[1], 'the tracing, in Lean', { size: T ? .52 : .64, k: 'plan' });
+  c.text(P.trL[0], P.trL[1], 'the tracing', { size: T ? .52 : .64, k: 'plan' });
   c.icon('blueprint', P.bp[0], P.bp[1], T ? 80 : 92, { k: 'plan' });
   c.text(P.bpL[0], P.bpL[1], 'the blueprint', { size: T ? .52 : .64, k: 'plan' });
   c.text(P.bpL[0], P.bpL[1] + (T ? 34 : 36), 'a readable model', { size: T ? .46 : .54, k: 'soft' });
@@ -1808,7 +1808,7 @@ B.inspector = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   plaqueText(c, P.th2[0], P.th2[1], "blueprint's answer, and never jams or loops", { size: T ? .56 : .7 });
   c.at(2800);
   c.icon('lock', P.cast[0], P.cast[1], T ? 56 : 54, { k: 'soft' });
-  c.text(P.castL[0], P.castL[1], 'the lock as compiled (Wasm): not inspected', { anchor: 'start', size: T ? .5 : .58, k: 'soft' });
+  c.text(P.castL[0], P.castL[1], 'the lock as built: not inspected', { anchor: 'start', size: T ? .5 : .58, k: 'soft' });
   if (T) { c.text(P.foot[0], P.foot[1], 'kernel-checked · 940 theorems', { size: .5, k: 'soft' }); c.text(P.foot2[0], P.foot2[1], 'CI re-traces on every change', { size: .5, k: 'soft' }); }
   else c.text(P.foot[0] + 100, P.foot[1], 'kernel-checked · 940 theorems on standard axioms · CI re-traces on every change', { size: .54, k: 'soft' });
 } };
@@ -1957,7 +1957,7 @@ B.limits = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   c.text(C[0], C[1] + (T ? 46 : 52), 'the tracing', { size: T ? .5 : .56, k: 'plan' });
   c.text(C[0], C[1] + (T ? 74 : 80), 'proved', { size: T ? .46 : .5, k: 'plan' });
   c.text(C[0], C[1] - R[1] + (T ? 34 : 38), 'the shell: tested', { size: T ? .5 : .56 });
-  c.text(C[0], C[1] - R[0] + (T ? 36 : 40), 'the Wasm rustc builds, the host:', { size: T ? .46 : .52, k: 'soft' });
+  c.text(C[0], C[1] - R[0] + (T ? 36 : 40), 'the lock as built, the host:', { size: T ? .46 : .52, k: 'soft' });
   c.text(C[0], C[1] - R[0] + (T ? 64 : 70), 'outside the theorems', { size: T ? .46 : .52, k: 'soft' });
   c.at(1600);
   const items = [['the specification is trusted', ''], ['no single theorem covers the whole path', ''], ['a meter keeps at most 907 spends', ''], ['two pre-signed installs land in either order', ''], ['a card holds at most 10 rules, 8 signers, 8,192 bytes', ''], ['nothing is audited', 'stop']];
