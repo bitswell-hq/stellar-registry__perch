@@ -1847,8 +1847,7 @@ function toggleNotes() {
     if (!$('#sources-panel').hidden) toggleSources();
   }
 }
-$('#np-reset').addEventListener('click', e => {
-  e.currentTarget.blur();
+$('#np-reset').addEventListener('click', () => {
   const on = !!NT.since;
   Object.assign(NT, { acc: 0, slideAcc: 0, since: on ? ntNow() : 0, slideSince: on ? ntNow() : 0 });
   ntPaint();
@@ -1923,6 +1922,11 @@ $('#prev').addEventListener('click', prev);
 $('#next').addEventListener('click', next);
 $('#notes-btn').addEventListener('click', toggleNotes);
 $('#theme-btn').addEventListener('click', toggleTheme);
+
+addEventListener('click', e => {
+  const b = e.detail > 0 && e.target.closest && e.target.closest('button');
+  if (b && !b.closest('.slide')) b.blur();
+});
 
 const inControl = t => t && t.closest && t.closest('a, button, iframe, .frame-wrap');
 addEventListener('keydown', e => {
@@ -2321,9 +2325,9 @@ async function save(chunks, mime, secs) {
   say(`Saved <b>${name}</b>: ${fmt}, 1920×1080, ${mmss(secs)}, ${(blob.size / 1048576).toFixed(1)} MB. It stays on this computer; nothing was uploaded. <a href="${R.url}" download="${name}">Download again</a>`, 'ok');
 }
 function toggleRecord() { if (R.state === 'idle') startRecording(); else stopRecording(); }
-[[recBtn, toggleRecord], [$('#rp-pause'), pauseRecording], [$('#rp-stop'), stopRecording]].forEach(([b, fn]) => {
-  b.addEventListener('click', () => { b.blur(); fn(); });
-});
+recBtn.addEventListener('click', toggleRecord);
+$('#rp-pause').addEventListener('click', pauseRecording);
+$('#rp-stop').addEventListener('click', stopRecording);
 $('#src-btn').addEventListener('click', toggleSources);
 
 slides.forEach(s => { s.setAttribute('aria-hidden', 'true'); s.inert = true; });
