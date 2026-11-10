@@ -85,7 +85,7 @@
 # --constructorless-wasm say otherwise.
 #
 # Env: STELLAR_RPC_URL overrides the network's RPC (a rehearsal points it at a
-# soroban-sim fork: scripts/rehearse-bootstrap.sh). PERCH_ADMIN_KEY, the admin
+# soroban-sim fork: scripts/rehearse-migration.sh). PERCH_ADMIN_KEY, the admin
 # key's secret, signs and pays each author's apply_doc through this checkout's
 # perch-deploy (--send only). Simulations use the source's address and never
 # load a secret.
