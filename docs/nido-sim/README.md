@@ -192,7 +192,9 @@ every request.
   without a review; `step`: the load's `step`, or the reviewed request's
   `op`), and sets `data-nido-ready` on `<html>` to the verdict, or `done`;
   an invalid load or a failure posts `{type:"nido-sim:error", step, error}`
-  and sets it to `error`. The URL forms do the same.
+  and sets it to `error`. The URL forms do the same, except that an invalid
+  `scenario` or `review` parameter is ignored with a note on the page: the
+  page does not start, and posts and sets nothing.
 - One state per slide, as `index.html?embed=1&present=sheet&theme=dark&…`
   (each opens in under a second once the reactor is compiled):
 
