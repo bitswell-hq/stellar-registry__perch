@@ -66,6 +66,5 @@ The frozen-vector rules above do not apply to this subdirectory.
 authors apply to gain `ci-publish-verifiers`
 ([`../docs/deploy/README.md`](../docs/deploy/README.md#the-perch-authors-rule-on-perchverifiers)).
 `crates/perch-deploy/tests/perch_author_docs.rs` pins each to its hash and
-to the document its author applied on chain, and
-`scripts/test-release-scripts.py` checks `bootstrap-registry.sh` writes the
-testnet one; once applied, they record what each author holds.
+to the document its author applied on chain; once applied, they record what
+each author holds.

@@ -275,15 +275,10 @@ the whole document. Exit 1 is a mismatch or a failed read. Before the
 apply, the same command reports the old hash, `ci-publish-verifiers`
 `MISSING` and 3 rules for 4, and exits 1.
 
-The bootstrap writes the same document:
-`scripts/bootstrap-registry.sh --network <n> --source GAMPJROH… create-author --project perch`
-finds an author with `ci-publish` but no `ci-publish-verifiers`, rebuilds the
-document it applied from its rules (admin signer, delegate, expiry), checks
-that it compiles on the author's own compiler to its `applied_doc_hash`, adds
-the rule, simulates the `apply_doc`, and prints the `perch-deploy apply` to
-sign; with `--send` and `PERCH_ADMIN_KEY` it applies it (so does the
-migration's `all --send`). An author whose rules do not rebuild its applied
-document is left alone, with a warning.
+The bootstrap does not do this: `bootstrap-registry.sh create-author`
+leaves an author that already holds `ci-publish` alone, with a warning when
+the perch author has no `ci-publish-verifiers` yet. An existing author gains
+the rule only by this apply.
 
 ### The `deploy-stack` jobs (`release.yml`)
 
@@ -638,7 +633,7 @@ only with `--allow-unattested perch-constructorless-registry`.
 | 5 | `seed` | upload the four tier-0 if missing; `constructorless.publish_hash(name, <perch author>, <released hash>, <released version>)` for each, then `deploy_stateless` (permissionless) | constructorless's manager |
 | 6 | `verifiers` | `perch.deploy("perch-constructorless-registry", "0.1.0", "verifiers", owner, [admin, manager, root], None)`: the managed registry a document's `verifier-name` resolves in, at `deployer(perch, sha256("verifiers"))` | perch's manager |
 | 7 | `seed-verifiers` | for the ed25519 and WebAuthn verifiers, at their released versions and hashes: upload if missing, `verifiers.publish_hash(name, <perch author>, <released hash>, <released version>)`, then `deploy_stateless`. Admitting a new verifier later is the same first publish, which only the manager approves | verifiers's manager |
-| 8 | `create-author --project perch` | deploy the account with an `External(ed25519 verifier, admin key)` admin, check its `infra()` resolves in constructorless, then `apply_doc` with `admin`, `ci-publish` (scoped to constructorless, until `--ci-expiry-ledger`), `admin-registry` and `ci-publish-verifiers` (`ci-publish` on `perch/verifiers`, `publish_hash` alone). An author from before `ci-publish-verifiers` gets the document it applied again with that rule added ([The perch author's rule on `perch/verifiers`](#the-perch-authors-rule-on-perchverifiers)). Where the compiler resolves verifier names (its `verifier_registry` view), the admin verifier is the one in `perch/verifiers`, named in the document (`perch-ed25519-verifier@<version>`), as such an account requires; with an earlier compiler, the one in constructorless, by contract id | the source deploys; the admin key signs `apply_doc` |
+| 8 | `create-author --project perch` | deploy the account with an `External(ed25519 verifier, admin key)` admin, check its `infra()` resolves in constructorless, then `apply_doc` with `admin`, `ci-publish` (scoped to constructorless, until `--ci-expiry-ledger`), `admin-registry` and `ci-publish-verifiers` (`ci-publish` on `perch/verifiers`, `publish_hash` alone). An author that already holds `ci-publish` is left alone: one from before `ci-publish-verifiers` gains it by its admin's `apply_doc` ([The perch author's rule on `perch/verifiers`](#the-perch-authors-rule-on-perchverifiers)). Where the compiler resolves verifier names (its `verifier_registry` view), the admin verifier is the one in `perch/verifiers`, named in the document (`perch-ed25519-verifier@<version>`), as such an account requires; with an earlier compiler, the one in constructorless, by contract id | the source deploys; the admin key signs `apply_doc` |
 | 9 | `names --project perch` | `publish_hash(name, <perch author>, sha256("perch-bootstrap:<name>"), "0.0.0")` for every other name `deployments/testnet.json` deploys ([#142](https://github.com/stellar-registry/perch/issues/142)); refused until step 8 is on chain | constructorless's manager |
 | 10 | `create-author --project nido`, `names --project nido` | as 8 and 9, scoped to `nido`, without `ci-publish-verifiers`; `--nido-names` (default `nido-factory nido-name-registry`) | the source, the admin key, nido's manager |
 
@@ -670,8 +665,8 @@ stack: `deploy-stack.sh` publishes it there as the perch author, through
   the G of `CI_PUBLISH_SECRET_KEY` (testnet) or
   `CI_PUBLISH_MAINNET_SECRET_KEY`. It signs nothing here. From the author's
   `apply_doc` on, it signs every later publish of the author's names, and
-  pays for them. `--ci-expiry-ledger` is both rules' `not-after-ledger`. An
-  existing author keeps its own delegate and expiry. Mainnet closes about
+  pays for them. `--ci-expiry-ledger` is both rules' `not-after-ledger`. Both
+  describe a new author: an existing one is not touched. Mainnet closes about
   17,280 ledgers a day, and renewing the rule means re-applying the document
   ([#145](https://github.com/stellar-registry/perch/issues/145)).
 

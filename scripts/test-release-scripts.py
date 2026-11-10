@@ -2817,8 +2817,6 @@ elif args[:2] == ["contract", "invoke"]:
         doc = json.loads(bytes.fromhex(a["--doc_json"]))
         h = hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
         print(json.dumps({"doc_hash": h}) if fn == "compile_doc" else '"' + h + '"')
-    elif fn == "applied_doc_hash":
-        print('"' + state["applied"][cid] + '"')
     elif fn == "revision":
         print("1")
     else:
@@ -3067,59 +3065,23 @@ shutil.copy(src, args[args.index("-o") + 1])
         self.assertEqual(ci["scope"]["address"], self.constructorless)
         self.assertIn("not-after-ledger", ci)
 
-    def live_testnet_author(self, applied):
-        """The perch author as testnet holds it (read 2026-11-10): admin,
-        ci-publish and admin-registry, from before ci-publish-verifiers."""
-        admin = {"External": ["CBV6XVWKCCQ6QKRB4VKSKKRSNUVPBFWKSBMKDLPXEMKTYH5CJ3N52264",
-                              "18f4c5c7702def68a86c39783b1aa2efd410d8b891c9333827fa43c031f3e534"]}
+    def test_an_author_from_before_ci_publish_verifiers_is_left_alone(self):
+        # Its admin applies the committed document (docs/deploy/README.md).
         self.state["rules"][self.author_id] = [
-            {"name": "admin", "context_type": {"CallContract": self.author_id}, "signers": [admin], "valid_until": None},
-            {"name": "ci-publish", "context_type": {"CallContract": self.constructorless},
-             "signers": [{"Delegated": "GCYKIEDE4YNEPLSSS5THRX4NOQDWYVZH7U6QL2WLAXQECSDTD7AX2X7C"}], "valid_until": 6999998},
-            {"name": "admin-registry", "context_type": {"CallContract": self.constructorless}, "signers": [admin],
-             "valid_until": None}]
-        self.state["applied"] = {self.author_id: applied}
+            r for r in self.state["rules"][self.author_id] if r["name"] != "ci-publish-verifiers"]
         self.save()
-
-    @staticmethod
-    def fake_hash(doc):
-        return hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-
-    def test_an_author_from_before_ci_publish_verifiers_gets_the_document_it_applied_plus_that_rule(self):
-        # The committed document testnet's perch author applies
-        # (docs/deploy/README.md), and the one it applied before it.
-        with open(os.path.join(REPO, "testdata", "deploy", "perch-author-testnet.json")) as f:
-            reviewed = json.load(f)
-        prior = {**reviewed, "rules": [r for r in reviewed["rules"] if r["name"] != "ci-publish-verifiers"]}
-        self.live_testnet_author(self.fake_hash(prior))
-        # Flags describe a new author: this one keeps its delegate and expiry.
         out = self.bootstrap("--ci-key", self.source, "--ci-expiry-ledger", "123")
         self.assertEqual(out.returncode, 0, out.stderr)
-        self.assertIn("applied " + self.fake_hash(prior) + ", the document its rules rebuild to", out.stderr)
-        self.assertIn("--ci-key " + self.source + " is not the author's delegate", out.stderr)
-        with open(os.path.join(self.checkout, "target", "bootstrap-registry", "testnet", "perch-author.json")) as f:
-            self.assertEqual(json.load(f), reviewed)
-        self.assertIn("simulated apply_doc: \"" + self.fake_hash(reviewed) + "\"", out.stderr)
-        self.assertIn("sign: PERCH_ADMIN_KEY=<secret of the key 18f4c5c7", out.stderr)
+        note, = [line for line in out.stderr.splitlines() if "ci-publish-verifiers" in line and "has no" in line]
+        self.assertIn("perch author " + self.author_id + " has no ci-publish-verifiers on " + self.verifiers, note)
+        self.assertIn("testdata/deploy/perch-author-testnet.json", note)
+        # A warning, never a planned step: nothing is left for a rerun to do.
+        self.assertNotIn(" ->", note)
+        self.assertNotIn("apply_doc", out.stderr)
         self.assertIn("all done", out.stderr)
+        self.assertFalse(os.path.exists(os.path.join(
+            self.checkout, "target", "bootstrap-registry", "testnet", "perch-author.json")))
         self.assertEqual(self.submissions(), [])
-
-    def test_an_author_whose_rules_do_not_rebuild_its_document_is_left_alone(self):
-        for why, change in (("applied the document " + "00" * 32, lambda: None),
-                            ("holds the rules", lambda: self.state["rules"][self.author_id].append(
-                                {"name": "extra", "context_type": {"CallContract": self.author_id}, "signers": []}))):
-            with self.subTest(why=why):
-                self.live_testnet_author("00" * 32)
-                change()
-                self.save()
-                out = self.bootstrap()
-                self.assertEqual(out.returncode, 0, out.stderr)
-                self.assertIn(why, out.stderr)
-                self.assertIn("add ci-publish-verifiers to its document by hand", out.stderr)
-                self.assertIn("all stopped", out.stderr)
-                self.assertFalse(os.path.exists(os.path.join(
-                    self.checkout, "target", "bootstrap-registry", "testnet", "perch-author.json")))
-                self.assertEqual(self.submissions(), [])
 
     def test_a_refused_submission_fails_the_run(self):
         self.assertTrue(self.names)

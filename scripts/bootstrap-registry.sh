@@ -38,9 +38,11 @@
 #                     resolves verifier names (its verifier_registry view), the
 #                     admin signer is the ed25519 verifier perch/verifiers
 #                     deployed, named in the document; with an earlier compiler,
-#                     the one in constructorless, by contract id. A perch author
-#                     from before ci-publish-verifiers gets the document it
-#                     applied again, rebuilt from its rules, with that rule added
+#                     the one in constructorless, by contract id. An author that
+#                     already holds ci-publish is left alone: a perch author
+#                     from before ci-publish-verifiers gains it by its admin's
+#                     apply_doc (docs/deploy/README.md, "The perch author's
+#                     rule on perch/verifiers")
 #   names             --project perch|nido: bind each remaining name to that
 #                     project's author with a synthetic hash (stellar-registry/perch#142)
 #   all               preflight, code (constructorless registry and account),
@@ -783,14 +785,13 @@ admin_verifier() {
 # the same ledger, through which deploy-stack.sh publishes the stack's
 # verifiers into perch/verifiers. It allows publish_hash alone, the one call
 # that publishes.
-author_doc() { # registry admin-signer-json ci expiry|null [verifiers]
+author_doc() { # registry admin-signer-json ci expiry [verifiers]
     jq -n --arg net "$PASSPHRASE" --arg reg "$1" --argjson admin "$2" --arg ci "$3" --argjson until "$4" \
         --arg vreg "${5:-}" '
         def ci_rule($name; $registry; $functions):
           {name: $name, scope: {type: "contract", address: $registry},
            principals: {type: "all", signers: ["ci"]}, functions: $functions,
-           args: [{index: 1, pred: {type: "is-self"}}]}
-          + (if $until == null then {} else {"not-after-ledger": $until} end);
+           args: [{index: 1, pred: {type: "is-self"}}], "not-after-ledger": $until};
         {version: 1, network: $net,
          signers: [{id: "admin"} + $admin, {id: "ci", address: $ci}],
          rules: ([
@@ -842,53 +843,6 @@ author_scoped() { # author registry [name]
         'any(.[]; .name == $n and .context_type.CallContract == $r)' >/dev/null <<<"$RULES"
 }
 
-# The document of an author from before ci-publish-verifiers, which holds
-# admin, ci-publish and admin-registry only: the one it applied, rebuilt from
-# its rules (the admin signer; ci-publish's delegate, and its expiry, which
-# is not-after-ledger - 1), with ci-publish-verifiers added. The rebuilt
-# document must compile, on the author's own compiler, to the hash the
-# account applied, so the new one changes that rule and nothing else. Sets
-# EXISTING_DOC, EXISTING_ADMIN and EXISTING_CI; 1, with a warning, when the
-# author's document is not one this script writes.
-EXISTING_DOC="" EXISTING_ADMIN="" EXISTING_CI=""
-existing_doc() { # author registry verifiers
-    local rules signer admin ci until row n v h prior compiler applied
-    author_rules "$1"
-    rules="$RULES"
-    if [ "$(jq -r '[.[].name] | sort | join(" ")' <<<"$rules")" != "admin admin-registry ci-publish" ]; then
-        warn "$1 holds the rules $(jq -c '[.[].name]' <<<"$rules"), not admin, ci-publish and admin-registry: add ci-publish-verifiers to its document by hand"
-        return 1
-    fi
-    signer="$(jq -c '[.[] | select(.name == "admin") | .signers[]] | if length == 1 then .[0] else empty end' <<<"$rules")"
-    ci="$(jq -r '[.[] | select(.name == "ci-publish") | .signers[] | .Delegated // empty] | if length == 1 then .[0] else empty end' <<<"$rules")"
-    until="$(jq -c 'first(.[] | select(.name == "ci-publish")) | if .valid_until == null then null else .valid_until + 1 end' <<<"$rules")"
-    if [ -z "$signer" ] || [[ ! "$ci" =~ ^G[A-Z2-7]{55}$ ]]; then
-        warn "$1's admin rule or ci-publish delegate is not one signer: add ci-publish-verifiers to its document by hand"
-        return 1
-    fi
-    if jq -e 'has("Delegated")' >/dev/null <<<"$signer"; then
-        admin="$(jq -c '{address: .Delegated}' <<<"$signer")"
-    else
-        # Named where the verifier is one perch/verifiers deployed.
-        admin="$(jq -c '{verifier: .External[0], key: .External[1]}' <<<"$signer")"
-        for row in "${VERIFIERS_SEEDED[@]}"; do
-            read -r n v h <<<"$row"
-            [ "$(content "$VERIFIERS" "$h")" = "$(jq -r .verifier <<<"$admin")" ] || continue
-            admin="$(jq -c --arg n "$n@$v" '{verifier, "verifier-name": $n, key}' <<<"$admin")"
-        done
-    fi
-    compiler="$(simulate "$1" infra | jq -r '.doc_compiler // empty' 2>/dev/null || true)"
-    prior="$(simulate "$compiler" compile_doc --doc_json "$(author_doc "$2" "$admin" "$ci" "$until" | doc_hex)" |
-        jq -r '.doc_hash // empty' 2>/dev/null || true)"
-    applied="$(simulate "$1" applied_doc_hash | unquote)"
-    if [ -z "$prior" ] || [ "$prior" != "$applied" ]; then
-        warn "$1 applied the document $applied, but its rules rebuild to ${prior:-one its compiler $compiler refuses}: add ci-publish-verifiers to its document by hand"
-        return 1
-    fi
-    log "$1 applied $applied, the document its rules rebuild to"
-    EXISTING_DOC="$(author_doc "$2" "$admin" "$ci" "$until" "$3")" EXISTING_ADMIN="$admin" EXISTING_CI="$ci"
-}
-
 # A deployed author must resolve its infra in this network's constructorless:
 # an account built from another registry.path never would. One this run
 # deploys must resolve the seeded tier-0. One deployed earlier keeps the
@@ -915,7 +869,7 @@ check_infra() { # author fresh(0|1)
 }
 
 cmd_create_author() {
-    local project="$PROJECT" author reg vreg="" salt hash wasm signer tx fee ci expiry docfile hex r admin rebuilt=0
+    local project="$PROJECT" author reg vreg="" salt hash wasm signer tx fee ci expiry docfile hex r
     author="$(author_of "$project")"
     reg="$(registry_of "$project")"
     # The perch author also publishes the stack's verifiers into perch/verifiers.
@@ -969,54 +923,29 @@ cmd_create_author() {
 
     # 2. Its document. apply_doc compiles through the account's own compiler,
     #    deployer(constructorless, compiler hash), which `seed` puts there.
-    docfile="$OUT/$project-author.json"
     if author_scoped "$author" "$reg"; then
-        if [ -z "$vreg" ] || author_scoped "$author" "$vreg" ci-publish-verifiers; then
-            log "$project author already has ci-publish on $reg${vreg:+ and ci-publish-verifiers on $vreg}"
-            return
-        fi
-        # An author from before ci-publish-verifiers keeps its admin signer,
-        # delegate and expiry: --admin-key, --ci-key and --ci-expiry-ledger
-        # describe a new author.
-        log "$project author has ci-publish on $reg but no ci-publish-verifiers on $vreg: its document again, with that rule"
-        existing_doc "$author" "$reg" "$vreg" || return 1
-        rebuilt=1
-        printf '%s\n' "$EXISTING_DOC" >"$docfile"
-        admin="$EXISTING_ADMIN" ci="$EXISTING_CI"
-        expiry="$(jq -r 'first(.rules[] | select(.name == "ci-publish")) | .["not-after-ledger"] // "none"' "$docfile")"
-        [ -z "$CI_KEY" ] || [ "$CI_KEY" = "$ci" ] || warn "--ci-key $CI_KEY is not the author's delegate $ci, which it keeps"
-        [ -z "$CI_EXPIRY" ] || [ "$CI_EXPIRY" = "$expiry" ] || warn "--ci-expiry-ledger $CI_EXPIRY is not the author's $expiry, which it keeps"
-    else
-        ci="$CI_KEY"
-        if [ -z "$ci" ]; then
-            [ "$SEND" != 1 ] || die "--ci-key G... is required with --send (the ci-publish delegate)"
-            ci="$ADMIN_KEY_G"
-            warn "no --ci-key: the dry run's document names the admin key as the ci-publish delegate"
-        fi
-        expiry="$CI_EXPIRY"
-        if [ -z "$expiry" ]; then
-            [ "$SEND" != 1 ] || die "--ci-expiry-ledger is required with --send"
-            expiry=$(( $(latest_ledger) + 518400 ))
-            warn "no --ci-expiry-ledger: the dry run uses $expiry (about 30 days from now)"
-        fi
-        admin="$(new_admin)"
-        author_doc "$reg" "$admin" "$ci" "$expiry" "$vreg" >"$docfile"
+        log "$project author already has ci-publish on $reg"
+        [ -z "$vreg" ] || author_scoped "$author" "$vreg" ci-publish-verifiers ||
+            warn "$project author $author has no ci-publish-verifiers on $vreg, and an existing author's document is left alone: its admin applies testdata/deploy/perch-author-$NETWORK.json (docs/deploy/README.md, \"The perch author's rule on perch/verifiers\")"
+        return
     fi
-    # The admin key that signs: an External signer's, or a Delegated G.
-    local admin_g
-    if jq -e 'has("address")' >/dev/null <<<"$admin"; then
-        admin_g="$(jq -r .address <<<"$admin")"
-    elif [ "$(jq -r .key <<<"$admin")" = "$("$DERIVE" key "$ADMIN_KEY_G")" ]; then
-        admin_g="$ADMIN_KEY_G"
-    else
-        admin_g="the key $(jq -r .key <<<"$admin")"
-        warn "--admin-key $ADMIN_KEY_G is not the author's admin, $admin_g"
+    ci="$CI_KEY"
+    if [ -z "$ci" ]; then
+        [ "$SEND" != 1 ] || die "--ci-key G... is required with --send (the ci-publish delegate)"
+        ci="$ADMIN_KEY_G"
+        warn "no --ci-key: the dry run's document names the admin key as the ci-publish delegate"
     fi
-    log "$project author document ($docfile): admin $(jq -c . <<<"$admin"), ci-publish by $ci until ledger $expiry and admin-registry on $reg${vreg:+, ci-publish-verifiers by $ci until ledger $expiry on $vreg}"
+    expiry="$CI_EXPIRY"
+    if [ -z "$expiry" ]; then
+        [ "$SEND" != 1 ] || die "--ci-expiry-ledger is required with --send"
+        expiry=$(( $(latest_ledger) + 518400 ))
+        warn "no --ci-expiry-ledger: the dry run uses $expiry (about 30 days from now)"
+    fi
+    docfile="$OUT/$project-author.json"
+    author_doc "$reg" "$(new_admin)" "$ci" "$expiry" "$vreg" >"$docfile"
+    log "$project author document ($docfile): admin $ACCOUNT_SIGNER $ADMIN_KEY_G, ci-publish by $ci until ledger $expiry and admin-registry on $reg${vreg:+, ci-publish-verifiers by $ci until ledger $expiry on $vreg}"
     hex="$(doc_hex <"$docfile")"
-    # An existing author's apply_doc compiles on its own compiler, which the
-    # rebuilt document already compiled on.
-    if [ "$rebuilt" = 0 ] && ! instance_exists "$COMPILER"; then
+    if ! instance_exists "$COMPILER"; then
         # The same compiler bytes may already run in the registry this
         # network's deployment records while a migration is pending
         # (deployments/pending-registry.json): compile there now, with that
@@ -1049,14 +978,14 @@ cmd_create_author() {
     r="$(simulate "$author" apply_doc --doc_json "$hex" --approval_valid_until 0 --expected_revision "$rev")"
     log "simulated apply_doc: $r"
     [[ "$r" =~ ^\"[0-9a-f]{64}\"$ ]] || die "apply_doc would fail"
-    if jq -e 'has("address")' >/dev/null <<<"$admin"; then
-        plan "sign apply_doc on $author for the Delegated admin $admin_g with a CAP-71 signer; perch-deploy apply signs only External admins"
+    if [ "$ACCOUNT_SIGNER" = delegated ]; then
+        plan "sign apply_doc on $author for the Delegated admin $ADMIN_KEY_G with a CAP-71 signer; perch-deploy apply signs only External admins"
         [ "$SEND" != 1 ] || die "--send with a Delegated admin: this script has no signer for it"
         return 0
     fi
-    plan "sign: PERCH_ADMIN_KEY=<secret of $admin_g> cargo run -p perch-deploy -- --rpc-url $RPC_URL --network-passphrase '$PASSPHRASE' apply --account $author --doc $docfile (that key also pays)"
+    plan "sign: PERCH_ADMIN_KEY=<secret of $ADMIN_KEY_G> cargo run -p perch-deploy -- --rpc-url $RPC_URL --network-passphrase '$PASSPHRASE' apply --account $author --doc $docfile (that key also pays)"
     [ "$SEND" = 1 ] || return 0
-    [ -n "${PERCH_ADMIN_KEY:-}" ] || die "--send needs PERCH_ADMIN_KEY, the secret of $admin_g"
+    [ -n "${PERCH_ADMIN_KEY:-}" ] || die "--send needs PERCH_ADMIN_KEY, the secret of $ADMIN_KEY_G"
     mainnet_gate "the $project author's apply_doc" "$(fee_of "$author" apply_doc --doc_json "$hex" --approval_valid_until 0 --expected_revision "$rev")"
     cargo run --locked --manifest-path "$REPO/Cargo.toml" -q -p perch-deploy -- --rpc-url "$RPC_URL" --network-passphrase "$PASSPHRASE" \
         apply --account "$author" --doc "$docfile" </dev/null || die "submitting the $project author's apply_doc failed"
