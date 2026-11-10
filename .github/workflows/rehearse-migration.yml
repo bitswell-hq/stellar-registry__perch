@@ -30,6 +30,7 @@ on:
       - crates/*/wasm/registry.path
       - crates/*/wasm/verifiers.path
       - deployments/*.json
+      - testdata/deploy/perch-author-*.json
       - .github/actions/setup-stellar-fork/**
       - .github/workflows/rehearse-migration.yml
       - .github/workflows/release.yml

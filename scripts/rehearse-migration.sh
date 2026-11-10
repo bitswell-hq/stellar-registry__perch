@@ -486,21 +486,6 @@ rehearse() {
         stellar ledger entry fetch contract-data "${net[@]}" --contract "$1" --instance --output json </dev/null 2>/dev/null |
             jq -r '.entries[0].val.contract_data.val.contract_instance.executable.wasm // empty'
     }
-    has_ci_publish() { # author registry
-        local count id rule
-        count="$(read_call "$1" get_context_rules_count)"
-        [[ "$count" =~ ^[0-9]+$ ]] || { echo no; return; }
-        for ((id = 0; id < count + 32; id++)); do
-            rule="$(stellar contract invoke "${net[@]}" --id "$1" --source-account "$role_source" --send=no -- \
-                get_context_rule --context_rule_id "$id" </dev/null 2>/dev/null)" || continue
-            if [ "$(jq -r .name <<<"$rule")" = ci-publish ] &&
-                [ "$(jq -r '.context_type.CallContract // empty' <<<"$rule")" = "$2" ]; then
-                echo yes
-                return
-            fi
-        done
-        echo no
-    }
     account_hash="$(sha256_file "$account_file")"
     {
         echo "$network: derived addresses on the fork"
@@ -549,7 +534,7 @@ rehearse() {
                 '{doc_compiler: $c, interpreter: $i, spending_limit: $s}')"
             fi
             i=$((i + 1))
-            check "$project author ci-publish scoped to $reg" "$(has_ci_publish "$author" "$reg")" yes
+            check "$project author ci-publish scoped to $reg" "$(holds_rule "$author" "$reg" ci-publish)" yes
             [ "$project" != perch ] || [ ! -f "$REPO/testdata/deploy/perch-author-$network.json" ] ||
                 check "perch author ci-publish-verifiers scoped to $verifiers" "$(holds_rule "$author" "$verifiers" ci-publish-verifiers)" yes
         done
@@ -659,9 +644,10 @@ holds_rule() { # account contract name
 # names the real key.
 apply_author_doc() { # author
     local author="$1" doc="$REPO/testdata/deploy/perch-author-$network.json" count id rule admin verifier real new
-    local key got json entry old_lookup new_lookup label rules
+    local key got json entry old_lookup new_lookup label rules held
     [ -f "$doc" ] || return 0
-    [ "$(holds_rule "$author" "$verifiers" ci-publish-verifiers)" = no ] || return 0
+    held="$(holds_rule "$author" "$verifiers" ci-publish-verifiers)" || exit 1
+    [ "$held" = no ] || return 0
     count="$(read_call "$author" get_context_rules_count)"
     for ((id = 0; id < count + 32; id++)); do
         rule="$(stellar contract invoke "${net[@]}" --id "$author" --source-account "$role_source" --send=no -- \
@@ -736,7 +722,8 @@ apply_author_doc() { # author
             cargo run --locked --manifest-path "$REPO/Cargo.toml" -q -p perch-deploy -- \
                 --rpc-url "$url" verify --account "$author" --rules "$rules" </dev/null
     } >"$out/author-doc.log" 2>&1 || { cat "$out/author-doc.log" >&2; die "$network: applying ${doc#"$REPO"/} to the perch author failed"; }
-    [ "$(holds_rule "$author" "$verifiers" ci-publish-verifiers)" = yes ] || die "$network: after the apply, the perch author has no ci-publish-verifiers"
+    held="$(holds_rule "$author" "$verifiers" ci-publish-verifiers)" || exit 1
+    [ "$held" = yes ] || die "$network: after the apply, the perch author has no ci-publish-verifiers"
     note "Perch author's rule on perch/verifiers: ${doc#"$REPO"/} ($(jq -r .doc_hash "$rules")) applied with perch-deploy apply, the throwaway admin key standing in for the admin key; perch-deploy verify passes"
 }
 
@@ -823,12 +810,13 @@ release_mainnet() {
 # deploy_stateless (publish-wasm.sh) then publish and deploy the release's
 # bytes there.
 bridge_verifiers() { # stack author
-    local wasm="$1/perch_webauthn_verifier.wasm" version hash key got label
+    local wasm="$1/perch_webauthn_verifier.wasm" version hash key got label held
     version="$(jq -r '.artifacts[] | select(.package == "perch-webauthn-verifier") | .version' "$1/build.json")"
     hash="$(sha256_file "$wasm")"
     [ "$(read_call "$verifiers" fetch_hash --wasm_name perch-webauthn-verifier --version "\"$version\"")" != "$hash" ] || return 0
     # The author's ci-publish-verifiers: deploy-stack.sh publishes it there.
-    [ "$(holds_rule "$2" "$verifiers" ci-publish-verifiers)" = no ] || return 0
+    held="$(holds_rule "$2" "$verifiers" ci-publish-verifiers)" || exit 1
+    [ "$held" = no ] || return 0
     bridged_verifier="$version"
     key="$(stellar xdr encode --type ScVal <<<'{"vec":[{"symbol":"WA"},{"string":"perch-webauthn-verifier"}]}')"
     got="$(stellar ledger entry fetch contract-data "${net[@]}" --contract "$verifiers" --durability persistent \
