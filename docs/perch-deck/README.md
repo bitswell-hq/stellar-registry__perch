@@ -43,7 +43,7 @@ The current set comes from `docs/nido-sim/index.html` with SHA-256 `4f3056d0…`
 
 ## Test
 
-`test/nido-dialog.test.mjs` drives slide 11 as a presenter would, in Chromium, Firefox and WebKit: from a fresh load, by the keyboard's Next only, it checks that every step opens its dialog on screen (open, not empty, inside the frame and the viewport, and topmost at its centre), approves each approvable step with a real click and checks that the balances line moves, and rejects each refusal. It serves `docs/` itself on a free local port and exits 1 on a failure:
+`test/nido-dialog.test.mjs` drives slide 11 as a presenter would, in Chromium, Firefox and WebKit: from a fresh load, by the keyboard's Next only, it checks that every step opens its dialog on screen (open, not empty, inside the frame and the viewport, and topmost at its centre), approves each approvable step with a real click and checks that the balances line moves, and rejects each refusal. It then clicks "Reset demo" and presses Next at once, and checks that the passkey prompt opens on step 1. It serves `docs/` itself on a free local port and exits 1 on a failure:
 
     cd docs/perch-deck/test
     npm install && npx playwright install chromium firefox webkit
