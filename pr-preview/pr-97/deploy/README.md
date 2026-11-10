@@ -786,7 +786,7 @@ each substitution is an override the fork's report lists.
 | Bootstrap | `bootstrap-registry.sh create-registry` and `all --send` as the account holding the role, then every derived address and a dry rerun | the same | [Bootstrapping](#bootstrapping-a-networks-registry-chain) |
 | Versions | a scratch clone of the checkout (HEAD and its uncommitted changes) at the versions `release-pr` would pick now: git-cliff over each contract's `paths_for()` scope against `stellar-registry/perch`'s release tags, with its pin and lockfile sync | the testnet leg's | the release PR |
 | Tier-0 | each released `ALLOW` contract built with `stellar scaffold build` and published, authored by the perch author, into the registry `registry-target.sh` names | the same bytes, checked against their testnet hash and `binver`; `mainnet-settings.sh`, `publish-wasm.sh --plan`, then `publish-wasm.sh` | `constructorless-build` and `constructorless-publish`; `mainnet-publish` |
-| Stack | `build-stack.sh --reuse`, [the bridge](#known-gap-the-releases-webauthn-verifier-in-perchverifiers), `deploy-stack.sh --plan`, `deploy-stack.sh` | the testnet fork's deployment fetched by hash (`fetch-infra-wasm.sh --stack`), the bridge, `deploy-stack.sh --plan`, `deploy-stack.sh` | `deploy-stack-build` and `deploy-stack`; `mainnet-deploy-stack` |
+| Stack | `build-stack.sh --reuse`, [the bridge](#known-gap-the-releases-webauthn-verifier-in-perchverifiers) while the gap is real, `deploy-stack.sh --plan`, `deploy-stack.sh` | the testnet fork's deployment fetched by hash (`fetch-infra-wasm.sh --stack`), the bridge while the gap is real, `deploy-stack.sh --plan`, `deploy-stack.sh` | `deploy-stack-build` and `deploy-stack`; `mainnet-deploy-stack` |
 | Record | `manifest-registry.sh` and `verify-deployment.sh` on the new manifest | the same | `deploy-stack-record`; `mainnet-deploy-stack-record` |
 | Consumers | Nido's receiver (`fetch-infra-wasm.sh --stack` on the new manifest); the factory's `account_wasm_hash` and `webauthn_verifier`; a simulated `create_passkey`; the `perch-deployed` payload; `deployments/<network>.json` and the accounts its exercise report lists, still verifying | the same | [Notifying Nido](#notifying-nido-nido-dispatchyml) |
 | Report | passed, no failures, no envelope a real signer signed, exactly this run's overrides | the same | |
@@ -804,11 +804,17 @@ The overrides, all listed in each fork's report:
   (`SignerData`) names the ci key instead. The author's code, the rule's
   registry, functions, `is-self` argument and expiry, and its policy are the
   chain's.
-- `fork_setLedgerEntry`, labelled `KNOWN GAP, fork only`: `perch/verifiers`
-  binds `perch-webauthn-verifier` to the ci key, so that the release's
-  version can be published there. It stands in for a step the real migration
-  has no way to take (below). The registry's own `publish_hash` and
-  `deploy_stateless` then run, through `publish-wasm.sh`.
+- `fork_setLedgerEntry` and `fork_removeLedgerEntry`, only when
+  `testdata/deploy/perch-author-<network>.json` exists: the perch author's
+  admin key becomes the throwaway admin key in the entries that store it
+  (`SignerData`, `SignerLookup`, `InstalledRules`), so that the document can
+  be applied to the author on the fork (below).
+- `fork_setLedgerEntry`, labelled `KNOWN GAP, fork only`, only while the
+  perch author has no rule on `perch/verifiers`: `perch/verifiers` binds
+  `perch-webauthn-verifier` to the ci key, so that the release's version can
+  be published there. It stands in for a step the real migration has no way
+  to take (below). The registry's own `publish_hash` and `deploy_stateless`
+  then run, through `publish-wasm.sh`.
 
 ### Known gap: the release's WebAuthn verifier in `perch/verifiers`
 
@@ -841,9 +847,16 @@ migration blocked: perch/verifiers has no publish path for perch-webauthn-verifi
 ```
 
 The version is the one the run bridged. The gap is detected, not assumed:
-the script bridges only when `perch/verifiers` does not already serve the
-stack's WebAuthn verifier, so once a real path publishes it there, nothing
-is bridged and the rehearsal passes. To inspect a run locally despite the
+the bridge runs only while the perch author has no `ci-publish-verifiers`
+rule on `perch/verifiers`. The fix is the author's document with that rule,
+`testdata/deploy/perch-author-<network>.json`, and a deploy path that
+publishes the verifier under it. When that file exists, the rehearsal
+applies it to the author on the fork before the bootstrap (`perch-deploy
+apply`, then `perch-deploy verify`), with the throwaway admin key
+substituted for the author's admin key, and checks the rule among the
+derived addresses. Those substitutions are overrides the fork's report
+lists. The release path then publishes the verifier itself, nothing is
+bridged, and the rehearsal passes. To inspect a run locally despite the
 gap, pass `--accept-known-gaps` or set `REHEARSE_ACCEPT_KNOWN_GAPS=verifiers`:
 the message becomes a warning and the exit status 0. The workflow sets
 neither.
@@ -880,8 +893,8 @@ when a fork was bridged.
 
 In CI, the `Rehearse migration` workflow runs it on `workflow_dispatch` and
 on pull requests that touch the release path's scripts, `registry.path` or
-`verifiers.path`, the manifests, or the release workflows. It runs both
-networks in one job, because the mainnet leg fetches from the testnet fork.
+`verifiers.path`, the manifests, the perch author's document, or the release
+workflows (its `paths` is the list). It runs both networks in one job, because the mainnet leg fetches from the testnet fork.
 It writes the summary to the job's page and uploads `target/rehearse-migration`,
 without the throwaway keys or the scratch clone. It uses no secret, only
 `github.token` for `gh attestation verify`. While the known gap is real the
