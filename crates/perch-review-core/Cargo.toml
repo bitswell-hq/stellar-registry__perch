@@ -27,3 +27,6 @@ soroban-facade = { workspace = true }
 
 [dev-dependencies]
 rule-eval-conformance = { workspace = true }
+# The npm wrapper's committed fixtures (tests/fixtures.rs).
+base64 = "0.22"
+serde_json = "1"

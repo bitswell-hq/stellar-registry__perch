@@ -182,19 +182,33 @@ The pure Rust API:
 - `review_entry(entry, ledger_entries, ledger, verified)`;
 - `review(&Snapshot, &Request)`;
 - `remaining`;
-- `replay` and `replay_witness`.
+- `replay` and `replay_witness`;
+- `Snapshot::keys` and `Snapshot::grant_keys`, the entries to fetch.
 
 The byte interface (`envelope`) takes a binary envelope and returns JSON:
 
 - **review:** the ledger sequence, the account's `SorobanAuthorizationEntry`
   XDR, the account's `LedgerEntryData` XDRs as `getLedgerEntries` returns
   them, and the verified flags;
+- **chosen:** an entry's account and rule ids;
 - **witness:** parent rules, steps and child rules, each as `ScVal` XDR;
 - **budget:** a `StoredRecord`, a `StoredCap` and a ledger sequence.
 
 The entry parser reads `Address`, `AddressV2` and `AddressWithDelegates`
 credentials, plus every kind of invocation. It treats any union arm it does
-not know as unreadable rather than guessing. The npm wrapper is in `npm/`.
+not know as unreadable rather than guessing. A snapshot skips temporary
+entries, such as the host's nonces, which `__check_auth` never reads.
+
+`npm/` holds the TypeScript wrapper, `@stellar-registry/perch-review-core`
+(private, not published). It includes:
+
+- the typed API;
+- the ledger keys to fetch;
+- strkeys;
+- `sign-dialog`, which builds the soroban-sign-dialog preview result's
+  `verdicts` and `budgets` from the core.
+
+Its README covers the details.
 
 ## Wasm builds
 
@@ -204,16 +218,21 @@ loads only what it needs:
 
 | Module | Exports | Raw | gzip -9 | brotli -q 11 | Imports |
 |---|---|---|---|---|---|
-| review (`--features abi-review`) | `review`, `budget` | 46,242 | 19,077 | 16,672 | 0 |
-| review, after `wasm-opt -Oz` | | 39,125 | 18,185 | 16,076 | 0 |
+| review (`--features abi-review`) | `review`, `budget`, `chosen` | 47,607 | 19,598 | 17,115 | 0 |
+| review, after `wasm-opt -Oz` | | 40,229 | 18,668 | 16,462 | 0 |
 | witness (`--features abi-witness`) | `witness` | 27,543 | 10,840 | 9,386 | 0 |
 | witness, after `wasm-opt -Oz` | | 23,760 | 10,315 | 8,976 | 0 |
-| both in one module, after `wasm-opt -Oz` | all three | 50,222 | 22,262 | 19,339 | 0 |
+| all four exports in one module, after `wasm-opt -Oz` | | 51,344 | 22,807 | 19,773 | 0 |
 
 These are rustc 1.97.1 and wasm-opt 131 sizes, with the workspace's
 release profile (`opt-level = "z"`, LTO, `panic = "abort"`, overflow checks
 on). Each module exports `memory` and `alloc`. `alloc` resets an arena at
 the start of each call, so memory does not grow across calls.
+
+In Node 24, the review module instantiates in 0.53 ms. A review of a real
+account's 3 to 4 KB snapshot (a recovery rule, a capped rule and a grant)
+takes 10 to 12 µs per call. The npm tests hold the review module to 18,000
+bytes brotli and the witness module to 10,500. CI builds without wasm-opt.
 
 ## Placement
 

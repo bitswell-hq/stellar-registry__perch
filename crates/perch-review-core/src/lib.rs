@@ -54,7 +54,7 @@ pub use snapshot::{Freeze, Snapshot, Unreadable};
 pub use witness::{replay, replay_witness, Step, WitnessError};
 
 /// The entry's `AuthPayload`: its rule ids, and its signers in map order.
-fn payload(v: &Val) -> Option<(Vec<u32>, Vec<rule_eval::Signer>)> {
+pub(crate) fn payload(v: &Val) -> Option<(Vec<u32>, Vec<rule_eval::Signer>)> {
     let [ids, signers] = stored::fields(v, [b"context_rule_ids", b"signers"])?;
     let ids = stored::each(ids, stored::u32_of)?;
     let Val::Map(entries) = signers else {

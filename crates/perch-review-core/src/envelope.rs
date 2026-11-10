@@ -15,6 +15,9 @@
 //!   of [`crate::witness::step`] values): parent, steps, child.
 //! - [`budget`]: `1`, a `StoredRecord` `ScVal`, a `StoredCap` `ScVal`, the
 //!   ledger sequence.
+//! - [`chosen`]: `1` and a `SorobanAuthorizationEntry` XDR: the account and
+//!   the rule ids its payload chooses, which name the ledger entries to
+//!   fetch (`Snapshot::keys`).
 
 use alloc::vec::Vec;
 
@@ -119,5 +122,27 @@ pub fn budget(input: &[u8]) -> Vec<u8> {
             json::budget(&crate::remaining(&record, limit, period, now))
         }
         None => json::unreadable(Unreadable::Input),
+    }
+}
+
+/// The account and chosen rule ids of one authorization entry, as JSON:
+/// `{"v":1,"account":<hex>,"rule_ids":[..]}`.
+#[must_use]
+pub fn chosen(input: &[u8]) -> Vec<u8> {
+    let parse = || {
+        let mut r = R::new(input);
+        version(&mut r)?;
+        let entry = bytes(&mut r)?;
+        r.done().then_some(entry)
+    };
+    let Some(entry) = parse() else {
+        return json::unreadable(Unreadable::Input);
+    };
+    let Some(e) = crate::xdr::entry(entry) else {
+        return json::unreadable(Unreadable::Entry);
+    };
+    match crate::payload(&e.payload) {
+        Some((ids, _)) => json::chosen(&e.account, &ids),
+        None => json::unreadable(Unreadable::Payload),
     }
 }

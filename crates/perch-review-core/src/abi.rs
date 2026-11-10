@@ -1,9 +1,9 @@
 //! The browser builds' interface (target `wasm32v1-none`): the
 //! [`crate::envelope`] functions as wasm exports, over an arena allocator,
 //! with a panic handler that traps. Two modules are built from it: feature
-//! `abi-review` exports `review` and `budget`, what a signing dialog needs;
-//! feature `abi-witness` exports `witness`, for a derived-grant view. Each
-//! carries only the code its exports reach.
+//! `abi-review` exports `review`, `budget` and `chosen`, what a signing
+//! dialog needs; feature `abi-witness` exports `witness`, for a
+//! derived-grant view. Each carries only the code its exports reach.
 //!
 //! A call is `alloc(len)`, writing `len` input bytes at the pointer it
 //! returns, then an export with that pointer and length, which returns the
@@ -153,6 +153,17 @@ pub unsafe extern "C" fn review(ptr: *const u8, len: usize) -> u64 {
 #[no_mangle]
 pub unsafe extern "C" fn witness(ptr: *const u8, len: usize) -> u64 {
     out(crate::envelope::witness(unsafe { input(ptr, len) }))
+}
+
+/// [`crate::envelope::chosen`].
+///
+/// # Safety
+///
+/// `ptr` and `len` name the input `alloc` made room for.
+#[cfg(feature = "abi-review")]
+#[no_mangle]
+pub unsafe extern "C" fn chosen(ptr: *const u8, len: usize) -> u64 {
+    out(crate::envelope::chosen(unsafe { input(ptr, len) }))
 }
 
 /// [`crate::envelope::budget`].

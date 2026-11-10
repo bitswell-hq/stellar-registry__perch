@@ -236,6 +236,12 @@ pub fn review(account: &[u8], ledger: u32, r: &Review) -> Vec<u8> {
         o.raw("{").key("id").num(u64::from(c.id));
         o.key("grant").opt_num(c.grant.map(u64::from));
         o.key("capped").raw(if c.capped { "true" } else { "false" });
+        o.key("contract").hex(&c.contract);
+        o.key("name");
+        match &c.name {
+            Some(n) => o.hex(n),
+            None => o.raw("null"),
+        };
         o.raw("}");
     }
     o.raw("]").key("budgets").raw("[");
@@ -298,5 +304,21 @@ pub fn witness(r: &Result<(), WitnessError>) -> Vec<u8> {
 pub fn budget(r: &Remaining) -> Vec<u8> {
     let mut o = Out::new();
     o.remaining(r);
+    o.done()
+}
+
+/// An entry's account and chosen rule ids as JSON.
+#[must_use]
+pub fn chosen(account: &[u8], ids: &[u32]) -> Vec<u8> {
+    let mut o = Out::new();
+    o.raw("{").key("v").num(1).key("account").hex(account);
+    o.key("rule_ids").raw("[");
+    for (i, id) in ids.iter().enumerate() {
+        if i > 0 {
+            o.raw(",");
+        }
+        o.num(u64::from(*id));
+    }
+    o.raw("]}");
     o.done()
 }

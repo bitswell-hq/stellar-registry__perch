@@ -353,6 +353,11 @@ pub struct Chosen {
     pub id: u32,
     pub grant: Option<u32>,
     pub capped: bool,
+    /// The rule's contract, as its `SCAddress` XDR: for a capped rule, the
+    /// token its cap counts.
+    pub contract: Vec<u8>,
+    /// The record's `name`, as stored (a Soroban string's bytes).
+    pub name: Option<Vec<u8>>,
 }
 
 /// The core's answer for one authorization entry.
@@ -385,17 +390,25 @@ fn is_completion(recovery: Option<u32>, r: &Request) -> bool {
 /// `rule_of` (`gate.rs:185-195`): the `rule` field of the first record whose
 /// `id` is `id`. A record that is not a map of symbol keys, or has no `u32`
 /// id, ends the search with nothing, as the account's read does.
-fn rule_of(records: &[Val], id: u32) -> Option<&Val> {
+fn rule_of(records: &[Val], id: u32) -> Option<(&Val, &Val)> {
     for v in records {
         let Val::Map(entries) = v else { return None };
         if !entries.iter().all(|(k, _)| matches!(k, Val::Symbol(_))) {
             return None;
         }
         if u32_of(field(v, b"id")?)? == id {
-            return field(v, b"rule");
+            return field(v, b"rule").map(|rule| (rule, v));
         }
     }
     None
+}
+
+/// A stored rule as `stored_rule` finds it: its grant, its stored value and
+/// its record.
+struct Found<'a> {
+    grant: Option<u32>,
+    rule: &'a Val,
+    record: &'a Val,
 }
 
 /// The stored rule `id` names and its grant (`stored_rule`, `gate.rs:173-182`).
@@ -403,14 +416,19 @@ fn stored_rule<'a>(
     s: &'a Snapshot,
     admin: &'a [Val],
     id: u32,
-) -> Result<Option<(Option<u32>, &'a Val)>, Unreadable> {
-    if let Some(grant) = s.grant_tag(id)? {
-        let Some(rules) = s.grant_rules(grant)? else {
-            return Ok(None);
-        };
-        return Ok(rule_of(rules, id).map(|v| (Some(grant), v)));
-    }
-    Ok(rule_of(admin, id).map(|v| (None, v)))
+) -> Result<Option<Found<'a>>, Unreadable> {
+    let (grant, records) = match s.grant_tag(id)? {
+        Some(grant) => match s.grant_rules(grant)? {
+            Some(rules) => (Some(grant), rules),
+            None => return Ok(None),
+        },
+        None => (None, admin),
+    };
+    Ok(rule_of(records, id).map(|(rule, record)| Found {
+        grant,
+        rule,
+        record,
+    }))
 }
 
 /// The amount `ctx` charges under a cap reading argument `arg`.
@@ -595,11 +613,11 @@ fn review_rules(
             Some(j) => j,
             None => {
                 // gate.rs:91.
-                let Some((grant, v)) = stored_rule(s, admin, *id)? else {
+                let Some(found) = stored_rule(s, admin, *id)? else {
                     return Ok(out.refused(Check::RuleNotFound, None, Some(*id)));
                 };
                 // gate.rs:92.
-                let Some(rule) = stored::rule(v) else {
+                let Some(rule) = stored::rule(found.rule) else {
                     return Ok(out.refused(Check::UnreadableRule, None, Some(*id)));
                 };
                 // gate.rs:93-97, `record` (gate.rs:198-207): absent is empty.
@@ -612,8 +630,13 @@ fn review_rules(
                 };
                 out.rules.push(Chosen {
                     id: *id,
-                    grant,
+                    grant: found.grant,
                     capped: rule.cap.is_some(),
+                    contract: rule.contract.clone(),
+                    name: match field(found.record, b"name") {
+                        Some(Val::String(n)) => Some(n.clone()),
+                        _ => None,
+                    },
                 });
                 rules.push(rule);
                 records.push(record);

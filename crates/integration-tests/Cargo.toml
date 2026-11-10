@@ -47,6 +47,8 @@ ed25519-dalek = "2"
 fips204 = { workspace = true }
 hex = "0.4"
 serde_json = "1"
+# base64 for the npm fixtures review_core_differential.rs writes.
+base64 = "0.22"
 # rule-core's evaluator, Soroban facade and conformance runner (document
 # traces and the rule-eval baseline), at the workspace's one rev.
 rule-eval = { workspace = true }

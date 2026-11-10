@@ -52,11 +52,12 @@ use sha2::{Digest as _, Sha256};
 use soroban_sdk::auth::{Context, ContractContext, CreateContractHostFnContext};
 use soroban_sdk::testutils::Ledger as _;
 use soroban_sdk::xdr::{
-    ContractExecutable, ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgs,
-    Hash as XdrHash, InvokeContractArgs, Limits, ReadXdr, ScAddress, ScError, ScSymbol, ScVal,
-    SorobanAddressCredentials, SorobanAddressCredentialsWithDelegates, SorobanAuthorizationEntry,
-    SorobanAuthorizedFunction, SorobanAuthorizedInvocation, SorobanCredentials,
-    SorobanDelegateSignature, StringM, Uint256, VecM, WriteXdr as _,
+    ContractDataDurability, ContractExecutable, ContractIdPreimage, ContractIdPreimageFromAddress,
+    CreateContractArgs, Hash as XdrHash, InvokeContractArgs, LedgerEntryData, Limits, ReadXdr,
+    ScAddress, ScError, ScSymbol, ScVal, SorobanAddressCredentials,
+    SorobanAddressCredentialsWithDelegates, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
+    SorobanAuthorizedInvocation, SorobanCredentials, SorobanDelegateSignature, StringM, Uint256,
+    VecM, WriteXdr as _,
 };
 use soroban_sdk::{
     contract, contractimpl, Address, Bytes, BytesN, Env, IntoVal, Map, String as SString, Symbol,
@@ -247,6 +248,152 @@ fn review_seen(seen: &Seen<'_>) -> Result<Review, String> {
     }
 }
 
+/// The rule ids an entry's payload chooses.
+fn chosen_ids(entry: &[u8]) -> Vec<u32> {
+    let e = perch_review_core::xdr::entry(entry).expect("an entry");
+    let soroban_facade::Val::Map(fields) = e.payload else {
+        panic!("a payload is a map")
+    };
+    let Some((_, soroban_facade::Val::Vec(ids))) = fields.first() else {
+        panic!("a payload's first field is its rule ids")
+    };
+    ids.iter()
+        .map(|v| match v {
+            soroban_facade::Val::U32(x) => *x,
+            _ => panic!("a rule id is a u32"),
+        })
+        .collect()
+}
+
+/// The entries of `before` a wallet fetches for `rule_ids`, as the core's
+/// README tells it to: the instance entry, and the keys
+/// `Snapshot::keys` and `Snapshot::grant_keys` name.
+fn fetched(account: &[u8], before: &[Vec<u8>], rule_ids: &[u32]) -> Vec<Vec<u8>> {
+    let all = Snapshot::from_ledger_entries(account, before.iter().map(Vec::as_slice))
+        .expect("a snapshot");
+    let mut keys = Snapshot::keys(rule_ids);
+    keys.extend(all.grant_keys(rule_ids).expect("grant keys"));
+    before
+        .iter()
+        .filter(|b| {
+            let LedgerEntryData::ContractData(c) =
+                LedgerEntryData::from_xdr(b, Limits::none()).unwrap()
+            else {
+                return false;
+            };
+            if c.key == ScVal::LedgerKeyContractInstance {
+                return true;
+            }
+            c.durability == ContractDataDurability::Persistent
+                && soroban_facade::xdr::decode(&c.key.to_xdr(Limits::none()).unwrap())
+                    .is_some_and(|k| keys.contains(&k))
+        })
+        .cloned()
+        .collect()
+}
+
+/// The core's byte interface's input (`perch_review_core::envelope`).
+fn envelope(entry: &[u8], entries: &[Vec<u8>], ledger: u32, verified: &[Verified]) -> Vec<u8> {
+    let mut out = vec![];
+    let u32 = |out: &mut Vec<u8>, n: usize| out.extend((n as u32).to_be_bytes());
+    u32(&mut out, 1);
+    u32(&mut out, ledger as usize);
+    u32(&mut out, entry.len());
+    out.extend(entry);
+    u32(&mut out, entries.len());
+    for e in entries {
+        u32(&mut out, e.len());
+        out.extend(e);
+    }
+    u32(&mut out, verified.len());
+    for v in verified {
+        out.push(match v {
+            Verified::No => 0,
+            Verified::Yes => 1,
+            Verified::Assumed => 2,
+        });
+    }
+    out
+}
+
+thread_local! {
+    /// Fixtures for the npm wrapper's tests, collected on the thread
+    /// `write_npm_fixtures` runs the gate cases on.
+    static FIXTURES: std::cell::RefCell<Option<Vec<serde_json::Value>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// What the core must also do for an authorization it reviewed from
+/// `entry`: give the same answer from only the entries a wallet fetches,
+/// and through its byte interface. The differences, if any.
+fn also(
+    what: &str,
+    entry: &[u8],
+    before: &[Vec<u8>],
+    ledger: u32,
+    verified: &[Verified],
+    review: &Review,
+    host: &Verdict,
+) -> Vec<String> {
+    let ids = chosen_ids(entry);
+    let account = perch_review_core::xdr::entry(entry).unwrap().account;
+    let full = perch_review_core::json::review(&account, ledger, review);
+    let subset = fetched(&account, before, &ids);
+    let mut out = vec![];
+    let input = envelope(entry, &subset, ledger, verified);
+    let bytes = perch_review_core::envelope::review(&input);
+    if bytes != full {
+        out.push(format!(
+            "{what}: from the fetched entries the core answers {}, from all of them {}",
+            String::from_utf8_lossy(&bytes),
+            String::from_utf8_lossy(&full)
+        ));
+    }
+    let mut sink = FIXTURES.take();
+    if let Some(sink) = sink.as_mut() {
+        let keys: Vec<String> = std::iter::once(b64(&instance_key(&account)))
+            .chain(
+                Snapshot::keys(&ids)
+                    .iter()
+                    .map(|k| b64(&ledger_key(&account, k))),
+            )
+            .collect();
+        sink.push(serde_json::json!({
+            "name": what,
+            "input": b64(&input),
+            "output": serde_json::from_slice::<serde_json::Value>(&full).unwrap(),
+            "account": format!("{host:?}"),
+            "rule_ids": ids,
+            "keys": keys,
+        }));
+    }
+    FIXTURES.set(sink);
+    out
+}
+
+/// `b` in standard base64, as `getLedgerEntries` and the wallets carry XDR.
+fn b64(b: &[u8]) -> String {
+    use base64::Engine as _;
+    base64::engine::general_purpose::STANDARD.encode(b)
+}
+
+/// The `LedgerKey` XDR of the account's contract-data entry under `key`.
+fn ledger_key(account: &[u8], key: &soroban_facade::Val) -> Vec<u8> {
+    let mut out = vec![0, 0, 0, 6];
+    out.extend(account);
+    out.extend(soroban_facade::xdr::encode(key));
+    out.extend([0, 0, 0, 1]);
+    out
+}
+
+/// The `LedgerKey` XDR of the account's instance entry.
+fn instance_key(account: &[u8]) -> Vec<u8> {
+    let mut out = vec![0, 0, 0, 6];
+    out.extend(account);
+    out.extend([0, 0, 0, 20, 0, 0, 0, 1]);
+    out
+}
+
 // ---------------------------------------------------------------------------
 // Document traces
 // ---------------------------------------------------------------------------
@@ -268,7 +415,14 @@ fn the_core_agrees_with_the_account_on_every_document_trace() {
                 i += 1;
                 match review_seen(&seen) {
                     Ok(review) => {
-                        tally.add(&what, seen.world, &review, &host_verdict(&seen.outcome))
+                        let host = host_verdict(&seen.outcome);
+                        tally.add(&what, seen.world, &review, &host);
+                        if let Some(entry) = seen.entry {
+                            let xdr = entry.to_xdr(Limits::none()).unwrap();
+                            let more =
+                                also(&what, &xdr, &seen.before, seen.ledger, &[], &review, &host);
+                            tally.differences.extend(more);
+                        }
                     }
                     Err(e) => tally.differences.push(format!("{what}: {e}")),
                 }
@@ -622,6 +776,7 @@ fn review_direct(
     ledger: u32,
     verified: &[Verified],
 ) -> Review {
+    LAST_ENTRY.with(|l| *l.borrow_mut() = None);
     let entries = before.iter().map(Vec::as_slice);
     if contexts.is_empty() {
         let account = sc_address(&w.account);
@@ -652,9 +807,21 @@ fn review_direct(
     let xdr = entry_of(w, contexts, payload)
         .to_xdr(Limits::none())
         .unwrap();
-    perch_review_core::review_entry(&xdr, entries, ledger, verified)
+    let review = perch_review_core::review_entry(&xdr, entries, ledger, verified)
         .expect("a review")
-        .1
+        .1;
+    LAST_ENTRY.with(|l| *l.borrow_mut() = Some(xdr));
+    review
+}
+
+thread_local! {
+    /// The entry [`review_direct`] last built, for [`also`].
+    static LAST_ENTRY: std::cell::RefCell<Option<Vec<u8>>> = const { std::cell::RefCell::new(None) };
+}
+
+/// The entry [`review_direct`] built for its last call, if it built one.
+fn last_entry() -> Option<Vec<u8>> {
+    LAST_ENTRY.with(|l| l.borrow_mut().take())
 }
 
 /// The abstract address renamed onto the account: the one most often
@@ -849,6 +1016,10 @@ fn run_authorize_trace(
             Err(Err(_)) => Verdict::Refused(None),
         };
         tally.add(&what, &w, &review, &host);
+        if let Some(entry) = last_entry() {
+            let more = also(&what, &entry, &before, a.now, &[], &review, &host);
+            tally.differences.extend(more);
+        }
         // The trace's expectation is rule-eval's alone.
         let model_ok = matches!(a.expected, authorize::Outcome::Ok(_));
         if diverged {
@@ -1110,6 +1281,8 @@ impl Gate {
             _ => host_verdict(&Err(rule_core::account_refusal(w))),
         };
         self.tally.add(what, w, &review, &host);
+        let more = also(what, &xdr, &before, w.ledger(), &[], &review, &host);
+        self.tally.differences.extend(more);
         host
     }
 
@@ -1144,6 +1317,10 @@ impl Gate {
             Err(Err(_)) => Verdict::Refused(None),
         };
         self.tally.add(what, w, &review, &host);
+        if let Some(entry) = last_entry() {
+            let more = also(what, &entry, &before, w.ledger(), verified, &review, &host);
+            self.tally.differences.extend(more);
+        }
         host
     }
 
@@ -1166,6 +1343,13 @@ fn code(e: impl Into<soroban_sdk::Error>) -> Verdict {
 
 #[test]
 fn the_core_agrees_with_the_account_on_perchs_gate_cases() {
+    let (cases, all) = gate_cases();
+    println!("gate cases: {cases:?}; {}", all.summary("authorizations"));
+    assert!(all.differences.is_empty(), "{}", all.differences.join("\n"));
+}
+
+/// Perch's gate cases, each compared: the cases run and what they found.
+fn gate_cases() -> (Vec<String>, Tally) {
     use perch_account::PerchAuthError as A;
     use perch_account_types::SmartAccountError as S;
     let mut all = Tally::default();
@@ -1716,8 +1900,373 @@ fn the_core_agrees_with_the_account_on_perchs_gate_cases() {
     assert_eq!(assumed.assumed, vec![0]);
     done(g, "external signatures");
 
-    println!("gate cases: {cases:?}; {}", all.summary("authorizations"));
+    (cases, all)
+}
+
+// ---------------------------------------------------------------------------
+// The npm wrapper's fixtures
+// ---------------------------------------------------------------------------
+
+/// The committed fixtures of the npm wrapper's tests.
+fn fixtures_path() -> std::path::PathBuf {
+    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../perch-review-core/npm/test/fixtures.json")
+}
+
+/// Regenerate the npm wrapper's fixtures (`fixtures_path`): every gate
+/// case's input with the native core's answer and the account's verdict,
+/// and witness and budget inputs with the native core's answers. Run with
+/// `cargo test -p perch-integration-tests --test review_core_differential
+/// write_npm_fixtures -- --ignored`. `perch-review-core`'s
+/// `tests/fixtures.rs` checks the committed file against the native core,
+/// and the npm tests run the wasm builds on it.
+#[test]
+#[ignore = "regenerates committed fixtures"]
+fn write_npm_fixtures() {
+    FIXTURES.set(Some(vec![]));
+    let (_, all) = gate_cases();
     assert!(all.differences.is_empty(), "{}", all.differences.join("\n"));
+    // At most three cases of each answer: every verdict and check the gate
+    // cases reach, without their repeats.
+    let mut seen: BTreeMap<String, usize> = BTreeMap::new();
+    let reviews: Vec<serde_json::Value> = FIXTURES
+        .take()
+        .unwrap()
+        .into_iter()
+        .filter(|f| {
+            let o = &f["output"];
+            let budgets = o["budgets"].as_array().is_some_and(|b| !b.is_empty());
+            let kind = format!(
+                "{} {} {} {budgets}",
+                o["status"], o["refusal"]["check"], f["account"]
+            );
+            let n = seen.entry(kind).or_default();
+            *n += 1;
+            *n <= 3
+        })
+        .collect();
+    let out = serde_json::json!({
+        "about": "Generated by perch-integration-tests (review_core_differential.rs, write_npm_fixtures): each review input is a gate case the account decided, with the native core's answer and the account's verdict; checked against the native core by perch-review-core's tests/fixtures.rs.",
+        "review": reviews,
+        "witness": witness_fixtures(),
+        "budget": budget_fixtures(),
+    });
+    std::fs::write(
+        fixtures_path(),
+        serde_json::to_string_pretty(&out).unwrap() + "\n",
+    )
+    .unwrap();
+}
+
+/// A host value's XDR.
+fn host_xdr<T: IntoVal<Env, Val>>(e: &Env, v: T) -> Vec<u8> {
+    let v: Val = v.into_val(e);
+    soroban_sdk::xdr::ToXdr::to_xdr(v, e).to_alloc_vec()
+}
+
+/// A host value's XDR, read by the facade.
+fn facade_of<T: IntoVal<Env, Val>>(e: &Env, v: T) -> soroban_facade::Val {
+    soroban_facade::xdr::decode(&host_xdr(e, v)).unwrap()
+}
+
+/// Witness inputs from rule-core's attenuation vectors: a vector's rule
+/// set as stored rules (its abstract addresses renamed onto host ones), a
+/// step list, and the child the vector reaches (or the parent, where a step
+/// is refused), then the same with the child's first threshold raised.
+fn witness_fixtures() -> Vec<serde_json::Value> {
+    use perch_rule_eval::{StoredCond, StoredRule};
+    use rule_eval_conformance::{decode_step, Outcome as VOutcome, Step as VStep};
+    use soroban_facade::Val as F;
+    let e = Env::default();
+    e.cost_estimate().budget().reset_unlimited();
+    let mut names = Renamer {
+        e: e.clone(),
+        names: BTreeMap::new(),
+    };
+    let stored = |rules: &[rule_eval::Rule]| -> Option<Vec<u8>> {
+        let mut v: SVec<StoredRule> = SVec::new(&e);
+        for r in rules {
+            v.push_back(StoredRule::from_rule(&e, r)?);
+        }
+        Some(host_xdr(&e, v))
+    };
+    let sym = |s: &str| F::Symbol(s.as_bytes().to_vec());
+    let symbols = |fs: &[Vec<u8>]| F::Vec(fs.iter().map(|f| F::Symbol(f.clone())).collect());
+    let mut out = vec![];
+    let vectors = rule_eval_conformance::load_dir(&rule_eval_conformance::vectors_dir()).unwrap();
+    for (_, v) in vectors.iter().filter(|(_, v)| !v.attenuations.is_empty()) {
+        let parent: Vec<rule_eval::Rule> = decode_rules(&v.rules)
+            .unwrap()
+            .iter()
+            .map(|r| names.rule(r))
+            .collect();
+        let Some(parent_xdr) = stored(&parent) else {
+            continue;
+        };
+        for case in v.attenuations.iter().take(2) {
+            let mut steps = vec![];
+            let mut ok = true;
+            for s in &case.steps {
+                let step = match decode_step(s).unwrap() {
+                    VStep::DropRule(i) => F::Vec(vec![sym("DropRule"), F::U32(i)]),
+                    VStep::AddCond(i, c) => {
+                        let renamed = names.rule(&rule_eval::Rule {
+                            contract: vec![],
+                            functions: rule_eval::Functions::Only(vec![]),
+                            conds: vec![c],
+                            signers: vec![],
+                            threshold: 0,
+                            cap: None,
+                            valid_until: None,
+                            generation: None,
+                            auth_root: None,
+                        });
+                        let Some(c) = StoredCond::from_cond(&e, &renamed.conds[0]) else {
+                            ok = false;
+                            break;
+                        };
+                        F::Vec(vec![sym("AddCond"), F::U32(i), facade_of(&e, c)])
+                    }
+                    VStep::RemoveFunctions(i, f) => {
+                        F::Vec(vec![sym("RemoveFunctions"), F::U32(i), symbols(&f)])
+                    }
+                    VStep::RestrictFunctions(i, f) => {
+                        F::Vec(vec![sym("RestrictFunctions"), F::U32(i), symbols(&f)])
+                    }
+                    VStep::RemoveSigners(i, ss) => {
+                        let mut list = vec![];
+                        for s in ss {
+                            let renamed = match s {
+                                rule_eval::Signer::Delegated(a) => {
+                                    rule_eval::Signer::Delegated(names.xdr(&a))
+                                }
+                                rule_eval::Signer::External(v, k) => {
+                                    rule_eval::Signer::External(names.xdr(&v), k)
+                                }
+                            };
+                            let host = perch_rule_eval::convert::host_signer(&e, &renamed).unwrap();
+                            list.push(facade_of(&e, host));
+                        }
+                        F::Vec(vec![sym("RemoveSigners"), F::U32(i), F::Vec(list)])
+                    }
+                    VStep::RaiseThreshold(i, t) => {
+                        F::Vec(vec![sym("RaiseThreshold"), F::U32(i), F::U32(t)])
+                    }
+                    VStep::AddCap(i, c) => F::Vec(vec![
+                        sym("AddCap"),
+                        F::U32(i),
+                        F::Map(vec![
+                            (sym("amount_arg"), F::U32(c.amount_arg)),
+                            (sym("limit"), F::I128(c.limit)),
+                            (sym("period"), F::U32(c.period)),
+                        ]),
+                    ]),
+                    VStep::LowerCapLimit(i, l) => {
+                        F::Vec(vec![sym("LowerCapLimit"), F::U32(i), F::I128(l)])
+                    }
+                    VStep::LengthenCapPeriod(i, p) => {
+                        F::Vec(vec![sym("LengthenCapPeriod"), F::U32(i), F::U32(p)])
+                    }
+                    VStep::LowerValidUntil(i, u) => {
+                        F::Vec(vec![sym("LowerValidUntil"), F::U32(i), F::U32(u)])
+                    }
+                };
+                steps.push(step);
+            }
+            if !ok {
+                continue;
+            }
+            let child: Vec<rule_eval::Rule> = match &case.expected {
+                VOutcome::Ok { rules, .. } => decode_rules(rules)
+                    .unwrap()
+                    .iter()
+                    .map(|r| names.rule(r))
+                    .collect(),
+                VOutcome::Error(_) => parent.iter().map(rename_identity).collect(),
+            };
+            let Some(child_xdr) = stored(&child) else {
+                continue;
+            };
+            let steps_xdr = soroban_facade::xdr::encode(&F::Vec(steps));
+            let mut tampered = child;
+            if let Some(first) = tampered.first_mut() {
+                first.threshold = first.threshold.wrapping_add(1);
+            }
+            let tampered_xdr = stored(&tampered);
+            for (label, child_xdr) in [("", Some(child_xdr)), (", the child changed", tampered_xdr)]
+            {
+                let Some(child_xdr) = child_xdr else { continue };
+                let mut input = vec![];
+                input.extend(1u32.to_be_bytes());
+                for b in [&parent_xdr, &steps_xdr, &child_xdr] {
+                    input.extend((b.len() as u32).to_be_bytes());
+                    input.extend(b);
+                }
+                let output = perch_review_core::envelope::witness(&input);
+                out.push(serde_json::json!({
+                    "name": format!("{}{label}", v.name),
+                    "input": b64(&input),
+                    "output": serde_json::from_slice::<serde_json::Value>(&output).unwrap(),
+                }));
+            }
+        }
+        if out.len() >= 16 {
+            break;
+        }
+    }
+    out
+}
+
+/// Abstract addresses renamed onto host ones, injectively.
+struct Renamer {
+    e: Env,
+    names: BTreeMap<Vec<u8>, Address>,
+}
+
+impl Renamer {
+    fn xdr(&mut self, a: &[u8]) -> Vec<u8> {
+        let e = self.e.clone();
+        let host = self
+            .names
+            .entry(a.to_vec())
+            .or_insert_with(|| <Address as soroban_sdk::testutils::Address>::generate(&e))
+            .clone();
+        sc_address(&host)
+    }
+
+    fn val(&mut self, v: &rule_eval::Val) -> rule_eval::Val {
+        match v {
+            rule_eval::Val::Address(a) => rule_eval::Val::Address(self.xdr(a)),
+            rule_eval::Val::I128(n) => rule_eval::Val::I128(*n),
+            rule_eval::Val::U64(n) => rule_eval::Val::U64(*n),
+            rule_eval::Val::Bool(b) => rule_eval::Val::Bool(*b),
+            rule_eval::Val::Bytes(b) => rule_eval::Val::Bytes(b.clone()),
+            rule_eval::Val::Symbol(b) => rule_eval::Val::Symbol(b.clone()),
+            rule_eval::Val::String(b) => rule_eval::Val::String(b.clone()),
+            rule_eval::Val::Other(b) => rule_eval::Val::Other(b.clone()),
+        }
+    }
+
+    fn rule(&mut self, r: &rule_eval::Rule) -> rule_eval::Rule {
+        rule_eval::Rule {
+            contract: self.xdr(&r.contract),
+            functions: match &r.functions {
+                rule_eval::Functions::Only(f) => rule_eval::Functions::Only(f.clone()),
+                rule_eval::Functions::AnyExcept(f) => rule_eval::Functions::AnyExcept(f.clone()),
+            },
+            conds: r
+                .conds
+                .iter()
+                .map(|c| match c {
+                    rule_eval::Cond::ArgEq(i, v) => rule_eval::Cond::ArgEq(*i, self.val(v)),
+                    rule_eval::Cond::ArgI128AtMost(i, n) => rule_eval::Cond::ArgI128AtMost(*i, *n),
+                    rule_eval::Cond::ArgIn(i, vs) => {
+                        rule_eval::Cond::ArgIn(*i, vs.iter().map(|v| self.val(v)).collect())
+                    }
+                    rule_eval::Cond::ArgStrPrefix(i, p) => {
+                        rule_eval::Cond::ArgStrPrefix(*i, p.clone())
+                    }
+                })
+                .collect(),
+            signers: r
+                .signers
+                .iter()
+                .map(|s| match s {
+                    rule_eval::Signer::Delegated(a) => rule_eval::Signer::Delegated(self.xdr(a)),
+                    rule_eval::Signer::External(v, k) => {
+                        rule_eval::Signer::External(self.xdr(v), k.clone())
+                    }
+                })
+                .collect(),
+            threshold: r.threshold,
+            cap: r.cap.as_ref().map(|c| rule_eval::Cap {
+                limit: c.limit,
+                period: c.period,
+                amount_arg: c.amount_arg,
+            }),
+            valid_until: r.valid_until,
+            generation: r.generation,
+            auth_root: r.auth_root.as_ref().map(|root| rule_eval::AuthRoot {
+                contract: self.xdr(&root.contract),
+                function: root.function.clone(),
+            }),
+        }
+    }
+}
+
+/// A copy of a rule already renamed.
+fn rename_identity(r: &rule_eval::Rule) -> rule_eval::Rule {
+    let e = Env::default();
+    let v: Val = StoredRule::from_rule(&e, r).unwrap().into_val(&e);
+    perch_rule_eval::mirror::rule(&e, v).unwrap()
+}
+
+/// Budget inputs: records and caps around the window's edges, with the
+/// native core's answers.
+fn budget_fixtures() -> Vec<serde_json::Value> {
+    use perch_rule_eval::{StoredCap, StoredEntry, StoredRecord};
+    let e = Env::default();
+    let record = |spends: &[(u32, i128)]| StoredRecord {
+        history: SVec::from_iter(
+            &e,
+            spends
+                .iter()
+                .map(|&(ledger, amount)| StoredEntry { ledger, amount }),
+        ),
+        total: spends.iter().map(|s| s.1).sum(),
+    };
+    let cap = |limit: i128, period: u32| StoredCap {
+        limit,
+        period,
+        amount_arg: 2,
+    };
+    let cases = [
+        ("an empty record", record(&[]), cap(100, 50), 1000),
+        (
+            "a spend in its window",
+            record(&[(1000, 40)]),
+            cap(100, 100),
+            1099,
+        ),
+        (
+            "a spend leaving its window",
+            record(&[(1000, 40)]),
+            cap(100, 100),
+            1100,
+        ),
+        (
+            "spends leaving one at a time",
+            record(&[(10, 5), (20, 7), (30, 11)]),
+            cap(30, 15),
+            35,
+        ),
+        (
+            "the record ahead of the ledger",
+            record(&[(500, 1)]),
+            cap(100, 10),
+            499,
+        ),
+        ("over the limit", record(&[(10, 150)]), cap(100, 50), 20),
+        ("a huge limit", record(&[(10, 1)]), cap(i128::MAX, 50), 20),
+    ];
+    cases
+        .into_iter()
+        .map(|(name, rec, cap, now)| {
+            let mut input = vec![];
+            input.extend(1u32.to_be_bytes());
+            for b in [host_xdr(&e, rec), host_xdr(&e, cap)] {
+                input.extend((b.len() as u32).to_be_bytes());
+                input.extend(b);
+            }
+            input.extend((now as u32).to_be_bytes());
+            let output = perch_review_core::envelope::budget(&input);
+            serde_json::json!({
+                "name": name,
+                "input": b64(&input),
+                "output": serde_json::from_slice::<serde_json::Value>(&output).unwrap(),
+            })
+        })
+        .collect()
 }
 
 // ---------------------------------------------------------------------------

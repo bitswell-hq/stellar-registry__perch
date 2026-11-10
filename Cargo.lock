@@ -1776,6 +1776,7 @@ name = "perch-integration-tests"
 version = "0.1.1"
 dependencies = [
  "arbitrary",
+ "base64",
  "ed25519-dalek",
  "fips204",
  "hex",
@@ -1895,8 +1896,10 @@ dependencies = [
 name = "perch-review-core"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "rule-eval",
  "rule-eval-conformance",
+ "serde_json",
  "soroban-facade",
 ]
 
