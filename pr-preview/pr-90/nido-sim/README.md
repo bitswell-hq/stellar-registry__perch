@@ -38,9 +38,10 @@ else is behind one Details control.
 - **Details** (collapsed for every request): what you sign (the decoded
   calls), the grant's rules in full (functions, conditions, root, cap in
   ledgers and time, recipient set by the call, end, signer, how to remove
-  it), why it is allowed (the rule matched per node and the result of its
-  checks), the simulation (balances, events, ledger and protocol) and the
-  addresses (full ids, the signer key, the network fee).
+  it), why it is allowed, or why it is refused when the account refuses it
+  (the rule matched per node and the result of its checks), the simulation
+  (balances, events, ledger and protocol) and the addresses (full ids, the
+  signer key, the network fee).
 - **Keyboard:** a native modal `<dialog>` labelled by the lead and described
   by the verdict; focus starts on Reject and returns to the button that opened
   the sheet; Details is a native `<details>` with a 44 px target; Escape
@@ -190,7 +191,7 @@ toolchain), stellar-cli 27.0.0 (`stellar contract build`).
 | reactor (driver, wasm32-wasip1) | 1d1e2094363cfa2fe5d6d944dbbb346031ec5571c7ea5bcdeb33e261d83841eb |
 | reference replies minus timings (native = WASI = browser) | 9ec27d1662a8999436d0961eb5ac122c4aefb28f2d7a405bad7e02b5e5aa7db7 |
 | recorded run `evidence/native-golden.jsonl` | a77586fa99248c75855a2dcf75e056c0bac8d7b88feb4c3c277ec850e9980850 |
-| index.html (5331561 bytes) | aa87fa18e4ebbf589280562fdb78ab8ced1624456e08091aa700ce6e850bdb8a |
+| index.html (5327291 bytes) | 64ae5a4af0b9687fa315b10f95b650a5d961da5b0b40708dd21fae02e3cc887b |
 
 None of the Perch artifacts is a deployed contract: the account is built
 from 2c64fe4 with its compiler, interpreter and spending-limit pins staged
