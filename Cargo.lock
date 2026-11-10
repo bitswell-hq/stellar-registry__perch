@@ -1891,6 +1891,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "perch-review-core"
+version = "0.1.0"
+dependencies = [
+ "rule-eval",
+ "rule-eval-conformance",
+ "soroban-facade",
+]
+
+[[package]]
 name = "perch-rule-eval"
 version = "0.1.0"
 dependencies = [
