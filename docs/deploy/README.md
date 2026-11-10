@@ -942,9 +942,9 @@ migration blocked: perch/verifiers has no publish path for perch-webauthn-verifi
 
 The version is the one the run bridged. The gap is detected, not assumed:
 the bridge runs only while the perch author has no `ci-publish-verifiers`
-rule on `perch/verifiers`. The fix is the author's document with that rule,
-`testdata/deploy/perch-author-<network>.json`, and a deploy path that
-publishes the verifier under it. When that file exists, the rehearsal
+rule on `perch/verifiers`. The author's document with that rule,
+`testdata/deploy/perch-author-<network>.json`, is committed for both
+networks. While that file exists, the rehearsal
 applies it to the author on the fork before the bootstrap (`perch-deploy
 apply`, then `perch-deploy verify --legacy-no-rule-set`, whose PARTIAL exit
 3 is the expected result on these authors), with the throwaway admin key

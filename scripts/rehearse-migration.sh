@@ -30,9 +30,9 @@
 #      the migration on forks"). When testdata/deploy/perch-author-<network>.json
 #      exists (the author's document with a ci-publish-verifiers rule), step
 #      2 first applies it to the author on the fork (perch-deploy apply, then
-#      verify --legacy-no-rule-set), the throwaway admin key substituted for the author's admin
-#      key by overrides the report lists, and the release path publishes the
-#      verifier itself. While the author has no such rule, one labelled
+#      verify --legacy-no-rule-set), the throwaway admin key substituted for
+#      the author's admin key by overrides the report lists, and the release
+#      path publishes the verifier itself. While the author has no such rule, one labelled
 #      fork_setLedgerEntry per fork stands in for that missing step, so every
 #      later step is still rehearsed, and the run then fails (below).
 #        testnet  release.yml. In a scratch clone of this checkout, the
