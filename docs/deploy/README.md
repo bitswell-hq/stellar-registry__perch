@@ -909,11 +909,11 @@ The overrides, all listed in each fork's report:
 
 ### Known gap: the release's WebAuthn verifier in `perch/verifiers`
 
-This blocks the real migration, and the rehearsal bridges it only on the
-fork. `deploy-stack.sh` refuses a stack whose WebAuthn verifier
-`perch/verifiers` does not serve, because the factory pins it there. A
-release that changes the verifier's bytes (the next release bumps it from
-0.1.2 to 0.1.3) has no way to publish it there:
+`deploy-stack.sh` refuses a stack whose WebAuthn verifier
+`perch/verifiers` does not serve, because the factory pins it there. Before
+the perch author's `ci-publish-verifiers`, a release that changes the
+verifier's bytes (the next release bumps it from 0.1.2 to 0.1.3) had no way
+to publish it there:
 
 - the bootstrap seeds `perch/verifiers` from `deployments/testnet.json`, with
   the current deployment's verifiers, and that first publish binds each name
@@ -922,16 +922,19 @@ release that changes the verifier's bytes (the next release bumps it from
   manager approves only a name's first publish);
 - the perch authors on testnet and mainnet hold `admin` (on the account
   itself), and `ci-publish` and `admin-registry` (on `perch/constructorless`).
-  No rule covers `perch/verifiers`, and no workflow publishes there.
+  No rule covers `perch/verifiers`.
 
-So on both networks the release's `deploy-stack` stops at that check, and
-the mainnet stack, which takes testnet's, cannot follow. Closing the gap
-changes who may publish verifiers, so it is a decision of its own.
+[The perch author's rule on `perch/verifiers`](#the-perch-authors-rule-on-perchverifiers)
+closes it: `ci-publish-verifiers`, and `deploy-stack.sh` publishing the
+stack's verifiers there as the author. On the live networks the gap stays
+until the admin key applies `testdata/deploy/perch-author-<network>.json`;
+until then the release's `deploy-stack` stops at that check on both, and
+the mainnet stack, which takes testnet's, cannot follow.
 
-Until it is made, the rehearsal fails. The bridge lets every later step
-run, on both networks, and the script then exits with status 3 (a failed
-step exits 1) and this message, which is also the first line of
-`summary.md` and, in CI, an error annotation:
+A rehearsal whose perch author has no such rule bridges the gap on the fork.
+The bridge lets every later step run, on both networks, and the script then
+exits with status 3 (a failed step exits 1) and this message, which is also
+the first line of `summary.md` and, in CI, an error annotation:
 
 ```
 migration blocked: perch/verifiers has no publish path for perch-webauthn-verifier 0.1.3 - see docs/deploy/README.md Known gap
@@ -943,7 +946,8 @@ rule on `perch/verifiers`. The fix is the author's document with that rule,
 `testdata/deploy/perch-author-<network>.json`, and a deploy path that
 publishes the verifier under it. When that file exists, the rehearsal
 applies it to the author on the fork before the bootstrap (`perch-deploy
-apply`, then `perch-deploy verify`), with the throwaway admin key
+apply`, then `perch-deploy verify --legacy-no-rule-set`, whose PARTIAL exit
+3 is the expected result on these authors), with the throwaway admin key
 substituted for the author's admin key, and checks the rule among the
 derived addresses. Those substitutions are overrides the fork's report
 lists. The release path then publishes the verifier itself, nothing is

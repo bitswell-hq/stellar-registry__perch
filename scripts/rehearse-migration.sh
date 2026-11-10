@@ -30,7 +30,7 @@
 #      the migration on forks"). When testdata/deploy/perch-author-<network>.json
 #      exists (the author's document with a ci-publish-verifiers rule), step
 #      2 first applies it to the author on the fork (perch-deploy apply, then
-#      verify), the throwaway admin key substituted for the author's admin
+#      verify --legacy-no-rule-set), the throwaway admin key substituted for the author's admin
 #      key by overrides the report lists, and the release path publishes the
 #      verifier itself. While the author has no such rule, one labelled
 #      fork_setLedgerEntry per fork stands in for that missing step, so every
@@ -718,13 +718,20 @@ apply_author_doc() { # author
     {
         cargo run --locked --manifest-path "$REPO/Cargo.toml" -q -p perch-deploy -- compose --doc "$doc" --account "$author" >"$rules" &&
             PERCH_ADMIN_KEY="$(stellar keys secret admin)" cargo run --locked --manifest-path "$REPO/Cargo.toml" -q -p perch-deploy -- \
-                --rpc-url "$url" --network-passphrase "$passphrase" apply --account "$author" --doc "$doc" </dev/null &&
-            cargo run --locked --manifest-path "$REPO/Cargo.toml" -q -p perch-deploy -- \
-                --rpc-url "$url" verify --account "$author" --rules "$rules" </dev/null
+                --rpc-url "$url" --network-passphrase "$passphrase" apply --account "$author" --doc "$doc" </dev/null
     } >"$out/author-doc.log" 2>&1 || { cat "$out/author-doc.log" >&2; die "$network: applying ${doc#"$REPO"/} to the perch author failed"; }
+    # The runbook's step 3. These authors predate the rule_set view, so
+    # verify runs with --legacy-no-rule-set: every other check passing is
+    # PARTIAL, exit 3; exit 1 is a mismatch or a failed read.
+    local verified=0
+    cargo run --locked --manifest-path "$REPO/Cargo.toml" -q -p perch-deploy -- \
+        --rpc-url "$url" verify --account "$author" --rules "$rules" --legacy-no-rule-set </dev/null >>"$out/author-doc.log" 2>&1 ||
+        verified=$?
+    [ "$verified" = 0 ] || [ "$verified" = 3 ] ||
+        { cat "$out/author-doc.log" >&2; die "$network: perch-deploy verify of ${doc#"$REPO"/} failed (exit $verified)"; }
     held="$(holds_rule "$author" "$verifiers" ci-publish-verifiers)" || exit 1
     [ "$held" = yes ] || die "$network: after the apply, the perch author has no ci-publish-verifiers"
-    note "Perch author's rule on perch/verifiers: ${doc#"$REPO"/} ($(jq -r .doc_hash "$rules")) applied with perch-deploy apply, the throwaway admin key standing in for the admin key; perch-deploy verify passes"
+    note "Perch author's rule on perch/verifiers: ${doc#"$REPO"/} ($(jq -r .doc_hash "$rules")) applied with perch-deploy apply, the throwaway admin key standing in for the admin key; perch-deploy verify --legacy-no-rule-set exits $verified (3: PARTIAL, the expected result on these authors)"
 }
 
 # release.yml on testnet: the infra publishes, then the stack.
