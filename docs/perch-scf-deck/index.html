@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Perch Agent Grants</title>
-<meta name="description" content="Perch Agent Grants, an SCF Build Award submission: subagent budgets enforced by Stellar smart accounts. What Perch is, an agent that raised its own cap, where the policy lives, the funded contained policy runtime, where Perch keeps the cap, what exists today, the three tranches with their dates, and the team.">
+<meta name="description" content="Perch Agent Grants, an SCF Build Award submission: subagent budgets enforced by Stellar smart accounts. What Perch is, an agent that raised its own cap, where the policy lives, the contained policy runtime we will build, where Perch keeps the cap, what exists today, the three tranches with their dates, and the team.">
 <link rel="icon" href="data:,">
 <style>
 :root {
@@ -70,22 +70,12 @@ body {
   opacity: 1; visibility: visible; transform: none;
   transition: opacity .55s ease, transform .7s cubic-bezier(.2, .7, .2, 1), visibility 0s;
 }
-/* today and the title: an engraved double-rule frame */
-.slide[data-status="now"]::before, .slide[data-status="title"]::before, .slide[data-status="cited"]::before, .slide[data-status="plain"]::before {
+/* every slide: an engraved double-rule frame */
+.slide::before {
   content: ""; position: absolute; inset: 10px; pointer-events: none;
   border: 1px solid var(--rule);
   box-shadow: inset 0 0 0 4px var(--paper), inset 0 0 0 5px var(--rule);
 }
-/* funded work: printer's proof marks */
-.proofmarks { position: absolute; inset: 0; pointer-events: none; }
-.proofmarks svg { position: absolute; width: 34px; height: 34px; overflow: visible; }
-.proofmarks svg * { fill: none; stroke: var(--next); stroke-width: 1; }
-.proofmarks .tl { top: 8px; left: 8px; }
-.proofmarks .tr { top: 8px; right: 8px; transform: scaleX(-1); }
-.proofmarks .bl { bottom: 8px; left: 8px; transform: scaleY(-1); }
-.proofmarks .br { bottom: 8px; right: 8px; transform: scale(-1, -1); }
-.proofmarks .rl { left: 6px; top: calc(50% - 17px); }
-.proofmarks .rr { right: 6px; top: calc(50% - 17px); }
 
 .head {
   display: flex; align-items: baseline; justify-content: space-between;
@@ -107,10 +97,6 @@ body {
   white-space: nowrap;
 }
 .status svg { width: 15px; height: 15px; overflow: visible; }
-.status.now { color: var(--now); }
-.status.now circle { fill: var(--now); }
-.status.next { color: var(--next); }
-.status.next circle { fill: none; stroke: var(--next); stroke-width: 1.6; stroke-dasharray: 3 2.4; }
 .status.cited { color: var(--ink-2); }
 .status.cited circle { fill: none; stroke: var(--ink-2); stroke-width: 1.4; }
 
@@ -147,6 +133,15 @@ body {
 .stage-sim.live .when-live { display: inline-block; }
 /* the recording draws each slide, never a live frame or its buttons */
 html[data-rec-frame] .stage-links .act { display: none; }
+.stage-doc .doc-details { display: none; overflow: auto; min-height: 0; font-size: clamp(12px, 1vw, 14px); line-height: 1.45; color: var(--ink); background: var(--paper-2); border: 1px solid var(--rule); border-radius: 14px; padding: 14px 18px; }
+.stage-doc.open > svg { display: none; }
+.stage-doc.open .doc-details { display: block; }
+.doc-details .dd-h { margin: 0 0 8px; color: var(--ink-2); }
+.doc-details dl { margin: 0; display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 6px 18px; }
+.doc-details dt, .doc-details dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.doc-details code { font-family: var(--f-code); font-size: .92em; }
+.doc-details .dd-note { margin: 10px 0 0; color: var(--ink-2); }
+@media (max-width: 640px) { .doc-details dl { grid-template-columns: minmax(0, 1fr); } .doc-details dd { margin-bottom: 6px; } }
 
 /* title slide */
 .slide-title {
@@ -180,15 +175,6 @@ html[data-rec-frame] .stage-links .act { display: none; }
 .slide-title .wallet { font-size: clamp(14px, 1.2vw, 17px); color: var(--ink-2); margin: 0 0 2em; }
 .byline { font-size: clamp(14px, 1.2vw, 17px); color: var(--ink-2); margin: 0 0 1.8em; line-height: 1.5; }
 .byline b { color: var(--ink); font-weight: 400; }
-.legend { list-style: none; padding: 0; margin: 0; display: flex; gap: 28px; flex-wrap: wrap; font-size: clamp(14px, 1.2vw, 17px); }
-.legend li { display: inline-flex; align-items: center; gap: 10px; }
-.legend svg { width: 54px; height: 16px; overflow: visible; }
-.legend .lg-now { color: var(--now); }
-.legend .lg-now line { stroke: var(--now); stroke-width: 2; }
-.legend .lg-now circle { fill: var(--now); }
-.legend .lg-next { color: var(--next); }
-.legend .lg-next line { stroke: var(--next); stroke-width: 2; stroke-dasharray: 6 5; }
-.legend .lg-next circle { fill: var(--paper); stroke: var(--next); stroke-width: 1.6; stroke-dasharray: 3 2.4; }
 .slide-title .stage { height: min(78vh, 46vw); padding: 0; }
 
 /* closing slide */
@@ -220,12 +206,9 @@ html[data-rec-frame] .stage-links .act { display: none; }
 .k-soft { stroke: var(--ink-2); }
 .k-faint { stroke: var(--rule); }
 .k-now { stroke: var(--now); }
-.k-next { stroke: var(--next); stroke-dasharray: 10 8; }
-.k-nexthead { stroke: var(--next); }
 .k-seal { stroke: var(--seal); }
 .k-paper { stroke: var(--paper); }
 .fl-now { fill: var(--now); }
-.fl-next { fill: var(--next); }
 .fl-ink { fill: var(--ink); }
 .fl-soft { fill: var(--ink-2); }
 .fl-seal { fill: var(--seal); }
@@ -235,7 +218,6 @@ html[data-rec-frame] .stage-links .act { display: none; }
 .fl-hatch-now { fill: url(#hatch-now); }
 .tx { fill: var(--ink); font-family: var(--f-text); }
 .c-now { fill: var(--now); }
-.c-next { fill: var(--next); }
 .c-soft { fill: var(--ink-2); }
 .c-seal { fill: var(--seal); }
 .c-paper { fill: var(--paper); }
@@ -251,31 +233,28 @@ html[data-rec-frame] .stage-links .act { display: none; }
 
 /* ---------- motion: each slide prints itself once on arrival ---------- */
 .an-draw { stroke-dasharray: var(--len, 0); stroke-dashoffset: var(--len, 0); }
-.an-fade, .an-march, .an-seal, .an-sweep { opacity: 0; }
+.an-fade, .an-seal, .an-sweep { opacity: 0; }
 .slide.on .an-draw { animation: draw 1s cubic-bezier(.55, .05, .25, 1) var(--d, 0ms) forwards; }
 .slide.on .an-fade { animation: fade .7s ease var(--d, 0ms) forwards; }
-.slide.on .an-march { animation: march .9s cubic-bezier(.3, .6, .2, 1) var(--d, 0ms) forwards; }
 .slide.on .an-seal { animation: sealin 1.5s cubic-bezier(.2, .7, .2, 1) var(--d, 0ms) forwards; }
 .slide.on .an-sweep { animation: sweep 2.4s cubic-bezier(.2, .7, .2, 1) var(--d, 0ms) forwards; }
 .an-sweep { transform-box: view-box; transform-origin: var(--ox, 0) var(--oy, 0); }
 @keyframes draw { to { stroke-dashoffset: 0; } }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
-@keyframes march { from { opacity: 0; stroke-dashoffset: 90; } to { opacity: 1; stroke-dashoffset: 0; } }
 @keyframes sealin { from { opacity: 0; transform: rotate(-50deg) scale(.82); } to { opacity: 1; transform: none; } }
 @keyframes sweep { from { opacity: 0; transform: rotate(-38deg); } 30% { opacity: 1; } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) {
   .slide, .slide.active { transition: none; transform: none; }
   .an-draw { stroke-dasharray: none; stroke-dashoffset: 0; }
-  .an-fade, .an-march, .an-seal, .an-sweep { opacity: 1; }
-  .slide.on .an-draw, .slide.on .an-fade, .slide.on .an-march, .slide.on .an-seal, .slide.on .an-sweep { animation: none; }
+  .an-fade, .an-seal, .an-sweep { opacity: 1; }
+  .slide.on .an-draw, .slide.on .an-fade, .slide.on .an-seal, .slide.on .an-sweep { animation: none; }
   .cw-fade { transition: none; }
 }
 /* ?still=1 shows every slide in its final state, as reduced motion does */
 .still .slide, .still .slide.active { transition: none; transform: none; }
 .still .an-draw { stroke-dasharray: none; stroke-dashoffset: 0; }
-.still .an-fade, .still .an-march, .still .an-seal, .still .an-sweep { opacity: 1; }
-.still .slide.on .an-draw, .still .slide.on .an-fade, .still .slide.on .an-march, .still .slide.on .an-seal, .still .slide.on .an-sweep { animation: none; }
-.still .k-next { stroke-dasharray: 10 8; }
+.still .an-fade, .still .an-seal, .still .an-sweep { opacity: 1; }
+.still .slide.on .an-draw, .still .slide.on .an-fade, .still .slide.on .an-seal, .still .slide.on .an-sweep { animation: none; }
 .still .cw-fade { transition: none; }
 
 /* ---------- chrome ---------- */
@@ -301,9 +280,8 @@ html[data-rec-frame] .stage-links .act { display: none; }
   width: 16px; height: 16px; display: grid; place-items: center; border-radius: 50%;
 }
 .marks svg { width: 12px; height: 12px; overflow: visible; transition: transform .3s ease; }
-.marks .m-now circle, .marks .m-title circle, .marks .m-cited circle, .marks .m-plain circle { fill: var(--now); opacity: .45; }
+.marks .m-title circle, .marks .m-cited circle, .marks .m-plain circle { fill: var(--now); opacity: .45; }
 .marks .m-title circle, .marks .m-cited circle, .marks .m-plain circle { fill: var(--ink-2); }
-.marks .m-next circle { fill: none; stroke: var(--next); stroke-width: 1.4; stroke-dasharray: 2.6 2.2; opacity: .7; }
 .marks button[aria-current="true"] svg { transform: scale(1.55); }
 .marks button[aria-current="true"] circle { opacity: 1; }
 .count { font-variant-numeric: tabular-nums; min-width: 4.5ch; text-align: right; }
@@ -466,22 +444,18 @@ html.side.side-below #sources-panel { right: 12px; bottom: calc(40vh + 64px); }
     <h1>Perch</h1>
     <p class="sub">Agent Grants: subagent budgets enforced by Stellar smart accounts</p>
     <p class="byline"><b>The Aha Company</b></p>
-    <ul class="legend">
-      <li class="lg-now"><svg viewBox="0 0 54 16" aria-hidden="true"><line x1="2" y1="8" x2="38" y2="8"/><circle cx="46" cy="8" r="5"/></svg>today</li>
-      <li class="lg-next"><svg viewBox="0 0 54 16" aria-hidden="true"><line x1="2" y1="8" x2="38" y2="8"/><circle cx="46" cy="8" r="5.5"/></svg>funded work</li>
-    </ul>
   </div>
   <div class="stage"><svg role="img" aria-label="An account at the centre of a dial of ledgers. A bracket marks a window of ledgers holding two charges; older charges lie outside it. An app key and an agent reach the account only through the window."></svg></div>
   <aside class="notes" data-sec="6">
     <p>This is Perch Agent Grants, from The Aha Company: subagent budgets enforced by Stellar smart accounts.</p>
   </aside>
   <aside class="sources">
-    <p>Perch Agent Grants, an Open Track submission for an SCF Build Award by The Aha Company. Perch is a set of Soroban contracts that turns a Stellar smart account into a permission engine for apps and agents; this award funds an agent runtime whose root authority is a grant on a Perch account. Solid cyan is what exists today; dashed magenta, with printer's marks, is the work the award funds.</p>
+    <p>Perch Agent Grants, an Open Track submission for an SCF Build Award by The Aha Company. Perch is a set of Soroban contracts that turns a Stellar smart account into a permission engine for apps and agents; this award funds an agent runtime whose root authority is a grant on a Perch account.</p>
     <p class="src">SCF Build submission, Submission Title, Build Award Track and Products &amp; Services. The dial is the Perch deck's title drawing.</p>
   </aside>
 </section>
 
-<section class="slide" data-status="now" data-draw="perch" aria-roledescription="slide" aria-label="What Perch is">
+<section class="slide" data-status="plain" data-draw="perch" aria-roledescription="slide" aria-label="What Perch is">
   <header class="head"><h2>What Perch is</h2></header>
   <div class="stage"><svg role="img" aria-label="Perch is a Stellar smart account. An app or agent's every call is checked against a grant, which says which calls, which signers, a spending cap and an expiry; rule_eval::check_auth decides every authorization. The decision function is proved in Lean, with kernel-checked theorems. Perch contracts are live on Stellar mainnet since 26 October 2026, and Nido creates Perch accounts."></svg></div>
   <aside class="notes" data-sec="13">
@@ -496,14 +470,14 @@ html.side.side-below #sources-panel { right: 12px; bottom: calc(40vh + 64px); }
   </aside>
 </section>
 
-<section class="slide" data-status="now" data-draw="agents" aria-roledescription="slide" aria-label="Agents with keys">
+<section class="slide" data-status="plain" data-draw="agents" aria-roledescription="slide" aria-label="Agents with keys">
   <header class="head"><h2>Agents with keys</h2></header>
-  <div class="stage"><svg role="img" aria-label="Today an agent that spends for a user holds a key that can do anything the account can, and a subagent copies it. With Perch the agent holds a grant and the account checks every call against it. Funded: subagents receive narrower grants and hold no keys."></svg></div>
+  <div class="stage"><svg role="img" aria-label="Today an agent that spends for a user holds a key that can do anything the account can, and a subagent copies it. With Perch the agent holds a grant and the account checks every call against it. We will build subagents that receive narrower grants and hold no keys."></svg></div>
   <aside class="notes" data-sec="12">
     <p>An agent with a key can do anything the account can, and its subagents copy it. With Perch, the agent holds a grant, and the account checks every call.</p>
   </aside>
   <aside class="sources">
-    <p>An agent that spends for a user holds a key that can do anything the account can, and anything it spawns inherits that power. A Perch grant fixes which contracts and functions an app or agent may call, argument conditions, which keys must sign, a sliding-window spending cap and an expiry, and the account checks every call in the authorization tree against it, so a stolen app key can spend no more than its grant allows. The funded work adds an agent runtime in which subagents receive narrower grants and hold no keys.</p>
+    <p>An agent that spends for a user holds a key that can do anything the account can, and anything it spawns inherits that power. A Perch grant fixes which contracts and functions an app or agent may call, argument conditions, which keys must sign, a sliding-window spending cap and an expiry, and the account checks every call in the authorization tree against it, so a stolen app key can spend no more than its grant allows. We will build an agent runtime in which subagents receive narrower grants and hold no keys.</p>
     <p class="src">SCF Build submission, Products &amp; Services (items 1 and 2, and the funded work).</p>
   </aside>
 </section>
@@ -526,71 +500,92 @@ html.side.side-below #sources-panel { right: 12px; bottom: calc(40vh + 64px); }
 
 <section class="slide" data-status="plain" data-draw="oneplace" aria-roledescription="slide" aria-label="Where the policy lives">
   <header class="head"><h2>Where the policy lives</h2></header>
-  <div class="stage"><svg role="img" aria-label="Common setups enforce agent-payment policy in one place. Limits the agent can reach: in its own tools, or behind an approval channel it can read, as in the cited study; the chain sees a valid key. On chain, written apart: client rules and contract logic are two rule sets written separately, which can drift. The funded design, Perch: one Cedar policy checked in both places, off chain by a contained engine and on chain by the account, the backstop."></svg></div>
+  <div class="stage"><svg role="img" aria-label="Common setups enforce agent-payment policy in one place. Limits the agent can reach: in its own tools, or behind an approval channel it can read, as in the cited study; the chain sees a valid key. On chain, written apart: client rules and contract logic are two rule sets written separately, which can drift. What we will build, Perch: one Cedar policy checked in both places, off chain by a contained engine and on chain by the account, the backstop."></svg></div>
   <aside class="notes" data-sec="12">
-    <p>Common setups keep limits within the agent's reach, or write contract logic apart from the client's rules, so the two can drift. We put one policy in both places.</p>
+    <p>Common setups keep limits within the agent's reach, or write contract logic apart from the client's rules, so the two can drift. We will put one policy in both places.</p>
   </aside>
   <aside class="sources">
     <p>Common setups for agent payments enforce the policy in one place. Some keep the limits within the agent's reach: the agent's own process or tools check them, or a provider enforces them behind an approval channel the agent can read. The cited study is the second kind: the wallet provider, Circle, enforced the cap, and agents raised it with a one-time code emailed to an inbox they could read. Others put the policy in on-chain logic written separately from the client's rules, so the two rule sets can drift apart. This slide names no product; the point is where the check sits.</p>
-    <p>Perch's funded design combines them: one Cedar policy, evaluated by a contained policy engine in the runtime and compiled into the rules the account enforces on chain. Off chain it covers what the chain cannot see (files, websites, signing, spawning); on chain the account is the backstop for payments and contract calls.</p>
+    <p>What we will build combines them: one Cedar policy, evaluated by a contained policy engine in the runtime and compiled into the rules the account enforces on chain. Off chain it covers what the chain cannot see (files, websites, signing, spawning); on chain the account is the backstop for payments and contract calls.</p>
     <p class="src">arXiv:2610.35835, p. 4 (the emailed-code finding); SCF Build submission, Products &amp; Services (the funded work), Tranche #1 items 2 and 3 (as agreed 2026-11-09).</p>
   </aside>
 </section>
 
-<section class="slide" data-status="next" data-draw="contained" aria-roledescription="slide" aria-label="A contained policy runtime">
+<section class="slide" data-status="plain" data-draw="contained" aria-roledescription="slide" aria-label="A contained policy runtime">
   <header class="head"><h2>A contained policy runtime</h2></header>
-  <div class="stage"><svg role="img" aria-label="Funded work. One Cedar policy is evaluated off chain by a contained policy engine, official Cedar with no imports, for files, websites, signing and spawning, and compiled into the Perch account's rule on chain for payments, contract calls and caps. Between them, the same decision: proved for the Rust translation, tested for the compiled contract; caps and time windows are the account's alone; today a prototype proof covers a small fragment. Agents, WASI components that hold no keys, send every request to the engine; the key service checks the request, then signs. The runtime is tested, not proven; the decision function is proved in Lean. Even if the runtime fails, the account refuses an over-cap payment."></svg></div>
-  <aside class="notes" data-sec="19">
-    <p>Our funded design is a contained policy runtime. One Cedar policy is evaluated off chain by an engine with no imports, and compiled into the account's rules on chain.</p>
-    <p>The runtime is tested; the decision function is proved. If the runtime fails, the account refuses an over-cap payment.</p>
+  <div class="stage"><svg role="img" aria-label="What we will build. One Cedar policy is evaluated off chain by a contained policy engine, official Cedar with no imports, for files, websites, signing and spawning, and compiled into the Perch account's rule on chain for payments, contract calls and caps. Between them, the same decision: proved for the Rust translation, tested for the compiled contract; caps and time windows are the account's alone; today a prototype proof covers a small fragment. Agents, WASI components that hold no keys, send every request to the engine; the key service checks the request, then signs. The runtime will be tested, not proven; the decision function is proved in Lean. Even if the runtime fails, the account refuses an over-cap payment."></svg></div>
+  <aside class="notes" data-sec="20">
+    <p>We will build a contained policy runtime. One Cedar policy will be evaluated off chain by an engine with no imports, and compiled into the account's rules on chain.</p>
+    <p>The runtime will be tested; the decision function is proved. If the runtime fails, the account refuses an over-cap payment.</p>
   </aside>
   <aside class="sources">
-    <p>Funded work (Tranches 1 and 2). One Cedar policy is the source of both checks. In the runtime, agents run as WASI components and hold no keys; a root agent's authority starts from a grant on the account, and a subagent is spawned only with a grant derived from its parent's (Tranche 1, item 1). Every file, website, signing and spawn request goes to the contained policy engine: official Cedar 4.14.x packaged as an import-free WebAssembly component, with no files, network or keys of its own, in which any policy error refuses and a subagent's request must be permitted by its own policies and every ancestor's (Tranche 1, item 3). Signing goes through the key service, which signs only after checking the signing request and every authorization context (Tranche 2, item 1).</p>
+    <p>What we will build (Tranches 1 and 2). One Cedar policy is the source of both checks. In the runtime, agents run as WASI components and hold no keys; a root agent's authority starts from a grant on the account, and a subagent is spawned only with a grant derived from its parent's (Tranche 1, item 1). Every file, website, signing and spawn request goes to the contained policy engine: official Cedar 4.14.x packaged as an import-free WebAssembly component, with no files, network or keys of its own, in which any policy error refuses and a subagent's request must be permitted by its own policies and every ancestor's (Tranche 1, item 3). Signing goes through the key service, which signs only after checking the signing request and every authorization context (Tranche 2, item 1).</p>
     <p>The same policy is compiled into the rules the account enforces on chain, by a compiler from a stated Cedar subset that refuses anything it cannot translate exactly, with compiled numeric rules carrying 64-bit bounds to match Cedar's integers. A Lean theorem, on Cedar's published Lean specification, is to show that the account's decision function, as translated from Rust, allows a call exactly when Cedar allows the matching request, and a harness runs the compiled contract in a local Soroban host and the official Cedar engine on the same generated requests (Tranche 1, item 2). The link is proved for the Rust translation and tested for the compiled contract, and it covers stateless call matching: spending caps and time windows are enforced only by the account.</p>
     <p>Proved today: the account's decision function, in 13 kernel-checked Lean theorems; P1 is argued, and nothing checks the compiled Wasm against the translation. The runtime will be tested, not proven. Payments over x402 (Tranche 2, item 2) and contract calls reach the account, which rechecks them on chain; with an attenuated grant installed (Tranche 2, item 1), an over-cap subagent payment is refused even with the runtime's own check switched off. Also today: an unpublished experiment proved the equivalence for a cut-down fragment, and Cedar's smallest evaluator build measured 710,772 bytes against the 131,072-byte contract limit (the Perch account is 106,668 bytes, measured 6 November 2026), which is why Cedar runs off chain.</p>
     <p class="src">SCF Build submission, Products &amp; Services (items 1 and 3, and the funded work); Tranche #1 items 1–3 (items 2 and 3 as agreed 2026-11-09); Tranche #2 items 1 and 2; docs/cedar-walkthrough ("Why not upload the full Cedar evaluator?"); vision paper §08 and §09.</p>
   </aside>
 </section>
 
-<section class="slide" data-status="next" data-draw="mail" aria-roledescription="slide" aria-label="Example: a mail assistant">
+<section class="slide" data-status="plain" data-draw="mail" aria-roledescription="slide" aria-label="Example: a mail assistant">
   <header class="head"><h2>Example: a mail assistant</h2></header>
-  <div class="stage"><svg role="img" aria-label="Planned: the runtime enforces a Cedar policy for a mail assistant. It may read only a forwarding mailbox's host and post only to a send host, and only to me@example.com or team@example.com. Sending the digest to team@example.com is allowed. Sending it to anyone@else.example is refused: not on your list. Opening your own inbox is refused: it reads only the mail you forward. On chain, a grant as Perch has today: pay newsletter.example, at most 5 USDC per 518,400 ledgers, about 30 days; the account refuses more, even if the runtime fails. It never sees your inbox, or the codes sent to it."></svg></div>
-  <aside class="notes" data-sec="14">
-    <p>Take a mail assistant. It reads only what you forward and sends only to your list, so it never sees your inbox or its codes. Its newsletter payments stay under a cap on chain.</p>
+  <div class="stage"><svg role="img" aria-label="The runtime we will build enforces a Cedar policy for a mail assistant. It may read only a forwarding mailbox's host and post only to a send host, and only to me@example.com or team@example.com. Sending the digest to team@example.com is allowed. Sending it to anyone@else.example is refused: not on your list. Opening your own inbox is refused: it reads only the mail you forward. On chain, a grant as Perch has today: pay newsletter.example, at most 5 USDC per 518,400 ledgers, about 30 days; the account refuses more, even if the runtime fails. It never sees your inbox, or the codes sent to it."></svg></div>
+  <aside class="notes" data-sec="10">
+    <p>Take a mail assistant: it will read only what you forward and send only to your list, so it never sees your inbox or its codes.</p>
   </aside>
   <aside class="sources">
-    <p>Planned, funded work: the policy is what the agent runtime (Tranche 1, items 1 and 3) would enforce, through the contained Cedar policy engine. The action and entity names (<code>Agent</code>, <code>Action::"web.get"</code>, <code>Action::"web.post"</code>, <code>Host</code>, <code>context.to</code>) are the planned runtime's request vocabulary, not an existing API. Mail is modelled as web requests to two named hosts, a forwarding mailbox's read API and a send API, not as a separate mail action; the hosts and addresses are illustrative. The syntax is Cedar's: <code>permit</code> with a scope, a <code>when</code> condition, a set's <code>contains</code>.</p>
+    <p>What we will build: the agent runtime (Tranche 1, items 1 and 3) will enforce this policy, through the contained Cedar policy engine. The action and entity names (<code>Agent</code>, <code>Action::"web.get"</code>, <code>Action::"web.post"</code>, <code>Host</code>, <code>context.to</code>) are the request vocabulary we will give the runtime, not an existing API. Mail is modelled as web requests to two named hosts, a forwarding mailbox's read API and a send API, not as a separate mail action; the hosts and addresses are illustrative. The syntax is Cedar's: <code>permit</code> with a scope, a <code>when</code> condition, a set's <code>contains</code>.</p>
     <p>The money part is an ordinary Perch grant, as merged today: a transfer of one token to one recipient, at most 5 USDC per 518,400 ledgers (about 30 days at 5 seconds a ledger), enforced by the account whatever the runtime does. This is the plain answer to the cited study's setup: the agent never holds the owner's inbox, so a one-time code emailed to the owner never reaches it, and it cannot change its own grant.</p>
     <p class="src">SCF Build submission, Products &amp; Services (the funded work: file, network, signing and spawn permissions; item 2, grants), Tranche #1 items 1 and 3; arXiv:2610.35835, p. 4 (the emailed code); docs/cedar-walkthrough (the Cedar dialect).</p>
   </aside>
 </section>
 
-<section class="slide" data-status="next" data-draw="reader" aria-roledescription="slide" aria-label="Example: a news and data reader">
+<section class="slide" data-status="plain" data-draw="reader" aria-roledescription="slide" aria-label="Example: a news and data reader">
   <header class="head"><h2>Example: a news and data reader</h2></header>
-  <div class="stage"><svg role="img" aria-label="Planned: the runtime enforces a Cedar policy for a news and data reader. It may only make web.get requests to named sources: an RSS feed at feeds.example.org, prices.example and weather.example; there is no other permit. Reading feeds.example.org/rss is allowed. Posting a comment on forum.example is refused: no permit for web.post. Reading unknown.example is refused: not a named source. No money moves, so it needs no grant on chain."></svg></div>
+  <div class="stage"><svg role="img" aria-label="The runtime we will build enforces a Cedar policy for a news and data reader. It may only make web.get requests to named sources: an RSS feed at feeds.example.org, prices.example and weather.example; there is no other permit. Reading feeds.example.org/rss is allowed. Posting a comment on forum.example is refused: no permit for web.post. Reading unknown.example is refused: not a named source. No money moves, so it needs no grant on chain."></svg></div>
   <aside class="notes" data-sec="9">
-    <p>Or a news reader: it reads an RSS feed and named data sources, and can't post, submit a form or send anything.</p>
+    <p>Or a news reader: it will read an RSS feed and named data sources, and can't post, submit a form or send anything.</p>
   </aside>
   <aside class="sources">
-    <p>Planned, funded work, like the mail assistant: one <code>permit</code> for <code>web.get</code> on the hosts in a group of named sources, and nothing else, so Cedar's default refuses every post, form submission and message. The names are the planned runtime's request vocabulary; the hosts are illustrative. No money moves, so no on-chain grant is needed; were the reader to pay for a data feed, that payment would go through a grant as in the mail example.</p>
+    <p>What we will build, like the mail assistant: one <code>permit</code> for <code>web.get</code> on the hosts in a group of named sources, and nothing else, so Cedar's default refuses every post, form submission and message. The names are the request vocabulary we will give the runtime; the hosts are illustrative. No money moves, so no on-chain grant is needed; were the reader to pay for a data feed, that payment would go through a grant as in the mail example.</p>
     <p class="src">SCF Build submission, Products &amp; Services (the funded work: network permissions), Tranche #1 items 1 and 3; docs/cedar-walkthrough (the Cedar dialect).</p>
   </aside>
 </section>
 
-<section class="slide" data-status="now" data-draw="keepcap" aria-roledescription="slide" aria-label="A cap the agent cannot raise">
+<section class="slide" data-status="plain" data-draw="keepcap" aria-roledescription="slide" aria-label="A cap the agent cannot raise">
   <header class="head"><h2>A cap the agent cannot raise</h2></header>
-  <div class="stage"><svg role="img" aria-label="The cap lives in the Perch account's own grant: the shop, at most 10 XLM per 100 ledgers. The agent paying the shop 5 XLM is inside its grant and allowed. The agent calling apply_grant to raise its cap is refused: Theorem 8, no grant allows a call to the account. An emailed code is refused: no rule in the account takes a code. The owner changes the grant through the admin rule, with the passkey on the owner's device. Reading an email gets the agent nothing."></svg></div>
-  <aside class="notes" data-sec="12">
-    <p>The cap lives in the account's grant. By Theorem 8 no grant allows a call to the account, so the agent can't raise its cap, and an emailed code opens nothing.</p>
+  <div class="stage stage-row stage-doc">
+    <svg role="img" aria-label="Two documents, in Cedar-style pseudocode: the authoring form we will compile to the account's rules. The account document, applied with apply_doc: permit the owner's passkey any action on this account, which covers apply_doc, apply_grant and remove_grant; recovery by guardians, 2 of 3; grant 1 is the agent's. The agent's grant document, applied with apply_grant: permit the agent's key to call order on the shop; permit it to pay XLM to the shop, from this account, inside shop.order, at most 10 XLM per 100 ledgers, about 8 minutes, before ledger 65,900,000, about 30 days; forbid it any action on this account or its recovery contracts. Why the agent cannot raise its cap: only the owner's passkey changes a grant; proven, no grant can authorize a call to the account itself or its recovery contracts; an emailed code gets the agent nothing, since it holds only its grant's key. The account enforces the cap and the window itself."></svg>
+    <div class="doc-details" id="doc-details" hidden>
+      <p class="dd-h">The pseudocode, field by field, in Perch's documents (<code>crates/perch-ir/src/doc.rs</code>, kebab-case JSON)</p>
+      <dl>
+        <dt><code>owner_passkey</code></dt><dd><code>signers: [{ "id": "owner", "verifier": …WebAuthn…, "key": … }]</code></dd>
+        <dt><code>permit (owner_passkey, any action, this_account)</code></dt><dd>rule <code>"admin"</code>: <code>"scope": { "type": "self-admin" }</code>, <code>"principals": { "type": "all", "signers": ["owner"] }</code>. It covers every call to the account itself: <code>apply_doc</code>, <code>apply_grant</code>, <code>remove_grant</code>, upgrades.</dd>
+        <dt><code>recovery: guardian-only, 2 of 3</code></dt><dd><code>"recovery": { "mode": { "type": "guardian-only", "guardians": […], "quorum": 2 }, … }</code></dd>
+        <dt><code>grants: grant 1</code></dt><dd>installed by <code>apply_grant(1, doc_json)</code>, owner authorization</dd>
+        <dt><code>agent_key</code></dt><dd><code>signers: [{ "id": "agent", "verifier": …Ed25519…, "key": … }]</code>; every rule: <code>"principals": { "type": "all", "signers": ["agent"] }</code></dd>
+        <dt><code>call order, shop</code></dt><dd><code>"scope": { "type": "contract", "address": shop }</code>, <code>"functions": ["order"]</code></dd>
+        <dt><code>pay XLM, shop</code>, <code>from == this_account</code></dt><dd><code>"scope": { "type": "contract", "address": XLM }</code>, <code>"functions": ["transfer"]</code>, <code>"args": [{ "index": 0, "pred": { "type": "is-self" } }, { "index": 1, "pred": { "type": "address-eq", "address": shop } }]</code></dd>
+        <dt><code>inside shop.order</code></dt><dd><code>"auth-root": { "contract": shop, "function": "order" }</code></dd>
+        <dt><code>amount &lt;= 10 XLM per 100 ledgers</code></dt><dd><code>"cap": { "limit": "100000000", "period-ledgers": 100 }</code>: 10 XLM in stroops, over a sliding window of 100 ledgers, about 8 minutes at 5 seconds a ledger. Cedar has no sliding window; the account keeps the window and enforces the cap.</dd>
+        <dt><code>ledger &lt; 65,900,000</code></dt><dd><code>"not-after-ledger": 65900000</code>, a ledger number, not a time</dd>
+        <dt><code>forbid (agent_key, any action, this_account or its recovery contracts)</code></dt><dd>not a field: <code>apply_grant</code> refuses a grant with a <code>self-admin</code> rule or a rule reaching the account's own rules or recovery, and it is proven that no grant, nor one derived from it, allows such a call.</dd>
+      </dl>
+      <p class="dd-note">Cedar-style pseudocode, not valid Cedar: the authoring form we will compile to these rules (Tranche 1). Today a document is written as this JSON, and the account stores the compiled rules. Values are illustrative.</p>
+    </div>
+    <p class="stage-links"><button class="act ghost" type="button" data-doc aria-expanded="false" aria-controls="doc-details">Show the document fields</button></p>
+  </div>
+  <aside class="notes" data-sec="14">
+    <p>Here are the two documents. Only the owner's passkey can change the account's, grants included.</p>
+    <p>The agent's grant pays one shop under a cap, until it expires, and no grant can reach the account itself.</p>
   </aside>
   <aside class="sources">
-    <p>Perch keeps the cap in the account's own grant, and every authorization is decided by <code>rule_eval::check_auth</code> over the rules the account stores. Changing a grant, with <code>apply_grant</code> or <code>remove_grant</code>, is a call to the account that only its admin rule authorizes; in Nido the admin is the owner's passkey, a signature made on the owner's device that the agent cannot produce. A grant can never authorize a call to the account itself or its recovery contracts. That is Theorem 8, grant target containment: "No grant as lowered at install, nor any grant derived from one, allows a call to the account or its adopted recovery contracts."</p>
-    <p>So the agent's own key cannot raise its own cap, and there is nothing an emailed code could open: reading an email gets the agent nothing. This assumes the agent holds only its grant's key and the owner's passkey stays on the owner's device. It is not the paper's I-HITL protocol; it is where Perch puts the limit. This is the merged account; mainnet still runs the earlier design, and deploying this one is Tranche 3.</p>
-    <p class="src">SCF Build submission, Products &amp; Services (items 1–3); docs/perch-paper/source/statements.json (T8); crates/perch-smart-account/src/lib.rs (the admin rule, <code>apply_grant</code>, <code>remove_grant</code>); docs/nido-sim/README.md (step 1, the passkey).</p>
+    <p>The two documents in Cedar-style pseudocode, not valid Cedar: the authoring form we will compile (Tranche 1, the Cedar-to-Perch compiler) to the rules the account stores. Today a document is Perch's JSON policy document, and "Show the document fields" maps each line to its fields (<code>PolicyDoc</code>, <code>SignerDecl</code>, <code>Rule</code> with <code>scope</code> contract or self-admin, <code>principals</code>, <code>functions</code>, <code>args</code>/<code>pred</code>, <code>auth-root</code>, <code>cap {limit, period-ledgers}</code>, <code>not-after-ledger</code>, <code>RecoveryConfig</code>). The grant has the shape of the one <code>crates/integration-tests/tests/auth_root.rs</code> installs, with a shop and its recipient in place of the game; the values are illustrative.</p>
+    <p>Why the agent cannot raise its cap. The account document's <code>admin</code> rule, scoped to the account itself (self-admin), is the owner's passkey, and only it authorizes <code>apply_doc</code>, <code>apply_grant</code> and <code>remove_grant</code>; in Nido the passkey's signature is made on the owner's device. <code>apply_grant</code> refuses (<code>GrantEscalation</code>) a grant document with a <code>self-admin</code> rule or a rule reaching the account's own rules or recovery. And Theorem 8, grant target containment, proves that "No grant as lowered at install, nor any grant derived from one, allows a call to the account or its adopted recovery contracts." The agent holds only its grant's key, so a code emailed to the owner gets it nothing. This is not the paper's I-HITL protocol; it is where Perch puts the limit. This is the merged account; mainnet still runs the earlier design, and deploying this one is Tranche 3.</p>
+    <p class="src">crates/perch-ir/src/doc.rs; docs/schema.md; docs/account-interface.md (Constructor, <code>apply_doc</code>, <code>apply_grant</code>, Removing grants); crates/integration-tests/tests/auth_root.rs (the grant it installs); docs/perch-paper/source/statements.json (T8); SCF Build submission, Products &amp; Services (items 1–3), Tranche #1 item 2.</p>
   </aside>
 </section>
 
-<section class="slide" data-status="now" data-draw="today" aria-roledescription="slide" aria-label="What exists today">
+<section class="slide" data-status="plain" data-draw="today" aria-roledescription="slide" aria-label="What exists today">
   <header class="head"><h2>What exists today</h2></header>
   <div class="stage stage-row"><svg role="img" aria-label="On Stellar mainnet since 26 October 2026: the Perch registry, document compiler and account factory, and Nido, which creates Perch accounts through its factory. Merged in the repository: grants installed with apply_grant, every authorization decided by rule_eval::check_auth, recovery, verifiers, and 13 Lean theorems. The mainnet account is the earlier design; deploying the new account to mainnet is Tranche 3."></svg>
     <p class="stage-links"><a href="https://github.com/stellar-registry/perch/blob/main/deployments/mainnet.json">mainnet.json</a><a href="https://stellar.expert/explorer/public/contract/CC236AK2RX7MUO7BV7JYDDW5KHZ3X7YYJOJKCVDC543BQBNNSUCZB7NN">Registry</a><a href="https://stellar.expert/explorer/public/contract/CB65ACZRA777XHGEKVX46LEU2ZSUAL2UQY2PKMVDL7KJTDHRTX5MTBQD">Document compiler</a><a href="https://stellar.expert/explorer/public/contract/CC2K7PEAV24N66JCEG5OPFCBBA4OK6DK7YISRCMQQQUC7KLNISNGYLMK">Account factory</a><a href="https://stellar.expert/explorer/public/contract/CBHERM3IKL2QLLJWNPBTATIHVFNT3FLFZKPFG4L2X7CHUPRLJHGC3FAC">Nido's factory</a></p>
@@ -605,7 +600,7 @@ html.side.side-below #sources-panel { right: 12px; bottom: calc(40vh + 64px); }
   </aside>
 </section>
 
-<section class="slide" data-status="now" data-draw="nido" aria-roledescription="slide" aria-label="Perch, in a shipping wallet">
+<section class="slide" data-status="plain" data-draw="nido" aria-roledescription="slide" aria-label="Perch, in a shipping wallet">
   <header class="head"><h2>Perch, in a shipping wallet</h2></header>
   <div class="stage stage-sim">
     <svg role="img" aria-label="As context, reported under Nido's SCF #41 award and not claimed for this ask: Perch contracts have been on Stellar mainnet since 26 October 2026; Nido creates Perch accounts on mainnet through its factory, on the earlier account design; and the npm package had 1,662 downloads from 10 October to 8 November 2026. On 5 November 2026 a scripted Nido run on testnet made 11 transactions: a grant installed, two capped payments and a recovery, with a third, over-cap payment refused before signing. Beside it, the Nido simulation's steps, run offline: create the account, install the grant, guess with a 1 XLM stake, buy a coffee for 3.50 EURC, and pay the game directly, which is refused."></svg>
@@ -623,20 +618,20 @@ html.side.side-below #sources-panel { right: 12px; bottom: calc(40vh + 64px); }
   </aside>
 </section>
 
-<section class="slide" data-status="now" data-draw="atten" aria-roledescription="slide" aria-label="Narrowing a grant">
+<section class="slide" data-status="plain" data-draw="atten" aria-roledescription="slide" aria-label="Narrowing a grant">
   <header class="head"><h2>Narrowing a grant</h2></header>
-  <div class="stage"><svg role="img" aria-label="The app's grant is a region of allowed calls: the game, any function; the shop, at most 10 XLM per 100 ledgers; until ledger N. A helper's grant is a smaller region nested inside it, made in three narrowing steps: only guess; at most 2 XLM per 100 ledgers; an earlier last ledger M. Paying the shop 5 XLM: the app may, the helper is refused. Theorems 4 and 5: the helper's grant allows no call, and no run of payments, that the app's grant refuses. Funded: the runtime that spawns the helper, and the account entry point that installs its grant."></svg></div>
-  <aside class="notes" data-sec="9">
-    <p>Theorems 4 and 5 show a narrowed helper's grant never allows a call, or a run of payments, that the app's grant refuses.</p>
+  <div class="stage"><svg role="img" aria-label="The app's grant is a region of allowed calls: the game, any function; the shop, at most 10 XLM per 100 ledgers; until ledger N. A helper's grant is a smaller region nested inside it, made in three narrowing steps: only guess; at most 2 XLM per 100 ledgers; an earlier last ledger M. Paying the shop 5 XLM: the app may, the helper is refused. Proven: a narrowed grant never allows a call, or a run of payments, that its parent refuses. We will build the runtime that spawns the helper and the account entry point that installs its grant."></svg></div>
+  <aside class="notes" data-sec="8">
+    <p>It's proven that a narrowed grant never allows a call, or a run of payments, that its parent refuses.</p>
   </aside>
   <aside class="sources">
     <p>Attenuation derives a narrower grant from an existing one; rule-core defines 10 narrowing steps, three shown here. Theorem 4: a derived grant allows no call its parent does not, under any signers; its comparison reads no cap or expiry, so it covers step 1. Theorem 5, trace inclusion: every run a derived grant accepts from empty records, its parent accepts too, which covers steps 2 and 3. N and M are illustrative.</p>
-    <p>Funded: a runtime that spawns a subagent only with a grant derived from its parent's (Tranche 1, deliverable 1), and an account entry point that installs a derived grant, checked on chain to be no wider than its parent (Tranche 2, deliverable 1). The account cannot install an attenuated grant today.</p>
+    <p>We will build a runtime that spawns a subagent only with a grant derived from its parent's (Tranche 1, deliverable 1), and an account entry point that installs a derived grant, checked on chain to be no wider than its parent (Tranche 2, deliverable 1). The account cannot install an attenuated grant today.</p>
     <p class="src">The Perch deck, slide 4, and its sources (statements.json T4, T5; facts example.json, proofs.json); SCF Build submission, Tranche #1 and #2 Deliverables.</p>
   </aside>
 </section>
 
-<section class="slide" data-status="next" data-draw="t1" aria-roledescription="slide" aria-label="Tranche 1: MVP">
+<section class="slide" data-status="plain" data-draw="t1" aria-roledescription="slide" aria-label="Tranche 1: MVP">
   <header class="head"><h2>Tranche 1: MVP</h2></header>
   <div class="stage"><svg role="img" aria-label="Tranche 1, an agent runtime rooted in a Perch grant, by 29 January 2027: agent runtime core; verified Cedar-to-Perch compiler and two-engine test harness; Cedar policy engine as an import-free WebAssembly component; public MVP demo."></svg></div>
   <aside class="notes" data-sec="8">
@@ -648,7 +643,7 @@ html.side.side-below #sources-panel { right: 12px; bottom: calc(40vh + 64px); }
   </aside>
 </section>
 
-<section class="slide" data-status="next" data-draw="t2" aria-roledescription="slide" aria-label="Tranche 2: testnet">
+<section class="slide" data-status="plain" data-draw="t2" aria-roledescription="slide" aria-label="Tranche 2: testnet">
   <header class="head"><h2>Tranche 2: testnet</h2></header>
   <div class="stage"><svg role="img" aria-label="Tranche 2, agent payments on Stellar, by 26 March 2027: attenuated grants on the account and subagent signing; x402 payer flow for Perch accounts; grant review views for wallets; threat model and monitoring plan."></svg></div>
   <aside class="notes" data-sec="7">
@@ -660,7 +655,7 @@ html.side.side-below #sources-panel { right: 12px; bottom: calc(40vh + 64px); }
   </aside>
 </section>
 
-<section class="slide" data-status="next" data-draw="t3" aria-roledescription="slide" aria-label="Tranche 3: mainnet">
+<section class="slide" data-status="plain" data-draw="t3" aria-roledescription="slide" aria-label="Tranche 3: mainnet">
   <header class="head"><h2>Tranche 3: mainnet</h2></header>
   <div class="stage"><svg role="img" aria-label="Tranche 3, mainnet launch, by 28 May 2027: mainnet release of the account and agent-grant contracts; runtime 1.0 release; mainnet agent payment demonstration; developer documentation."></svg></div>
   <aside class="notes" data-sec="8">
@@ -672,7 +667,7 @@ html.side.side-below #sources-panel { right: 12px; bottom: calc(40vh + 64px); }
   </aside>
 </section>
 
-<section class="slide" data-status="next" data-draw="timeline" aria-roledescription="slide" aria-label="Timeline">
+<section class="slide" data-status="plain" data-draw="timeline" aria-roledescription="slide" aria-label="Timeline">
   <header class="head"><h2>Timeline</h2></header>
   <div class="stage"><svg role="img" aria-label="Three tranches on a calendar from December 2026 to June 2027. Tranche 1, MVP, by 29 January 2027: agent runtime core; verified Cedar-to-Perch compiler and two-engine test harness; Cedar policy engine as an import-free WebAssembly component; public MVP demo. Tranche 2, testnet, by 26 March 2027: attenuated grants on the account and subagent signing; x402 payer flow for Perch accounts; grant review views for wallets; threat model and monitoring plan. Tranche 3, mainnet launch, by 28 May 2027: mainnet release of the account and agent-grant contracts; runtime 1.0 release; mainnet agent payment demonstration; developer documentation."></svg></div>
   <aside class="notes" data-sec="4">
@@ -849,8 +844,8 @@ class Ctx {
   _paint(e, o, d) {
     const k = o.k || 'ink';
     const cls = ['st', 'k-' + k];
-    let anim = k === 'next' ? 'an-march' : 'an-draw';
-    if (o.fill) { cls.push('fl-' + o.fill); anim = k === 'next' ? 'an-march' : 'an-fade'; }
+    let anim = 'an-draw';
+    if (o.fill) { cls.push('fl-' + o.fill); anim = 'an-fade'; }
     if (o.anim) anim = o.anim;
     if (anim !== 'none') cls.push(anim);
     if (o.cls) cls.push(o.cls);
@@ -905,22 +900,22 @@ class Ctx {
     const g = E('g', { transform: `translate(${x} ${y}) scale(${f2(sc)})` }, o.p || this.svg);
     const d = this._d(o);
     const k = o.k || 'ink';
-    const ik = k === 'next' ? 'nexthead' : k;
+    const ik = k;
     (ICONS[name] || []).forEach(([tag, a]) => {
       const e = E(tag, a, g);
       const small = tag === 'circle' && a.r != null && a.r < 3;
-      const dot = { next: 'next', soft: 'soft', now: 'now', seal: 'seal' }[k] || 'ink';
-      this._paint(e, { k: ik, w: this.sw / sc * (o.w || 1), raw: true, fill: small ? dot : o.fill, anim: o.anim || (k === 'next' ? 'an-fade' : null) }, d);
+      const dot = { soft: 'soft', now: 'now', seal: 'seal' }[k] || 'ink';
+      this._paint(e, { k: ik, w: this.sw / sc * (o.w || 1), raw: true, fill: small ? dot : o.fill, anim: o.anim || null }, d);
     });
     if (name === 'tree') TREE_DOTS.forEach(([cx, cy]) => {
-      this._paint(E('circle', { cx, cy, r: 3 }, g), { k: ik, fill: k === 'next' ? 'next' : (k === 'now' ? 'now' : 'soft'), w: this.sw / sc, raw: true, anim: 'an-fade' }, d);
+      this._paint(E('circle', { cx, cy, r: 3 }, g), { k: ik, fill: k === 'now' ? 'now' : 'soft', w: this.sw / sc, raw: true, anim: 'an-fade' }, d);
     });
     return g;
   }
   head(x, y, ang, o = {}) {
     const L = this.tall ? 17 : 13;
     const a1 = ang + Math.PI - .45, a2 = ang + Math.PI + .45;
-    return this.path(`M${f2(x + L * Math.cos(a1))} ${f2(y + L * Math.sin(a1))}L${f2(x)} ${f2(y)}L${f2(x + L * Math.cos(a2))} ${f2(y + L * Math.sin(a2))}`, { ...o, k: o.k === 'next' ? 'nexthead' : o.k, anim: 'an-fade' });
+    return this.path(`M${f2(x + L * Math.cos(a1))} ${f2(y + L * Math.sin(a1))}L${f2(x)} ${f2(y)}L${f2(x + L * Math.cos(a2))} ${f2(y + L * Math.sin(a2))}`, { ...o, anim: 'an-fade' });
   }
   arrow(x1, y1, x2, y2, o = {}) {
     const d = this._d(o);
@@ -991,7 +986,6 @@ B.title = { vb: ['0 0 800 800', '0 0 800 800'], draw(c) {
 
 // Wrap a sentence into lines of at most n characters.
 const wrapText = (s, n) => { const out = []; let cur = ''; s.split(' ').forEach(x => { if ((cur + ' ' + x).trim().length > n && cur) { out.push(cur); cur = x; } else cur = cur ? cur + ' ' + x : x; }); if (cur) out.push(cur); return out; };
-const funded = (c, x, y, s, o = {}) => c.chip(x, y, s, { k: 'next', tk: 'next', size: o.size || (c.tall ? .46 : .5), d: o.d });
 
 B.agents = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   const T = c.tall;
@@ -1033,12 +1027,12 @@ B.agents = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   c.text(P.acc2L[0], P.acc2L[1], 'the account checks every call', { size: .64, k: 'now' });
   c.at(2200);
   P.subs2.forEach(([x, y]) => {
-    c.line(P.ag2[0], P.ag2[1] + 44, x, y - 34, { k: 'next', w: .5, step: 0 });
-    c.icon('agent', x, y, T ? 46 : 54, { k: 'next', step: 0 });
-    c.rect(x + (T ? 24 : 30), y + 4, T ? 40 : 46, T ? 26 : 28, { k: 'next', rx: 5, w: .6, step: 120 });
+    c.line(P.ag2[0], P.ag2[1] + 44, x, y - 34, { k: 'now', w: .5, step: 0 });
+    c.icon('agent', x, y, T ? 46 : 54, { k: 'now', step: 0 });
+    c.rect(x + (T ? 24 : 30), y + 4, T ? 40 : 46, T ? 26 : 28, { k: 'now', rx: 5, w: .6, step: 120 });
   });
-  if (T) { c.text(P.sub2L[0][0], P.sub2L[0][1], 'funded: subagents get narrower grants', { size: .54, k: 'next' }); c.text(P.sub2L[1][0], P.sub2L[1][1], 'and hold no keys', { size: .54, k: 'next' }); }
-  else c.text(P.sub2L[0][0] + 120, P.sub2L[0][1], 'funded: subagents get narrower grants and hold no keys', { size: .6, k: 'next' });
+  if (T) { c.text(P.sub2L[0][0], P.sub2L[0][1], 'we will build: subagents with narrower grants', { size: .54, k: 'now' }); c.text(P.sub2L[1][0], P.sub2L[1][1], 'and hold no keys', { size: .54, k: 'now' }); }
+  else c.text(P.sub2L[0][0] + 120, P.sub2L[0][1], 'we will build: subagents with narrower grants and no keys', { size: .6, k: 'now' });
 } };
 
 B.today = { vb: ['0 0 1600 760', '0 0 800 1240'], draw(c) {
@@ -1072,9 +1066,9 @@ B.today = { vb: ['0 0 1600 760', '0 0 800 1240'], draw(c) {
     if (code) c.text(rx + 116, y + 24, code, { anchor: 'start', size: T ? .48 : .52, font: 'code', k: 'now', step: 60 });
   });
   c.at(2200);
-  c.arrow(...P.arrow, { k: 'next', w: .8 });
-  if (T) c.text(P.arrowL[0], P.arrowL[1], 'to mainnet: Tranche 3', { anchor: 'start', size: .5, k: 'next' });
-  else { c.text(P.arrowL[0], P.arrowL[1], 'to mainnet:', { size: .46, k: 'next' }); c.text(P.arrowL[0], P.arrowL[1] + 24, 'Tranche 3', { size: .46, k: 'next' }); }
+  c.arrow(...P.arrow, { k: 'now', w: .8 });
+  if (T) c.text(P.arrowL[0], P.arrowL[1], 'to mainnet: Tranche 3', { anchor: 'start', size: .5, k: 'now' });
+  else { c.text(P.arrowL[0], P.arrowL[1], 'to mainnet:', { size: .46, k: 'now' }); c.text(P.arrowL[0], P.arrowL[1] + 24, 'Tranche 3', { size: .46, k: 'now' }); }
 } };
 
 /* A study: an agent with the owner's inbox read the emailed code and raised its own cap. */
@@ -1119,43 +1113,57 @@ B.ihitl = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   }
 } };
 
-/* Where Perch keeps the cap: in the account's own grant, out of the agent's reach. */
+/* The account document and the agent's grant document, as Cedar-style pseudocode, and why the cap holds. */
 B.keepcap = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   const T = c.tall;
-  const A = T ? { x: 400, y: 280, r: 190 } : { x: 330, y: 360, r: 210 };
-  c.at(80);
-  c.circle(A.x, A.y, A.r, { k: 'now', w: 1.2 });
-  c.circle(A.x, A.y, A.r - 14, { k: 'now', w: .35 });
-  c.seal(A.x, A.y - (T ? 104 : 118), T ? 40 : 44);
-  const [gw, gh] = T ? [300, 132] : [280, 124];
-  c.rect(A.x - gw / 2, A.y - (T ? 30 : 34), gw, gh, { k: 'now', rx: 14, w: 1, fill: 'paper' });
-  c.text(A.x, A.y + (T ? 6 : 2), "the agent's grant", { size: T ? .48 : .54, k: 'soft' });
-  c.text(A.x, A.y + (T ? 44 : 38), 'the shop, at most 10 XLM', { size: T ? .54 : .6, k: 'now' });
-  c.text(A.x, A.y + (T ? 80 : 72), 'per 100 ledgers', { size: T ? .54 : .6, k: 'now' });
-  c.text(A.x, A.y + A.r + (T ? 52 : 50), 'the Perch account', { size: T ? .62 : .68, k: 'now' });
-  c.text(A.x, A.y + A.r + (T ? 88 : 88), "the cap lives in the account's own grant", { size: T ? .48 : .54, k: 'soft' });
-  const rows = [
-    ['agent', 'the agent pays the shop 5 XLM', 'inside its grant', true],
-    ['agent', 'the agent calls apply_grant to raise its cap', 'Theorem 8: no grant allows a call to the account', false],
-    ['envelope', 'the agent reads an emailed code', 'no rule in the account takes a code', false],
-    ['passkey', 'the owner changes the grant', "the admin rule: the owner's passkey, on the owner's device", true],
+  // Every space becomes a no-break space, so the pseudocode keeps its indentation and alignment in SVG.
+  const nb = s => s.replace(/ /g, '\u00a0');
+  const card = ([x, y, w, h], k, title, entry, lines, d) => {
+    c.at(d);
+    c.rect(x, y, w, h, { k, rx: 16, w: k === 'now' ? 1.1 : .9 });
+    c.text(x + 26, y + (T ? 42 : 44), title, { anchor: 'start', size: T ? .54 : .62, k });
+    c.text(x + w - 26, y + (T ? 42 : 44), entry, { anchor: 'end', size: T ? .38 : .44, font: 'code', k: 'soft' });
+    lines.forEach((s, i) => c.text(x + 26, y + (T ? 88 : 96) + i * (T ? 34 : 40), nb(s), { anchor: 'start', font: 'code', size: T ? .38 : .5, k: s.trim().startsWith('//') ? 'soft' : undefined, step: 30 }));
+  };
+  c.at(60);
+  c.text(T ? 30 : 40, T ? 34 : 34, 'Cedar-style pseudocode: the authoring form we will compile to the account’s rules', { anchor: 'start', size: T ? .38 : .46, k: 'now' });
+  const A = T ? [30, 56, 740, 250] : [30, 56, 690, 270];
+  const G = T ? [30, 336, 740, 360] : [760, 56, 810, 390];
+  card(A, 'now', 'the account document', 'apply_doc', [
+    'permit (owner_passkey, any action, this_account);',
+    '  // apply_doc, apply_grant, remove_grant, …',
+    'recovery: guardian-only, 2 of 3',
+    'grants: grant 1, the agent’s',
+  ], 200);
+  card(G, 'now', 'the agent’s grant document', 'apply_grant(1, …)', [
+    'permit (agent_key, call order, shop);',
+    'permit (agent_key, pay XLM, shop)',
+    '  when { from == this_account && inside shop.order',
+    '         && amount <= 10 XLM per 100 ledgers  // ≈ 8 min',
+    '         && ledger < 65,900,000 };            // ≈ 30 days',
+    'forbid (agent_key, any action,',
+    '        this_account or its recovery contracts);',
+  ], 900);
+  // The account installs grant 1; only the owner's passkey can change it.
+  c.at(1700);
+  if (T) c.arrow(400, A[1] + A[3] + 4, 400, G[1] - 6, { k: 'now', w: .7 });
+  else c.arrow(A[0] + A[2] + 6, A[1] + 216, G[0] - 8, A[1] + 216, { k: 'now', w: .7 });
+  // Why the agent cannot raise its cap.
+  const why = [
+    ['passkey', 'now', 'Only the owner’s passkey changes a grant', 'apply_grant needs the account document’s own rule'],
+    ['proof', 'now', 'Proven: no grant can authorize a call', 'to the account itself or its recovery contracts'],
+    ['envelope', 'ink', 'An emailed code gets the agent nothing', 'it holds only its grant’s key'],
   ];
-  rows.forEach(([ic, a, b, ok], i) => {
-    c.at(900 + i * 560);
-    const y = T ? 680 + i * 136 : 150 + i * 150;
-    const ix = T ? 70 : 730, tx = T ? 128 : 800, vx = T ? 738 : 1520;
-    if (!T) {
-      const dx = ix - 54 - A.x, dy = y - A.y, Lh = Math.hypot(dx, dy);
-      c.arrow(ix - 54, y, A.x + dx / Lh * (A.r + 10), A.y + dy / Lh * (A.r + 10), { k: ok ? 'now' : 'soft', w: .6 });
-    }
-    c.icon(ic, ix, y, T ? 50 : 58, { k: ic === 'passkey' ? 'now' : 'ink' });
-    if (i === 0) c.icon('key', ix + (T ? 34 : 40), y + (T ? 26 : 30), T ? 26 : 30, { k: 'now', step: 0 });
-    c.text(tx, y - (T ? 4 : 4), a, { anchor: 'start', size: T ? .56 : .74 });
-    c.text(tx, y + (T ? 30 : 34), b, { anchor: 'start', size: T ? .44 : .56, k: ok ? 'now' : 'soft' });
-    if (ok) c.check(vx, y, T ? 34 : 38, { k: 'now' }); else c.cross(vx, y, T ? 28 : 32, { k: 'ink' });
+  why.forEach(([ic, k, a, b], i) => {
+    c.at(2200 + i * 350);
+    const [x, y] = T ? [60, 790 + i * 120] : [70 + i * 512, 560];
+    c.icon(ic, x, y, T ? 44 : 48, { k });
+    if (ic === 'envelope') c.cross(x + (T ? 30 : 32), y + (T ? 22 : 24), T ? 18 : 20, { k: 'ink', step: 0 });
+    c.text(x + (T ? 52 : 56), y - 4, a, { anchor: 'start', size: T ? .5 : .56 });
+    c.text(x + (T ? 52 : 56), y + (T ? 28 : 30), b, { anchor: 'start', size: T ? .4 : .46, k: 'soft' });
   });
   c.at(3300);
-  c.text(T ? 400 : 800, T ? 1250 : 752, 'Reading an email gets the agent nothing.', { anchor: T ? 'middle' : 'start', size: T ? .62 : .78 });
+  c.text(T ? 400 : 800, T ? 1180 : 700, 'the account enforces the cap and the window itself, whatever the agent runs', { size: T ? .42 : .5, k: 'soft' });
 } };
 
 /* Perch in one picture: an account whose grants decide every call, with the decision proved in Lean. */
@@ -1214,12 +1222,12 @@ B.oneplace = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   c.at(60);
   if (T) {
     c.text(40, 44, 'common setups', { anchor: 'start', size: .46, k: 'soft' });
-    c.text(40, 866, 'the funded design', { anchor: 'start', size: .46, k: 'next' });
+    c.text(40, 866, 'what we will build', { anchor: 'start', size: .46, k: 'now' });
     c.line(40, 452, 760, 452, { k: 'faint', w: .5 });
     c.line(40, 840, 760, 840, { k: 'faint', w: .5 });
   } else {
     c.text(548, 62, 'common setups', { size: .5, k: 'soft' });
-    c.text(1305, 62, 'the funded design', { size: .5, k: 'next' });
+    c.text(1305, 62, 'what we will build', { size: .5, k: 'now' });
     c.line(548, 90, 548, 740, { k: 'faint', w: .5 });
     c.line(1053, 40, 1053, 740, { k: 'faint', w: .5 });
   }
@@ -1279,29 +1287,29 @@ B.oneplace = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
       // One policy: evaluated off chain by a contained engine, compiled into the account's rules.
       if (T) {
         const y = y0;
-        c.rect(80, y + 60, 180, 64, { k: 'next', rx: 12, w: .7 });
-        c.text(170, y + 100, 'one policy', { size: .44, k: 'next' });
-        c.curve(130, y + 124, 90, y + 186, { k: 'next', w: .6, dir: 'v', head: true });
-        c.curve(210, y + 124, 250, y + 186, { k: 'next', w: .6, dir: 'v', head: true });
-        c.rect(30, y + 190, 120, 80, { k: 'next', rx: 12, w: .7 });
-        c.icon('policy', 90, y + 230, 36, { k: 'next' });
+        c.rect(80, y + 60, 180, 64, { k: 'now', rx: 12, w: .7 });
+        c.text(170, y + 100, 'one policy', { size: .44, k: 'now' });
+        c.curve(130, y + 124, 90, y + 186, { k: 'now', w: .6, dir: 'v', head: true });
+        c.curve(210, y + 124, 250, y + 186, { k: 'now', w: .6, dir: 'v', head: true });
+        c.rect(30, y + 190, 120, 80, { k: 'now', rx: 12, w: .7 });
+        c.icon('policy', 90, y + 230, 36, { k: 'now' });
         c.circle(254, y + 236, 46, { k: 'now', w: 1 });
         c.circle(254, y + 236, 36, { k: 'now', w: .3 });
-        c.text(90, y + 304, 'off chain', { size: .4, k: 'next' });
+        c.text(90, y + 304, 'off chain', { size: .4, k: 'now' });
         c.text(254, y + 304, 'on chain', { size: .4, k: 'now' });
       } else {
-        c.rect(1205, 150, 200, 96, { k: 'next', rx: 12, w: .8 });
-        c.text(1305, 190, 'one Cedar policy', { size: .5, k: 'next' });
+        c.rect(1205, 150, 200, 96, { k: 'now', rx: 12, w: .8 });
+        c.text(1305, 190, 'one Cedar policy', { size: .5, k: 'now' });
         c.text(1305, 224, 'permit (…) when { … };', { size: .4, font: 'code', k: 'soft' });
-        c.curve(1255, 246, 1180, 332, { k: 'next', w: .6, dir: 'v', head: true });
-        c.curve(1355, 246, 1430, 332, { k: 'next', w: .6, dir: 'v', head: true });
-        c.rect(1085, 338, 190, 124, { k: 'next', rx: 14, w: .8 });
-        c.icon('policy', 1180, 382, 40, { k: 'next' });
+        c.curve(1255, 246, 1180, 332, { k: 'now', w: .6, dir: 'v', head: true });
+        c.curve(1355, 246, 1430, 332, { k: 'now', w: .6, dir: 'v', head: true });
+        c.rect(1085, 338, 190, 124, { k: 'now', rx: 14, w: .8 });
+        c.icon('policy', 1180, 382, 40, { k: 'now' });
         c.text(1180, 440, 'contained engine', { size: .44 });
         c.circle(1430, 404, 68, { k: 'now', w: 1.1 });
         c.circle(1430, 404, 56, { k: 'now', w: .3 });
         c.seal(1430, 404, 34);
-        c.text(1180, 500, 'off chain', { size: .46, k: 'next' });
+        c.text(1180, 500, 'off chain', { size: .46, k: 'now' });
         c.text(1430, 500, 'the account, on chain', { size: .46, k: 'now' });
       }
     }
@@ -1330,15 +1338,15 @@ B.contained = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   };
   c.at(80);
   const [px, py, pw, ph] = P.pol;
-  c.rect(px, py, pw, ph, { k: 'next', rx: 14, w: .9 });
-  c.text(P.polT[0], P.polT[1], 'one Cedar policy', { size: T ? .62 : .7, k: 'next' });
+  c.rect(px, py, pw, ph, { k: 'now', rx: 14, w: .9 });
+  c.text(P.polT[0], P.polT[1], 'one Cedar policy', { size: T ? .62 : .7, k: 'now' });
   c.text(P.polC[0][0], P.polC[0][1], 'permit (principal, action, resource)', { anchor: 'start', font: 'code', size: T ? .42 : .46, k: 'soft' });
   c.text(P.polC[1][0], P.polC[1][1], 'when { … };', { anchor: 'start', font: 'code', size: T ? .42 : .46, k: 'soft' });
   c.at(600);
-  c.curve(...P.p1, { k: 'next', w: .7, dir: 'v', head: true });
-  c.curve(...P.p2, { k: 'next', w: .7, dir: 'v', head: true });
-  c.chip(P.ch1[0], P.ch1[1], 'evaluated', { k: 'next', tk: 'next', size: T ? .42 : .48, fill: 'paper' });
-  c.chip(P.ch2[0], P.ch2[1], 'compiled', { k: 'next', tk: 'next', size: T ? .42 : .48, fill: 'paper' });
+  c.curve(...P.p1, { k: 'now', w: .7, dir: 'v', head: true });
+  c.curve(...P.p2, { k: 'now', w: .7, dir: 'v', head: true });
+  c.chip(P.ch1[0], P.ch1[1], 'evaluated', { k: 'now', tk: 'now', size: T ? .42 : .48, fill: 'paper' });
+  c.chip(P.ch2[0], P.ch2[1], 'compiled', { k: 'now', tk: 'now', size: T ? .42 : .48, fill: 'paper' });
   // Off chain: the runtime's contained engine. On chain: the account's compiled rule.
   const box = ([x, y, w, h], k, ic, t1, t2, sub, uses, d) => {
     c.at(d);
@@ -1352,32 +1360,32 @@ B.contained = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   box(P.E1, 'next', 'policy', 'contained', 'policy engine', T ? 'off chain, no imports' : 'off chain · official Cedar, no imports', T ? ['files · websites ·', 'signing · spawning'] : ['files · websites · signing · spawning'], 1000);
   box(P.E2, 'now', 'account', 'the Perch', 'account', T ? 'on chain, the compiled rule' : 'on chain · the compiled rule', T ? ['payments, contract calls', 'and caps'] : ['payments · contract calls · caps'], 1300);
   c.at(1800);
-  c.line(...P.link, { k: 'next', w: .8 });
-  c.head(P.link[0], P.link[1], Math.PI, { k: 'next', w: .8 });
-  c.head(P.link[2], P.link[3], 0, { k: 'next', w: .8 });
+  c.line(...P.link, { k: 'now', w: .8 });
+  c.head(P.link[0], P.link[1], Math.PI, { k: 'now', w: .8 });
+  c.head(P.link[2], P.link[3], 0, { k: 'now', w: .8 });
   P.linkL.forEach(([x, y, z, k, s]) => c.text(x, y, s, { size: z, k, step: 40 }));
   // Agents send every request to the engine; signing goes through the key service.
   c.at(2400);
-  P.ag.forEach(([x, y, s]) => c.icon('agent', x, y, s, { k: 'next' }));
+  P.ag.forEach(([x, y, s]) => c.icon('agent', x, y, s, { k: 'now' }));
   c.text(P.agL[0][0], P.agL[0][1], T ? 'WASI agents,' : 'agents: WASI components', { anchor: 'start', size: T ? .42 : .5 });
   c.text(P.agL[1][0], P.agL[1][1], T ? 'no keys' : 'that hold no keys', { anchor: 'start', size: T ? .42 : .5, k: 'soft' });
-  c.arrow(...P.toEng, { k: 'next', w: .7 });
-  c.text(P.reqL[0], P.reqL[1], 'every request', { anchor: 'start', size: T ? .38 : .44, k: 'next' });
+  c.arrow(...P.toEng, { k: 'now', w: .7 });
+  c.text(P.reqL[0], P.reqL[1], 'every request', { anchor: 'start', size: T ? .38 : .44, k: 'now' });
   const [kx, ky, kw, kh] = P.ky;
-  if (T) c.arrow(...P.e2k, { k: 'next', w: .6 });
-  else c.curve(...P.e2k, { k: 'next', w: .6, dir: 'h', head: true });
-  c.rect(kx, ky, kw, kh, { k: 'next', rx: 16, w: .9 });
-  c.icon('key', kx + 44, ky + 44, T ? 40 : 42, { k: 'next' });
+  if (T) c.arrow(...P.e2k, { k: 'now', w: .6 });
+  else c.curve(...P.e2k, { k: 'now', w: .6, dir: 'h', head: true });
+  c.rect(kx, ky, kw, kh, { k: 'now', rx: 16, w: .9 });
+  c.icon('key', kx + 44, ky + 44, T ? 40 : 42, { k: 'now' });
   c.text(kx + 84, ky + 52, 'key service', { anchor: 'start', size: T ? .54 : .62 });
   c.text(kx + 30, ky + (T ? 92 : 96), 'checks the request, then signs', { anchor: 'start', size: T ? .42 : .48, k: 'soft' });
-  c.curve(...P.k2a, { k: 'next', w: .6, dir: T ? 'v' : 'h', head: true });
+  c.curve(...P.k2a, { k: 'now', w: .6, dir: T ? 'v' : 'h', head: true });
   // What is proved, what is tested, and the backstop.
   c.at(3000);
   if (T) {
-    c.text(P.tested[0], P.tested[1], 'off chain, the runtime: tested, not proven', { size: .46, k: 'next' });
+    c.text(P.tested[0], P.tested[1], 'off chain, the runtime: we will test it, not prove it', { size: .46, k: 'now' });
     c.text(P.proved[0], P.proved[1], 'on chain, the decision function: proved in Lean', { size: .46, k: 'now' });
   } else {
-    c.text(P.tested[0], P.tested[1], 'the runtime: tested, not proven', { anchor: 'start', size: .56, k: 'next' });
+    c.text(P.tested[0], P.tested[1], 'the runtime: we will test it, not prove it', { anchor: 'start', size: .56, k: 'now' });
     c.icon('proof', P.proved[0] + 20, P.proved[1] - 8, 34, { k: 'now' });
     c.text(P.proved[0] + 50, P.proved[1], 'the decision function: proved in Lean', { anchor: 'start', size: .56, k: 'now' });
   }
@@ -1433,26 +1441,26 @@ B.nido = { vb: ['0 0 1600 760', '0 0 800 1200'], draw(c) {
   });
 } };
 
-/* Two planned uses of the contained policy runtime: a Cedar policy, one request it allows, one it refuses. */
+/* Two uses of the contained policy runtime we will build: a Cedar policy, one request it allows, one it refuses. */
 function example(c, d) {
   const T = c.tall;
   const P = T
     ? { lab: [36, 44], box: [30, 62, 740, 52 + d.code.length * 34], code: [52, 104, 34, .37], note: 36, tx: 120 }
     : { lab: [70, 58], box: [60, 76, 800, 56 + d.code.length * 38], code: [86, 124, 38, .45], note: 70, req: [930, 132], tx: 1010 };
   c.at(80);
-  c.text(P.lab[0], P.lab[1], 'planned: the runtime enforces this Cedar policy', { anchor: 'start', size: T ? .46 : .52, k: 'next' });
+  c.text(P.lab[0], P.lab[1], 'the runtime we will build enforces this Cedar policy', { anchor: 'start', size: T ? .46 : .52, k: 'now' });
   const [bx, by, bw, bh] = P.box;
-  c.rect(bx, by, bw, bh, { k: 'next', rx: 14, w: .8 });
+  c.rect(bx, by, bw, bh, { k: 'now', rx: 14, w: .8 });
   // Leading spaces become no-break spaces, so the policy keeps its indentation in SVG.
   d.code.forEach((s, i) => c.text(P.code[0], P.code[1] + i * P.code[2], s.replace(/^ +/, m => '\u00a0'.repeat(m.length)), { anchor: 'start', font: 'code', size: P.code[3], k: s.startsWith('//') ? 'soft' : undefined, step: 30 }));
-  c.text(P.note, by + bh + (T ? 30 : 34), 'the names are the planned runtime’s request vocabulary, not an existing API', { anchor: 'start', size: T ? .38 : .44, k: 'soft' });
+  c.text(P.note, by + bh + (T ? 30 : 34), 'request names we will give the runtime, not an existing API', { anchor: 'start', size: T ? .38 : .44, k: 'soft' });
   // One request it allows, one it refuses.
   c.at(1400);
   const ry0 = T ? by + bh + 100 : P.req[1];
   d.reqs.forEach(([ok, a, b], i) => {
     const y = ry0 + i * (T ? 106 : 130);
     const x = T ? 60 : P.req[0];
-    if (ok) c.check(x, y - 8, T ? 34 : 38, { k: 'next' }); else c.cross(x, y - 8, T ? 28 : 32, { k: 'ink' });
+    if (ok) c.check(x, y - 8, T ? 34 : 38, { k: 'now' }); else c.cross(x, y - 8, T ? 28 : 32, { k: 'ink' });
     c.text(P.tx, y - 6, a, { anchor: 'start', size: T ? .5 : .66, step: 0 });
     c.text(P.tx, y + (T ? 28 : 32), b, { anchor: 'start', size: T ? .4 : .5, k: 'soft', step: 0 });
   });
@@ -1536,14 +1544,14 @@ function tranche(c, d) {
   const T = c.tall;
   c.at(60);
   c.text(T ? 40 : 80, T ? 44 : 72, d.sub, { anchor: 'start', size: T ? .58 : .74 });
-  c.text(T ? 40 : 1520, T ? 88 : 72, `by ${d.date}`, { anchor: T ? 'start' : 'end', size: T ? .54 : .66, k: 'next', font: 'code' });
+  c.text(T ? 40 : 1520, T ? 88 : 72, `by ${d.date}`, { anchor: T ? 'start' : 'end', size: T ? .54 : .66, k: 'now', font: 'code' });
   d.items.forEach(([title, crit, ic], i) => {
     const [x, y, w, h] = T ? [40, 128 + i * 290, 720, 268] : [80 + (i % 2) * 740, 118 + Math.floor(i / 2) * 322, 700, 296];
     c.at(260 + i * 380);
-    c.rect(x, y, w, h, { k: 'next', rx: 16, w: .8 });
-    c.circle(x + 36, y + 40, 18, { k: 'next', w: .6 });
-    c.text(x + 36, y + 41, String(i + 1), { size: .54, base: 'central', k: 'next' });
-    c.icon(ic, x + 38, y + (T ? 132 : 150), T ? 50 : 54, { k: 'next' });
+    c.rect(x, y, w, h, { k: 'now', rx: 16, w: .8 });
+    c.circle(x + 36, y + 40, 18, { k: 'now', w: .6 });
+    c.text(x + 36, y + 41, String(i + 1), { size: .54, base: 'central', k: 'now' });
+    c.icon(ic, x + 38, y + (T ? 132 : 150), T ? 50 : 54, { k: 'now' });
     const tl = wrapText(title, T ? 40 : 46), lh = 34;
     tl.forEach((s, j) => c.text(x + 80, y + 48 + j * lh, s, { anchor: 'start', size: T ? .6 : .7, step: 0 }));
     const cl = wrapText(crit, T ? 48 : 54);
@@ -1570,18 +1578,18 @@ B.timeline = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   TR.forEach((d, i) => {
     const dx = X(d.date);
     c.at(500 + i * 500);
-    c.circle(dx, A.y, T ? 11 : 10, { k: 'next', fill: 'next', w: .3 });
+    c.circle(dx, A.y, T ? 11 : 10, { k: 'now', fill: 'now', w: .3 });
     c.text(dx, A.y + 40, T ? `T${i + 1}` : d.date, { size: T ? .48 : .5, font: T ? undefined : 'code', k: T ? undefined : 'next' });
-    if (T) c.text(dx, A.y + 70, d.date, { size: .42, font: 'code', k: 'next' });
+    if (T) c.text(dx, A.y + 70, d.date, { size: .42, font: 'code', k: 'now' });
     const [x, y, w, h] = T ? [40, 240 + i * 340, 720, 314] : [70 + i * 492, 236, 470, 440];
-    if (!T) c.curve(dx, A.y + 52, x + w / 2, y - 6, { k: 'next', w: .6, dir: 'v', head: true });
-    c.rect(x, y, w, h, { k: 'next', rx: 16, w: .8 });
+    if (!T) c.curve(dx, A.y + 52, x + w / 2, y - 6, { k: 'now', w: .6, dir: 'v', head: true });
+    c.rect(x, y, w, h, { k: 'now', rx: 16, w: .8 });
     c.text(x + 30, y + (T ? 50 : 54), d.name, { anchor: 'start', size: T ? .62 : .74 });
-    c.text(T ? x + w - 28 : x + 30, T ? y + 50 : y + 92, `by ${d.date}`, { anchor: T ? 'end' : 'start', size: T ? .5 : .56, font: 'code', k: 'next' });
+    c.text(T ? x + w - 28 : x + 30, T ? y + 50 : y + 92, `by ${d.date}`, { anchor: T ? 'end' : 'start', size: T ? .5 : .56, font: 'code', k: 'now' });
     let iy = y + (T ? 110 : 158);
     d.items.forEach(([title], j) => {
-      c.circle(x + 44, iy - 6, T ? 13 : 14, { k: 'next', w: .5, step: 60 });
-      c.text(x + 44, iy - 5, String(j + 1), { size: T ? .42 : .46, base: 'central', k: 'next', step: 0 });
+      c.circle(x + 44, iy - 6, T ? 13 : 14, { k: 'now', w: .5, step: 60 });
+      c.text(x + 44, iy - 5, String(j + 1), { size: T ? .42 : .46, base: 'central', k: 'now', step: 0 });
       const tl = wrapText(title, T ? 60 : 34), lh = T ? 30 : 32;
       tl.forEach((s, k) => c.text(x + 74, iy + k * lh, s, { anchor: 'start', size: T ? .52 : .6, step: 0 }));
       iy += tl.length * lh + (T ? 18 : 26);
@@ -1675,10 +1683,10 @@ B.atten = { vb: ['0 0 1600 800', '0 0 800 1300'], draw(c) {
   c.text(exx + (T ? 120 : 70), exy, 'the helper', { size: sz, k: 'soft' });
   c.cross(exx + (T ? 120 : 70), exy + 40, T ? 28 : 26, { k: 'ink' });
   c.text(G.steps10[0], G.steps10[1], 'three of the 10 narrowing steps', { size: sz, k: 'soft' });
-  funded(c, G.fund[0][0], G.fund[0][1], 'funded: the runtime spawns it (Tranche 1)');
-  funded(c, G.fund[1][0], G.fund[1][1], 'funded: the account installs it (Tranche 2)');
-  c.text(G.th[0], G.th[1], T ? "Theorems 4 and 5: the helper's grant allows no call," : "Theorems 4 and 5: the helper's grant allows no call, and no run of payments, that the app's grant refuses", { size: T ? .54 : .64, k: 'now' });
-  if (T) c.text(G.th2[0], G.th2[1], "and no run of payments, that the app's grant refuses", { size: .54, k: 'now' });
+  c.text(G.fund[0][0], G.fund[0][1], 'we will build: the runtime spawns it (Tranche 1)', { size: T ? .46 : .5, k: 'now' });
+  c.text(G.fund[1][0], G.fund[1][1], 'and the account installs it (Tranche 2)', { size: T ? .46 : .5, k: 'now' });
+  c.text(G.th[0], G.th[1], T ? "proven: a narrowed grant never allows a call," : "proven: a narrowed grant never allows a call, or a run of payments, that its parent refuses", { size: T ? .54 : .64, k: 'now' });
+  if (T) c.text(G.th2[0], G.th2[1], "or a run of payments, that its parent refuses", { size: .54, k: 'now' });
   const finalState = () => { setChild(G.stages[3]); stepEls.forEach(g => { g.style.opacity = 1; }); Object.values(marks).forEach(g => { g.style.opacity = ''; }); };
   finalState();
   c.svg._att = { G, setChild, lerp, stepEls, marks, finalState };
@@ -1723,26 +1731,12 @@ const slides = $$('.slide');
 let cur = 0, tallMode = null;
 const leaveTimers = new Map();
 
-function proofMarks(s) {
-  const pm = document.createElement('div');
-  pm.className = 'proofmarks'; pm.setAttribute('aria-hidden', 'true');
-  const crop = '<line x1="0" y1="14" x2="10" y2="14"/><line x1="14" y1="0" x2="14" y2="10"/>';
-  const reg = '<circle cx="17" cy="17" r="6"/><line x1="17" y1="4" x2="17" y2="30"/><line x1="4" y1="17" x2="30" y2="17"/>';
-  pm.innerHTML = ['tl', 'tr', 'bl', 'br'].map(p => `<svg class="${p}" viewBox="0 0 34 34">${crop}</svg>`).join('') +
-    ['rl', 'rr'].map(p => `<svg class="${p}" viewBox="0 0 34 34">${reg}</svg>`).join('');
-  s.prepend(pm);
-}
 function statusChip(s) {
-  const st = s.dataset.status;
   const head = $('.head', s);
-  if (!head || !['now', 'next', 'cited'].includes(st)) return;
+  if (!head || s.dataset.status !== 'cited') return;
   const chip = document.createElement('span');
-  chip.className = 'status ' + st;
-  chip.innerHTML = st === 'now'
-    ? '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5"/></svg>today'
-    : st === 'cited'
-      ? '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/></svg>a cited study'
-      : '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/></svg>funded work';
+  chip.className = 'status cited';
+  chip.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/></svg>a cited study';
   head.appendChild(chip);
 }
 const svgOf = s => $('.stage > svg', s);
@@ -1772,7 +1766,6 @@ function render() {
 
 const marks = $('#marks');
 slides.forEach((s, i) => {
-  if (s.dataset.status === 'next') proofMarks(s);
   statusChip(s);
   const li = document.createElement('li');
   const b = document.createElement('button');
@@ -1903,6 +1896,14 @@ $$('[data-run]').forEach(b => b.addEventListener('click', e => {
   st.classList.add('live');
   startFrame($('iframe', st));
   const u = $('[data-unrun]', st); if (u) u.focus();
+}));
+$$('[data-doc]').forEach(b => b.addEventListener('click', e => {
+  e.stopPropagation();
+  const st = b.closest('.stage-doc'), open = !st.classList.contains('open');
+  st.classList.toggle('open', open);
+  $('.doc-details', st).hidden = !open;
+  b.setAttribute('aria-expanded', String(open));
+  b.textContent = open ? 'Back to the documents' : 'Show the document fields';
 }));
 $$('[data-unrun]').forEach(b => b.addEventListener('click', e => {
   e.stopPropagation();
