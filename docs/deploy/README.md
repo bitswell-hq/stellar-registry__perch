@@ -74,7 +74,7 @@ every consumer reads.
 | Command | Does |
 | --- | --- |
 | `scripts/build-stack.sh` | Records the registry `crates/*/wasm/registry.path` derives on the build's network (`--network-passphrase`, default `$STELLAR_NETWORK_PASSPHRASE` or testnet's), and refuses a `--registry` naming another. Builds tier 0, stages its wasm as the account's pins, builds the account, stages it and the WebAuthn verifier as the factory's pins, builds the factory. `target/stack/build.json` records every hash and the pins each consumer was built against. Deployments build with `stellar scaffold build`; `--builder contract` uses core `stellar contract build`, the same code without scaffold's metadata. `--reuse "<names>"` fetches those tier-0 from that registry by the hash it serves for each crate's version (no key) and pins them instead of rebuilding: the canonical path (see [The canonical registry](#the-canonical-registry-and-publishing-the-stack-to-it)). It overwrites the account's and factory's committed pins: run `fetch-infra-wasm.sh` (or `git checkout crates/*/wasm`) afterwards to pin the deployment again, unless this build is the new deployment. |
-| `scripts/deploy-stack.sh --author <address>` | Publishes a built stack (`--stack`, default `target/stack`) into the registry `registry.path` derives on the network, and nowhere else. Builds nothing and runs no compiled code: computes the registry and every content address (`derive-id.py`), checks each wasm against `build.json`, refuses a stack whose WebAuthn verifier `perch/verifiers` does not serve at its content address (the factory pins it there), then publishes tier 0 and the factory with `publish-wasm.sh` (upload with hash check, `publish_hash`, `deploy_stateless`, code-hash check) and checks each address, installs the account, and writes the manifest, `verifiers` included. `--author <C…>` binds every name to a smart account whose authorization the delegate (`STELLAR_ACCOUNT`, or `STELLAR_SIGN_WITH_KEY`) signs through the `theahaco/stellar-cli` fork. `--reuse "<names>"` publishes nothing for those tier-0: the registry must already serve the stack's bytes for them. `--plan` simulates every transaction and prints its fee, submitting nothing. Idempotent. Run `verify-deployment.sh` on the manifest afterwards. |
+| `scripts/deploy-stack.sh --author <address>` | Publishes a built stack (`--stack`, default `target/stack`) into the registry `registry.path` derives on the network, and nowhere else. Builds nothing and runs no compiled code: computes the registry and every content address (`derive-id.py`), checks each wasm against `build.json`, first publishes each stack verifier `perch/verifiers` does not serve yet into it as `--author` (through the author's [rule there](#the-perch-authors-rule-on-perchverifiers)), refuses a stack whose WebAuthn verifier `perch/verifiers` then does not serve at its content address (the factory pins it there), then publishes tier 0 and the factory with `publish-wasm.sh` (upload with hash check, `publish_hash`, `deploy_stateless`, code-hash check) and checks each address, installs the account, and writes the manifest, `verifiers` included. `--author <C…>` binds every name to a smart account whose authorization the delegate (`STELLAR_ACCOUNT`, or `STELLAR_SIGN_WITH_KEY`) signs through the `theahaco/stellar-cli` fork. `--reuse "<names>"` publishes nothing for those tier-0: the registry must already serve the stack's bytes for them. `--plan` simulates every transaction and prints its fee, submitting nothing. Idempotent. Run `verify-deployment.sh` on the manifest afterwards. |
 | `scripts/publish-wasm.sh` | Publishes one wasm under its name and version and deploys its content-addressed instance, or (`--plan`) simulates each transaction for its fee. The stack deploy and the mainnet publishes both run it. |
 | `scripts/derive-id.py` | The contract-id derivation every release script uses, in the Python standard library: `content`, `name`, the `registry` and `root` a `registry.path` derives on a network, and its whole `chain`; `key` prints the ed25519 key inside a `G…` address. CI checks it against the account's own (`perch-derive-id`) on every network and every recorded address. |
 | `scripts/bootstrap-registry.sh --network <n> --source <id> <step>` | Creates a network's registry chain, the four tier-0 an author needs, and the perch and nido authors, then binds every name; a dry run unless `--send`. See [Bootstrapping a network's registry chain](#bootstrapping-a-networks-registry-chain). |
@@ -151,10 +151,10 @@ the registry wasm (the manifest's `registry.wasm_hash`, `0acc4da2…`) at a deri
 deploy --salt`, a throwaway key as admin and manager), name its deployer and
 salt with `path /`, then run `build-stack.sh` and `deploy-stack.sh` with that
 key as `STELLAR_ACCOUNT` and `--author`. Its dev `verifiers.path` names a
-second such instance, its `perch/verifiers`, which needs the stack's
-verifiers published and deployed there before `deploy-stack.sh` runs
-(`upload`, `publish_hash`, `deploy_stateless`, by hand:
-`bootstrap-registry.sh` seeds only the canonical one). It is
+second such instance, its `perch/verifiers`, where `deploy-stack.sh`
+publishes and deploys the stack's verifiers itself, as `--author`: that key
+is the instance's manager too, so it makes each name's first publish
+(`bootstrap-registry.sh` seeds only the canonical one). It is
 self-contained: it builds and publishes its own bytes, and the account pins
 exactly those. Its `release_stack` run skips
 `one_build_resolves_each_networks_own_registry`. The
@@ -182,14 +182,102 @@ Three signers, the same split as the constructorless publishes
 | Signer | Role |
 | --- | --- |
 | `perch-author` smart account (`vars.PERCH_AUTHOR_ADDRESS`) | author of every published name. The registry has no author transfer, so the binding is permanent. |
-| `ci-publish` delegate (`secrets.CI_PUBLISH_SECRET_KEY`, in the `testnet` environment) | signs the account's `publish_hash` authorization and pays the fees; a CAP-71 delegate rule, expiry-bounded. Where each secret lives: [`../testnet-deployment.md`](../testnet-deployment.md#secrets-and-environments). |
+| `ci-publish` delegate (`secrets.CI_PUBLISH_SECRET_KEY`, in the `testnet` environment) | signs the account's `publish_hash` authorization and pays the fees; a CAP-71 delegate rule, expiry-bounded. The same delegate signs the stack's verifiers into `perch/verifiers` through `ci-publish-verifiers` ([below](#the-perch-authors-rule-on-perchverifiers)). Where each secret lives: [`../testnet-deployment.md`](../testnet-deployment.md#secrets-and-environments). |
 | manager (the manifest's `registry.manager`, human-held) | the one-time initial publish of each new name (`#12 ManagerRequired` otherwise), which binds that name's author. |
 
 Canonical mode mirrors `release.yml`'s constructorless publishes exactly:
 `--author` is the smart account, the source/fee key is the delegate
 (`STELLAR_ACCOUNT`), and the delegate signs the account's authorization through
 the `theahaco/stellar-cli` fork, which discovers the account's context rule
-on-chain (`STELLAR_SIGN_WITH_KEY`). No new authority is introduced.
+on-chain (`STELLAR_SIGN_WITH_KEY`). The one addition is the stack's
+verifiers in `perch/verifiers`, below.
+
+### The perch author's rule on `perch/verifiers`
+
+The factory pins its WebAuthn verifier at its content address in
+`perch/verifiers`, so a release whose stack carries a new WebAuthn verifier
+must publish it there before the factory. The bootstrap's `seed-verifiers`
+binds each verifier name there to the perch author, and a later version of a
+bound name needs that author's own authorization. So the perch author holds
+a fourth rule, beside `admin`, `ci-publish` and `admin-registry`:
+
+```json
+{"name": "ci-publish-verifiers", "scope": {"type": "contract", "address": "<perch/verifiers>"},
+ "principals": {"type": "all", "signers": ["ci"]}, "functions": ["publish_hash"],
+ "args": [{"index": 1, "pred": {"type": "is-self"}}], "not-after-ledger": <ci-publish's>}
+```
+
+It is `ci-publish` on `perch/verifiers`, with `publish_hash` alone: the same
+delegate, the author must be the account itself, and it expires with
+`ci-publish` (renew both together,
+[#145](https://github.com/stellar-registry/perch/issues/145)).
+`deploy-stack.sh` uses it: before anything else, it publishes each stack
+verifier `perch/verifiers` does not serve yet (`publish-wasm.sh`, the same
+path as the stack: a version already published with the same hash is not
+published again, another hash is refused), and a reused one only as the
+bytes the registry already serves. Without the rule, or once it has
+expired, a stack with a new WebAuthn verifier is refused before anything is
+sent, as before; a new ed25519 verifier is only warned about.
+`bootstrap-registry.sh create-author --project perch` writes it into a new
+author's document.
+
+The live perch authors predate it. Each needs one `apply_doc` signed by its
+admin key, the human-held `GAMPJROH…` (External key `18f4c5c7…`; it also
+pays the fee), before the first release whose stack deploy needs it. It can
+be applied now: `perch/verifiers` is at its derived address
+(`deployer(perch, sha256("verifiers"))`) before the bootstrap creates it,
+and only perch's named deploy can put a contract there. The documents are
+committed: each is the document the author applied, as its on-chain
+`applied_doc_hash` reads, plus this rule
+(`crates/perch-deploy/tests/perch_author_docs.rs` checks both).
+
+| Network | Author | Document | `applied_doc_hash` now | after the apply | `ci-publish-verifiers` scope, delegate, `not-after-ledger` |
+| --- | --- | --- | --- | --- | --- |
+| testnet | `CAAGHKZBUOQVVDB6LZCMCJHHSLAMBIPUYN3VU57NOLTVNYWMBI3T4KZ4` | [`testdata/deploy/perch-author-testnet.json`](../../testdata/deploy/perch-author-testnet.json) | `79e90f3a…419d` | `d9e69c50…4c7b` | `CCHJ7RWP…N5HW`, `GCYKIEDE…X2X7C`, 6999999 |
+| mainnet | `CDZWM45C6N6YBH73KNUDOTOI7P6K5UQDCRMHSQ76YSCERLS66FPZ253O` | [`testdata/deploy/perch-author-mainnet.json`](../../testdata/deploy/perch-author-mainnet.json) | `2fb21e99…9158` | `4bb8f166…7441` | `CCDCKRUV…GDPH`, `GCU2TBV6…RXHE`, 71430000 |
+
+For each network, from a checkout of `main` (testnet shown; for mainnet use
+`--rpc-url https://mainnet.sorobanrpc.com --network-passphrase 'Public
+Global Stellar Network ; September 2015'`, the mainnet author and its
+document):
+
+```sh
+author=CAAGHKZBUOQVVDB6LZCMCJHHSLAMBIPUYN3VU57NOLTVNYWMBI3T4KZ4
+doc=testdata/deploy/perch-author-testnet.json
+net=(--rpc-url https://soroban-testnet.stellar.org --network-passphrase 'Test SDF Network ; September 2015')
+
+# 1. Review (read-only): the rules the document lowers to, and its hash.
+cargo run -q -p perch-deploy -- compose --doc "$doc" --account "$author" >author.rules.json
+jq -r .doc_hash author.rules.json          # d9e69c50681dc63c2aab9379903986e8dbd86405306c93d479732ca27ad44c7b
+
+# 2. Simulate, then apply. PERCH_ADMIN_KEY is the admin key's secret, in the
+#    environment only; perch-deploy signs the account's `admin` rule with it.
+export PERCH_ADMIN_KEY="$(stellar keys secret <identity of GAMPJROH…>)"
+cargo run -q -p perch-deploy -- "${net[@]}" apply --account "$author" --doc "$doc" --dry-run
+cargo run -q -p perch-deploy -- "${net[@]}" apply --account "$author" --doc "$doc"
+unset PERCH_ADMIN_KEY
+
+# 3. Verify (read-only): the applied hash is the document's, and the four
+#    rules are installed by name and scope.
+cargo run -q -p perch-deploy -- "${net[@]}" verify --account "$author" --rules author.rules.json
+```
+
+`verify` prints `OK` for the applied hash, `admin`, `ci-publish`,
+`admin-registry`, `ci-publish-verifiers` and the rule count. These authors
+predate the account's `rule_set` view, so it says it does not compare the
+stored rules; the applied hash still pins the whole document. Before the
+apply, the same command reports the old hash, `ci-publish-verifiers`
+`MISSING` and 3 rules for 4.
+
+The bootstrap writes the same document:
+`scripts/bootstrap-registry.sh --network <n> --source GAMPJROH… create-author --project perch`
+finds an author with `ci-publish` but no `ci-publish-verifiers`, rebuilds the
+document it applied from its rules (admin signer, delegate, expiry), checks
+that it compiles on the author's own compiler to its `applied_doc_hash`, adds
+the rule, simulates the `apply_doc`, and prints the `perch-deploy apply` to
+sign; with `--send` and `PERCH_ADMIN_KEY` it applies it (so does the
+migration's `all --send`). An author whose rules do not rebuild its applied
+document is left alone, with a warning.
 
 ### The `deploy-stack` jobs (`release.yml`)
 
@@ -208,7 +296,7 @@ checks onto the new deployment. The jobs run only when
 | --- | --- | --- |
 | `deploy-plan` | which recovery-stack contracts the run released, and whether the stack may deploy (`registry-target.sh`) | nothing |
 | `deploy-stack-build` | `build-stack.sh --reuse`: fetches the reused tier-0, compiles the stack; hands on only its wasm and `build.json` | no secret, no environment |
-| `deploy-stack` | `deploy-stack.sh`: computes the registry and every content address, uploads, publishes, deploys, writes the manifest; compiles nothing and runs no compiled code | the delegate seed (`testnet` environment), in the environment only, never argv |
+| `deploy-stack` | `deploy-stack.sh`: computes the registry and every content address, publishes the stack's verifiers into `perch/verifiers`, then uploads, publishes, deploys, writes the manifest; compiles nothing and runs no compiled code | the delegate seed (`testnet` environment), in the environment only, never argv |
 | `deploy-stack-attest` | attests each freshly built wasm (not the reused tier-0); checks out nothing and runs no repository code | the attestation token (`id-token`, `attestations: write`), no secret |
 | `deploy-stack-record` | settles a completed registry migration (`manifest-registry.sh --settle`), `verify-deployment.sh`, `bindings-contracts.sh` (which also rewrites the hash pins from the manifest), the perch-artifacts bump, and the PR; compiles nothing | no secret |
 
@@ -544,16 +632,16 @@ only with `--allow-unattested perch-constructorless-registry`.
 | 5 | `seed` | upload the four tier-0 if missing; `constructorless.publish_hash(name, <perch author>, <released hash>, <released version>)` for each, then `deploy_stateless` (permissionless) | constructorless's manager |
 | 6 | `verifiers` | `perch.deploy("perch-constructorless-registry", "0.1.0", "verifiers", owner, [admin, manager, root], None)`: the managed registry a document's `verifier-name` resolves in, at `deployer(perch, sha256("verifiers"))` | perch's manager |
 | 7 | `seed-verifiers` | for the ed25519 and WebAuthn verifiers, at their released versions and hashes: upload if missing, `verifiers.publish_hash(name, <perch author>, <released hash>, <released version>)`, then `deploy_stateless`. Admitting a new verifier later is the same first publish, which only the manager approves | verifiers's manager |
-| 8 | `create-author --project perch` | deploy the account with an `External(ed25519 verifier, admin key)` admin, check its `infra()` resolves in constructorless, then `apply_doc` with `admin`, `ci-publish` (scoped to constructorless, until `--ci-expiry-ledger`) and `admin-registry`. Where the compiler resolves verifier names (its `verifier_registry` view), the admin verifier is the one in `perch/verifiers`, named in the document (`perch-ed25519-verifier@<version>`), as such an account requires; with an earlier compiler, the one in constructorless, by contract id | the source deploys; the admin key signs `apply_doc` |
+| 8 | `create-author --project perch` | deploy the account with an `External(ed25519 verifier, admin key)` admin, check its `infra()` resolves in constructorless, then `apply_doc` with `admin`, `ci-publish` (scoped to constructorless, until `--ci-expiry-ledger`), `admin-registry` and `ci-publish-verifiers` (`ci-publish` on `perch/verifiers`, `publish_hash` alone). An author from before `ci-publish-verifiers` gets the document it applied again with that rule added ([The perch author's rule on `perch/verifiers`](#the-perch-authors-rule-on-perchverifiers)). Where the compiler resolves verifier names (its `verifier_registry` view), the admin verifier is the one in `perch/verifiers`, named in the document (`perch-ed25519-verifier@<version>`), as such an account requires; with an earlier compiler, the one in constructorless, by contract id | the source deploys; the admin key signs `apply_doc` |
 | 9 | `names --project perch` | `publish_hash(name, <perch author>, sha256("perch-bootstrap:<name>"), "0.0.0")` for every other name `deployments/testnet.json` deploys ([#142](https://github.com/stellar-registry/perch/issues/142)); refused until step 8 is on chain | constructorless's manager |
-| 10 | `create-author --project nido`, `names --project nido` | as 8 and 9, scoped to `nido`; `--nido-names` (default `nido-factory nido-name-registry`) | the source, the admin key, nido's manager |
+| 10 | `create-author --project nido`, `names --project nido` | as 8 and 9, scoped to `nido`, without `ci-publish-verifiers`; `--nido-names` (default `nido-factory nido-name-registry`) | the source, the admin key, nido's manager |
 
 `all` runs 2 to 10 in that order (`--no-nido` leaves out 10).
 
-A verifier's tagged release publishes into `perch/constructorless` only
-(`release.yml`'s `ALLOW`); publishing a new verifier version into
-`perch/verifiers` is its author's (the perch author's) `publish_hash` there,
-which no workflow sends yet.
+A verifier's tagged release publishes into `perch/constructorless`
+(`release.yml`'s `ALLOW`). Its new version reaches `perch/verifiers` with the
+stack: `deploy-stack.sh` publishes it there as the perch author, through
+`ci-publish-verifiers`.
 
 ### Signers
 
@@ -572,11 +660,12 @@ which no workflow sends yet.
   `--account-signer delegated` gives a `Delegated(G)` admin instead, and the
   script then prints the `apply_doc` for a CAP-71 signer and refuses `--send`
   for it.
-- **`--ci-key`** is the `ci-publish` delegate: the G of
-  `CI_PUBLISH_SECRET_KEY` (testnet) or `CI_PUBLISH_MAINNET_SECRET_KEY`. It
-  signs nothing here. From the author's `apply_doc` on, it signs every later
-  publish of the author's names, and pays for them.
-  `--ci-expiry-ledger` is the rule's `not-after-ledger`. Mainnet closes about
+- **`--ci-key`** is the `ci-publish` (and `ci-publish-verifiers`) delegate:
+  the G of `CI_PUBLISH_SECRET_KEY` (testnet) or
+  `CI_PUBLISH_MAINNET_SECRET_KEY`. It signs nothing here. From the author's
+  `apply_doc` on, it signs every later publish of the author's names, and
+  pays for them. `--ci-expiry-ledger` is both rules' `not-after-ledger`. An
+  existing author keeps its own delegate and expiry. Mainnet closes about
   17,280 ledgers a day, and renewing the rule means re-applying the document
   ([#145](https://github.com/stellar-registry/perch/issues/145)).
 
@@ -734,7 +823,7 @@ the derived registry.
 
 | Name | Kind | |
 | --- | --- | --- |
-| `CI_PUBLISH_MAINNET_SECRET_KEY` | secret | the mainnet delegate's seed: fee source, and signer of `perch-author`'s authorization on its own context rule, which must allow `publish_hash` on the derived registry. Never the testnet key. |
+| `CI_PUBLISH_MAINNET_SECRET_KEY` | secret | the mainnet delegate's seed: fee source, and signer of `perch-author`'s authorization on its own context rules, which must allow `publish_hash` on the derived registry and, for a stack, on `perch/verifiers` (`ci-publish-verifiers`). Never the testnet key. |
 | `PERCH_MAINNET_AUTHOR_ADDRESS` | variable | the mainnet `perch-author` smart account (C…), bound to every name |
 
 The submitting jobs (`mainnet-publish`, `mainnet-deploy-stack`) set
@@ -752,7 +841,8 @@ first `deploy(mainnet)` (2026-10-26):
 1. The `perch` and `perch/constructorless` registries under the mainnet root,
    at the addresses `registry.path` derives, and the settings above.
 2. The mainnet `perch-author` account, with a delegate rule for the mainnet
-   key.
+   key, and, before a stack deploy that brings a new verifier,
+   `ci-publish-verifiers` ([The perch author's rule on `perch/verifiers`](#the-perch-authors-rule-on-perchverifiers)).
 3. The manager's one-time initial publish of every name, as on testnet
    ([One-time manager bootstrap](#one-time-manager-bootstrap)).
 

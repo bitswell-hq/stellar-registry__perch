@@ -7,8 +7,9 @@
 //! the matching context type. Every rule's stored rule-eval rule (the
 //! account's `rule_set()`, aligned with its installed rules) must equal the
 //! composed one: the rule `__check_auth` decides that rule's authorizations
-//! with is the rule the reviewed document lowers to. The on-chain rule
-//! count, and the stored set's length, must equal the document's exactly —
+//! with is the rule the reviewed document lowers to (not checked on an
+//! account built before the `rule_set` view, which says so). The on-chain
+//! rule count, and the stored set's length, must equal the document's exactly —
 //! `apply_doc` brings the rule set to the document's, so a leftover rule is a
 //! detected mismatch, not a mystery. Every read must belong to the
 //! snapshot's configuration revision, which is read again at the end.
@@ -93,13 +94,22 @@ fn check_applied_hash(rpc: &Rpc, account: &str, doc_hash_hex: &str) -> Result<Ro
 }
 
 /// The account's stored rule-eval rules (`rule_set()`), aligned with its
-/// installed rules.
-fn read_rule_set(rpc: &Rpc, account: &str) -> Result<Vec<ScVal>> {
-    match simulate_read(rpc, account, "rule_set", vec![])? {
-        ReadOutcome::Value(ScVal::Vec(Some(rules))) => Ok(rules.to_vec()),
-        ReadOutcome::Value(other) => bail!("rule_set returned {other:?}"),
-        ReadOutcome::ContractError { message, .. } => bail!("rule_set trapped: {message}"),
+/// installed rules; `None` for an account built before that view, whose
+/// rules OZ's policies decide (the live perch authors).
+fn read_rule_set(rpc: &Rpc, account: &str) -> Result<Option<Vec<ScVal>>> {
+    match simulate_read(rpc, account, "rule_set", vec![]) {
+        Ok(ReadOutcome::Value(ScVal::Vec(Some(rules)))) => Ok(Some(rules.to_vec())),
+        Ok(ReadOutcome::Value(other)) => bail!("rule_set returned {other:?}"),
+        Ok(ReadOutcome::ContractError { message, .. }) => bail!("rule_set trapped: {message}"),
+        Err(e) if lacks_function(&format!("{e:#}")) => Ok(None),
+        Err(e) => Err(e),
     }
+}
+
+/// A read of a function the contract does not export.
+fn lacks_function(message: &str) -> bool {
+    message.contains("Error(WasmVm, MissingValue)")
+        && message.contains("non-existent contract function")
 }
 
 /// The rule stored for the installed rule at `index` must be exactly the
@@ -171,13 +181,20 @@ pub fn run(rpc: &Rpc, account: &str, rules_path: &std::path::Path) -> Result<()>
     // checked again once they are done.
     let (revision, onchain) = read_configuration(rpc, account)?;
     let stored = read_rule_set(rpc, account)?;
+    if stored.is_none() {
+        println!(
+            "{account} has no rule_set view (built before it): the stored rules are not checked; \
+             the applied hash, names, context types and count are"
+        );
+    }
     let mut rows = vec![check_applied_hash(rpc, account, &compose.doc_hash)?];
 
     for expected in compose.genesis_rule.iter().chain(compose.apply.iter()) {
         let (row, at) = check_rule(&onchain, expected)?;
         rows.push(row);
+        let Some(stored) = &stored else { continue };
         rows.push(match at {
-            Some((index, id)) => check_stored(&stored, expected, index, id)?,
+            Some((index, id)) => check_stored(stored, expected, index, id)?,
             None => Row {
                 rule_id: None,
                 name: expected.name.clone(),
@@ -201,18 +218,20 @@ pub fn run(rpc: &Rpc, account: &str, rules_path: &std::path::Path) -> Result<()>
     // The stored set is aligned with the installed rules; an account with
     // none is one OZ's policies still decide, which the reviewed rules do
     // not describe.
-    rows.push(Row {
-        rule_id: None,
-        name: "(rule set)".to_string(),
-        check: "aligned",
-        mismatch: (stored.len() != onchain.len()).then(|| {
-            format!(
-                "{} stored rules for {} installed rules",
-                stored.len(),
-                onchain.len()
-            )
-        }),
-    });
+    if let Some(stored) = &stored {
+        rows.push(Row {
+            rule_id: None,
+            name: "(rule set)".to_string(),
+            check: "aligned",
+            mismatch: (stored.len() != onchain.len()).then(|| {
+                format!(
+                    "{} stored rules for {} installed rules",
+                    stored.len(),
+                    onchain.len()
+                )
+            }),
+        });
+    }
 
     let after = read_revision(rpc, account)?;
     if after != revision {
@@ -236,4 +255,22 @@ pub fn run(rpc: &Rpc, account: &str, rules_path: &std::path::Path) -> Result<()>
     }
     println!("verification OK: installed == reviewed");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::lacks_function;
+
+    #[test]
+    fn a_missing_view_is_told_apart_from_a_failed_read() {
+        assert!(lacks_function(
+            "read simulation of rule_set failed: HostError: Error(WasmVm, MissingValue)\n\n\
+             Event log (newest first):\n   0: [Diagnostic Event] contract:CAAG…, topics:[error, \
+             Error(WasmVm, MissingValue)], data:[\"trying to invoke non-existent contract function\", rule_set]"
+        ));
+        assert!(!lacks_function(
+            "read simulation of rule_set failed: HostError: Error(Budget, ExceededLimit)"
+        ));
+        assert!(!lacks_function("rpc: 503 Service Unavailable"));
+    }
 }
