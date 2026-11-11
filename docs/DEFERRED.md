@@ -194,8 +194,10 @@ recovery compiles, has its own caps: 15 signers (`MAX_GRANT_SIGNERS`), 17
 rules (`MAX_GRANT_RULES`), and 8,192 canonical bytes
 (`MAX_GRANT_CANONICAL_BYTES`), sized so that every grant flow over the
 documents with the most signer references stays within 75% of every limit,
-the ledger's per-entry limit included; a document that spends its bytes on
-`string-in` values stores a larger entry, 92.3% of that limit
+the ledger's per-entry limit included. A document that spends its bytes on
+`string-in` values stores the largest entry, 92.3% of that limit: the
+shared caps admitted the same document, the byte cap being unchanged, it is
+inside every limit, and CI holds it under 95%
 ([`budgets.md`](recovery/budgets.md), "Grant-document caps"). Measured with
 signer keys at most a passkey's, which every verifier in `perch/verifiers`
 takes: a grant document naming a verifier by contract id alone, with longer

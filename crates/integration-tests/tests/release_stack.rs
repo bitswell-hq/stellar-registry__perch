@@ -112,7 +112,16 @@ thread_local! {
     /// size ([`World::report_sizes`]): the two limits a grant document's
     /// size meets that [`report`] does not meter.
     static SIZES: Cell<bool> = const { Cell::new(false) };
+    /// The share of the per-entry limit [`World::report_sizes`] holds the
+    /// largest entry within: [`BUDGET_PCT`], but [`VALUES_ENTRY_PCT`] over
+    /// the values-only grant document.
+    static ENTRY_PCT: Cell<u64> = const { Cell::new(BUDGET_PCT) };
 }
+
+/// The share of the per-entry limit the record of the values-only grant
+/// document stays within (`budgets.md`, "Grant-document caps"): it measures
+/// 92.3%, so growth in the record's encoding fails before the limit does.
+const VALUES_ENTRY_PCT: u64 = 95;
 
 /// The per-entry and per-transaction size limits ([`World::report_sizes`]):
 /// `max_contract_data_entry_size_bytes` (the SDK's mainnet invocation limit)
@@ -3732,7 +3741,8 @@ impl World {
     /// document argument twice, in the call and in the signed invocation),
     /// the footprint's keys as an RPC-style simulation of it records them,
     /// and 300 bytes for the envelope, the resources and one signature. A
-    /// budgeted run asserts each within 75%.
+    /// budgeted run asserts the transaction within 75% and the entry within
+    /// [`ENTRY_PCT`].
     fn report_sizes(
         &self,
         label: &str,
@@ -3803,7 +3813,7 @@ impl World {
             return;
         }
         assert!(
-            max_entry as u64 * 100 <= TX_MAX_ENTRY_BYTES * BUDGET_PCT,
+            max_entry as u64 * 100 <= TX_MAX_ENTRY_BYTES * ENTRY_PCT.with(Cell::get),
             "{label}: largest entry over budget"
         );
         assert!(
@@ -4687,6 +4697,10 @@ fn grant_flows(w: &World, shape: GrantShape, seed: u8) {
 /// grant documents with the most signer references they admit, a transfer
 /// every signer of a rule signs among them, each row within 75% of every
 /// metered limit, the largest entry and the transaction's size included.
+/// Then over the values-only document, one signer and two rules with every
+/// other byte of the byte cap a `string-in` value, whose record is the
+/// largest entry the caps admit: within [`VALUES_ENTRY_PCT`] of the entry
+/// limit and 75% of every other.
 #[test]
 #[ignore = "needs the built stack"]
 fn worst_case_grant_flows_at_the_grant_caps() {
@@ -4696,6 +4710,18 @@ fn worst_case_grant_flows_at_the_grant_caps() {
         w.env.cost_estimate().disable_resource_limits();
         grant_flows(&w, GrantShape::at_caps(&w, dense), seed);
     }
+    let w = world();
+    w.env.cost_estimate().disable_resource_limits();
+    let values_only = GrantShape {
+        signers: 1,
+        rules: 2,
+        fan: 1,
+        bytes: MAX_GRANT_CANONICAL_BYTES as usize,
+        dense: 0,
+    };
+    ENTRY_PCT.with(|p| p.set(VALUES_ENTRY_PCT));
+    grant_flows(&w, values_only, 100);
+    ENTRY_PCT.with(|p| p.set(BUDGET_PCT));
     SIZES.with(|s| s.set(false));
 }
 

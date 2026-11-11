@@ -1051,9 +1051,14 @@ Two rules bound that cost:
   sized so that every grant flow fits the transaction budget, the ledger's
   per-entry limit included (`budgets.md`, "Grant-document caps"; the
   `worst_case_grant_flows_at_the_grant_caps` test holds them in CI, within
-  75% of every limit for the documents with the most signer references; one
-  that spends its bytes on `string-in` values stores a larger entry, 92.3%
-  of the per-entry limit). The measurement assumes signer keys at most a
+  75% of every limit for the documents with the most signer references).
+  The entry-size worst case is another document: one signer and two rules
+  with every other byte a `string-in` value stores a record of 92.3% of the
+  per-entry limit. It is not new: the byte cap is unchanged, so the shared
+  caps admitted the same document. It is inside every limit, a larger
+  record fails closed (`apply_grant` is refused and nothing is stored), no
+  recovery reads a grant record, and the same test holds it under 95% of
+  the entry limit. The measurement assumes signer keys at most a
   passkey's, which every verifier in `perch/verifiers` takes; a grant
   document naming a verifier by contract id alone, with longer keys (up to
   `perch_ir::MAX_SIGNER_KEY_LEN`, 256 bytes), is outside it.

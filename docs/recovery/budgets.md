@@ -139,7 +139,7 @@ States: **Measured** (within budget unless stated; the cell says where);
 | §2 `Protected` reconfiguration, `schedule_upgrade` | Measured: in process (reconfiguration at the caps) and on testnet | Within budget. |
 | §2 `execute_upgrade` | Measured in process only | Within budget. Not run on testnet: the upgrade delay is 120 960 ledgers. |
 | §2 promotion after many collecting attempts | Measured without siblings; bounded by construction | Promotion writes one `invalidate_below` value whatever the number of siblings (spec §6.3 T4); the promoting rows above are within budget. No run with many siblings. |
-| §2 grant flows (`apply_grant`, `remove_grant`, `gc_grant`, a transfer through a grant) | Measured in process, at the grant caps | Within budget over the documents with the most signer references the caps admit, the largest ledger entry and the transaction size included. Binding row: the record of 17 rules naming 15 signers each, 74.6% of the entry limit. Not within it: a document that spends its 8 192 bytes on `string-in` values stores a record of 92.3% of the entry limit, inside the limit and past the 75% line ([Grant-document caps](#grant-document-caps)). |
+| §2 grant flows (`apply_grant`, `remove_grant`, `gc_grant`, a transfer through a grant) | Measured in process, at the grant caps | Within budget over the documents with the most signer references the caps admit, the largest ledger entry and the transaction size included. Binding row: the record of 17 rules naming 15 signers each, 74.6% of the entry limit. The entry-size worst case is a document that spends its 8 192 bytes on `string-in` values: a record of 92.3% of the entry limit, inside every limit, admitted under the shared caps too, and held under 95% in CI ([Grant-document caps](#grant-document-caps)). |
 | §2 ordinary authorization overhead | Measured on testnet (absolute cost) and in process | Direct authorization and `execute` are within budget ([testnet-exercise.md](../deploy/testnet-exercise.md), "Against the budget"). The grant generation gate adds one footprint entry per selected rule ([Grant documents](#grant-documents)). Rule-eval's `check_auth` decides an authorization in 5.6M to 6.3M instructions in process, a capped transfer more with a long spending history, up to 47.40M (11.8%) for the longest one window holds ([Rule-eval in `__check_auth`](#rule-eval-in-__check_auth)). |
 | §2 disk read bytes, every row | Required before launch | Neither the release-stack suite nor the testnet exercise reports disk read bytes. |
 | §2 transaction size, every row | Measured on testnet | Within budget. The in-process suite meters transaction size only for the grant flows ([Grant-document caps](#grant-document-caps)). |
@@ -653,25 +653,35 @@ naming every declared signer still installs (`rules.rs` asserts it). A
 document rule carries no policy, so OZ's per-rule 5 never binds one. The
 byte cap admits 14 one-key capped grants (15 take 8 271 bytes).
 
-**Outside the 75% line: a document of values.** The rule cap bounds signer
-references, not `string-in` values, which the byte cap alone bounds. The
-`1 | 2 | 1 | 8 192` row above, one signer and two rules with every other
-byte a value, stores a record of 60 472 bytes, 92.3% of the entry limit: its
-`apply_grant` costs 191.0M to 198.4M instructions (49.6%) and 21.0 MB of
-memory (50.1%). It is inside every limit, so the account accepts it, and no
-recovery reads it ([Grant documents](#grant-documents)). Holding it to 75%
-needs a byte cap near 6 700 or a cap on a document's predicate values, a
-sizing decision not taken here. `worst_case_grant_flows_at_the_grant_caps`
-runs the 15-signer shapes only.
+**The entry-size worst case: a document of values.** The rule cap bounds
+signer references, not `string-in` values, which the byte cap alone bounds.
+The `1 | 2 | 1 | 8 192` row above, one signer and two rules with every other
+byte a value, stores a record of 60 472 bytes, 92.3% of the entry limit, the
+largest the caps admit: its `apply_grant` costs 191.0M to 198.4M
+instructions (49.6%) and 21.0 MB of memory (50.1%).
+
+- It is not new. The byte cap is unchanged, so the shared caps (8 signers,
+  10 rules, 8 192 bytes) admitted the same document.
+- It is inside every limit, so the account accepts it. A larger record
+  fails closed: the ledger refuses the `apply_grant` and nothing is stored.
+- No recovery reads a grant record ([Grant documents](#grant-documents)).
+- `worst_case_grant_flows_at_the_grant_caps` runs every grant flow over it
+  and holds its record under 95% of the entry limit and every other limit
+  within 75%, so growth in the record's encoding fails CI before it
+  reaches the limit.
+
+Holding it to 75% would need a byte cap near 6 700, less than grants had
+before, or a cap on a document's predicate values; neither is taken.
 
 **At the caps** (`worst_case_grant_flows_at_the_grant_caps`, which asserts
-every row within 75%, the two sizes included): of the 15-signer documents
+every row within 75%, the two sizes included, but for the values-only
+document's largest entry, within 95%): of the 15-signer documents
 the caps admit, the capped one holds 10 rules, the dense ones 17. Every flow
 over the dense document with `all` principals, whose record is the largest
 (48 888 bytes, 74.6%, in each `apply_grant` over it), its capped
 counterpart's worst, and the transfers every asked passkey signs, through
 the bare last rule of that document and through the two capped rules of the
-quorum document:
+quorum document; then the values-only document's worst rows:
 
 | Flow (dense all, 15 × 17, 8 192 B) | Instructions | Memory | Footprint | Written | Write bytes | Largest entry | Tx size |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -685,6 +695,8 @@ quorum document:
 | Capped transfer, 8 of 15 signing (quorum rules) | 36.15M (9.0%) | 1.8 MB | 13 | 4 | 764 | | 5 536 |
 | Capped transfer, 15 of 15 signing (quorum rules) | 62.76M (15.7%) | 2.5 MB | 13 | 4 | 764 | | 8 980 |
 | `apply_grant` over the wiped grant document (quorum rules), worst row | 154.38M (38.6%) | 3.7 MB | 79 | 52 | 51 784 | 47 360 (72.3%) | 24 692 |
+| Values only (1 × 2): `apply_grant`, every rule added | 190.99M (47.7%) | 20.0 MB (47.6%) | 18 | 7 | 61 388 | 60 472 (92.3%) | 18 672 |
+| Values only (1 × 2): `apply_grant` over the wiped grant document, worst row | 198.38M (49.6%) | 21.0 MB (50.1%) | 21 | 9 | 61 320 | 60 472 (92.3%) | 18 924 |
 
 A transfer through a grant reads its grant document's record and verifies
 one passkey assertion per signer the rule asks, about 3.8M each: 8.9M to
