@@ -697,18 +697,18 @@ the byte cap:
 | Flow | Instructions | Memory | Footprint | Written | Write bytes | Largest entry | Tx size |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Dense all (15 × 19, 8 192 B): `apply_grant`, every rule added | 156.90M (39.2%) | 2.9 MB | 63 | 38 | 14 124 | 9 424 (14.4%) | 23 348 |
-| Dense all: `apply_grant`, every rule replaced | 166.79M (41.7%) | 3.3 MB | 81 | 56 | 14 020 | 9 424 | 24 860 |
+| Dense all: `apply_grant`, every rule replaced | 166.78M (41.7%) | 3.3 MB | 81 | 56 | 14 020 | 9 424 | 24 860 |
 | Dense all: `remove_grant` | 7.93M | 1.0 MB | 47 | 23 | 460 | | 4 796 |
 | Dense all: `gc_grant` of the wiped grant document | 2.77M | 0.5 MB | 42 | 22 | 424 | | 3 808 |
-| Dense all: `apply_grant` over the wiped grant document | 166.86M (41.7%) | 3.3 MB | 81 | 56 | 14 056 | 9 424 | 24 860 |
+| Dense all: `apply_grant` over the wiped grant document | 166.87M (41.7%) | 3.3 MB | 81 | 56 | 14 056 | 9 424 | 24 860 |
 | Capped (15 × 10), worst row | 131.04M (32.8%) | 2.8 MB | 73 | 47 | 13 196 | 9 536 (14.6%) | 24 188 |
 | Transfer through a bare rule, 15 of 15 signing | 61.29M (15.3%) | 2.2 MB | 12 | 3 | 520 | | 8 896 |
 | Capped transfer, 8 of 15 signing (quorum rules) | 34.89M (8.7%) | 1.5 MB | 13 | 4 | 764 | | 5 536 |
 | Capped transfer, 15 of 15 signing (quorum rules) | 61.50M (15.4%) | 2.3 MB | 13 | 4 | 764 | | 8 980 |
 | Quorum rules (15 × 18), worst row | 162.11M (40.5%) | 3.3 MB | 81 | 54 | 14 028 | 9 500 (14.5%) | 24 860 |
-| Most rules (1 × 50, dense): `apply_grant`, every rule replaced | 124.87M (31.2%) | 3.7 MB | 115 | 104 (52.0%) | 16 964 | 11 160 (17.0%) | 26 820 |
-| Most rules: `remove_grant` | 12.15M | 1.5 MB | 109 | 54 | 460 | | 10 004 |
-| Values (1 × 2, 8 192 B): `apply_grant` over the wiped grant document, worst row | 175.33M (43.8%) | 19.8 MB (47.3%) | 21 | 9 | 19 708 | 18 860 (28.8%) | 18 924 |
+| Most rules (1 × 50, dense): `apply_grant`, every rule replaced | 124.92M (31.2%) | 3.7 MB | 115 | 104 (52.0%) | 16 964 | 11 160 (17.0%) | 26 820 |
+| Most rules: `remove_grant` | 12.16M | 1.5 MB | 109 | 54 | 460 | | 10 004 |
+| Values (1 × 2, 8 192 B): `apply_grant` over the wiped grant document, worst row | 175.32M (43.8%) | 19.8 MB (47.3%) | 21 | 9 | 19 708 | 18 860 (28.8%) | 18 924 |
 | One-character values on every index (1 × 1, passkey, 8 192 B): `apply_grant` | 150.23M (37.6%) | 3.2 MB | 17 | 6 | 21 476 | 20 888 (31.9%) | 18 588 |
 | The same with a delegated signer | 149.71M (37.4%) | 3.0 MB | 14 | 6 | 21 820 | 21 232 (32.4%) | 18 404 |
 
@@ -727,14 +727,14 @@ signers, 10 rules, 8 KiB; fork rows):
 
 | Completion | 0 | 3 | 12 | Footprint | Written | Write bytes |
 | --- | --- | --- | --- | --- | --- | --- |
-| Compromise, names kept, every program changed | 159.07M (39.8%) | 159.10M | 159.15M | 55 | 37 | 27 872 |
-| Compromise, every rule renamed | 154.66M (38.7%) | 154.65M | 154.62M | 63 | 37 | 27 872 |
-| Lost-key (`Combined`, ZK rotation, every signer revoked) | 158.64M (39.7%) | 158.65M | 158.62M | 47 | 29 | 26 936 / 26 964 / 26 964 |
+| Compromise, names kept, every program changed | 159.09M (39.8%) | 159.14M | 159.16M | 55 | 37 | 27 872 |
+| Compromise, every rule renamed | 154.65M (38.7%) | 154.65M | 154.62M | 63 | 37 | 27 872 |
+| Lost-key (`Combined`, ZK rotation, every signer revoked) | 158.65M (39.7%) | 158.66M | 158.63M | 47 | 29 | 26 936 / 26 964 / 26 964 |
 
 Memory is 4.5 to 4.6 MB in every row. The long-lived host's rows grow with
 the grant documents' entries (169.1M with 12, names kept), as
 [above](#grant-documents). `gc_grant` of a wiped grant document at the caps
-costs at most 10.1M on the long-lived host, 42 footprint entries, 23
+costs at most 10.0M on the long-lived host, 42 footprint entries, 23
 written.
 
 **Keys.** The stored bound counts each signer at its key's length, so it
@@ -796,12 +796,12 @@ from this source (grant caps 15 × 50). Both pass. Rows the two runs share:
 
 | Row (account document at its caps: 8 signers, 10 rules) | Instructions | Write bytes |
 | --- | --- | --- |
-| Enroll `Combined` through `apply_doc` | 154.52M → 151.40M (37.8%) | 41 492 → 22 852 |
+| Enroll `Combined` through `apply_doc` | 154.52M → 151.39M (37.8%) | 41 492 → 22 852 |
 | Thief's `apply_doc`, names kept, every program changed | 122.68M → 120.32M (30.1%) | 37 652 → 19 348 |
-| Compromise completion, names kept, every program and cap changed (fork) | 163.12M → 159.60M (39.9%) | 46 176 → 27 872 |
-| Compromise completion, every rule renamed (fork) | 158.15M → 154.68M (38.7%) | 46 176 → 27 872 |
-| Lost-key completion (`Combined`, ZK rotation, every signer revoked) | 161.08M → 157.99M (39.5%) | 45 576 → 26 936 |
-| `Protected` reconfiguration, every rule edited | 163.34M → 160.82M (40.2%) | 41 456 → 22 844 |
+| Compromise completion, names kept, every program and cap changed (fork) | 163.12M → 159.63M (39.9%) | 46 176 → 27 872 |
+| Compromise completion, every rule renamed (fork) | 158.15M → 154.67M (38.7%) | 46 176 → 27 872 |
+| Lost-key completion (`Combined`, ZK rotation, every signer revoked) | 161.08M → 158.00M (39.5%) | 45 576 → 26 936 |
+| `Protected` reconfiguration, every rule edited | 163.34M → 160.81M (40.2%) | 41 456 → 22 844 |
 | Exact root: maximum-sized document apply | 106.72M → 104.93M (26.2%) | 35 524 → 19 684 |
 
 | Row (grant documents) | Instructions | Write bytes |
@@ -814,8 +814,10 @@ from this source (grant caps 15 × 50). Both pass. Rows the two runs share:
 
 Write bytes fall by about 18 KB at the account document's caps, where the
 records are rewritten whole, and by 23 KB in a 15-signer grant document.
-Instructions fall by 1.8M to 3.5M in the account document's flows at the
-caps and move by at most 1.3M either way in the grant flows. An
+Instructions fall by 1.5M to 3.5M in the account document's flows at the
+caps (the least in the exact root's maximum-sized guardian recovery
+completion, 113.32M → 111.85M) and move by at most 1.3M either way in the
+grant flows. An
 authorization that chooses an admin rule converts the account document's
 signer table once (`gate::Rules`), 0.04M to 0.38M more than reading each
 rule's signers did, the most with 7 grants' signers in the table; one that
@@ -837,7 +839,7 @@ unchanged.
 
 The account wasm grows from 108 020 to 109 625 bytes as `build-stack.sh`
 builds it (the signer-table views and conversion), and the compiler's
-shrinks from 117 019 to 116 984.
+shrinks from 117 019 to 116 502.
 
 ### Rule-eval rule sets
 
