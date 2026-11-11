@@ -194,7 +194,11 @@ recovery compiles, has its own caps: 15 signers (`MAX_GRANT_SIGNERS`), 18
 rules (`MAX_GRANT_RULES`), and 8,192 canonical bytes
 (`MAX_GRANT_CANONICAL_BYTES`), sized so that every grant flow stays within
 75% of every limit, the ledger's per-entry limit included
-([`budgets.md`](recovery/budgets.md), "Grant-document caps"). The caps are sized so that
+([`budgets.md`](recovery/budgets.md), "Grant-document caps"), measured with
+signer keys at most a passkey's, which every verifier in `perch/verifiers`
+takes: a grant document naming a verifier by contract id alone, with longer
+keys (up to `perch_ir::MAX_SIGNER_KEY_LEN`, 256 bytes), is outside the
+measurement. The account-document caps are sized so that
 a worst-case completion, compromise restore, or `Protected` reconfiguration
 stays within 75% of every *measured* per-transaction limit: instructions,
 memory, write bytes, and write entries

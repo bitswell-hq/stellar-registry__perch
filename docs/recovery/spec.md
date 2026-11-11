@@ -1050,7 +1050,11 @@ Two rules bound that cost:
   rule-name cap. The compiler's `grant_limits` view returns them. They are
   sized so that every grant flow fits the transaction budget, the ledger's
   per-entry limit included (`budgets.md`, "Grant-document caps"; the
-  `worst_case_grant_flows_at_the_grant_caps` test holds them in CI).
+  `worst_case_grant_flows_at_the_grant_caps` test holds them in CI). The
+  measurement assumes signer keys at most a passkey's, which every verifier
+  in `perch/verifiers` takes; a grant document naming a verifier by
+  contract id alone, with longer keys (up to `perch_ir::MAX_SIGNER_KEY_LEN`,
+  256 bytes), is outside it.
 - **Bounded revocation writes.** The revoked set is one persistent entry per
   fingerprint, so a completion writes at most one entry per removed
   credential, a number the caps bound.

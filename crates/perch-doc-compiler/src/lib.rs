@@ -86,7 +86,11 @@ pub const MAX_DOC_CANONICAL_BYTES: u32 = 8_192;
 /// capped transfer. The binding limit is the entry the account keeps a
 /// grant document's rules in, which stores every signer a rule names: 18
 /// rules each naming all 15 signers. The signer cap is OZ's per-rule
-/// limit, so a rule naming every declared signer still installs.
+/// limit, so a rule naming every declared signer still installs. Measured
+/// with signer keys at most a passkey's, which every verifier in
+/// `perch/verifiers` takes: a grant document naming a verifier by contract
+/// id alone, with longer keys (up to `perch_ir::MAX_SIGNER_KEY_LEN`), is
+/// outside the measurement.
 pub const MAX_GRANT_SIGNERS: u32 = 15;
 /// See [`MAX_GRANT_SIGNERS`].
 pub const MAX_GRANT_RULES: u32 = 18;
