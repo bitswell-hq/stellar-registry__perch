@@ -7,7 +7,7 @@
 // scripts/bindings-contracts.sh run replaces this file.
 
 /** sha256 of the wasm these bindings were generated from. */
-export const WASM_SHA256 = "d3d31403e003e5b306239aaac82f4a4252508a1b102c697002d36097386a2808";
+export const WASM_SHA256 = "5aa894781255ab405ada4dd494a99eecfcb1247ad3b2adbab9e49c5830e75f18";
 
 /** These bindings describe a build no deployment runs yet. */
 export const DEPLOYED = false;

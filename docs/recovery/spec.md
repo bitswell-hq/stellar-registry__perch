@@ -1045,16 +1045,18 @@ Two rules bound that cost:
   `apply_doc` applies, every published baseline, and every recovery target
   is. A **grant document** (§7.6), which no completion compiles or
   installs, has its own: `MAX_GRANT_SIGNERS` = 15 declared signers (the
-  account's per-rule signer limit, OZ's), `MAX_GRANT_RULES` = 18 rules, and
+  account's per-rule signer limit, OZ's), `MAX_GRANT_RULES` = 17 rules, and
   `MAX_GRANT_CANONICAL_BYTES` = 8 192 canonical bytes, with the same
   rule-name cap. The compiler's `grant_limits` view returns them. They are
   sized so that every grant flow fits the transaction budget, the ledger's
   per-entry limit included (`budgets.md`, "Grant-document caps"; the
-  `worst_case_grant_flows_at_the_grant_caps` test holds them in CI). The
-  measurement assumes signer keys at most a passkey's, which every verifier
-  in `perch/verifiers` takes; a grant document naming a verifier by
-  contract id alone, with longer keys (up to `perch_ir::MAX_SIGNER_KEY_LEN`,
-  256 bytes), is outside it.
+  `worst_case_grant_flows_at_the_grant_caps` test holds them in CI, within
+  75% of every limit for the documents with the most signer references; one
+  that spends its bytes on `string-in` values stores a larger entry, 92.3%
+  of the per-entry limit). The measurement assumes signer keys at most a
+  passkey's, which every verifier in `perch/verifiers` takes; a grant
+  document naming a verifier by contract id alone, with longer keys (up to
+  `perch_ir::MAX_SIGNER_KEY_LEN`, 256 bytes), is outside it.
 - **Bounded revocation writes.** The revoked set is one persistent entry per
   fingerprint, so a completion writes at most one entry per removed
   credential, a number the caps bound.

@@ -135,7 +135,7 @@ the owner chooses (one per app grant, say), and returns its `doc_hash`
 - It refuses (`WipedCredential`) a credential a grant document named before
   the last completed recovery, and records every credential it names under
   the current grant generation.
-- The document is compiled under the grant-document caps (15 signers, 18
+- The document is compiled under the grant-document caps (15 signers, 17
   rules, 8 192 canonical bytes: the compiler's `grant_limits`, larger than
   an account document's `limits`) and reconciled against this grant's
   records only. Every rule it installs is tagged with

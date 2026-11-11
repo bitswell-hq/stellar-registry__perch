@@ -190,11 +190,13 @@ The doc compiler refuses with `DocTooLarge`, on every `compile_doc` and
 canonical bytes (`MAX_DOC_CANONICAL_BYTES`), or a rule name over 20 bytes
 (`MAX_RULE_NAME_BYTES`, the account's `MAX_NAME_SIZE`). The recovery rule the account
 generates is additional to the 10 document rules. A grant document, which no
-recovery compiles, has its own caps: 15 signers (`MAX_GRANT_SIGNERS`), 18
+recovery compiles, has its own caps: 15 signers (`MAX_GRANT_SIGNERS`), 17
 rules (`MAX_GRANT_RULES`), and 8,192 canonical bytes
-(`MAX_GRANT_CANONICAL_BYTES`), sized so that every grant flow stays within
-75% of every limit, the ledger's per-entry limit included
-([`budgets.md`](recovery/budgets.md), "Grant-document caps"), measured with
+(`MAX_GRANT_CANONICAL_BYTES`), sized so that every grant flow over the
+documents with the most signer references stays within 75% of every limit,
+the ledger's per-entry limit included; a document that spends its bytes on
+`string-in` values stores a larger entry, 92.3% of that limit
+([`budgets.md`](recovery/budgets.md), "Grant-document caps"). Measured with
 signer keys at most a passkey's, which every verifier in `perch/verifiers`
 takes: a grant document naming a verifier by contract id alone, with longer
 keys (up to `perch_ir::MAX_SIGNER_KEY_LEN`, 256 bytes), is outside the

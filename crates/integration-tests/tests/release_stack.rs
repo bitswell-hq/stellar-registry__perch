@@ -4248,10 +4248,35 @@ struct GrantShape {
 /// The signers the second-last rule of a `dense` 3 grant document asks.
 const QUORUM: usize = 8;
 
+/// The characters of a padding `string-in` value: canonical JSON escapes
+/// none of them.
+const VALUE_CHARS: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+
+/// The characters of a dense rule's name: [`VALUE_CHARS`] without the `x`
+/// that pads a name.
+const NAME_CHARS: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwyz";
+
+/// The `n`th string over `chars`, shortest first: distinct for distinct `n`.
+fn shortest(chars: &[u8], mut n: usize) -> String {
+    let (mut len, mut span) = (1, chars.len());
+    while n >= span {
+        n -= span;
+        len += 1;
+        span *= chars.len();
+    }
+    let mut out = std::vec![0u8; len];
+    for slot in out.iter_mut().rev() {
+        *slot = chars[n % chars.len()];
+        n /= chars.len();
+    }
+    String::from_utf8(out).unwrap()
+}
+
 impl GrantShape {
-    /// The costliest grant documents the grant caps admit, `dense` or
-    /// capped: every signer a passkey, every rule naming as many signers as
-    /// a rule may (OZ's 15), as many rules as fit the byte cap, padded to it.
+    /// The grant documents with the most signer references the grant caps
+    /// admit, `dense` or capped: every signer a passkey, every rule naming
+    /// as many signers as a rule may (OZ's 15), as many rules as fit the
+    /// byte cap, padded to it.
     fn at_caps(w: &World, dense: u8) -> GrantShape {
         let signers = MAX_GRANT_SIGNERS as usize;
         let mut shape = GrantShape {
@@ -4296,10 +4321,15 @@ impl GrantShape {
         }
     }
 
-    /// Rule `k`'s name before padding.
+    /// Rule `k`'s name before padding: when dense, the shortest that is
+    /// distinct in the documents of every `tag` (`a`, `b`, `c`).
     fn rule_name(&self, tag: &str, k: usize) -> String {
         if self.dense > 0 {
-            format!("{tag}{k}")
+            let t = ["a", "b", "c"]
+                .iter()
+                .position(|x| *x == tag)
+                .expect("a known tag");
+            shortest(NAME_CHARS, k * 3 + t)
         } else {
             format!("{tag}g{k:02}")
         }
@@ -4366,8 +4396,9 @@ impl World {
     /// (`is-self` on argument 0) within a cap, and `edit` changes every cap's
     /// limit and period; a dense rule may call anything, and `edit` asks two
     /// of its signers where it names three or more. Either edit keeps the
-    /// length. `values` strings in a `string-in` on argument 1 of rule 0 and
-    /// `pad` bytes over the rule names grow it. Normal form, as `apply_grant`
+    /// length. `values` strings, the shortest distinct ones, in a
+    /// `string-in` on argument 1 of rule 0 and `pad` bytes over the rule
+    /// names grow it. Normal form, as `apply_grant`
     /// requires.
     #[allow(clippy::too_many_arguments)]
     fn grant_json(
@@ -4412,8 +4443,9 @@ impl World {
                 args.push(r#"{"index":0,"pred":{"type":"is-self"}}"#.to_string());
             }
             if k == 0 && values > 0 {
-                let values: std::vec::Vec<String> =
-                    (0..values).map(|v| format!(r#""v{v:05}""#)).collect();
+                let values: std::vec::Vec<String> = (0..values)
+                    .map(|v| format!(r#""{}""#, shortest(VALUE_CHARS, v)))
+                    .collect();
                 args.push(format!(
                     r#"{{"index":1,"pred":{{"type":"string-in","values":[{}]}}}}"#,
                     values.join(",")
@@ -4452,7 +4484,9 @@ impl World {
 
     /// [`World::grant_json`] padded to exactly `shape.bytes` canonical bytes
     /// (unpadded at 0): first a `string-in` with as many strings as fit,
-    /// then the rule names. Returns the document and its canonical length.
+    /// which the account's record stores at several times their document
+    /// bytes, then the rule names. Returns the document and its canonical
+    /// length.
     fn grant_shaped(
         &self,
         token: &Address,
@@ -4468,25 +4502,17 @@ impl World {
             (0, 0)
         } else {
             assert!(len(0, 0) <= shape.bytes, "{shape:?} does not fit its bytes");
-            let room: usize = (0..shape.rules)
-                .map(|k| MAX_NAME_SIZE as usize - shape.rule_name(tag, k).len())
-                .sum();
-            let values = if len(0, 0) + room < shape.bytes {
-                // Each value adds at least eight bytes.
-                let (mut lo, mut hi) = (0usize, shape.bytes / 8 + 1);
-                while lo < hi {
-                    let mid = (lo + hi).div_ceil(2);
-                    if len(mid, 0) <= shape.bytes {
-                        lo = mid;
-                    } else {
-                        hi = mid - 1;
-                    }
+            // Each value adds at least four bytes.
+            let (mut values, mut hi) = (0usize, shape.bytes / 4 + 1);
+            while values < hi {
+                let mid = (values + hi).div_ceil(2);
+                if len(mid, 0) <= shape.bytes {
+                    values = mid;
+                } else {
+                    hi = mid - 1;
                 }
-                lo
-            } else {
-                0
-            };
-            (values, (shape.bytes - len(values, 0)).min(room))
+            }
+            (values, shape.bytes - len(values, 0))
         };
         let size = len(values, pad);
         if shape.bytes > 0 {
@@ -4657,10 +4683,10 @@ fn grant_flows(w: &World, shape: GrantShape, seed: u8) {
     ));
 }
 
-/// The grant flows at the compiled-in grant caps, over the costliest capped
-/// and dense grant documents they admit, a transfer every signer of a rule
-/// signs among them, each row within 75% of every metered limit, the
-/// largest entry and the transaction's size included.
+/// The grant flows at the compiled-in grant caps, over the capped and dense
+/// grant documents with the most signer references they admit, a transfer
+/// every signer of a rule signs among them, each row within 75% of every
+/// metered limit, the largest entry and the transaction's size included.
 #[test]
 #[ignore = "needs the built stack"]
 fn worst_case_grant_flows_at_the_grant_caps() {
