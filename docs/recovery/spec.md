@@ -1045,17 +1045,18 @@ Two rules bound that cost:
   `apply_doc` applies, every published baseline, and every recovery target
   is. A **grant document** (§7.6), which no completion compiles or
   installs, has its own: `MAX_GRANT_SIGNERS` = 15 declared signers (the
-  account's per-rule signer limit, OZ's), `MAX_GRANT_RULES` = 17 rules, and
+  account's per-rule signer limit, OZ's), `MAX_GRANT_RULES` = 50 rules, and
   `MAX_GRANT_CANONICAL_BYTES` = 8 192 canonical bytes, with the same
   rule-name cap, and the ledger entry the account stores for it: at most
   `MAX_GRANT_STORED_BYTES` = 49 152 bytes, 75% of the ledger's per-entry
-  limit. That entry holds every signer each rule names in full and every
-  condition with its values, so within 8 192 bytes `string-in` values alone
-  could pass the ledger's limit (the shared caps admitted such documents).
-  The compiler computes the entry's size from the document
+  limit. That entry holds the document's signers once, and every rule with
+  its conditions and their values (`account-interface.md`, "Types",
+  `StoredRule`). The compiler computes the entry's size from the document
   (`grant_stored_bytes`, exact) and refuses one past the bound
   (`DocTooLarge`); `apply_grant` of such a document fails and stores
-  nothing. The compiler's `grant_limits` view returns the count and byte
+  nothing. Within the other caps no document reaches the bound: the
+  largest entry they admit is 21 236 bytes (32.4% of the limit), a
+  `string-in` of one-character values filling the byte cap. The compiler's `grant_limits` view returns the count and byte
   caps, its `grant_stored_bytes` view a document's entry. They are sized so
   that every grant flow over every grant document they admit fits the
   transaction budget, the ledger's per-entry limit included (`budgets.md`,

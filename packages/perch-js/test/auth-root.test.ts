@@ -79,13 +79,19 @@ describe('exact authorization root', () => {
     expect(() => selectRules(snapshot, [game, transfer], [{ ...root, function: 'wrong' }, root])).toThrow(AuthRootMismatch);
   });
 
-  it('recognizes legacy stored rules and never defaults malformed new layouts', () => {
-    const old = { cap: [], conds: [], contract: token, functions: { tag: 'Only', values: [['transfer']] }, generation: 1n, signers: [], threshold: 1, valid_until: undefined };
-    expect(decodeStoredRule(old).authRoot).toBeUndefined();
-    expect(decodeStoredRule({ ...old, auth_root: [root] }).authRoot).toEqual(root);
+  it('reads only the stored tuple layout, and never defaults a malformed root', () => {
+    // contract, functions, conds, signer positions, threshold, cap, valid_until, generation, auth_root
+    const stored = [token, { tag: 'Only', values: [['transfer']] }, [], [0], 1, [], undefined, 1n, undefined];
+    const withRoot = (r: unknown) => stored.map((x, i) => (i === 8 ? r : x));
+    expect(decodeStoredRule(stored).authRoot).toBeNull();
+    expect(decodeStoredRule(withRoot([root])).authRoot).toEqual(root);
     for (const value of [[], ['bad'], [{ ...root, function: '*' }], {}, [root, root]]) {
-      expect(() => decodeStoredRule({ ...old, auth_root: value })).toThrow();
+      expect(() => decodeStoredRule(withRoot(value))).toThrow();
     }
-    expect(() => decodeStoredRule({ ...old, auth_rooot: [root.contract, root.function] })).toThrow();
+    // The map earlier builds stored, and a tuple of eight or ten fields.
+    const map = { cap: [], conds: [], contract: token, functions: stored[1], generation: 1n, signers: [], threshold: 1, valid_until: undefined };
+    expect(() => decodeStoredRule(map as never)).toThrow('unknown stored rule layout');
+    expect(() => decodeStoredRule(stored.slice(0, 8))).toThrow('unknown stored rule layout');
+    expect(() => decodeStoredRule([...stored, undefined])).toThrow('unknown stored rule layout');
   });
 });

@@ -3,13 +3,15 @@
 //! computed from the document alone, so the compiler can refuse a grant
 //! document whose entry would pass [`crate::MAX_GRANT_STORED_BYTES`].
 //!
-//! The entry holds, per rule, the rule-eval rule the account lowers it to
-//! (rule-core's `lower_scoped`, mirrored as `perch_rule_eval::StoredRule`):
-//! every signer the rule names in full, and every condition with its
-//! values. Each term below is the XDR size of one `#[contracttype]` value:
-//! a symbol, string or bytes is 8 bytes and its padded length, a vector or
-//! map 12 bytes and its elements, an enum case a vector of its name and its
-//! fields, a struct a map of its field names and values.
+//! The entry holds the grant's signer table, each signer a rule names once,
+//! and per rule the rule-eval rule the account lowers it to (rule-core's
+//! `lower_scoped`, mirrored as `perch_rule_eval::StoredRule`): its signers
+//! as positions in the table, and every condition with its values. Each
+//! term below is the XDR size of one `#[contracttype]` value: a symbol,
+//! string or bytes is 8 bytes and its padded length, a vector or map 12
+//! bytes and its elements, an enum case a vector of its name and its fields,
+//! a tuple struct a vector of its fields, and a struct with named fields a
+//! map of its field names and values.
 //! `integration-tests/tests/grant_stored_size.rs` holds the sum equal to the
 //! entry the account writes, so a change to the account's record or to the
 //! lowering fails there first.
@@ -54,12 +56,7 @@ const fn case(name: &str, fields: usize) -> usize {
     HEADER + blob(name.len()) + fields
 }
 
-/// A `StoredVal::String` of `n` bytes.
-const fn string_val(n: usize) -> usize {
-    case("String", blob(n))
-}
-
-/// The `Signer` a principal id names.
+/// The `Signer` a declaration makes.
 fn signer(decl: &SignerDecl) -> usize {
     match &decl.method {
         SignerMethod::External { verifier, key, .. } => {
@@ -69,7 +66,8 @@ fn signer(decl: &SignerDecl) -> usize {
     }
 }
 
-/// The `StoredCond` an argument predicate lowers to.
+/// The `StoredCond` an argument predicate lowers to; a `string-in`'s values
+/// are plain strings.
 fn condition(pred: &ArgPred) -> usize {
     let arg_eq = |val: usize| case("ArgEq", U32 + val);
     match pred {
@@ -81,7 +79,7 @@ fn condition(pred: &ArgPred) -> usize {
                 .values
                 .iter()
                 .filter(|v| v.len() <= MAX_STRING_LEN)
-                .map(|v| string_val(v.len()))
+                .map(|v| blob(v.len()))
                 .sum();
             case("ArgIn", U32 + HEADER + values)
         }
@@ -102,39 +100,26 @@ fn functions(rule: &Rule) -> usize {
     }
 }
 
-/// The `StoredRule` a grant rule lowers to: a map of its nine fields.
-fn stored_rule(rule: &Rule, signers: &[SignerDecl]) -> usize {
-    let keys: usize = [
-        "auth_root",
-        "cap",
-        "conds",
-        "contract",
-        "functions",
-        "generation",
-        "signers",
-        "threshold",
-        "valid_until",
-    ]
-    .iter()
-    .map(|k| blob(k.len()))
-    .sum();
-    let named = match &rule.principals {
+/// The ids of the signers `rule` names, in the order it names them.
+fn named(rule: &Rule) -> &[alloc::string::String] {
+    match &rule.principals {
         Principals::All(p) => &p.signers,
         Principals::Threshold(p) => &p.signers,
-        Principals::SelfAuthenticating(_) => return 0,
-    };
-    let rule_signers: usize = named
-        .iter()
-        .filter_map(|id| signers.iter().find(|s| &s.id == id))
-        .map(signer)
-        .sum();
+        Principals::SelfAuthenticating(_) => &[],
+    }
+}
+
+/// The `StoredRule` a grant rule lowers to: the tuple of its contract,
+/// functions, conditions, signers (positions in its record's signer table),
+/// threshold, cap, last ledger, grant generation, and exact root.
+fn stored_rule(rule: &Rule) -> usize {
     let mut conds: usize = rule.args.iter().flatten().map(|a| condition(&a.pred)).sum();
     let mut cap = 0;
     if rule.cap.is_some() {
-        // The cap's `amount_arg <= i128::MAX` condition, and the cap.
+        // The cap's `amount_arg <= i128::MAX` condition, and the cap's tuple
+        // of its limit, period and amount argument.
         conds += case("ArgI128AtMost", U32 + I128);
-        cap = HEADER + blob("amount_arg".len()) + I128 + blob("limit".len()) + U32;
-        cap += blob("period".len()) + U32;
+        cap = HEADER + I128 + U32 + U32;
     }
     let contract = match &rule.scope {
         perch_ir::Scope::Contract(c) => address(&c.address),
@@ -157,45 +142,49 @@ fn stored_rule(rule: &Rule, signers: &[SignerDecl]) -> usize {
         VOID
     };
     HEADER
-        + keys
-        + auth_root
-        + (HEADER + cap)
-        + (HEADER + conds)
         + contract
         + functions(rule)
-        + U64
-        + (HEADER + rule_signers)
+        + (HEADER + conds)
+        + (HEADER + U32 * named(rule).len())
         + U32
+        + (HEADER + cap)
         + valid_until
+        + U64
+        + auth_root
 }
 
-/// The account's `RuleRecord` of a grant rule: its id, name, no policies,
-/// and its stored rule.
-fn rule_record(rule: &Rule, signers: &[SignerDecl]) -> usize {
-    let keys = blob("id".len()) + blob("name".len()) + blob("policies".len()) + blob("rule".len());
-    HEADER + keys + U32 + blob(rule.name.len()) + HEADER + stored_rule(rule, signers)
+/// The account's `RuleRecord` of a grant rule: the tuple of its id, name,
+/// policies (none), and stored rule.
+fn rule_record(rule: &Rule) -> usize {
+    HEADER + U32 + blob(rule.name.len()) + HEADER + stored_rule(rule)
+}
+
+/// The record's signer table: every signer a rule names, once.
+fn signer_table(doc: &PolicyDoc) -> usize {
+    let mut seen: alloc::vec::Vec<&str> = alloc::vec::Vec::new();
+    let mut bytes = 0;
+    for id in doc.rules.iter().flat_map(named) {
+        if seen.contains(&id.as_str()) {
+            continue;
+        }
+        seen.push(id);
+        if let Some(decl) = doc.signers.iter().find(|s| &s.id == id) {
+            bytes += signer(decl);
+        }
+    }
+    HEADER + bytes
 }
 
 /// The bytes of the ledger entry an account stores for grant document
-/// `doc`: its `StoredGrant` (generation, `doc_hash`, index position, every
-/// rule's record, the signer ids, and, when any signer has one, each
-/// signer's `verifier-name`) in its entry under the `Grants` key. Exact for
-/// a document `apply_grant` accepts (every rule live, no self-authenticating
-/// principals).
+/// `doc`: its `StoredGrant`, the tuple of its grant generation, `doc_hash`,
+/// index position, rules (the tuple of the signer table and every rule's
+/// record), signer ids, and, when any signer has one, each signer's
+/// `verifier-name`, in its entry under the `Grants` key. Exact for a
+/// document `apply_grant` accepts (every rule live, no self-authenticating
+/// principals, no two signers one key).
 #[must_use]
 pub fn grant_stored_bytes(doc: &PolicyDoc) -> u32 {
-    let keys: usize = [
-        "doc_hash",
-        "gen",
-        "pos",
-        "rules",
-        "signer_ids",
-        "verifier_names",
-    ]
-    .iter()
-    .map(|k| blob(k.len()))
-    .sum();
-    let rules: usize = doc.rules.iter().map(|r| rule_record(r, &doc.signers)).sum();
+    let rules: usize = doc.rules.iter().map(rule_record).sum();
     let ids: usize = doc.signers.iter().map(|s| blob(s.id.len())).sum();
     let names: alloc::vec::Vec<usize> = doc
         .signers
@@ -215,11 +204,10 @@ pub fn grant_stored_bytes(doc: &PolicyDoc) -> u32 {
     };
     let total = ENTRY
         + HEADER
-        + keys
         + U64
         + blob(32)
         + U32
-        + (HEADER + rules)
+        + (HEADER + signer_table(doc) + (HEADER + rules))
         + (HEADER + ids)
         + (HEADER + verifier_names);
     u32::try_from(total).unwrap_or(u32::MAX)

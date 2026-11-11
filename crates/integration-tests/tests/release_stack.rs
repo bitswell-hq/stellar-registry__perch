@@ -35,9 +35,9 @@ use perch_account::PerchAccountClient;
 use perch_account_factory::PerchAccountFactoryClient;
 use perch_account_types::{AuthPayload, Signer};
 use perch_doc_compiler::{
-    DocCompilerError, PerchDocCompilerClient, MAX_DOC_CANONICAL_BYTES, MAX_DOC_RULES,
-    MAX_DOC_SIGNERS, MAX_GRANT_CANONICAL_BYTES, MAX_GRANT_RULES, MAX_GRANT_SIGNERS,
-    MAX_GRANT_STORED_BYTES, MAX_RULE_CONSTRAINTS,
+    PerchDocCompilerClient, MAX_DOC_CANONICAL_BYTES, MAX_DOC_RULES, MAX_DOC_SIGNERS,
+    MAX_GRANT_CANONICAL_BYTES, MAX_GRANT_RULES, MAX_GRANT_SIGNERS, MAX_GRANT_STORED_BYTES,
+    MAX_RULE_CONSTRAINTS,
 };
 use perch_recovery::{EvidenceDomain, PerchRecoveryClient, RecoveryError};
 use perch_recovery_interface::credential::{Credential, Replacement, ReplacementSet, ZkEnrollment};
@@ -4567,14 +4567,10 @@ impl World {
     }
 
     /// [`World::values_json`] with as many values as `bytes` canonical bytes
-    /// hold, filled to exactly `bytes`, or, `bounded`, as many as also keep
-    /// the entry within what the compiler admits ([`MAX_GRANT_STORED_BYTES`]).
-    fn values_grant(&self, token: &Address, signer: &str, bytes: usize, bounded: bool) -> Bytes {
+    /// hold, filled to exactly `bytes`.
+    fn values_grant(&self, token: &Address, signer: &str, bytes: usize) -> Bytes {
         let json = |values: usize, pad: usize| self.values_json(token, signer, values, pad);
-        let fits = |values: usize, pad: usize| {
-            canonical_len(&json(values, pad)) <= bytes
-                && (!bounded || stored_bytes(&json(values, pad)) <= MAX_GRANT_STORED_BYTES)
-        };
+        let fits = |values: usize, pad: usize| canonical_len(&json(values, pad)) <= bytes;
         // Each value adds at least four bytes.
         let (mut values, mut hi) = (1usize, bytes / 4);
         while values < hi {
@@ -4585,16 +4581,8 @@ impl World {
                 hi = mid - 1;
             }
         }
-        let pad = if bounded {
-            (0..=bytes - canonical_len(&json(values, 0)))
-                .take_while(|&p| fits(values, p))
-                .last()
-                .unwrap()
-        } else {
-            let pad = bytes - canonical_len(&json(values, 0));
-            assert_eq!(canonical_len(&json(values, pad)), bytes);
-            pad
-        };
+        let pad = bytes - canonical_len(&json(values, 0));
+        assert_eq!(canonical_len(&json(values, pad)), bytes);
         Bytes::from_slice(&self.env, json(values, pad).as_bytes())
     }
 
@@ -4758,11 +4746,11 @@ fn grant_flows(w: &World, shape: GrantShape, seed: u8) {
 
 /// The grant flows at the compiled-in grant caps, over the capped and dense
 /// grant documents with the most signer references they admit, a transfer
-/// every signer of a rule signs among them, and the values-only document
-/// (one signer, two rules, the rest of the byte cap a `string-in`'s values,
-/// as many as the compiler admits): each row within 75% of every metered
-/// limit, the largest entry and the transaction's size included. Then
-/// [`values_grants_at_the_bound`].
+/// every signer of a rule signs among them, the most rules (one signer, as
+/// many rules as the rule cap allows), and the values-only document (one
+/// signer, two rules, the rest of the byte cap a `string-in`'s values):
+/// each row within 75% of every metered limit, the largest entry and the
+/// transaction's size included. Then [`values_grants_at_the_byte_cap`].
 #[test]
 #[ignore = "needs the built stack"]
 fn worst_case_grant_flows_at_the_grant_caps() {
@@ -4772,8 +4760,13 @@ fn worst_case_grant_flows_at_the_grant_caps() {
         w.env.cost_estimate().disable_resource_limits();
         grant_flows(&w, GrantShape::at_caps(&w, dense), seed);
     }
-    let w = world();
-    w.env.cost_estimate().disable_resource_limits();
+    let most_rules = GrantShape {
+        signers: 1,
+        rules: MAX_GRANT_RULES as usize,
+        fan: 1,
+        bytes: MAX_GRANT_CANONICAL_BYTES as usize,
+        dense: 1,
+    };
     let values_only = GrantShape {
         signers: 1,
         rules: 2,
@@ -4781,8 +4774,12 @@ fn worst_case_grant_flows_at_the_grant_caps() {
         bytes: MAX_GRANT_CANONICAL_BYTES as usize,
         dense: 0,
     };
-    grant_flows(&w, values_only, 100);
-    values_grants_at_the_bound();
+    for (shape, seed) in [(most_rules, 95), (values_only, 100)] {
+        let w = world();
+        w.env.cost_estimate().disable_resource_limits();
+        grant_flows(&w, shape, seed);
+    }
+    values_grants_at_the_byte_cap();
     SIZES.with(|s| s.set(false));
 }
 
@@ -4793,14 +4790,12 @@ fn stored_bytes(json: &str) -> u32 {
 }
 
 /// The grant documents of one-character `string-in` values on every argument
-/// index ([`World::values_json`]), which the record stores densest. The one
-/// with as many values as the compiler admits applies within 75% of every
-/// limit, its record at most [`MAX_GRANT_STORED_BYTES`]. The two that spend
-/// the whole byte cap on values, with a passkey signer and with a delegated
-/// one (whose shorter declaration leaves room for more), would store an
-/// entry at and past the ledger's limit: the compiler refuses them
-/// (`DocTooLarge`), so `apply_grant` fails and stores nothing.
-fn values_grants_at_the_bound() {
+/// index ([`World::values_json`]), which the record stores densest, filling
+/// the byte cap beside a passkey signer and beside a delegated one (whose
+/// shorter declaration leaves room for more values): each applies within
+/// 75% of every limit, its record within [`MAX_GRANT_STORED_BYTES`], the
+/// largest entry any grant document the caps admit stores.
+fn values_grants_at_the_byte_cap() {
     let bytes = MAX_GRANT_CANONICAL_BYTES as usize;
     let w = world();
     w.env.cost_estimate().disable_resource_limits();
@@ -4809,34 +4804,20 @@ fn values_grants_at_the_bound() {
     assert!(split_stack(&w, &a), "needs a stack with grant documents");
     let token = w.funded_token(&a);
     let passkey = passkey_decl(&w, "a", &gkey(0));
-
-    let bounded = w.values_grant(&token, &passkey, bytes, true);
-    assert!(w.fork_apply_grant(
-        &format!("grant: apply_grant, one rule of one-character values [1 passkey signer, 1 rule, as many values as the compiler admits, {} bytes]", bounded.len()),
-        &a,
-        &owner,
-        0,
-        &bounded
-    ));
-
     let delegate = format!(r#"{{"id":"a","address":"{}"}}"#, strkey(&w.guardians[0]));
-    for signer in [passkey, delegate] {
-        let doc = w.values_grant(&token, &signer, bytes, false);
+    for (kind, signer) in [("passkey", passkey), ("delegated", delegate)] {
+        let doc = w.values_grant(&token, &signer, bytes);
         let json = std::str::from_utf8(&doc.to_alloc_vec())
             .unwrap()
             .to_string();
-        println!(
-            "\n{{\"refused_values_document\":{{\"canonical_bytes\":{},\"stored_bytes\":{}}}}}",
-            canonical_len(&json),
-            stored_bytes(&json)
-        );
-        assert!(stored_bytes(&json) > MAX_GRANT_STORED_BYTES);
-        assert!(matches!(
-            PerchDocCompilerClient::new(&w.env, &w.compiler).try_compile_doc(&doc),
-            Err(Ok(DocCompilerError::DocTooLarge))
+        assert!(stored_bytes(&json) <= MAX_GRANT_STORED_BYTES);
+        assert!(w.fork_apply_grant(
+            &format!("grant: apply_grant, one rule of one-character values [1 {kind} signer, 1 rule, {bytes} bytes, {} stored]", stored_bytes(&json)),
+            &a,
+            &owner,
+            0,
+            &doc
         ));
-        assert!(!w.try_apply_grant(&a, &owner, 1, &doc), "refused");
-        assert!(w.account(&a).grant(&1).is_none(), "nothing stored");
     }
 }
 
@@ -5117,7 +5098,7 @@ fn exact_root_wasm_game_and_cap_costs() {
     let bytes = Bytes::from_slice(e, perch_ir::canonical_json(&doc).as_bytes());
     assert!(w.try_apply(&a, &a.owner, &bytes, 0));
     report("exact root: apply game grant", e);
-    assert_eq!(w.account(&a).capabilities().interface_version, 3);
+    assert_eq!(w.account(&a).capabilities().interface_version, 4);
     let ids = [w.rule_id(&a.address, "game"), w.rule_id(&a.address, "pay")];
     for win in [false, true] {
         let mut root = w.invocation(
@@ -5186,7 +5167,7 @@ fn exact_root_wasm_at_document_caps() {
     report("exact root: maximum-sized document apply", &w.env);
     let stored = w.account(&a).rule_set();
     assert_eq!(
-        stored.iter().filter(|r| r.auth_root.is_some()).count(),
+        stored.iter().filter(|r| r.auth_root().is_some()).count(),
         MAX_DOC_RULES as usize - 1
     );
     let replacement_keys = passkeys(90, shape.signers);
@@ -5210,7 +5191,7 @@ fn exact_root_wasm_at_document_caps() {
         w.account(&a)
             .rule_set()
             .iter()
-            .filter(|r| r.auth_root.is_some())
+            .filter(|r| r.auth_root().is_some())
             .count(),
         MAX_DOC_RULES as usize - 1
     );

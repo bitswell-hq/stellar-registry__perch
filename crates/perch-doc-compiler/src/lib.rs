@@ -88,26 +88,27 @@ pub const MAX_DOC_CANONICAL_BYTES: u32 = 8_192;
 /// ledger's per-entry limit, through `apply_grant` (adding, editing, or
 /// replacing every rule, and over a grant document a recovery wiped),
 /// `remove_grant`, `gc_grant`, and a capped transfer every signer of a
-/// 15-signer rule signs. The binding limit is the entry the account keeps a
-/// grant document's rules in, which stores every signer a rule names and
-/// every `string-in` value: 17 rules each naming all 15 signers, or a
-/// document of values, reach [`MAX_GRANT_STORED_BYTES`]. The signer cap is
-/// OZ's per-rule limit, so a rule naming every declared signer still
-/// installs.
+/// 15-signer rule signs. The rule cap is the most rules the byte cap holds
+/// (50 one-signer rules in 8 078 bytes), where written entries, at 52%,
+/// come closest to the line; rules naming more signers fit fewer, and
+/// instructions stay below 43%. The signer cap is OZ's per-rule limit, so a
+/// rule naming every declared signer still installs.
 pub const MAX_GRANT_SIGNERS: u32 = 15;
 /// See [`MAX_GRANT_SIGNERS`].
-pub const MAX_GRANT_RULES: u32 = 17;
+pub const MAX_GRANT_RULES: u32 = 50;
 /// See [`MAX_GRANT_SIGNERS`].
 pub const MAX_GRANT_CANONICAL_BYTES: u32 = 8_192;
 /// The largest ledger entry a grant document may make its account store,
 /// in bytes: 75% of the ledger's 65 536-byte
 /// `max_contract_data_entry_size_bytes`. The entry is the account's record
-/// of the grant document, which holds every signer each rule names and
-/// every condition with its values ([`grant_stored_bytes`]); within 8 192
-/// canonical bytes, `string-in` values alone could make it pass the ledger's
-/// limit. The compiler refuses a grant document whose entry would be larger
-/// (`DocTooLarge`); [`PerchDocCompiler::grant_stored_bytes`] reports a
-/// document's entry.
+/// of the grant document: its signer table, and every rule with its
+/// conditions and their values ([`grant_stored_bytes`]). The compiler
+/// refuses a grant document whose entry would be larger (`DocTooLarge`);
+/// [`PerchDocCompiler::grant_stored_bytes`] reports a document's entry. No
+/// document within the other grant caps reaches it (the largest, one
+/// `string-in` of one-character values filling the byte cap, stores about a
+/// third of the entry limit), so it bounds the entry whatever those caps
+/// become.
 pub const MAX_GRANT_STORED_BYTES: u32 = 49_152;
 /// The longest rule name, in bytes: OZ's context-rule name limit. Checked
 /// here so that a document that compiles also installs: a compromise

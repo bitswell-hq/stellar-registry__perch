@@ -130,8 +130,12 @@ allows. The rule's context type is `CallContract` of that rule's contract,
 its `valid_until` and signers are that rule's, and it is the recovery rule
 when its id is the instance's `RecoveryRule`, so each rule is stored once;
 the views read records as the `InstalledRule`s they were (`rules::installed`).
-The account document's records are one persistent entry (`RuleSet`), and each
-grant document's are in its grant record. Ids come from
+A document's records sit beside one signer table (`rules::RuleSet`): each
+signer its rules name, once, in the order they first name it, and a stored
+rule names its signers by position in it, so a signer several rules name is
+stored once. Records and stored rules are tuples (`StoredRule`,
+`account-interface.md` "Types"). The account document's are one persistent
+entry (`RuleSet`), and each grant document's are in its grant record. Ids come from
 the account's counter (`NextRuleId`, instance storage, `rules::allocate`),
 which never gives an id twice, so a spending record or grant tag keyed by
 id never outlives its rule into another. `get_context_rule(id)` and
@@ -171,7 +175,11 @@ instead of its text, and `perch_testkit::rebuild` and perch-js's
 `check_auth` decides an authorization with rule-eval's `check_auth` on the
 stored rules of the rules the payload chooses: a rule id is the stored rule
 its record holds, among the admin records or, when a grant tag names its
-grant, that grant's. It runs at the current ledger and grant generation,
+grant, that grant's, its signers read from that document's signer table
+(`gate::stored_rule`; the admin table converted once per authorization, and
+only when an admin rule is chosen). `perch_rule_eval::mirror::rule` reads
+a stored rule only in its tuple layout and refuses a position past the
+table. It runs at the current ledger and grant generation,
 under every signer the payload names, with the account's own spending
 records, and refuses a chosen grant rule of another generation (a wiped
 grant's) with `StaleGrant` and anything else it does not accept with

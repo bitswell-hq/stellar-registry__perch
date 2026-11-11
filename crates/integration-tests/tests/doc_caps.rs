@@ -153,29 +153,77 @@ fn grant_doc(w: &World, signers: u32, rules: u32, padding: usize) -> Bytes {
     Bytes::from_slice(&w.env, json.as_bytes())
 }
 
+/// The shortest spelling of a grant document of `rules` rules on `scope`,
+/// each asking the one delegated signer `signer` (`a`): one-letter ids, rule
+/// names `a`, ..., `z`, `ba`, ..., and `all` principals, so that the most
+/// rules fit the byte cap.
+fn dense_grant(env: &soroban_sdk::Env, scope: &str, signer: &str, rules: u32) -> Bytes {
+    let name = |k: u32| {
+        let letter = |n: u32| char::from(b'a' + n as u8);
+        if k < 26 {
+            letter(k).to_string()
+        } else {
+            format!("{}{}", letter(k / 26), letter(k % 26))
+        }
+    };
+    let rules: Vec<String> = (0..rules)
+        .map(|k| {
+            format!(
+                r#"{{"name":"{}","scope":{{"type":"contract","address":"{scope}"}},"principals":{{"type":"all","signers":["a"]}}}}"#,
+                name(k)
+            )
+        })
+        .collect();
+    let json = format!(
+        r#"{{"version":1,"network":"{FIXTURE_NETWORK}","signers":[{{"id":"a","address":"{signer}"}}],"rules":[{}]}}"#,
+        rules.join(",")
+    );
+    Bytes::from_slice(env, json.as_bytes())
+}
+
 /// A grant document has its own caps, larger than an account document's:
-/// the compiler admits one at every grant count cap and refuses one past
-/// any, and still refuses an account document past its own caps, within the
-/// grant caps.
+/// the compiler admits one at each grant count cap and refuses one past
+/// either, and still refuses an account document past its own caps, within
+/// the grant caps. The two count caps are not reached in one document: the
+/// rule cap is the most rules the byte cap holds, so the document at the
+/// rule cap names one signer, and the one at the signer cap as many rules
+/// naming every signer as the byte cap holds. Each document one past a cap
+/// is within the byte cap, so the count cap is what refuses it.
 #[test]
 fn a_grant_document_at_every_grant_cap_compiles_and_one_past_any_does_not() {
     let w = setup();
-    let at_caps = grant_doc(&w, MAX_GRANT_SIGNERS, MAX_GRANT_RULES, 0);
-    let compiled = w.compiler_client().compile_doc(&at_caps);
-    assert_eq!(compiled.fingerprints.len(), MAX_GRANT_SIGNERS);
+    let canonical = |doc: &Bytes| {
+        let json = std::str::from_utf8(&doc.to_alloc_vec())
+            .unwrap()
+            .to_string();
+        perch_ir::canonical_json(&perch_ir::from_json(&json).unwrap()).len()
+    };
+    let within_bytes = |doc: &Bytes| canonical(doc) <= MAX_GRANT_CANONICAL_BYTES as usize;
+
+    // The rule cap, with one signer, in the shortest spelling.
+    let (scope, signer) = (strkey(&w.verifier), strkey(&w.compiler));
+    let at_rules = dense_grant(&w.env, &scope, &signer, MAX_GRANT_RULES);
+    let compiled = w.compiler_client().compile_doc(&at_rules);
     assert_eq!(compiled.rules.len(), MAX_GRANT_RULES);
+    let past_rules = dense_grant(&w.env, &scope, &signer, MAX_GRANT_RULES + 1);
+    assert!(within_bytes(&past_rules));
+    assert!(too_large(&w, &past_rules));
+
+    // The signer cap, every rule naming every signer, as many rules as fit.
+    let fit = (1..=MAX_GRANT_RULES)
+        .take_while(|&r| within_bytes(&grant_doc(&w, MAX_GRANT_SIGNERS, r, 0)))
+        .last()
+        .unwrap();
+    let at_signers = grant_doc(&w, MAX_GRANT_SIGNERS, fit, 0);
+    let compiled = w.compiler_client().compile_doc(&at_signers);
+    assert_eq!(compiled.fingerprints.len(), MAX_GRANT_SIGNERS);
     assert!(compiled
         .rules
         .iter()
         .all(|r| r.signers.len() == MAX_GRANT_SIGNERS));
-    assert!(too_large(
-        &w,
-        &grant_doc(&w, MAX_GRANT_SIGNERS + 1, MAX_GRANT_RULES, 0)
-    ));
-    assert!(too_large(
-        &w,
-        &grant_doc(&w, MAX_GRANT_SIGNERS, MAX_GRANT_RULES + 1, 0)
-    ));
+    let past_signers = grant_doc(&w, MAX_GRANT_SIGNERS + 1, 1, 0);
+    assert!(within_bytes(&past_signers));
+    assert!(too_large(&w, &past_signers));
 
     // An account document past its caps, within the grant caps.
     const { assert!(MAX_DOC_SIGNERS < MAX_GRANT_SIGNERS && MAX_DOC_RULES < MAX_GRANT_RULES) };

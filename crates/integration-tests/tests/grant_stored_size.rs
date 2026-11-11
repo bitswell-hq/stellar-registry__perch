@@ -1,6 +1,7 @@
 //! The compiler's `grant_stored_bytes` is the size of the ledger entry the
-//! account stores for a grant document, to the byte, and the compiler
-//! refuses a grant document whose entry would pass `MAX_GRANT_STORED_BYTES`
+//! account stores for a grant document, to the byte, and every grant
+//! document the grant caps admit stores within `MAX_GRANT_STORED_BYTES`,
+//! the bound the compiler refuses a grant document past
 //! (`docs/recovery/budgets.md`, "Grant-document caps"). The documents cover
 //! every part the entry holds: delegated and external signers, keys of
 //! several lengths, named and unnamed verifiers, every predicate, functions,
@@ -8,7 +9,8 @@
 //! rule-core's lowering fails here first.
 
 use perch_doc_compiler::{
-    grant_stored_bytes, DocCompilerError, MAX_GRANT_CANONICAL_BYTES, MAX_GRANT_STORED_BYTES,
+    grant_stored_bytes, DocCompilerError, MAX_GRANT_CANONICAL_BYTES, MAX_GRANT_RULES,
+    MAX_GRANT_STORED_BYTES,
 };
 use perch_testkit::delta::strkey;
 use perch_testkit::{
@@ -39,7 +41,8 @@ fn doc(signers: &[String], rules: &[String]) -> String {
 }
 
 /// The account's ledger entry whose value is the record of the grant
-/// document hashing to `doc_hash`, in bytes.
+/// document hashing to `doc_hash` (the tuple a `StoredGrant` is stored as,
+/// its second field the hash), in bytes.
 fn stored_entry(w: &World, doc_hash: &BytesN<32>) -> usize {
     let me: ScAddress = w.account.clone().into();
     let hash = ScVal::Bytes(doc_hash.to_array().to_vec().try_into().unwrap());
@@ -53,12 +56,10 @@ fn stored_entry(w: &World, doc_hash: &BytesN<32>) -> usize {
             else {
                 return None;
             };
-            let ScVal::Map(Some(fields)) = &d.val else {
+            let ScVal::Vec(Some(fields)) = &d.val else {
                 return None;
             };
-            let holds = fields.iter().any(|e| {
-                matches!(&e.key, ScVal::Symbol(s) if s.to_string() == "doc_hash") && e.val == hash
-            });
+            let holds = fields.len() == 6 && fields.get(1) == Some(&hash);
             (k.contract == me && holds).then(|| entry.to_xdr(Limits::none()).unwrap().len())
         })
         .collect();
@@ -152,43 +153,85 @@ fn the_estimate_is_the_stored_entry() {
     );
 }
 
-/// A grant document of one delegated signer and one rule whose `string-in`
-/// holds `n` short distinct values.
-fn values_doc(w: &World, n: usize) -> String {
+/// A grant document of `signer` (a declaration with id `g`) and one rule
+/// whose `string-in`s hold `n` one-character values, `VALUES` per argument
+/// index: the densest a document stores, per canonical byte.
+fn values_doc(w: &World, signer: &str, n: usize) -> String {
+    const VALUES: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
     let target = strkey(&w.verifier);
-    let values: Vec<String> = (0..n).map(|i| format!(r#""{i:x}""#)).collect();
+    let preds: Vec<String> = (0..n.div_ceil(VALUES.len()))
+        .map(|i| {
+            let values: Vec<String> = (0..VALUES.len().min(n - i * VALUES.len()))
+                .map(|v| format!(r#""{}""#, char::from(VALUES[v])))
+                .collect();
+            format!(
+                r#"{{"index":{i},"pred":{{"type":"string-in","values":[{}]}}}}"#,
+                values.join(",")
+            )
+        })
+        .collect();
     doc(
-        &[format!(r#"{{"id":"g","address":"{G}"}}"#)],
+        &[signer.to_string()],
         &[format!(
-            r#"{{"name":"v","scope":{{"type":"contract","address":"{target}"}},"principals":{{"type":"all","signers":["g"]}},"functions":["f"],"args":[{{"index":0,"pred":{{"type":"string-in","values":[{}]}}}}]}}"#,
-            values.join(",")
+            r#"{{"name":"v","scope":{{"type":"contract","address":"{target}"}},"principals":{{"type":"all","signers":["g"]}},"args":[{}]}}"#,
+            preds.join(",")
         )],
     )
 }
 
-/// The compiler refuses a grant document whose entry would pass the bound,
-/// one value past the largest it admits, which applies and stores exactly
-/// its estimate, within the byte cap.
-#[test]
-fn the_compiler_bounds_the_entry_a_grant_stores() {
-    let w = setup();
-    let estimate = |n| grant_stored_bytes(&perch_ir::from_json(&values_doc(&w, n)).unwrap());
-    let most = (1..)
-        .take_while(|&n| estimate(n) <= MAX_GRANT_STORED_BYTES)
-        .last()
-        .unwrap();
-    let canonical =
-        |n| perch_ir::canonical_json(&perch_ir::from_json(&values_doc(&w, n)).unwrap()).len();
-    assert!(
-        canonical(most + 1) <= MAX_GRANT_CANONICAL_BYTES as usize,
-        "within the byte cap"
-    );
+fn canonical(json: &str) -> usize {
+    perch_ir::canonical_json(&perch_ir::from_json(json).unwrap()).len()
+}
 
-    let stored = check(&w, 1, &values_doc(&w, most));
-    assert!(stored <= MAX_GRANT_STORED_BYTES as usize);
-    assert!(matches!(
-        w.compiler_client()
-            .try_compile_doc(&bytes(&w, &values_doc(&w, most + 1))),
-        Err(Ok(DocCompilerError::DocTooLarge))
-    ));
+/// The bound holds every grant document the other caps admit: the densest
+/// per canonical byte, one-character `string-in` values filling the byte
+/// cap beside a passkey signer and beside a delegated one (whose shorter
+/// declaration leaves room for more values), and the most rules, each
+/// apply and store exactly their estimate, within the bound. One value
+/// more passes the byte cap and is refused, storing nothing.
+#[test]
+fn every_grant_document_the_caps_admit_stores_within_the_bound() {
+    let w = setup();
+    let passkey = format!(
+        r#"{{"id":"g","verifier":"{}","verifier-name":"{}","key":"{}"}}"#,
+        strkey(&w.fixture_verifiers[0]),
+        FIXTURE_VERIFIER_NAMES[0],
+        "ab".repeat(65)
+    );
+    let delegated = format!(r#"{{"id":"g","address":"{G}"}}"#);
+    let mut largest = 0;
+    for (grant, signer) in [(1, &passkey), (2, &delegated)] {
+        let most = (1..)
+            .take_while(|&n| {
+                canonical(&values_doc(&w, signer, n)) <= MAX_GRANT_CANONICAL_BYTES as usize
+            })
+            .last()
+            .unwrap();
+        let stored = check(&w, grant, &values_doc(&w, signer, most));
+        assert!(stored <= MAX_GRANT_STORED_BYTES as usize);
+        largest = largest.max(stored);
+
+        let past = values_doc(&w, signer, most + 1);
+        assert!(matches!(
+            w.compiler_client().try_compile_doc(&bytes(&w, &past)),
+            Err(Ok(DocCompilerError::DocTooLarge))
+        ));
+        assert!(w
+            .account_client()
+            .try_apply_grant(&9, &bytes(&w, &past))
+            .is_err());
+        assert!(w.account_client().grant(&9).is_none(), "nothing stored");
+    }
+
+    // The most rules: one delegated signer, every rule bare.
+    let target = strkey(&w.verifier);
+    let rules: Vec<String> = (0..MAX_GRANT_RULES)
+        .map(|k| {
+            format!(
+                r#"{{"name":"r{k}","scope":{{"type":"contract","address":"{target}"}},"principals":{{"type":"all","signers":["g"]}}}}"#
+            )
+        })
+        .collect();
+    largest = largest.max(check(&w, 3, &doc(&[delegated], &rules)));
+    println!("the largest entry the grant caps admit: {largest} bytes");
 }

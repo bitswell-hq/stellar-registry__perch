@@ -265,8 +265,9 @@ landed is skipped when an operation is retried or started again.
 ### Reading a grant document
 
 An account keeps no grant document's text. It keeps each rule's name and
-stored rule (`grant(id)`, `grant_rule_set(id)`), the document's signer ids
-(`grant_signer_ids(id)`) and each signer's `verifier-name`
+stored rule (`grant(id)`, `grant_rule_set(id)`), the signer table the rules
+name their signers by position in (`grant_signers(id)`), the document's
+signer ids (`grant_signer_ids(id)`) and each signer's `verifier-name`
 (`grant_verifier_names(id)`), and applies a grant document only in normal
 form, so those give the text back:
 
@@ -277,7 +278,7 @@ const grant = await readGrantDoc(new account.Client(opts(accountId)), accountId,
 // null when the account has no grant there; else { doc, canonical, docHash }
 ```
 
-`rebuildGrantDoc` rebuilds the document from those four views
+`rebuildGrantDoc` rebuilds the document from those five views
 (`decodeStoredGrant` decodes them as the generated bindings return them),
 and throws `GrantNotRebuilt` unless its canonical text hashes to the
 grant's stored `doc_hash`, so a rebuild is never trusted on its own. Write
