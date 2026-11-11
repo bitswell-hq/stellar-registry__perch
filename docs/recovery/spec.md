@@ -1047,26 +1047,21 @@ Two rules bound that cost:
   installs, has its own: `MAX_GRANT_SIGNERS` = 15 declared signers (the
   account's per-rule signer limit, OZ's), `MAX_GRANT_RULES` = 17 rules, and
   `MAX_GRANT_CANONICAL_BYTES` = 8 192 canonical bytes, with the same
-  rule-name cap. The compiler's `grant_limits` view returns them. They are
-  sized so that every grant flow fits the transaction budget, the ledger's
-  per-entry limit included (`budgets.md`, "Grant-document caps"; the
-  `worst_case_grant_flows_at_the_grant_caps` test holds them in CI, within
-  75% of every limit for the documents with the most signer references).
-  The byte cap also admits grant documents whose stored record is over the
-  per-entry limit. The record stores a one-character `string-in` value in
-  40 bytes, so one signer and one rule with every other byte such a value
-  stores a record 16 bytes under the limit with a passkey signer and of
-  102.0% of it with a delegated one. No compiler or account check bounds
-  the record: the network refuses the `apply_grant` transaction of a
-  document whose record is over the limit for the entry's size, and a
-  refused transaction's writes never reach the ledger (the release-stack
-  test asserts the refusal, not the rollback). This is not new: the byte cap is unchanged, so the shared caps admitted the same
-  documents. No recovery reads a grant record. The same test holds the
-  passkey document's record within the limit and checks that the limit
-  refuses the delegated one's. The measurement assumes signer keys at most a
-  passkey's, which every verifier in `perch/verifiers` takes; a grant
-  document naming a verifier by contract id alone, with longer keys (up to
-  `perch_ir::MAX_SIGNER_KEY_LEN`, 256 bytes), is outside it.
+  rule-name cap, and the ledger entry the account stores for it: at most
+  `MAX_GRANT_STORED_BYTES` = 49 152 bytes, 75% of the ledger's per-entry
+  limit. That entry holds every signer each rule names in full and every
+  condition with its values, so within 8 192 bytes `string-in` values alone
+  could pass the ledger's limit (the shared caps admitted such documents).
+  The compiler computes the entry's size from the document
+  (`grant_stored_bytes`, exact) and refuses one past the bound
+  (`DocTooLarge`); `apply_grant` of such a document fails and stores
+  nothing. The compiler's `grant_limits` view returns the count and byte
+  caps, its `grant_stored_bytes` view a document's entry. They are sized so
+  that every grant flow over every grant document they admit fits the
+  transaction budget, the ledger's per-entry limit included (`budgets.md`,
+  "Grant-document caps"; the `worst_case_grant_flows_at_the_grant_caps` test
+  holds them in CI, and `grant_stored_size.rs` holds the computed size equal
+  to the stored entry). No recovery reads a grant record.
 - **Bounded revocation writes.** The revoked set is one persistent entry per
   fingerprint, so a completion writes at most one entry per removed
   credential, a number the caps bound.

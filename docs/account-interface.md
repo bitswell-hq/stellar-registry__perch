@@ -137,7 +137,9 @@ the owner chooses (one per app grant, say), and returns its `doc_hash`
   the current grant generation.
 - The document is compiled under the grant-document caps (15 signers, 17
   rules, 8 192 canonical bytes: the compiler's `grant_limits`, larger than
-  an account document's `limits`) and reconciled against this grant's
+  an account document's `limits`; and a record of at most 49 152 bytes, the
+  entry this grant's rules are stored in, which the compiler's
+  `grant_stored_bytes` reports) and reconciled against this grant's
   records only. Every rule it installs is tagged with
   the grant, and its stored rule carries the current grant generation, so
   applying over a wiped grant revives it with the new rules.

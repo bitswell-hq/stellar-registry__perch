@@ -7,7 +7,7 @@
 // scripts/bindings-contracts.sh run replaces this file.
 
 /** sha256 of the wasm these bindings were generated from. */
-export const WASM_SHA256 = "5aa894781255ab405ada4dd494a99eecfcb1247ad3b2adbab9e49c5830e75f18";
+export const WASM_SHA256 = "36e312cfee0e383687fce55647bc9c7dc9aab1c30f0785bf0e5ac1509b3d5ba4";
 
 /** These bindings describe a build no deployment runs yet. */
 export const DEPLOYED = false;
@@ -635,6 +635,15 @@ export interface Client {
    */
   verifier_registry: (options?: MethodOptions) => Promise<AssembledTransaction<string>>
 
+  /**
+   * Construct and simulate a grant_stored_bytes transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * The bytes of the ledger entry an account would store for grant
+   * document `doc_json`, which `compile_doc` refuses (`DocTooLarge`) past
+   * [`MAX_GRANT_STORED_BYTES`]. Parses the document and checks nothing
+   * else.
+   */
+  grant_stored_bytes: ({doc_json}: {doc_json: Buffer}, options?: MethodOptions) => Promise<AssembledTransaction<Result<u32>>>
+
 }
 export class Client extends ContractClient {
   static async deploy<T = Client>(
@@ -667,6 +676,7 @@ export class Client extends ContractClient {
         "AAAAAAAAAJdUaGUgY2FwcyBgY29tcGlsZV9kb2NgIGVuZm9yY2VzIG9uIGEgZ3JhbnQgZG9jdW1lbnQ6IG9uZSB3aXRoIG5vCnNlbGYtYWRtaW4gcnVsZSBhbmQgbm8gcmVjb3ZlcnkgbWVtYmVyLCB3aGljaCBpcyBldmVyeSBkb2N1bWVudApgYXBwbHlfZ3JhbnRgIGFwcGxpZXMuAAAAAAxncmFudF9saW1pdHMAAAAAAAAAAQAAB9AAAAAJRG9jTGltaXRzAAAA",
         "AAAAAAAAAiNEZXJpdmUgYSByZWNvdmVyeSB0YXJnZXQgKGBkb2NzL3JlY292ZXJ5L3NwZWMubWRgIMKnNyk6IGBzb3VyY2VfanNvbmAKaXMgdGhlIGFjY291bnQncyBhcHBsaWVkIGRvY3VtZW50IChsb3N0LWtleSkgb3IgdGhlIHB1Ymxpc2hlZApiYXNlbGluZSAoY29tcHJvbWlzZSk7IGBjdXJyZW50X2pzb25gIGlzIHRoZSBhcHBsaWVkIGRvY3VtZW50LCB3aG9zZQpyZWNvdmVyeSBtZW1iZXIgdGhlIHRhcmdldCBrZWVwcy4gVGhlIHRhcmdldCBpcyB0aGUgc291cmNlIHdpdGgKZXhhY3RseSB0aGUgZGVjbGFyZWQgcmVwbGFjZW1lbnRzIGFuZCBaSyByb3RhdGlvbiwgdGhlbiB2YWxpZGF0ZWQsCm5ldHdvcmstYm91bmQsIGNhcHBlZCwgY29tcGlsZWQsIGFuZCBhbnRpLWJyaWNrLWNoZWNrZWQgbGlrZSBhbnkKYXBwbGllZCBkb2N1bWVudC4gUHVyZTogbm8gYXV0aCwgbm8gc3RvcmFnZS4gVGhlIGNvbnRyb2xsZXIgY2FsbHMgaXQKd2hlbiBhbiBhdHRlbXB0IGJlZ2lucywgYW5kIGNvbXBsZXRlcnMgc2ltdWxhdGUgaXQgdG8gb2J0YWluIHRoZQpjYW5vbmljYWwgYnl0ZXMuAAAAAA1kZXJpdmVfdGFyZ2V0AAAAAAAABAAAAAAAAAALc291cmNlX2pzb24AAAAADgAAAAAAAAAMY3VycmVudF9qc29uAAAADgAAAAAAAAAGYWN0aW9uAAAAAAfQAAAADlJlY292ZXJ5QWN0aW9uAAAAAAAAAAAADHJlcGxhY2VtZW50cwAAB9AAAAAOUmVwbGFjZW1lbnRTZXQAAAAAAAEAAAPpAAAH0AAAAA1EZXJpdmVkVGFyZ2V0AAAAAAAH0AAAABBEb2NDb21waWxlckVycm9y",
         "AAAAAAAAAE5UaGUgYHBlcmNoL3ZlcmlmaWVyc2AgcmVnaXN0cnkgYSBgdmVyaWZpZXItbmFtZWAgcmVzb2x2ZXMgaW4sIG9uIHRoaXMKbmV0d29yay4AAAAAABF2ZXJpZmllcl9yZWdpc3RyeQAAAAAAAAAAAAABAAAAEw==",
+        "AAAAAAAAAM1UaGUgYnl0ZXMgb2YgdGhlIGxlZGdlciBlbnRyeSBhbiBhY2NvdW50IHdvdWxkIHN0b3JlIGZvciBncmFudApkb2N1bWVudCBgZG9jX2pzb25gLCB3aGljaCBgY29tcGlsZV9kb2NgIHJlZnVzZXMgKGBEb2NUb29MYXJnZWApIHBhc3QKW2BNQVhfR1JBTlRfU1RPUkVEX0JZVEVTYF0uIFBhcnNlcyB0aGUgZG9jdW1lbnQgYW5kIGNoZWNrcyBub3RoaW5nCmVsc2UuAAAAAAAAEmdyYW50X3N0b3JlZF9ieXRlcwAAAAAAAQAAAAAAAAAIZG9jX2pzb24AAAAOAAAAAQAAA+kAAAAEAAAH0AAAABBEb2NDb21waWxlckVycm9y",
         "AAAAAgAAAEJSZXByZXNlbnRzIGRpZmZlcmVudCB0eXBlcyBvZiBzaWduZXJzIGluIHRoZSBzbWFydCBhY2NvdW50IHN5c3RlbS4AAAAAAAAAAAAGU2lnbmVyAAAAAAACAAAAAQAAAD1BIGRlbGVnYXRlZCBzaWduZXIgdGhhdCB1c2VzIGJ1aWx0LWluIHNpZ25hdHVyZSB2ZXJpZmljYXRpb24uAAAAAAAACURlbGVnYXRlZAAAAAAAAAEAAAATAAAAAQAAAHJBbiBleHRlcm5hbCBzaWduZXIgd2l0aCBjdXN0b20gdmVyaWZpY2F0aW9uIGxvZ2ljLgpDb250YWlucyB0aGUgdmVyaWZpZXIgY29udHJhY3QgYWRkcmVzcyBhbmQgdGhlIHB1YmxpYyBrZXkgZGF0YS4AAAAAAAhFeHRlcm5hbAAAAAIAAAATAAAADg==",
         "AAAAAgAAAE5BIHNpZ25lciBjcmVkZW50aWFsLCBzaGFwZWQgbGlrZSBPWiBgc3RlbGxhcl9hY2NvdW50czo6c21hcnRfYWNjb3VudDo6U2lnbmVyYC4AAAAAAAAAAAAKQ3JlZGVudGlhbAAAAAAAAgAAAAEAAABsYFNpZ25lcjo6RGVsZWdhdGVkKGFkZHJlc3MpYDogYSBgRy4uLmAgb3IgYEMuLi5gIGFkZHJlc3MgdGhhdAphdXRoZW50aWNhdGVzIHRocm91Z2ggQ0FQLTAwNzEgZGVsZWdhdGVkIGF1dGguAAAACURlbGVnYXRlZAAAAAAAAAEAAAATAAAAAQAAAEhgU2lnbmVyOjpFeHRlcm5hbCh2ZXJpZmllciwga2V5KWA6IGEga2V5IGNoZWNrZWQgYnkgYSB2ZXJpZmllcgpjb250cmFjdC4AAAAIRXh0ZXJuYWwAAAACAAAAEwAAAA4=",
         "AAAAAQAAAGxPbmUgZGVzaWduYXRlZCBzaWduZXIgc2xvdCBhbmQgdGhlIGNyZWRlbnRpYWwgdGhhdCByZXBsYWNlcyB3aGF0ZXZlcgp0aGF0IHNsb3QgaG9sZHMgaW4gdGhlIHNvdXJjZSBkb2N1bWVudC4AAAAAAAAAC1JlcGxhY2VtZW50AAAAAAIAAAA4VGhlIGNyZWRlbnRpYWwgdGhlIHRhcmdldCBkb2N1bWVudCBnaXZlcyB0aGF0IHNpZ25lciBpZC4AAAAKY3JlZGVudGlhbAAAAAAH0AAAAApDcmVkZW50aWFsAAAAAABDQSBkb2N1bWVudCBzaWduZXIgaWQgbGlzdGVkIGluIHRoZSBlbnJvbGxlZCBgcmVjb3ZlcnkucmVwbGFjZWFibGVgLgAAAAAJc2lnbmVyX2lkAAAAAAAAEA==",
@@ -698,6 +708,7 @@ export class Client extends ContractClient {
         capabilities: this.txFromJSON<CompilerCapabilities>,
         grant_limits: this.txFromJSON<DocLimits>,
         derive_target: this.txFromJSON<Result<DerivedTarget>>,
-        verifier_registry: this.txFromJSON<string>
+        verifier_registry: this.txFromJSON<string>,
+        grant_stored_bytes: this.txFromJSON<Result<u32>>
   }
 }

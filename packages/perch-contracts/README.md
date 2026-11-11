@@ -16,7 +16,7 @@ npm install @stellar-registry/perch-contracts
 | `pool` | `perch-zk-pool`: trees, leaves, roots, enrollments |
 | `adapter` | `perch-zk-adapter`: `verify`, `circuit_id`, `tree_depth` |
 | `webauthnVerifier` | `perch-webauthn-verifier` |
-| `docCompiler` | `perch-doc-compiler`: `compile_doc`, `derive_target`, `limits`, `grant_limits`, `capabilities` |
+| `docCompiler` | `perch-doc-compiler`: `compile_doc`, `derive_target`, `limits`, `grant_limits`, `grant_stored_bytes`, `capabilities` |
 | `legacyAccount`, `legacyDocCompiler` | the deployed `perch-account` and `perch-doc-compiler` specs (snapshot 1; see below) |
 
 ```ts

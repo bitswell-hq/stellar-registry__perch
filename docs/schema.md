@@ -153,7 +153,10 @@ validation as a substitute for them:
   `perch-doc-compiler::doc_limits()` (an account document's) and
   `grant_limits()` (a grant document's) and is mirrored client-side by
   perch-js's `checkLimits`. The schema encodes the other per-document caps
-  (`max_signers`, `max_rules`, `max_rule_name_bytes`).
+  (`max_signers`, `max_rules`, `max_rule_name_bytes`). Likewise the size of
+  the ledger entry a grant document makes its account store
+  (`MAX_GRANT_STORED_BYTES`), which the compiler computes from the document
+  and reports through its `grant_stored_bytes` view.
 - **Canonical spelling (CANON v2).** The schema accepts everything today's
   parser accepts, including non-canonical spellings of a valid value: a
   `cap.limit` with leading zeros or a leading `+` (`007`, `+5`), and uppercase

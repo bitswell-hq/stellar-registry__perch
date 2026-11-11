@@ -191,23 +191,14 @@ canonical bytes (`MAX_DOC_CANONICAL_BYTES`), or a rule name over 20 bytes
 (`MAX_RULE_NAME_BYTES`, the account's `MAX_NAME_SIZE`). The recovery rule the account
 generates is additional to the 10 document rules. A grant document, which no
 recovery compiles, has its own caps: 15 signers (`MAX_GRANT_SIGNERS`), 17
-rules (`MAX_GRANT_RULES`), and 8,192 canonical bytes
-(`MAX_GRANT_CANONICAL_BYTES`), sized so that every grant flow over the
-documents with the most signer references stays within 75% of every limit,
-the ledger's per-entry limit included. The byte cap also admits documents
-whose stored record is over that limit: one that spends its bytes on
-one-character `string-in` values stores a record 16 bytes under the limit
-with a passkey signer and over it (102.0%) with a delegated one. The
-network refuses the `apply_grant` transaction of such a document for the
-entry's size, and a refused transaction's writes never reach the ledger
-(the release-stack test asserts the refusal, not the rollback);
-the shared caps admitted the same documents, the byte cap being unchanged;
-no recovery reads a grant record
-([`budgets.md`](recovery/budgets.md), "Grant-document caps"). Measured with
-signer keys at most a passkey's, which every verifier in `perch/verifiers`
-takes: a grant document naming a verifier by contract id alone, with longer
-keys (up to `perch_ir::MAX_SIGNER_KEY_LEN`, 256 bytes), is outside the
-measurement. The account-document caps are sized so that
+rules (`MAX_GRANT_RULES`), 8,192 canonical bytes
+(`MAX_GRANT_CANONICAL_BYTES`), and a stored entry of at most 49,152 bytes
+(`MAX_GRANT_STORED_BYTES`, 75% of the ledger's per-entry limit, which
+`string-in` values alone could otherwise pass within the byte cap), sized so
+that every grant flow over every grant document they admit stays within 75%
+of every limit, the ledger's per-entry limit included
+([`budgets.md`](recovery/budgets.md), "Grant-document caps"). The
+account-document caps are sized so that
 a worst-case completion, compromise restore, or `Protected` reconfiguration
 stays within 75% of every *measured* per-transaction limit: instructions,
 memory, write bytes, and write entries
@@ -225,7 +216,8 @@ The residual limit is product capacity: a document that needs more signers,
 rules, or bytes cannot be applied. The caps apply per document; app grants
 can be spread over any number of grant documents (spec §7.6), each under
 the grant caps. A grant document's rules live in one ledger entry, which
-binds its caps; storing them across entries would lift that limit.
+the compiler bounds (`MAX_GRANT_STORED_BYTES`); storing them across entries,
+or in a more compact form, would lift that limit.
 
 **Exit criterion and follow-up review:** a backend change is a new account
 build that existing accounts adopt only by upgrade. Review it as a

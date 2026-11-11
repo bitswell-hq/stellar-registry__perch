@@ -51,7 +51,11 @@ pub use perch_recovery_interface::config::{
 #[cfg(feature = "contract")]
 use perch_recovery_interface::config;
 #[cfg(feature = "contract")]
+mod stored;
+#[cfg(feature = "contract")]
 use soroban_sdk::{contract, contractimpl, IntoVal, Map, TryFromVal, Val};
+#[cfg(feature = "contract")]
+pub use stored::grant_stored_bytes;
 
 /// Account-document caps (`docs/recovery/spec.md` §7.5): the compiler
 /// refuses an account document (one with a self-admin rule or a recovery
@@ -74,37 +78,37 @@ pub const MAX_DOC_RULES: u32 = 10;
 pub const MAX_DOC_CANONICAL_BYTES: u32 = 8_192;
 /// Grant-document caps: the compiler refuses a grant document (any document
 /// that is not an account document) with more declared signers, more rules,
-/// or longer canonical bytes than these. A recovery never compiles or
-/// installs a grant document: a completion advances one counter whatever
-/// grant documents the account holds (`docs/recovery/budgets.md`, "Grant
-/// documents"), so these bound only the grant flows themselves. Sized
-/// against the measured budget (`docs/recovery/budgets.md`, "Grant-document
-/// caps"): the grant documents with the most signer references they admit
-/// stay within 75% of every per-transaction limit, and of the ledger's
-/// per-entry limit, through `apply_grant` (adding, editing, or replacing
-/// every rule, and over a grant document a recovery wiped), `remove_grant`,
-/// `gc_grant`, and a capped transfer every signer of a 15-signer rule
-/// signs. The binding limit is the entry the account keeps a grant
-/// document's rules in, which stores every signer a rule names: 17 rules
-/// each naming all 15 signers. No cap here bounds a rule's `string-in`
-/// values but the byte cap, and the entry stores a one-character value in
-/// 40 bytes: a document that spends its bytes on them stores an entry of
-/// 92.3% of the limit to 16 bytes under it with a passkey signer, and over
-/// it (102.0%) with a delegated one. The network refuses the `apply_grant`
-/// transaction of a document whose entry is over the limit for the entry's
-/// size, and a refused transaction's writes never reach the ledger (the
-/// release-stack suite asserts the refusal, not the rollback). The account
-/// document's caps admitted the same documents, the byte cap being the
-/// same. The signer cap is OZ's per-rule limit, so a rule naming every
-/// declared signer still installs. Measured with signer keys at most a passkey's,
-/// which every verifier in `perch/verifiers` takes: a grant document naming
-/// a verifier by contract id alone, with longer keys (up to
-/// `perch_ir::MAX_SIGNER_KEY_LEN`), is outside the measurement.
+/// or longer canonical bytes than these, or whose stored entry would pass
+/// [`MAX_GRANT_STORED_BYTES`]. A recovery never compiles or installs a grant
+/// document: a completion advances one counter whatever grant documents the
+/// account holds (`docs/recovery/budgets.md`, "Grant documents"), so these
+/// bound only the grant flows themselves. Sized against the measured budget
+/// (`docs/recovery/budgets.md`, "Grant-document caps"): every grant document
+/// they admit stays within 75% of every per-transaction limit, and of the
+/// ledger's per-entry limit, through `apply_grant` (adding, editing, or
+/// replacing every rule, and over a grant document a recovery wiped),
+/// `remove_grant`, `gc_grant`, and a capped transfer every signer of a
+/// 15-signer rule signs. The binding limit is the entry the account keeps a
+/// grant document's rules in, which stores every signer a rule names and
+/// every `string-in` value: 17 rules each naming all 15 signers, or a
+/// document of values, reach [`MAX_GRANT_STORED_BYTES`]. The signer cap is
+/// OZ's per-rule limit, so a rule naming every declared signer still
+/// installs.
 pub const MAX_GRANT_SIGNERS: u32 = 15;
 /// See [`MAX_GRANT_SIGNERS`].
 pub const MAX_GRANT_RULES: u32 = 17;
 /// See [`MAX_GRANT_SIGNERS`].
 pub const MAX_GRANT_CANONICAL_BYTES: u32 = 8_192;
+/// The largest ledger entry a grant document may make its account store,
+/// in bytes: 75% of the ledger's 65 536-byte
+/// `max_contract_data_entry_size_bytes`. The entry is the account's record
+/// of the grant document, which holds every signer each rule names and
+/// every condition with its values ([`grant_stored_bytes`]); within 8 192
+/// canonical bytes, `string-in` values alone could make it pass the ledger's
+/// limit. The compiler refuses a grant document whose entry would be larger
+/// (`DocTooLarge`); [`PerchDocCompiler::grant_stored_bytes`] reports a
+/// document's entry.
+pub const MAX_GRANT_STORED_BYTES: u32 = 49_152;
 /// The longest rule name, in bytes: OZ's context-rule name limit. Checked
 /// here so that a document that compiles also installs: a compromise
 /// baseline is only published, never applied, until its recovery completes.
@@ -143,8 +147,10 @@ pub enum DocCompilerError {
     /// The document exceeds a cap on signers, rules, bytes, or name length.
     // [`MAX_DOC_SIGNERS`], [`MAX_DOC_RULES`], [`MAX_DOC_CANONICAL_BYTES`] for
     // an account document, [`MAX_GRANT_SIGNERS`], [`MAX_GRANT_RULES`],
-    // [`MAX_GRANT_CANONICAL_BYTES`] for a grant document, and
-    // [`MAX_RULE_NAME_BYTES`] for both.
+    // [`MAX_GRANT_CANONICAL_BYTES`] and [`MAX_GRANT_STORED_BYTES`] for a
+    // grant document, and [`MAX_RULE_NAME_BYTES`] for both. One code for
+    // every cap: the account numbers the compiler's errors into its own, so a
+    // new one would renumber every account error after it.
     DocTooLarge,
     /// A signer's external `key` is not its verifier-canonical form.
     // Why the compiler refuses rather than canonicalizing:
@@ -465,6 +471,14 @@ impl PerchDocCompiler {
         DocLimits::V1(grant_limits())
     }
 
+    /// The bytes of the ledger entry an account would store for grant
+    /// document `doc_json`, which `compile_doc` refuses (`DocTooLarge`) past
+    /// [`MAX_GRANT_STORED_BYTES`]. Parses the document and checks nothing
+    /// else.
+    pub fn grant_stored_bytes(_e: &Env, doc_json: Bytes) -> Result<u32, DocCompilerError> {
+        Ok(grant_stored_bytes(&parse(&doc_json)?))
+    }
+
     /// The CANON version and the fragment hash domain tags this compiler
     /// produces.
     pub fn capabilities(e: &Env) -> CompilerCapabilities {
@@ -587,6 +601,9 @@ fn compile_parsed(e: &Env, doc: &perch_ir::PolicyDoc) -> Result<CompiledDoc, Doc
             .iter()
             .any(|r| r.name.len() > caps.max_rule_name_bytes as usize)
     {
+        return Err(DocCompilerError::DocTooLarge);
+    }
+    if !perch_ir::is_account_document(doc) && grant_stored_bytes(doc) > MAX_GRANT_STORED_BYTES {
         return Err(DocCompilerError::DocTooLarge);
     }
 

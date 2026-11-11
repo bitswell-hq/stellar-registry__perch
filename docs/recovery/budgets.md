@@ -139,7 +139,7 @@ States: **Measured** (within budget unless stated; the cell says where);
 | §2 `Protected` reconfiguration, `schedule_upgrade` | Measured: in process (reconfiguration at the caps) and on testnet | Within budget. |
 | §2 `execute_upgrade` | Measured in process only | Within budget. Not run on testnet: the upgrade delay is 120 960 ledgers. |
 | §2 promotion after many collecting attempts | Measured without siblings; bounded by construction | Promotion writes one `invalidate_below` value whatever the number of siblings (spec §6.3 T4); the promoting rows above are within budget. No run with many siblings. |
-| §2 grant flows (`apply_grant`, `remove_grant`, `gc_grant`, a transfer through a grant) | Measured in process, at the grant caps | Within budget over the documents with the most signer references the caps admit, the largest ledger entry and the transaction size included. Binding row: the record of 17 rules naming 15 signers each, 74.6% of the entry limit. Outside it: the byte cap admits documents whose record is over the entry limit. A document that spends its 8 192 bytes on one-character `string-in` values stores a record 16 bytes under the limit with a passkey signer and of 102.0% of it with a delegated one, whose `apply_grant` the network refuses with nothing stored. The shared caps admitted the same documents ([Grant-document caps](#grant-document-caps)). |
+| §2 grant flows (`apply_grant`, `remove_grant`, `gc_grant`, a transfer through a grant) | Measured in process, at the grant caps | Within budget, the largest ledger entry and the transaction size included. The compiler holds every grant document's stored entry within 75% of the entry limit (`MAX_GRANT_STORED_BYTES`), which documents of `string-in` values and of signer references reach: 75.0%, and 74.6% for 17 rules naming 15 signers each. Without that bound the byte cap admitted documents of values whose record reached and passed the limit ([Grant-document caps](#grant-document-caps), "The stored bound"). |
 | §2 ordinary authorization overhead | Measured on testnet (absolute cost) and in process | Direct authorization and `execute` are within budget ([testnet-exercise.md](../deploy/testnet-exercise.md), "Against the budget"). The grant generation gate adds one footprint entry per selected rule ([Grant documents](#grant-documents)). Rule-eval's `check_auth` decides an authorization in 5.6M to 6.3M instructions in process, a capped transfer more with a long spending history, up to 47.40M (11.8%) for the longest one window holds ([Rule-eval in `__check_auth`](#rule-eval-in-__check_auth)). |
 | §2 disk read bytes, every row | Required before launch | Neither the release-stack suite nor the testnet exercise reports disk read bytes. |
 | §2 transaction size, every row | Measured on testnet | Within budget. The in-process suite meters transaction size only for the grant flows ([Grant-document caps](#grant-document-caps)). |
@@ -527,10 +527,12 @@ PERCH_SPLIT_FILLER=650 PERCH_SPLIT_RECOVERY="8,9,0,0,8,8192,2,0,8;8,0,1,0,8,8192
 
 ### Grant-document caps
 
-**The grant caps are 15 declared signers, 17 rules, and 8 192 canonical
-bytes** (`perch_doc_compiler::{MAX_GRANT_SIGNERS, MAX_GRANT_RULES,
-MAX_GRANT_CANONICAL_BYTES}`), with the account document's 20-byte rule-name
-cap. The compiler holds a grant document, one with no self-admin rule and no
+**The grant caps are 15 declared signers, 17 rules, 8 192 canonical
+bytes, and a stored entry of at most 49 152 bytes**
+(`perch_doc_compiler::{MAX_GRANT_SIGNERS, MAX_GRANT_RULES,
+MAX_GRANT_CANONICAL_BYTES, MAX_GRANT_STORED_BYTES}`; the last is 75% of the
+ledger's entry limit: "The stored bound" below), with the account
+document's 20-byte rule-name cap. The compiler holds a grant document, one with no self-admin rule and no
 recovery member (`perch_ir::is_account_document`), to these, and every other
 document to [the account document's](#document-caps); its `limits` and
 `grant_limits` views report each. No recovery compiles or installs a grant
@@ -635,30 +637,34 @@ measured on the raised stack only.
   71.3%, 32 at 140.9%), and by `string-in` values, about 12.5% of the limit
   per KiB of the shortest ones in one predicate: a document of one signer,
   two rules, and values reaches 92.3% at 8 KiB and 142.3% at 12 KiB. Values
-  of one character in many predicates store larger still (below).
+  of one character in many predicates store larger still. The compiler
+  bounds the record at 75% ("The stored bound", below).
 - **Written entries bind one-key grants**, in `apply_grant` replacing every
   rule, about 4 entries per rule: 48 of them reach 97.0% while their record
   stays at 65.5%.
 - **Instructions and memory follow the values**: about 6.9% of the
-  instruction limit per KiB of them, 49.6% for 8 KiB of little else, and
-  50.1% of memory there, 112.1% at 12 KiB. Footprint, transaction size, and
+  instruction limit per KiB of them, and up to 49.6% and 50.1% of memory
+  for 8 KiB of little else, 112.1% of memory at 12 KiB. Within the stored
+  bound they are at most 40.9% and 34.7%. Footprint, transaction size, and
   events (392 bytes in every `apply_grant`) never bind within the caps.
 
 **The caps.** Within 8 192 bytes the document with the most signer
 references is the most 15-signer rules that fit, the bytes left over spent
 on values: 17 rules naming all 15 signers is 74.6% of the entry limit (72.3%
 with two of them capped transfers), 18 are 75.9%, and 19 are 76.7%. The rule
-cap stops at 17 for that reason. Fewer signers do not buy more rules: 24
-rules of 8 signers are 77.8%. The signer cap is OZ's per-rule 15, so a rule
+cap was set at 17 for that reason, before the stored bound; the bound now
+holds every grant document's entry within 75% whatever its rules, so it is
+no longer the entry that a larger rule cap would meet first. Fewer signers
+do not buy more rules: 24 rules of 8 signers are 77.8%. The signer cap is OZ's per-rule 15, so a rule
 naming every declared signer still installs (`rules.rs` asserts it). A
 document rule carries no policy, so OZ's per-rule 5 never binds one. The
 byte cap admits 14 one-key capped grants (15 take 8 271 bytes).
 
-**Documents of values: the byte cap admits records over the entry limit.**
-The rule cap bounds signer references, not `string-in` values, which the
-byte cap alone bounds, and the record stores a value of up to four
-characters in 40 bytes. Three documents of one signer filled to 8 192 bytes
-with values, each `apply_grant` on the fork:
+**The stored bound.** The rule cap bounds signer references, not
+`string-in` values, which the byte cap alone bounds, and the record stores
+a value of up to four characters in 40 bytes. Without a further bound, documents of one signer
+filled to 8 192 bytes with values store records at and past the entry
+limit. Measured before the bound, each `apply_grant` on the fork:
 
 | Document | Values | Record | Entry limit | Instructions | Memory | Write bytes |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -670,30 +676,40 @@ A value must be distinct only within its predicate, so the second document
 repeats the one-character values, 4 document bytes each, on every argument
 index (26 constraints of the 127 a rule may carry); a delegated signer's
 declaration is 188 bytes shorter than a passkey's and leaves room for 34
-more. The second document's other shares: footprint 17 entries, 6 written,
-events 392 bytes, transaction 18 588 bytes (14.1%).
+more. The shared caps (8 signers, 10 rules, 8 192 bytes) admitted the same
+documents.
 
-- The third document's record is over the entry limit. Neither the compiler
-  nor the account bounds the stored record: the account accepts the
-  document, and the network refuses the transaction for the entry's size,
-  so nothing is stored. The second is 16 bytes under the limit.
-- This is not new. The byte cap is unchanged, so the shared caps (8
-  signers, 10 rules, 8 192 bytes) admitted the same three documents.
-- No recovery reads a grant record ([Grant documents](#grant-documents)).
-- `worst_case_grant_flows_at_the_grant_caps` runs every grant flow over the
-  first document and holds its record under 95% of the entry limit and
-  every other limit within 75%. It applies the second on the fork and holds
-  its record within the entry limit, a margin of 16 bytes, and every other
-  limit within 75%. For the third it asserts that the SDK's mainnet
-  invocation limits refuse the call on the fork, and that with those limits
-  lifted the account applies it and the record measures over 65 536 bytes.
-  The in-process host checks the limits after the call and does not model
-  the ledger's rollback.
+**The compiler bounds the entry.** It computes, from a grant document
+alone, the bytes of the ledger entry the account would store for it
+(`perch_doc_compiler::grant_stored_bytes`): every rule's record with the
+rule-eval rule it lowers to, each signer the rule names in full and each
+condition with its values, the signer ids and `verifier-name`s, and the
+entry's key and header, each part at its XDR size. It refuses
+(`DocTooLarge`) a grant document whose entry would pass
+`MAX_GRANT_STORED_BYTES`, 49 152 bytes. The sum is exact:
+`grant_stored_size.rs` holds it equal to the entry the account writes for
+documents with delegated and external signers, keys of 32, 65 and 256
+bytes, named and unnamed verifiers, every predicate, caps, expiries and
+exact roots, and its sums for the three documents above are their measured
+records. The compiler refuses all three; `values_grants_at_the_bound`
+asserts that the account's `apply_grant` of the last two fails with nothing
+stored. The compiler's `grant_stored_bytes` view reports a document's entry.
+The refusal is `DocTooLarge`, the code of every cap: the account numbers
+the compiler's errors into its own, so a new code would renumber every
+account error after it.
 
-Holding every admitted record inside the limit needs a byte cap about 130
-bytes lower (about 6 400 to hold it to 75%), less than grants had before, a
-cap on a document's predicate values, or a stored-size check; none is taken
-here.
+The documents of values the bound admits, on the fork (rows below):
+
+| Document | Bytes | Record | Instructions | Memory |
+| --- | --- | --- | --- | --- |
+| One signer, two rules, one `string-in` of the shortest distinct values, as many as admitted | 6 777 | 49 152 (75.0%) | 163.58M (40.9%), the costliest flow | 13.9 MB (34.7%) |
+| One rule of one-character values on every argument index, as many as admitted | 6 273 | 49 152 (75.0%) | 132.44M (33.1%) | 3.0 MB (7.4%) |
+
+The bound costs grants nothing measured above: the most signer references
+8 192 bytes hold, 17 rules of 15 signers, store 48 888 bytes (74.6%). No
+recovery reads a grant record
+([Grant documents](#grant-documents)). An account document is not held to
+the bound; [its caps](#document-caps) are sized by the recovery flows.
 
 **The record, byte for byte.** The second document's entry, serialized as
 the ledger stores it (65 520 bytes):
@@ -720,38 +736,36 @@ the `StoredCond` in its rule's `StoredRule`, which rule-eval reads; the
 record holds no other form of it (no interpreter program and no canonical
 text, only the document's hash). The first document's record is the same
 layout with two rules: 1 460 values in one condition are 58 400 of its
-60 472 bytes.
+60 472 bytes. `grant_stored_bytes` adds up this layout part by part.
 
 **At the caps** (`worst_case_grant_flows_at_the_grant_caps`, which asserts
-every row within 75%, the two sizes included, but for the largest entry of
-the documents of values, as above): of the 15-signer documents
+every row within 75%, the two sizes included): of the 15-signer documents
 the caps admit, the capped one holds 10 rules, the dense ones 17. Every flow
 over the dense document with `all` principals, whose record is the largest
-(48 888 bytes, 74.6%, in each `apply_grant` over it), its capped
-counterpart's worst, and the transfers every asked passkey signs, through
-the bare last rule of that document and through the two capped rules of the
-quorum document; then the rows of the documents of values:
+of them (48 888 bytes, 74.6%), its capped counterpart's worst, the
+transfers every asked passkey signs, through the bare last rule of that
+document and through the two capped rules of the quorum document, and the
+documents of values at the stored bound:
 
-| Flow (dense all, 15 × 17, 8 192 B) | Instructions | Memory | Footprint | Written | Write bytes | Largest entry | Tx size |
+| Flow | Instructions | Memory | Footprint | Written | Write bytes | Largest entry | Tx size |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `apply_grant`, every rule added (binding) | 150.78M (37.7%) | 3.1 MB | 61 | 36 | 53 380 | 48 888 (74.6%) | 23 180 |
-| `apply_grant`, every rule replaced | 157.16M (39.3%) | 3.8 MB | 77 | 52 | 53 276 | 48 888 (74.6%) | 24 524 |
-| `remove_grant` | 9.95M | 1.1 MB | 43 | 21 | 460 | | 4 460 |
-| `gc_grant` of the wiped grant document | 4.79M | 0.7 MB | 38 | 20 | 424 | | 3 472 |
-| `apply_grant` over the wiped grant document | 157.24M (39.3%) | 3.8 MB | 77 | 52 | 53 312 | 48 888 (74.6%) | 24 524 |
-| Capped (15 × 10), worst row | 128.02M (32.0%) | 3.1 MB | 73 | 47 | 36 112 | 32 452 (49.5%) | 24 188 |
-| Transfer through a bare rule, 15 of 15 signing | 62.64M (15.7%) | 2.5 MB | 12 | 3 | 520 | | 8 896 |
-| Capped transfer, 8 of 15 signing (quorum rules) | 36.15M (9.0%) | 1.8 MB | 13 | 4 | 764 | | 5 536 |
-| Capped transfer, 15 of 15 signing (quorum rules) | 62.76M (15.7%) | 2.5 MB | 13 | 4 | 764 | | 8 980 |
-| `apply_grant` over the wiped grant document (quorum rules), worst row | 154.38M (38.6%) | 3.7 MB | 79 | 52 | 51 784 | 47 360 (72.3%) | 24 692 |
-| Values only (1 × 2): `apply_grant`, every rule added | 190.99M (47.7%) | 20.0 MB (47.6%) | 18 | 7 | 61 388 | 60 472 (92.3%) | 18 672 |
-| Values only (1 × 2): `apply_grant` over the wiped grant document, worst row | 198.38M (49.6%) | 21.0 MB (50.1%) | 21 | 9 | 61 320 | 60 472 (92.3%) | 18 924 |
-| One-character values on 26 indices (1 × 1, passkey): `apply_grant` | 170.45M (42.6%) | 3.8 MB (9.1%) | 17 | 6 | 66 108 | 65 520 (99.98%) | 18 588 |
-| The same with a delegated signer: `apply_grant`, refused by the entry limit (measured with limits lifted) | 170.39M (42.6%) | 3.6 MB (8.7%) | 14 | 6 | 67 404 | 66 816 (**102.0%**) | |
+| Dense all (15 × 17, 8 192 B): `apply_grant`, every rule added | 153.50M (38.4%) | 2.9 MB | 61 | 36 | 53 380 | 48 888 (74.6%) | 23 180 |
+| Dense all: `apply_grant`, every rule replaced | 159.88M (40.0%) | 3.6 MB | 77 | 52 | 53 276 | 48 888 (74.6%) | 24 524 |
+| Dense all: `remove_grant` | 9.95M | 1.1 MB | 43 | 21 | 460 | | 4 460 |
+| Dense all: `gc_grant` of the wiped grant document | 4.79M | 0.7 MB | 38 | 20 | 424 | | 3 472 |
+| Dense all: `apply_grant` over the wiped grant document | 159.96M (40.0%) | 3.6 MB | 77 | 52 | 53 312 | 48 888 (74.6%) | 24 524 |
+| Capped (15 × 10), worst row | 129.91M (32.5%) | 3.0 MB | 73 | 47 | 36 112 | 32 452 (49.5%) | 24 188 |
+| Transfer through a bare rule, 15 of 15 signing | 62.64M (15.7%) | 2.4 MB | 12 | 3 | 520 | | 8 896 |
+| Capped transfer, 8 of 15 signing (quorum rules) | 36.15M (9.0%) | 1.7 MB | 13 | 4 | 764 | | 5 536 |
+| Capped transfer, 15 of 15 signing (quorum rules) | 62.76M (15.7%) | 2.4 MB | 13 | 4 | 764 | | 8 980 |
+| Quorum rules, worst row (`apply_grant` over the wiped grant document) | 157.04M (39.3%) | 3.5 MB | 79 | 52 | 51 784 | 47 360 (72.3%) | 24 692 |
+| Values (1 × 2, 6 777 B): `apply_grant`, every rule added | 157.54M (39.4%) | 13.1 MB (32.7%) | 18 | 7 | 50 068 | 49 152 (75.0%) | 15 848 |
+| Values (1 × 2): `apply_grant` over the wiped grant document, worst row | 163.58M (40.9%) | 13.9 MB (34.7%) | 21 | 9 | 50 000 | 49 152 (75.0%) | 16 100 |
+| One-character values on every index (1 × 1, 6 273 B): `apply_grant` | 132.44M (33.1%) | 3.0 MB (7.4%) | 17 | 6 | 49 740 | 49 152 (75.0%) | 14 756 |
 
 A transfer through a grant reads its grant document's record and verifies
 one passkey assertion per signer the rule asks, about 3.8M each: 8.9M to
-9.3M at the caps with one signing, 36.2M with 8 of 15, and 62.8M (15.7% of
+10.0M at the caps with one signing, 36.2M with 8 of 15, and 62.8M (15.7% of
 the instruction limit, its largest share of any limit) with all 15; 6.3M
 with 4 rules of 2 signers. The footprint is 12 entries, 13 through a capped
 rule of the dense document. Every event is 392 bytes or less.
@@ -774,12 +788,11 @@ grant documents' entries (171.78M with 12, names kept), as
 costs 7.6M to 12.0M on the long-lived host, 40 footprint entries, 22
 written.
 
-**Assumption.** Signer keys are at most a passkey's, as for an account
-document ([Document caps](#document-caps)); every verifier in
-`perch/verifiers` takes such keys (the ML-DSA verifier a 32-byte key hash).
-A grant document may name a verifier by contract id alone, once per rule; a
-key up to the 256 bytes the IR admits would grow each reference in the
-record and needs its own measurement.
+**Keys.** The stored bound counts each signer at its key's length, so it
+holds the entry within 75% for a key of any length, a verifier's named by
+contract id alone included (up to the 256 bytes the IR admits). The other
+rows are measured with passkeys, the longest key a verifier in
+`perch/verifiers` takes (the ML-DSA verifier's is a 32-byte key hash).
 
 **Commands.**
 
@@ -791,6 +804,7 @@ export PERCH_STACK_DIR=target/grant-stack
 scripts/cap-sweep.py --grants 16,16,1 32,32,1 48,48,1 64,64,1 15,16 15,32 15,48 15,64 \
   15,17,15,8192,2 15,18,15,8192,2 1,2,1,8192 1,2,1,12288
 cargo test -p perch-integration-tests --test release_stack worst_case_grant_flows -- --ignored --nocapture
+cargo test -p perch-integration-tests --test grant_stored_size   # the stored bound against the entry
 # per 0: thief (or, with thief 3, lost-key owner) grant documents at the grant caps
 PERCH_SPLIT_RECOVERY="8,8,0,0,8,8192,2,0,0;8,8,0,0,8,8192,2,3,0;8,8,0,0,8,8192,2,12,0;8,8,0,0,8,8192,1,0,0;8,8,0,0,8,8192,1,3,0;8,8,0,0,8,8192,1,12,0;8,8,0,0,8,8192,3,0,0;8,8,0,0,8,8192,3,3,0;8,8,0,0,8,8192,3,12,0" \
   cargo test -p perch-integration-tests --test release_stack docsplit_compromise_completion -- --ignored --nocapture --test-threads 1

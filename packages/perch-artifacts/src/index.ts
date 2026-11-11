@@ -138,6 +138,8 @@ export interface Constants {
     MAX_GRANT_SIGNERS: number;
     MAX_GRANT_RULES: number;
     MAX_GRANT_CANONICAL_BYTES: number;
+    /** The largest ledger entry a grant document may make its account store. */
+    MAX_GRANT_STORED_BYTES: number;
     MAX_RULE_NAME_BYTES: number;
   };
   program: { PROGRAM_VERSION: number; MAX_PROGRAM_LEN: number; MAX_STACK_DEPTH: number };
