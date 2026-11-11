@@ -103,8 +103,7 @@ pub const MAX_GRANT_CANONICAL_BYTES: u32 = 8_192;
 /// `max_contract_data_entry_size_bytes`. The entry is the account's record
 /// of the grant document: its signer table, and every rule with its
 /// conditions and their values ([`grant_stored_bytes`]). The compiler
-/// refuses a grant document whose entry would be larger (`DocTooLarge`);
-/// [`PerchDocCompiler::grant_stored_bytes`] reports a document's entry. No
+/// refuses a grant document whose entry would be larger (`DocTooLarge`). No
 /// document within the other grant caps reaches it (the largest, one
 /// `string-in` of one-character values filling the byte cap, stores about a
 /// third of the entry limit), so it bounds the entry whatever those caps
@@ -470,14 +469,6 @@ impl PerchDocCompiler {
     /// `apply_grant` applies.
     pub fn grant_limits(_e: &Env) -> DocLimits {
         DocLimits::V1(grant_limits())
-    }
-
-    /// The bytes of the ledger entry an account would store for grant
-    /// document `doc_json`, which `compile_doc` refuses (`DocTooLarge`) past
-    /// [`MAX_GRANT_STORED_BYTES`]. Parses the document and checks nothing
-    /// else.
-    pub fn grant_stored_bytes(_e: &Env, doc_json: Bytes) -> Result<u32, DocCompilerError> {
-        Ok(grant_stored_bytes(&parse(&doc_json)?))
     }
 
     /// The CANON version and the fragment hash domain tags this compiler

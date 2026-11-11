@@ -70,13 +70,7 @@ fn stored_entry(w: &World, doc_hash: &BytesN<32>) -> usize {
 /// Apply `json` under `grant` and check the estimate against the entry.
 fn check(w: &World, grant: u32, json: &str) -> usize {
     let estimate = grant_stored_bytes(&perch_ir::from_json(json).unwrap()) as usize;
-    let doc = bytes(w, json);
-    assert_eq!(
-        w.compiler_client().grant_stored_bytes(&doc),
-        estimate as u32,
-        "the view reports the estimate"
-    );
-    let hash = w.account_client().apply_grant(&grant, &doc);
+    let hash = w.account_client().apply_grant(&grant, &bytes(w, json));
     assert_eq!(stored_entry(w, &hash), estimate, "grant {grant}: {json}");
     estimate
 }

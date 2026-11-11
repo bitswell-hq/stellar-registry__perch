@@ -1057,7 +1057,7 @@ Two rules bound that cost:
   nothing. Within the other caps no document reaches the bound: the
   largest entry they admit is 21 236 bytes (32.4% of the limit), a
   `string-in` of one-character values filling the byte cap. The compiler's `grant_limits` view returns the count and byte
-  caps, its `grant_stored_bytes` view a document's entry. They are sized so
+  caps. They are sized so
   that every grant flow over every grant document they admit fits the
   transaction budget, the ledger's per-entry limit included (`budgets.md`,
   "Grant-document caps"; the `worst_case_grant_flows_at_the_grant_caps` test

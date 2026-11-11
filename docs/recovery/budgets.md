@@ -663,8 +663,7 @@ bound. The record stores densest, per document byte, one-character
 that fill the byte cap store at most 21 236 bytes (32.4%, with a delegated
 signer); `grant_stored_size.rs` applies them and the document of the most
 rules, each stored exactly at its sum. The bound stays so that the entry
-stays bounded whatever the other caps become. The compiler's
-`grant_stored_bytes` view reports a document's entry. The refusal is
+stays bounded whatever the other caps become. The refusal is
 `DocTooLarge`, the code of every cap: the account numbers the compiler's
 errors into its own, so a new code would renumber every account error
 after it.
