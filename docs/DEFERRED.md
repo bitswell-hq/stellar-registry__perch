@@ -190,14 +190,8 @@ The doc compiler refuses with `DocTooLarge`, on every `compile_doc` and
 canonical bytes (`MAX_DOC_CANONICAL_BYTES`), or a rule name over 20 bytes
 (`MAX_RULE_NAME_BYTES`, the account's `MAX_NAME_SIZE`). The recovery rule the account
 generates is additional to the 10 document rules. A grant document, which no
-recovery compiles, has its own caps: 15 signers (`MAX_GRANT_SIGNERS`), 17
-rules (`MAX_GRANT_RULES`), 8,192 canonical bytes
-(`MAX_GRANT_CANONICAL_BYTES`), and a stored entry of at most 49,152 bytes
-(`MAX_GRANT_STORED_BYTES`, 75% of the ledger's per-entry limit, which
-`string-in` values alone could otherwise pass within the byte cap), sized so
-that every grant flow over every grant document they admit stays within 75%
-of every limit, the ledger's per-entry limit included
-([`budgets.md`](recovery/budgets.md), "Grant-document caps"). The
+recovery compiles, has its own caps and a bound on the entry it stores
+(spec §7.5; [`budgets.md`](recovery/budgets.md), "Grant-document caps"). The
 account-document caps are sized so that
 a worst-case completion, compromise restore, or `Protected` reconfiguration
 stays within 75% of every *measured* per-transaction limit: instructions,

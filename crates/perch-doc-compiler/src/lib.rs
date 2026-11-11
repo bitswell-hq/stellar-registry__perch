@@ -91,7 +91,7 @@ pub const MAX_DOC_CANONICAL_BYTES: u32 = 8_192;
 /// 15-signer rule signs. The rule cap is the most rules the byte cap holds
 /// (50 one-signer rules in 8 078 bytes), where written entries, at 52%,
 /// come closest to the line; rules naming more signers fit fewer, and
-/// instructions stay below 43%. The signer cap is OZ's per-rule limit, so a
+/// instructions stay below 44%. The signer cap is OZ's per-rule limit, so a
 /// rule naming every declared signer still installs.
 pub const MAX_GRANT_SIGNERS: u32 = 15;
 /// See [`MAX_GRANT_SIGNERS`].
