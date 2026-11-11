@@ -46,7 +46,7 @@ use perch_recovery_interface::{
 };
 use perch_smart_account::{MAX_NAME_SIZE, MAX_SIGNERS};
 use perch_testkit::delta::raw_entries;
-use perch_testkit::passkey::{auth_entry, SoftPasskey};
+use perch_testkit::passkey::{auth_entry, auth_entry_for_keys, SoftPasskey};
 use perch_testkit::FIXTURE_NETWORK;
 use perch_zk_pool::{PerchZkPoolClient, PoolKey, TreeState};
 use perch_zk_primitives::{contract_id, ZERO_HASHES};
@@ -3812,25 +3812,26 @@ impl World {
         );
     }
 
-    /// [`World::forked`], authorized by `key` through `rule_id` of `account`.
+    /// [`World::forked`], authorized by every one of `keys` through
+    /// `rule_id` of `account`.
     #[allow(clippy::too_many_arguments)]
     fn forked_call(
         &self,
         label: &str,
         account: &Address,
-        key: &SoftPasskey,
+        keys: &[&SoftPasskey],
         rule_id: u32,
         contract: &Address,
         fn_name: &str,
         args: std::vec::Vec<ScVal>,
     ) -> bool {
         self.forked(label, contract, fn_name, args, |e2, root| {
-            std::vec![auth_entry(
+            std::vec![auth_entry_for_keys(
                 e2,
                 &Address::from_str(e2, &strkey(account)),
                 &Address::from_str(e2, &strkey(&self.webauthn)),
-                key,
-                rule_id,
+                keys,
+                &[rule_id],
                 self.next_nonce(),
                 e2.ledger().sequence() + 1_000_000,
                 root,
@@ -3856,7 +3857,7 @@ impl World {
         self.forked_call(
             label,
             &a.address,
-            key,
+            &[key],
             admin,
             &a.address,
             "apply_doc",
@@ -3876,7 +3877,7 @@ impl World {
         self.forked_call(
             label,
             &a.address,
-            key,
+            &[key],
             admin,
             &a.address,
             "apply_grant",
@@ -3889,7 +3890,7 @@ impl World {
         self.forked_call(
             label,
             &a.address,
-            key,
+            &[key],
             admin,
             &a.address,
             "remove_grant",
@@ -3906,10 +3907,23 @@ impl World {
         amount: i128,
         rule_id: u32,
     ) -> bool {
+        self.fork_spend_by(label, a, &[key], token, amount, rule_id)
+    }
+
+    /// [`World::fork_spend`] signed by every one of `keys`.
+    fn fork_spend_by(
+        &self,
+        label: &str,
+        a: &Acct,
+        keys: &[&SoftPasskey],
+        token: &Address,
+        amount: i128,
+        rule_id: u32,
+    ) -> bool {
         self.forked_call(
             label,
             &a.address,
-            key,
+            keys,
             rule_id,
             token,
             "transfer",
@@ -4225,9 +4239,14 @@ struct GrantShape {
     /// bare grant, with the shortest signer ids and rule names: the most
     /// signer references, each a passkey the account's record of the grant
     /// document holds, per document byte. 2: as 1, every rule asking all of
-    /// its signers (`all`, shorter than a `threshold`).
+    /// its signers (`all`, shorter than a `threshold`). 3: as 2, the last
+    /// two rules capped `transfer`s from the account, the second-last
+    /// asking [`QUORUM`] of its signers and the last all of them.
     dense: u8,
 }
+
+/// The signers the second-last rule of a `dense` 3 grant document asks.
+const QUORUM: usize = 8;
 
 impl GrantShape {
     /// The costliest grant documents the grant caps admit, `dense` or
@@ -4260,7 +4279,7 @@ impl GrantShape {
             self.signers,
             self.rules,
             self.fan,
-            ["", ", dense", ", dense all"][self.dense as usize]
+            ["", ", dense", ", dense all", ", dense all, quorum rules"][self.dense as usize]
         )
     }
 
@@ -4297,6 +4316,23 @@ impl GrantShape {
         named
     }
 
+    /// Whether rule `k` is a capped `transfer` from the account.
+    fn capped(&self, k: usize) -> bool {
+        self.dense == 0 || (self.dense == 3 && k + 2 >= self.rules)
+    }
+
+    /// The signers rule `k` asks of those it names.
+    fn quorum(&self, k: usize) -> usize {
+        let named = self.named(k).len();
+        if self.dense < 2 {
+            1
+        } else if self.dense == 3 && k + 2 == self.rules {
+            QUORUM.min(named)
+        } else {
+            named
+        }
+    }
+
     /// The signers in the order the rules first name them, which normal
     /// form declares them in.
     fn declared(&self) -> std::vec::Vec<usize> {
@@ -4324,8 +4360,9 @@ fn gkeys(first: usize, n: usize) -> std::vec::Vec<SoftPasskey> {
 
 impl World {
     /// The grant document of `shape` over `keys`, one per signer: rule `k`
-    /// lets 1-of-its-named-signers ([`GrantShape::named`]; `all` when it
-    /// names one) call `token`. A capped rule may transfer from the account
+    /// lets [`GrantShape::quorum`] of its named signers
+    /// ([`GrantShape::named`]; `all` when it asks every one) call `token`.
+    /// A capped rule ([`GrantShape::capped`]) may transfer from the account
     /// (`is-self` on argument 0) within a cap, and `edit` changes every cap's
     /// limit and period; a dense rule may call anything, and `edit` asks two
     /// of its signers where it names three or more. Either edit keeps the
@@ -4356,8 +4393,9 @@ impl World {
                 .iter()
                 .map(|&i| format!(r#""{}""#, shape.id(i)))
                 .collect();
-            let m = if edit && named.len() >= 3 { 2 } else { 1 };
-            let principals = if named.len() == 1 || shape.dense == 2 {
+            let quorum = shape.quorum(k);
+            let m = if edit && named.len() >= 3 { 2 } else { quorum };
+            let principals = if quorum == named.len() {
                 format!(r#"{{"type":"all","signers":[{}]}}"#, quoted.join(","))
             } else {
                 format!(
@@ -4370,7 +4408,7 @@ impl World {
             pad -= grow;
             let name = format!("{base}{}", "x".repeat(grow));
             let mut args = std::vec![];
-            if shape.dense == 0 {
+            if shape.capped(k) {
                 args.push(r#"{"index":0,"pred":{"type":"is-self"}}"#.to_string());
             }
             if k == 0 && values > 0 {
@@ -4391,7 +4429,7 @@ impl World {
                     args.join(",")
                 ));
             }
-            if shape.dense == 0 {
+            if shape.capped(k) {
                 let (limit, period) = if edit {
                     ("1001", "1001")
                 } else {
@@ -4494,8 +4532,9 @@ impl World {
 
 /// Every grant flow over a grant document of `shape`, each one transaction
 /// on a host forked from the ledger (`World::forked`): `apply_grant`
-/// adding every rule, a transfer through the last rule, every rule edited
-/// in place, every rule replaced (renamed and rekeyed), `remove_grant`,
+/// adding every rule, a transfer through the last rule signed by as many
+/// keys as it asks (and through a `dense` 3 document's second-last), every
+/// rule edited in place, every rule replaced (renamed and rekeyed), `remove_grant`,
 /// then, after a lost-key recovery wipes the grant document, `gc_grant` of
 /// it and a re-grant over it. A capped document's rules have each spent
 /// through their cap before the edits, so each holds a spending record to
@@ -4535,16 +4574,28 @@ fn grant_flows(w: &World, shape: GrantShape, seed: u8) {
     }
     let last = shape.rules - 1;
     let id = w.shaped_rule_id(&a, 0, &shape.rule_name("a", last));
-    // One key signs: an `all` rule of more signers needs every one.
-    let one_signs = shape.dense < 2 || shape.named(last).len() == 1;
-    if one_signs {
-        assert!(w.fork_spend(
-            &label("transfer through the last rule"),
+    let one_signs = shape.quorum(last) == 1;
+    for k in last.saturating_sub((shape.dense == 3) as usize)..=last {
+        let named = shape.named(k);
+        let signing: std::vec::Vec<&SoftPasskey> =
+            named[..shape.quorum(k)].iter().map(|&i| &keys[i]).collect();
+        let what = if k == last && one_signs {
+            "transfer through the last rule".to_string()
+        } else {
+            format!(
+                "transfer through a {} rule, {} of {} signing",
+                if shape.capped(k) { "capped" } else { "bare" },
+                signing.len(),
+                named.len()
+            )
+        };
+        assert!(w.fork_spend_by(
+            &label(&what),
             &a,
-            spender(last),
+            &signing,
             &token,
             5,
-            id
+            w.shaped_rule_id(&a, 0, &shape.rule_name("a", k))
         ));
     }
     // An `all` rule has no same-length edit.
@@ -4607,13 +4658,14 @@ fn grant_flows(w: &World, shape: GrantShape, seed: u8) {
 }
 
 /// The grant flows at the compiled-in grant caps, over the costliest capped
-/// and dense grant documents they admit, each row within 75% of every
-/// metered limit, the largest entry and the transaction's size included.
+/// and dense grant documents they admit, a transfer every signer of a rule
+/// signs among them, each row within 75% of every metered limit, the
+/// largest entry and the transaction's size included.
 #[test]
 #[ignore = "needs the built stack"]
 fn worst_case_grant_flows_at_the_grant_caps() {
     SIZES.with(|s| s.set(true));
-    for (dense, seed) in [(0, 60), (1, 70), (2, 80)] {
+    for (dense, seed) in [(0, 60), (1, 70), (2, 80), (3, 90)] {
         let w = world();
         w.env.cost_estimate().disable_resource_limits();
         grant_flows(&w, GrantShape::at_caps(&w, dense), seed);
@@ -4623,7 +4675,7 @@ fn worst_case_grant_flows_at_the_grant_caps() {
 
 /// Size the grant caps: [`grant_flows`] over each
 /// `signers,rules,fan,bytes[,dense]` of `PERCH_GRANT_SWEEP` (`;`-separated;
-/// bytes 0 leaves the document unpadded, dense 1 makes it dense),
+/// bytes 0 leaves the document unpadded, dense as [`GrantShape`]'s),
 /// unbudgeted. `scripts/cap-sweep.py --grants` runs and tabulates it. The
 /// stack's compiler must admit the shapes: to measure past the grant caps,
 /// build a stack with them raised.

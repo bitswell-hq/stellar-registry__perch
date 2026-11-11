@@ -17,7 +17,8 @@ capped grants, each rule naming F of the signers (default: as many as a rule
 may, 15), padded to B canonical bytes (default 0: unpadded); D 1 makes it
 dense (bare rules and the shortest ids: the most signer references, which
 the account's record of the document stores in full, per byte), and D 2
-dense with `all` principals, shorter still. Every grant flow
+dense with `all` principals, shorter still, and D 3 that with its last two
+rules capped transfers asking 8 and all of their signers. Every grant flow
 runs on a forked host: apply_grant adding every rule, a capped transfer,
 every cap changed, every rule replaced, remove_grant, and, after a recovery
 wipes the document, gc_grant and a re-grant over it. Two more columns: the
@@ -115,7 +116,10 @@ def run_grants(args) -> str:
     return out.stdout
 
 
-GRANT_SHAPE = re.compile(r"\[(\d+) signers, (\d+) rules, (\d+) per rule, (\d+) bytes(, dense(?: all)?)?\]")
+GRANT_SHAPE = re.compile(r"\[(\d+) signers, (\d+) rules, (\d+) per rule, (\d+) bytes(, dense(?: all(?:, quorum rules)?)?)?\]")
+
+
+GRANT_DENSE = ["", ", dense", ", dense all", ", dense all, quorum rules"]
 
 
 def tabulate_grants(log: str, budget: float) -> None:
@@ -135,7 +139,7 @@ def tabulate_grants(log: str, budget: float) -> None:
         m = GRANT_SHAPE.search(label or "")
         if not m:
             continue
-        key = tuple(int(x) for x in m.groups()[:4]) + ({None: 0, ", dense": 1, ", dense all": 2}[m.group(5)],)
+        key = tuple(int(x) for x in m.groups()[:4]) + (GRANT_DENSE.index(m.group(5) or ""),)
         flow = label.split(": ", 2)[-1].split(" [")[0]
         row = worst.setdefault(key, {})
         for k, lim in limits.items():
@@ -152,7 +156,7 @@ def tabulate_grants(log: str, budget: float) -> None:
             share = row.get(k, (0.0, ""))[0]
             cells.append(f"**{share:.1f}%**" if share > budget else f"{share:.1f}%")
         binding = max(limits, key=lambda k: row.get(k, (0.0, ""))[0])
-        print(f"| {['capped', 'dense', 'dense all'][key[4]]} | " + " | ".join(str(x) for x in key[:4]) + " | "
+        print(f"| {GRANT_DENSE[key[4]][2:] or 'capped'} | " + " | ".join(str(x) for x in key[:4]) + " | "
               + " | ".join(cells) + f" | {names[binding]}: {row[binding][1]} |")
     print()
     for k in limits:
@@ -160,7 +164,7 @@ def tabulate_grants(log: str, budget: float) -> None:
         if over:
             key = min(over, key=lambda x: (x[1], x[0], x[3], x))
             print(f"- {names[k]}: past {budget:g}% first at {key[0]} signers, {key[1]} rules, "
-                  f"{key[2]} per rule, {key[3]} bytes{['', ', dense', ', dense all'][key[4]]} "
+                  f"{key[2]} per rule, {key[3]} bytes{GRANT_DENSE[key[4]]} "
                   f"({worst[key][k][0]:.1f}%, {worst[key][k][1]})")
         else:
             top = max(worst.items(), key=lambda kv: kv[1].get(k, (0.0,))[0])

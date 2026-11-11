@@ -83,10 +83,11 @@ pub const MAX_DOC_CANONICAL_BYTES: u32 = 8_192;
 /// every per-transaction limit, and of the ledger's per-entry limit, through
 /// `apply_grant` (adding, editing, or replacing every rule, and over a
 /// grant document a recovery wiped), `remove_grant`, `gc_grant`, and a
-/// capped transfer. The binding limit is the entry the account keeps a
-/// grant document's rules in, which stores every signer a rule names: 18
-/// rules each naming all 15 signers. The signer cap is OZ's per-rule
-/// limit, so a rule naming every declared signer still installs. Measured
+/// capped transfer every signer of a 15-signer rule signs. The binding
+/// limit is the entry the account keeps a grant document's rules in, which
+/// stores every signer a rule names: 18 rules each naming all 15 signers.
+/// The signer cap is OZ's per-rule limit, so a rule naming every declared
+/// signer still installs. Measured
 /// with signer keys at most a passkey's, which every verifier in
 /// `perch/verifiers` takes: a grant document naming a verifier by contract
 /// id alone, with longer keys (up to `perch_ir::MAX_SIGNER_KEY_LEN`), is
