@@ -87,11 +87,13 @@ pub const MAX_DOC_CANONICAL_BYTES: u32 = 8_192;
 /// signs. The binding limit is the entry the account keeps a grant
 /// document's rules in, which stores every signer a rule names: 17 rules
 /// each naming all 15 signers. No cap here bounds a rule's `string-in`
-/// values but the byte cap: a document that spends its bytes on them stores
-/// the largest entry, 92.3% of the limit. The account document's caps
-/// admitted the same document, the byte cap being the same; it is inside
-/// every limit, a larger record would refuse the `apply_grant` and store
-/// nothing, and the release-stack suite holds it under 95%. The signer cap is OZ's per-rule limit, so a rule naming every declared
+/// values but the byte cap, and the entry stores a one-character value in
+/// 40 bytes: a document that spends its bytes on them stores an entry of
+/// 92.3% of the limit to 16 bytes under it with a passkey signer, and over
+/// it (102.0%) with a delegated one. The network refuses the `apply_grant`
+/// of a document whose entry is over the limit, and nothing is stored. The
+/// account document's caps admitted the same documents, the byte cap being
+/// the same. The signer cap is OZ's per-rule limit, so a rule naming every declared
 /// signer still installs. Measured with signer keys at most a passkey's,
 /// which every verifier in `perch/verifiers` takes: a grant document naming
 /// a verifier by contract id alone, with longer keys (up to

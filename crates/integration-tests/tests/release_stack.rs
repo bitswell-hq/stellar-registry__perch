@@ -36,7 +36,7 @@ use perch_account_factory::PerchAccountFactoryClient;
 use perch_account_types::{AuthPayload, Signer};
 use perch_doc_compiler::{
     PerchDocCompilerClient, MAX_DOC_CANONICAL_BYTES, MAX_DOC_RULES, MAX_DOC_SIGNERS,
-    MAX_GRANT_CANONICAL_BYTES, MAX_GRANT_RULES, MAX_GRANT_SIGNERS,
+    MAX_GRANT_CANONICAL_BYTES, MAX_GRANT_RULES, MAX_GRANT_SIGNERS, MAX_RULE_CONSTRAINTS,
 };
 use perch_recovery::{EvidenceDomain, PerchRecoveryClient, RecoveryError};
 use perch_recovery_interface::credential::{Credential, Replacement, ReplacementSet, ZkEnrollment};
@@ -114,13 +114,14 @@ thread_local! {
     static SIZES: Cell<bool> = const { Cell::new(false) };
     /// The share of the per-entry limit [`World::report_sizes`] holds the
     /// largest entry within: [`BUDGET_PCT`], but [`VALUES_ENTRY_PCT`] over
-    /// the values-only grant document.
+    /// the values-only grant document and the whole limit over
+    /// [`values_grants_at_the_byte_cap`]'s.
     static ENTRY_PCT: Cell<u64> = const { Cell::new(BUDGET_PCT) };
 }
 
 /// The share of the per-entry limit the record of the values-only grant
-/// document stays within (`budgets.md`, "Grant-document caps"): it measures
-/// 92.3%, so growth in the record's encoding fails before the limit does.
+/// document, its values in one predicate, stays within (`budgets.md`,
+/// "Grant-document caps"): it measures 92.3%.
 const VALUES_ENTRY_PCT: u64 = 95;
 
 /// The per-entry and per-transaction size limits ([`World::report_sizes`]):
@@ -3672,6 +3673,23 @@ fn docsplit_compromise_completion() {
     }
 }
 
+/// The size of the largest contract-data entry `contract` holds on `e`.
+fn largest_entry(e: &Env, contract: &Address) -> usize {
+    use soroban_sdk::xdr::{LedgerEntryData, LedgerKey, Limits, ScAddress, WriteXdr};
+    let me: ScAddress = Address::from_str(e, &strkey(contract)).into();
+    e.to_ledger_snapshot()
+        .ledger_entries
+        .iter()
+        .filter_map(|(key, (entry, _))| match (&**key, &entry.data) {
+            (LedgerKey::ContractData(k), LedgerEntryData::ContractData(_)) if k.contract == me => {
+                Some(entry.to_xdr(Limits::none()).unwrap().len())
+            }
+            _ => None,
+        })
+        .max()
+        .unwrap_or(0)
+}
+
 impl World {
     /// `fn_name(args)` on `contract`, authorized by the entries `entry`
     /// builds on the fork (none for a permissionless call), run on a fresh
@@ -3752,24 +3770,8 @@ impl World {
         e2: &Env,
     ) {
         use soroban_env_host::{budget::Budget, e2e_invoke, storage::SnapshotSource};
-        use soroban_sdk::xdr::{
-            InvokeHostFunctionOp, LedgerEntryData, LedgerKey, Limits, ScAddress, WriteXdr,
-        };
-        let me: ScAddress = Address::from_str(e2, &strkey(contract)).into();
-        let max_entry = e2
-            .to_ledger_snapshot()
-            .ledger_entries
-            .iter()
-            .filter_map(|(key, (entry, _))| match (&**key, &entry.data) {
-                (LedgerKey::ContractData(k), LedgerEntryData::ContractData(_))
-                    if k.contract == me =>
-                {
-                    Some(entry.to_xdr(Limits::none()).unwrap().len())
-                }
-                _ => None,
-            })
-            .max()
-            .unwrap_or(0);
+        use soroban_sdk::xdr::{InvokeHostFunctionOp, LedgerKey, Limits, WriteXdr};
+        let max_entry = largest_entry(e2, contract);
         let SorobanAuthorizedFunction::ContractFn(call) = &root.function else {
             unreachable!("a contract call")
         };
@@ -4535,6 +4537,60 @@ impl World {
         (Bytes::from_slice(&self.env, json.as_bytes()), size)
     }
 
+    /// A grant document of one signer and one rule that spends its bytes on
+    /// `string-in` values: `values` of them, each one character, a
+    /// [`VALUE_CHARS`] of them on each argument index from 0 (a value must
+    /// be distinct only within its predicate), the first `pad` bytes
+    /// longer. Normal form, as `apply_grant` requires.
+    fn values_json(&self, token: &Address, signer: &str, values: usize, pad: usize) -> String {
+        let per = VALUE_CHARS.len();
+        let preds: std::vec::Vec<String> = (0..values.div_ceil(per))
+            .map(|i| {
+                let quoted: std::vec::Vec<String> = (0..per.min(values - i * per))
+                    .map(|v| {
+                        let longer = if i == 0 && v == 0 { pad } else { 0 };
+                        format!(r#""{}{}""#, char::from(VALUE_CHARS[v]), "0".repeat(longer))
+                    })
+                    .collect();
+                format!(
+                    r#"{{"index":{i},"pred":{{"type":"string-in","values":[{}]}}}}"#,
+                    quoted.join(",")
+                )
+            })
+            .collect();
+        assert!(preds.len() <= MAX_RULE_CONSTRAINTS as usize);
+        format!(
+            r#"{{"version":1,"network":"{FIXTURE_NETWORK}","signers":[{}],"rules":[{{"name":"a","scope":{{"type":"contract","address":"{}"}},"principals":{{"type":"all","signers":["a"]}},"args":[{}]}}]}}"#,
+            signer,
+            strkey(token),
+            preds.join(",")
+        )
+    }
+
+    /// [`World::values_json`] with as many values as `bytes` canonical bytes
+    /// hold, filled to exactly `bytes`.
+    fn values_grant(&self, token: &Address, signer: &str, bytes: usize) -> Bytes {
+        let len = |values: usize, pad: usize| {
+            canonical_len(&self.values_json(token, signer, values, pad))
+        };
+        // Each value adds at least four bytes.
+        let (mut values, mut hi) = (1usize, bytes / 4);
+        while values < hi {
+            let mid = (values + hi).div_ceil(2);
+            if len(mid, 0) <= bytes {
+                values = mid;
+            } else {
+                hi = mid - 1;
+            }
+        }
+        let pad = bytes - len(values, 0);
+        assert_eq!(len(values, pad), bytes);
+        Bytes::from_slice(
+            &self.env,
+            self.values_json(token, signer, values, pad).as_bytes(),
+        )
+    }
+
     /// The id of the rule named `base`, padded or not, in the grant
     /// document under `grant`.
     fn shaped_rule_id(&self, a: &Acct, grant: u32, base: &str) -> u32 {
@@ -4698,9 +4754,9 @@ fn grant_flows(w: &World, shape: GrantShape, seed: u8) {
 /// every signer of a rule signs among them, each row within 75% of every
 /// metered limit, the largest entry and the transaction's size included.
 /// Then over the values-only document, one signer and two rules with every
-/// other byte of the byte cap a `string-in` value, whose record is the
-/// largest entry the caps admit: within [`VALUES_ENTRY_PCT`] of the entry
-/// limit and 75% of every other.
+/// other byte of the byte cap a value of one `string-in`, the costliest in
+/// instructions and memory: within [`VALUES_ENTRY_PCT`] of the entry limit
+/// and 75% of every other. Then [`values_grants_at_the_byte_cap`].
 #[test]
 #[ignore = "needs the built stack"]
 fn worst_case_grant_flows_at_the_grant_caps() {
@@ -4722,7 +4778,57 @@ fn worst_case_grant_flows_at_the_grant_caps() {
     ENTRY_PCT.with(|p| p.set(VALUES_ENTRY_PCT));
     grant_flows(&w, values_only, 100);
     ENTRY_PCT.with(|p| p.set(BUDGET_PCT));
+    values_grants_at_the_byte_cap();
     SIZES.with(|s| s.set(false));
+}
+
+/// `apply_grant` of the two grant documents that spend the byte cap on
+/// one-character `string-in` values ([`World::values_grant`]), which the
+/// record stores largest. With a passkey signer the record fits the entry
+/// limit, 16 bytes under it as measured, and the call stays within 75% of
+/// every other limit. With a delegated signer, whose shorter declaration
+/// leaves room for more values, the account accepts the document and its
+/// record is over the entry limit, so the network's limits refuse the
+/// transaction.
+fn values_grants_at_the_byte_cap() {
+    let bytes = MAX_GRANT_CANONICAL_BYTES as usize;
+    let w = world();
+    w.env.cost_estimate().disable_resource_limits();
+    let owner = canonical_passkey([110; 32]);
+    let a = w.new_account(canonical_passkey([110; 32]));
+    assert!(split_stack(&w, &a), "needs a stack with grant documents");
+    let token = w.funded_token(&a);
+    let label = |signer: &str| {
+        format!("grant: apply_grant, one rule of one-character values [1 {signer} signer, 1 rule, {bytes} bytes]")
+    };
+
+    let passkey = w.values_grant(&token, &passkey_decl(&w, "a", &gkey(0)), bytes);
+    ENTRY_PCT.with(|p| p.set(100));
+    assert!(w.fork_apply_grant(&label("passkey"), &a, &owner, 0, &passkey));
+    ENTRY_PCT.with(|p| p.set(BUDGET_PCT));
+
+    let delegate = format!(r#"{{"id":"a","address":"{}"}}"#, strkey(&w.guardians[0]));
+    let delegated = w.values_grant(&token, &delegate, bytes);
+    let refused = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        w.fork_apply_grant(&label("delegated"), &a, &owner, 0, &delegated)
+    }))
+    .expect_err("the network's limits admit the record");
+    let why = refused.downcast_ref::<String>().expect("a message");
+    assert!(why.contains("ExceededLimit"), "{why}");
+    assert!(
+        w.try_apply_grant(&a, &owner, 0, &delegated),
+        "the account refuses the document"
+    );
+    report_unbudgeted(
+        &format!("{} (no network limits)", label("delegated")),
+        &w.env,
+    );
+    let record = largest_entry(&w.env, &a.address);
+    println!(
+        "\n{{\"record_of\":\"{}\",\"max_entry_bytes\":{record}}}",
+        label("delegated")
+    );
+    assert!(record as u64 > TX_MAX_ENTRY_BYTES, "{record}");
 }
 
 /// Size the grant caps: [`grant_flows`] over each
