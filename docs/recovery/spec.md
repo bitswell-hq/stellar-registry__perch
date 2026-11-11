@@ -1058,8 +1058,9 @@ Two rules bound that cost:
   stores a record 16 bytes under the limit with a passkey signer and of
   102.0% of it with a delegated one. No compiler or account check bounds
   the record: the network refuses the `apply_grant` transaction of a
-  document whose record is over the limit, and nothing is stored. This is
-  not new: the byte cap is unchanged, so the shared caps admitted the same
+  document whose record is over the limit for the entry's size, and a
+  refused transaction's writes never reach the ledger (the release-stack
+  test asserts the refusal, not the rollback). This is not new: the byte cap is unchanged, so the shared caps admitted the same
   documents. No recovery reads a grant record. The same test holds the
   passkey document's record within the limit and checks that the limit
   refuses the delegated one's. The measurement assumes signer keys at most a

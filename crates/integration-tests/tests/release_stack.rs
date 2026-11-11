@@ -97,7 +97,7 @@ thread_local! {
     static SIMULATED: Cell<u32> = const { Cell::new(0) };
     /// How many grant documents a [`worst_compromise`] thief installs
     /// before the attempt, and of how many own-key capped grants each (0:
-    /// the costliest the grant caps admit, [`install_grants`]).
+    /// the dense document at the grant caps, [`install_grants`]).
     static THIEF_GRANTS: Cell<(u32, usize)> = const { Cell::new((3, 0)) };
     /// The same for the grant documents a [`worst_lost_key`] account holds
     /// before its key is lost. When set (to any number, 0 included), its
@@ -2320,7 +2320,7 @@ fn worst_compromise(w: &World, shape: Shape, bytes: usize, seed: u8, variant: Th
 /// What [`install_grants`] puts in each grant document.
 fn grants_of(per: usize) -> String {
     if per == 0 {
-        "the grant caps' costliest".to_string()
+        "the dense document at the grant caps".to_string()
     } else {
         format!("{per} own-key grants")
     }
@@ -2328,8 +2328,8 @@ fn grants_of(per: usize) -> String {
 
 /// Grant documents under grants `0..docs`, applied by `key` through `admin`
 /// to fresh session keys from [`gkey`] `first` on, each of `per` own-key
-/// capped grants or, with `per` 0, the costliest dense grant document the
-/// grant caps admit (1-of-15 rules, [`GrantShape::at_caps`]). Each
+/// capped grants or, with `per` 0, the dense document at the grant caps
+/// (1-of-15 rules, the most signer references, [`GrantShape::at_caps`]). Each
 /// `apply_grant` is reported on the long-lived host as `who`'s. Returns a
 /// session key's [`gkey`] index and the rule it may transfer through, from
 /// the last one.
@@ -3630,8 +3630,8 @@ fn docsplit_many_grants() {
 /// `PERCH_SPLIT_RECOVERY` (`;`-separated; thief 0 keeps every name, 1
 /// renames every rule, 2 reprograms every rule, and 3 is no thief but the
 /// lost-key completion, [`worst_lost_key`], over `docs` grant documents the
-/// account held; `per` 0 makes each grant document the costliest the grant
-/// caps admit), with `PERCH_SPLIT_FILLER`
+/// account held; `per` 0 makes each grant document the dense one at the
+/// grant caps), with `PERCH_SPLIT_FILLER`
 /// unrelated entries written before the completion as the host-growth
 /// control. Unbudgeted: a sizing tool (`budgets.md`, "Grant documents").
 #[test]
@@ -3770,7 +3770,7 @@ impl World {
         e2: &Env,
     ) {
         use soroban_env_host::{budget::Budget, e2e_invoke, storage::SnapshotSource};
-        use soroban_sdk::xdr::{InvokeHostFunctionOp, LedgerKey, Limits, WriteXdr};
+        use soroban_sdk::xdr::{InvokeHostFunctionOp, Limits, WriteXdr};
         let max_entry = largest_entry(e2, contract);
         let SorobanAuthorizedFunction::ContractFn(call) = &root.function else {
             unreachable!("a contract call")

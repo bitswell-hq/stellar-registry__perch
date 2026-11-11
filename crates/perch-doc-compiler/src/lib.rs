@@ -91,10 +91,12 @@ pub const MAX_DOC_CANONICAL_BYTES: u32 = 8_192;
 /// 40 bytes: a document that spends its bytes on them stores an entry of
 /// 92.3% of the limit to 16 bytes under it with a passkey signer, and over
 /// it (102.0%) with a delegated one. The network refuses the `apply_grant`
-/// of a document whose entry is over the limit, and nothing is stored. The
-/// account document's caps admitted the same documents, the byte cap being
-/// the same. The signer cap is OZ's per-rule limit, so a rule naming every declared
-/// signer still installs. Measured with signer keys at most a passkey's,
+/// transaction of a document whose entry is over the limit for the entry's
+/// size, and a refused transaction's writes never reach the ledger (the
+/// release-stack suite asserts the refusal, not the rollback). The account
+/// document's caps admitted the same documents, the byte cap being the
+/// same. The signer cap is OZ's per-rule limit, so a rule naming every
+/// declared signer still installs. Measured with signer keys at most a passkey's,
 /// which every verifier in `perch/verifiers` takes: a grant document naming
 /// a verifier by contract id alone, with longer keys (up to
 /// `perch_ir::MAX_SIGNER_KEY_LEN`), is outside the measurement.

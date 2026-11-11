@@ -198,7 +198,9 @@ the ledger's per-entry limit included. The byte cap also admits documents
 whose stored record is over that limit: one that spends its bytes on
 one-character `string-in` values stores a record 16 bytes under the limit
 with a passkey signer and over it (102.0%) with a delegated one. The
-network refuses the `apply_grant` of such a document and nothing is stored;
+network refuses the `apply_grant` transaction of such a document for the
+entry's size, and a refused transaction's writes never reach the ledger
+(the release-stack test asserts the refusal, not the rollback);
 the shared caps admitted the same documents, the byte cap being unchanged;
 no recovery reads a grant record
 ([`budgets.md`](recovery/budgets.md), "Grant-document caps"). Measured with
