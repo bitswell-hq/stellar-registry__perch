@@ -208,9 +208,11 @@ host render errors, so transports should attach the events.
 
 ### Limits and capabilities
 
-`snapshot.limits` holds the caps the account's compiler enforces;
-`checkLimits(doc, snapshot.limits)` throws `OverLimits` for a document the
-compiler would refuse. `readSnapshot` refuses with `UnsupportedCapability`
+`snapshot.limits` holds the caps the account's compiler enforces on an
+account document; `checkLimits(doc, snapshot.limits)` throws `OverLimits`
+for a document the compiler would refuse. A grant document has its own caps,
+the compiler's `grant_limits()`: decode them with `decodeDocLimits` and check
+a grant document against them with the same `checkLimits`. `readSnapshot` refuses with `UnsupportedCapability`
 an account whose document identity, authorization digest, or snapshot
 format this version does not implement, and a limits format it does not
 know. `grantMode(snapshot.capabilities)` returns `'grant_v1'` for an account

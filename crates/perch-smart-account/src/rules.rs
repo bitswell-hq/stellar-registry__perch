@@ -57,9 +57,13 @@ pub const MAX_EXTERNAL_KEY_SIZE: u32 = 256;
 
 // The compiler refuses what these limits would, so a document that compiles
 // also installs: a rule name within the name limit, a rule naming every
-// declared signer within the signer limit, and keys within the key limit.
+// declared signer within the signer limit (an account document's or a grant
+// document's), and keys within the key limit. A document rule carries no
+// policy (`document_rule`), so only the recovery rule's one counts against
+// the policy limit.
 const _: () = assert!(perch_doc_compiler::MAX_RULE_NAME_BYTES == MAX_NAME_SIZE);
 const _: () = assert!(perch_doc_compiler::MAX_DOC_SIGNERS <= MAX_SIGNERS);
+const _: () = assert!(perch_doc_compiler::MAX_GRANT_SIGNERS <= MAX_SIGNERS);
 
 /// OZ's codes for the install-time refusals (`stellar-accounts`'
 /// `SmartAccountError`), raised unchanged.

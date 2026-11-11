@@ -303,6 +303,68 @@ fn only_the_owner_changes_a_grant() {
     assert!(call_via(&w, &app, id), "nothing changed");
 }
 
+/// A grant document of `signers` delegated keys and `rules` rules, each
+/// scoped to the target and letting any one of every signer call it.
+fn wide_grant(w: &World, keys: &[Address], rules: u32) -> Bytes {
+    let ids: std::vec::Vec<String> = (0..keys.len()).map(|i| format!(r#""k{i:02}""#)).collect();
+    let signers: std::vec::Vec<String> = keys
+        .iter()
+        .enumerate()
+        .map(|(i, a)| format!(r#"{{"id":"k{i:02}","address":"{}"}}"#, strkey(a)))
+        .collect();
+    let rules: std::vec::Vec<String> = (0..rules)
+        .map(|k| {
+            format!(
+                r#"{{"name":"g{k:02}","scope":{{"type":"contract","address":"{}"}},"principals":{{"type":"threshold","m":1,"signers":[{}]}}}}"#,
+                strkey(&w.target),
+                ids.join(",")
+            )
+        })
+        .collect();
+    let json = format!(
+        r#"{{"version":1,"network":"{}","signers":[{}],"rules":[{}]}}"#,
+        perch_testkit::FIXTURE_NETWORK,
+        signers.join(","),
+        rules.join(",")
+    );
+    Bytes::from_slice(&w.env, json.as_bytes())
+}
+
+/// A grant document at the grant caps applies, every rule naming every
+/// signer (OZ's per-rule signer limit is the grant signer cap), and
+/// authorizes through its last rule; one past the rule or the signer cap is
+/// refused, though an account document's caps are smaller
+/// (`docs/recovery/budgets.md`, "Grant-document caps").
+#[test]
+fn a_grant_document_at_the_grant_caps_applies() {
+    use perch_doc_compiler::{DocCompilerError, MAX_GRANT_RULES, MAX_GRANT_SIGNERS};
+    let w = world();
+    w.enroll(&w.doc(None));
+    let keys: std::vec::Vec<Address> = (0..=MAX_GRANT_SIGNERS).map(|_| w.new_key()).collect();
+    let at_caps = &keys[..MAX_GRANT_SIGNERS as usize];
+
+    apply_grant(&w, 3, &wide_grant(&w, at_caps, MAX_GRANT_RULES)).expect("at the grant caps");
+    let record = w.client().grant(&3).unwrap();
+    assert_eq!(record.rules.len(), MAX_GRANT_RULES);
+    assert!(record
+        .rules
+        .iter()
+        .all(|r| r.signers.len() == MAX_GRANT_SIGNERS));
+    let last = grant_rule_id(&w, 3, &format!("g{:02}", MAX_GRANT_RULES - 1));
+    assert!(call_via(&w, &at_caps[MAX_GRANT_SIGNERS as usize - 1], last));
+
+    for past in [
+        wide_grant(&w, at_caps, MAX_GRANT_RULES + 1),
+        wide_grant(&w, &keys, MAX_GRANT_RULES),
+    ] {
+        assert_eq!(
+            err(apply_grant(&w, 4, &past)),
+            PerchAccountError::Compiler(DocCompilerError::DocTooLarge)
+        );
+    }
+    assert_eq!(w.client().grant(&3), Some(record), "nothing changed");
+}
+
 #[test]
 fn changing_a_grant_reconciles_its_own_rules_only() {
     let w = world();

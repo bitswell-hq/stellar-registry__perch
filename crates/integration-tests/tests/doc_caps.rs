@@ -1,13 +1,15 @@
 //! The document caps (`docs/recovery/spec.md` §7.5) at their boundaries:
 //! the compiler admits a document at every cap and refuses one past any of
-//! them, and every rule name it admits OZ installs. The per-rule constraint
+//! them, and every rule name it admits OZ installs. An account document and
+//! a grant document each have their own caps. The per-rule constraint
 //! cap has the interpreter's local limit, with each exact root consuming one
 //! additional constraint. The release-stack suite
 //! measures the costliest document the caps admit against the budget
-//! (`docs/recovery/budgets.md`, "Document caps").
+//! (`docs/recovery/budgets.md`, "Document caps" and "Grant-document caps").
 
 use perch_doc_compiler::{
-    DocCompilerError, MAX_DOC_CANONICAL_BYTES, MAX_DOC_RULES, MAX_DOC_SIGNERS,
+    doc_limits, grant_limits, DocCompilerError, DocLimits, MAX_DOC_CANONICAL_BYTES, MAX_DOC_RULES,
+    MAX_DOC_SIGNERS, MAX_GRANT_CANONICAL_BYTES, MAX_GRANT_RULES, MAX_GRANT_SIGNERS,
     MAX_RULE_CONSTRAINTS, MAX_RULE_NAME_BYTES,
 };
 use perch_testkit::delta::strkey;
@@ -110,6 +112,117 @@ fn the_byte_cap_counts_canonical_bytes() {
         .try_compile_doc(&doc(&w, 1, 2, "last", fits))
         .is_ok());
     assert!(too_large(&w, &doc(&w, 1, 2, "last", fits + 1)));
+}
+
+/// A grant document (no self-admin rule, no recovery member): `signers`
+/// signers and `rules` rules, each scoped to a contract and naming every
+/// signer, with `padding` strings in a `string-in` constraint on rule 0.
+fn grant_doc(w: &World, signers: u32, rules: u32, padding: usize) -> Bytes {
+    let verifier = strkey(&w.verifier);
+    let ids: Vec<String> = (0..signers).map(|i| format!(r#""s{i:02}""#)).collect();
+    let decls: Vec<String> = (0..signers)
+        .map(|i| {
+            format!(
+                r#"{{"id":"s{i:02}","verifier":"{verifier}","verifier-name":"{ED25519_VERIFIER_NAME}","key":"{}"}}"#,
+                format!("{:02x}", i + 1).repeat(32)
+            )
+        })
+        .collect();
+    let rules: Vec<String> = (0..rules)
+        .map(|k| {
+            let args = if k == 0 && padding > 0 {
+                let values: Vec<String> = (0..padding).map(|v| format!(r#""v{v:05}""#)).collect();
+                format!(
+                    r#","functions":["f"],"args":[{{"index":0,"pred":{{"type":"string-in","values":[{}]}}}}]"#,
+                    values.join(",")
+                )
+            } else {
+                String::new()
+            };
+            format!(
+                r#"{{"name":"g{k}","scope":{{"type":"contract","address":"{verifier}"}},"principals":{{"type":"all","signers":[{}]}}{args}}}"#,
+                ids.join(",")
+            )
+        })
+        .collect();
+    let json = format!(
+        r#"{{"version":1,"network":"{FIXTURE_NETWORK}","signers":[{}],"rules":[{}]}}"#,
+        decls.join(","),
+        rules.join(",")
+    );
+    Bytes::from_slice(&w.env, json.as_bytes())
+}
+
+/// A grant document has its own caps, larger than an account document's:
+/// the compiler admits one at every grant count cap and refuses one past
+/// any, and still refuses an account document past its own caps, within the
+/// grant caps.
+#[test]
+fn a_grant_document_at_every_grant_cap_compiles_and_one_past_any_does_not() {
+    let w = setup();
+    let at_caps = grant_doc(&w, MAX_GRANT_SIGNERS, MAX_GRANT_RULES, 0);
+    let compiled = w.compiler_client().compile_doc(&at_caps);
+    assert_eq!(compiled.fingerprints.len(), MAX_GRANT_SIGNERS);
+    assert_eq!(compiled.rules.len(), MAX_GRANT_RULES);
+    assert!(compiled
+        .rules
+        .iter()
+        .all(|r| r.signers.len() == MAX_GRANT_SIGNERS));
+    assert!(too_large(
+        &w,
+        &grant_doc(&w, MAX_GRANT_SIGNERS + 1, MAX_GRANT_RULES, 0)
+    ));
+    assert!(too_large(
+        &w,
+        &grant_doc(&w, MAX_GRANT_SIGNERS, MAX_GRANT_RULES + 1, 0)
+    ));
+
+    // An account document past its caps, within the grant caps.
+    const { assert!(MAX_DOC_SIGNERS < MAX_GRANT_SIGNERS && MAX_DOC_RULES < MAX_GRANT_RULES) };
+    assert!(too_large(
+        &w,
+        &doc(&w, MAX_DOC_SIGNERS, MAX_DOC_RULES + 1, "last", 0)
+    ));
+    assert!(too_large(
+        &w,
+        &doc(&w, MAX_DOC_SIGNERS + 1, MAX_DOC_RULES, "last", 0)
+    ));
+}
+
+#[test]
+fn the_grant_byte_cap_counts_canonical_bytes() {
+    let w = setup();
+    let len = |padding| {
+        perch_ir::canonical_json(
+            &perch_ir::from_json(
+                std::str::from_utf8(&grant_doc(&w, 1, 1, padding).to_alloc_vec()).unwrap(),
+            )
+            .unwrap(),
+        )
+        .len()
+    };
+    let fits = (1..)
+        .take_while(|&p| len(p) <= MAX_GRANT_CANONICAL_BYTES as usize)
+        .last()
+        .unwrap();
+    assert!(w
+        .compiler_client()
+        .try_compile_doc(&grant_doc(&w, 1, 1, fits))
+        .is_ok());
+    assert!(too_large(&w, &grant_doc(&w, 1, 1, fits + 1)));
+}
+
+/// `limits` reports an account document's caps and `grant_limits` a grant
+/// document's, in one format.
+#[test]
+fn the_compiler_reports_each_kinds_caps() {
+    let w = setup();
+    assert_eq!(w.compiler_client().limits(), DocLimits::V1(doc_limits()));
+    assert_eq!(
+        w.compiler_client().grant_limits(),
+        DocLimits::V1(grant_limits())
+    );
+    assert_eq!(grant_limits().max_rule_name_bytes, MAX_RULE_NAME_BYTES);
 }
 
 /// OZ refuses a context-rule name longer than its `MAX_NAME_SIZE` at

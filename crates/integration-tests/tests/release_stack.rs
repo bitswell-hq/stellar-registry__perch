@@ -36,6 +36,7 @@ use perch_account_factory::PerchAccountFactoryClient;
 use perch_account_types::{AuthPayload, Signer};
 use perch_doc_compiler::{
     PerchDocCompilerClient, MAX_DOC_CANONICAL_BYTES, MAX_DOC_RULES, MAX_DOC_SIGNERS,
+    MAX_GRANT_CANONICAL_BYTES, MAX_GRANT_RULES, MAX_GRANT_SIGNERS,
 };
 use perch_recovery::{EvidenceDomain, PerchRecoveryClient, RecoveryError};
 use perch_recovery_interface::credential::{Credential, Replacement, ReplacementSet, ZkEnrollment};
@@ -94,14 +95,30 @@ thread_local! {
     static SIMULATE: Cell<bool> = const { Cell::new(false) };
     /// How many `apply_doc` calls were checked that way.
     static SIMULATED: Cell<u32> = const { Cell::new(0) };
-    /// How many grant documents, of how many capped grants each, a
-    /// [`worst_compromise`] thief installs before the attempt.
-    static THIEF_GRANTS: Cell<(u32, usize)> = const { Cell::new((3, 8)) };
+    /// How many grant documents a [`worst_compromise`] thief installs
+    /// before the attempt, and of how many own-key capped grants each (0:
+    /// the costliest the grant caps admit, [`install_grants`]).
+    static THIEF_GRANTS: Cell<(u32, usize)> = const { Cell::new((3, 0)) };
+    /// The same for the grant documents a [`worst_lost_key`] account holds
+    /// before its key is lost. When set (to any number, 0 included), its
+    /// completion is budgeted on a forked host.
+    static OWNER_GRANTS: Cell<Option<(u32, usize)>> = const { Cell::new(None) };
     /// Unrelated entries [`worst_compromise`] writes before its completion,
     /// which the completion never touches: the control for the long-lived
     /// host's storage growth (`budgets.md`, "Grant documents").
     static FILLER: Cell<u32> = const { Cell::new(0) };
+    /// While set, every [`World::forked`] row also reports the largest
+    /// contract-data entry of the contract it calls and the transaction's
+    /// size ([`World::report_sizes`]): the two limits a grant document's
+    /// size meets that [`report`] does not meter.
+    static SIZES: Cell<bool> = const { Cell::new(false) };
 }
+
+/// The per-entry and per-transaction size limits ([`World::report_sizes`]):
+/// `max_contract_data_entry_size_bytes` (the SDK's mainnet invocation limit)
+/// and `tx_max_size_bytes` (`stellar network settings`, protocol 29).
+const TX_MAX_ENTRY_BYTES: u64 = 65_536;
+const TX_MAX_SIZE_BYTES: u64 = 132_096;
 
 fn report(label: &str, e: &Env) {
     let r = e.cost_estimate().resources();
@@ -2030,6 +2047,12 @@ fn worst_lost_key(w: &World, shape: Shape, bytes: usize, seed: u8) {
     let doc = w.shaped_doc(&keys, &rec, shape, bytes, true);
     assert!(w.try_apply(&a, &keys[0], &doc, 0));
     report(&label(shape, "enroll Combined through apply_doc"), &w.env);
+    let owner_grants = OWNER_GRANTS.with(Cell::get);
+    let grant = owner_grants.map(|(docs, per)| {
+        let token = w.funded_token(&a);
+        let grant = install_grants(w, &a, &keys[0], &token, docs, per, 3000, "owner");
+        (token, grant)
+    });
 
     let new_keys = passkeys(seed + 1, shape.signers);
     let zk2 = Zk {
@@ -2052,14 +2075,25 @@ fn worst_lost_key(w: &World, shape: Shape, bytes: usize, seed: u8) {
     w.guardian(0, &a, attempt, EvidenceDomain::Initiate);
     w.guardian(1, &a, attempt, EvidenceDomain::Initiate);
     w.advance(DELAY);
-    assert!(w.try_complete(&a, &target));
-    report(
-        &label(
-            shape,
-            "completion apply_doc (Combined, ZK rotation, every signer revoked)",
-        ),
-        &w.env,
-    );
+    let what = "completion apply_doc (Combined, ZK rotation, every signer revoked)";
+    match (owner_grants, grant) {
+        (Some((docs, per)), Some((token, grant))) => {
+            // Budgeted on a forked host, as the compromise completion with
+            // the thief's grant documents is ([`worst_compromise`]).
+            let what = format!("{what}; {docs} grant documents of {}", grants_of(per));
+            assert!(w.fork_complete(&label(shape, &what), &a, &target));
+            assert!(w.try_complete(&a, &target));
+            report_unbudgeted(&format!("long-lived host: {what}"), &w.env);
+            assert_eq!(w.account(&a).grant_generation(), 1);
+            if let Some((i, id)) = grant {
+                assert!(!w.spend_id(&a, &gkey(i), &token, 1, id), "a wiped grant");
+            }
+        }
+        _ => {
+            assert!(w.try_complete(&a, &target));
+            report(&label(shape, what), &w.env);
+        }
+    }
     assert!(w.all_revoked(&a, &keys));
     assert!(w.ctl().nullifier_spent(&a.address, &evidence.nullifier));
     assert!(w
@@ -2179,18 +2213,7 @@ fn worst_compromise(w: &World, shape: Shape, bytes: usize, seed: u8, variant: Th
         &w.env,
     );
     let (docs, per) = THIEF_GRANTS.with(Cell::get);
-    let mut thief_grant = None;
-    for s in 0..docs {
-        let first = 2000 + s as usize * per;
-        let grants: std::vec::Vec<(usize, u32)> =
-            (first..first + per).map(|i| (i, 1_000)).collect();
-        assert!(w.try_apply_grant(&a, &thief[0], s, &grant_doc(w, &token, &grants)));
-        report(
-            &format!("thief apply_grant {s} ({per} grants, long-lived host)"),
-            &w.env,
-        );
-        thief_grant = Some((first, w.grant_rule_id(&a, s, &format!("g{first:03}"))));
-    }
+    let thief_grant = install_grants(w, &a, &thief[0], &token, docs, per, 2000, "thief");
     if let Some((i, id)) = thief_grant {
         assert!(
             w.spend_id(&a, &gkey(i), &token, 1, id),
@@ -2234,7 +2257,8 @@ fn worst_compromise(w: &World, shape: Shape, bytes: usize, seed: u8, variant: Th
         });
     }
     let what = format!(
-        "completion apply_doc (compromise, Combined, ZK rotation, both key sets revoked; {how}; {docs} thief grant documents of {per})"
+        "completion apply_doc (compromise, Combined, ZK rotation, both key sets revoked; {how}; {docs} thief grant documents of {})",
+        grants_of(per)
     );
     // Budgeted on a forked host, which holds only what the transaction
     // touches. The long-lived host also holds every entry earlier calls
@@ -2268,7 +2292,7 @@ fn worst_compromise(w: &World, shape: Shape, bytes: usize, seed: u8, variant: Th
     if docs > 0 {
         w.account(&a).gc_grant(&0);
         report(
-            &format!("gc_grant of a wiped grant document ({per} grants)"),
+            &format!("gc_grant of a wiped grant document ({})", grants_of(per)),
             &w.env,
         );
     }
@@ -2281,6 +2305,68 @@ fn worst_compromise(w: &World, shape: Shape, bytes: usize, seed: u8, variant: Th
     let regrant = w.grant_rule_id(&a, 500, "g901");
     assert!(w.spend_id(&a, &gkey(901), &token, 1, regrant));
     assert!(!w.spend_id(&a, &gkey(900), &token, 1, owner_grant));
+}
+
+/// What [`install_grants`] puts in each grant document.
+fn grants_of(per: usize) -> String {
+    if per == 0 {
+        "the grant caps' costliest".to_string()
+    } else {
+        format!("{per} own-key grants")
+    }
+}
+
+/// Grant documents under grants `0..docs`, applied by `key` through `admin`
+/// to fresh session keys from [`gkey`] `first` on, each of `per` own-key
+/// capped grants or, with `per` 0, the costliest dense grant document the
+/// grant caps admit (1-of-15 rules, [`GrantShape::at_caps`]). Each
+/// `apply_grant` is reported on the long-lived host as `who`'s. Returns a
+/// session key's [`gkey`] index and the rule it may transfer through, from
+/// the last one.
+#[allow(clippy::too_many_arguments)]
+fn install_grants(
+    w: &World,
+    a: &Acct,
+    key: &SoftPasskey,
+    token: &Address,
+    docs: u32,
+    per: usize,
+    first: usize,
+    who: &str,
+) -> Option<(usize, u32)> {
+    let mut last = None;
+    for s in 0..docs {
+        if per == 0 {
+            let shape = GrantShape::at_caps(w, 1);
+            let start = first + s as usize * shape.signers;
+            let (doc, _) = w.grant_shaped(token, &gkeys(start, shape.signers), shape, "a", false);
+            assert!(w.try_apply_grant(a, key, s, &doc));
+            report(
+                &format!(
+                    "{who} apply_grant {s} ({}, long-lived host)",
+                    grants_of(per)
+                ),
+                &w.env,
+            );
+            let k = shape.rules - 1;
+            let id = w.shaped_rule_id(a, s, &shape.rule_name("a", k));
+            last = Some((start + shape.named(k)[0], id));
+        } else {
+            let start = first + s as usize * per;
+            let grants: std::vec::Vec<(usize, u32)> =
+                (start..start + per).map(|i| (i, 1_000)).collect();
+            assert!(w.try_apply_grant(a, key, s, &grant_doc(w, token, &grants)));
+            report(
+                &format!(
+                    "{who} apply_grant {s} ({}, long-lived host)",
+                    grants_of(per)
+                ),
+                &w.env,
+            );
+            last = Some((start, w.grant_rule_id(a, s, &format!("g{start:03}"))));
+        }
+    }
+    last
 }
 
 /// A `Protected` `Combined` reconfiguration of a `shape` document: the
@@ -3532,7 +3618,10 @@ fn docsplit_many_grants() {
 /// and the account document's shape: [`worst_compromise`] over each
 /// `signers,both,interp,plain,fan,bytes,thief,docs,per` of
 /// `PERCH_SPLIT_RECOVERY` (`;`-separated; thief 0 keeps every name, 1
-/// renames every rule, 2 reprograms every rule), with `PERCH_SPLIT_FILLER`
+/// renames every rule, 2 reprograms every rule, and 3 is no thief but the
+/// lost-key completion, [`worst_lost_key`], over `docs` grant documents the
+/// account held; `per` 0 makes each grant document the costliest the grant
+/// caps admit), with `PERCH_SPLIT_FILLER`
 /// unrelated entries written before the completion as the host-growth
 /// control. Unbudgeted: a sizing tool (`budgets.md`, "Grant documents").
 #[test]
@@ -3556,37 +3645,51 @@ fn docsplit_compromise_completion() {
             fan: v[4],
             tag: "",
         };
+        let w = world();
+        w.env.cost_estimate().disable_resource_limits();
+        if v[6] == 3 {
+            OWNER_GRANTS.with(|t| t.set(Some((v[7] as u32, v[8]))));
+            worst_lost_key(&w, shape, v[5], 140 + 7 * n as u8);
+            OWNER_GRANTS.with(|t| t.set(None));
+            continue;
+        }
         let thief = match v[6] {
             0 => Thief::KeepNames,
             1 => Thief::Rename,
             _ => Thief::Reprogram,
         };
         THIEF_GRANTS.with(|t| t.set((v[7] as u32, v[8])));
-        let w = world();
-        w.env.cost_estimate().disable_resource_limits();
         worst_compromise(&w, shape, v[5], 140 + 7 * n as u8, thief);
     }
 }
 
 impl World {
-    /// `fn_name(args)` on `contract`, authorized by the entry `entry` builds
-    /// on the fork, run on a fresh host forked from this ledger: its
-    /// storage holds only what the transaction touches, as a network
-    /// transaction's does, so entries earlier calls wrote on the long-lived
-    /// host do not inflate it. Changes nothing on this host. Reports `label`.
+    /// `fn_name(args)` on `contract`, authorized by the entries `entry`
+    /// builds on the fork (none for a permissionless call), run on a fresh
+    /// host forked from this ledger: its storage holds only what the
+    /// transaction touches, as a network transaction's does, so entries
+    /// earlier calls wrote on the long-lived host do not inflate it. Changes
+    /// nothing on this host. Reports `label`.
     fn forked(
         &self,
         label: &str,
         contract: &Address,
         fn_name: &str,
         args: std::vec::Vec<ScVal>,
-        entry: impl FnOnce(&Env, SorobanAuthorizedInvocation) -> SorobanAuthorizationEntry,
+        entry: impl FnOnce(
+            &Env,
+            SorobanAuthorizedInvocation,
+        ) -> std::vec::Vec<SorobanAuthorizationEntry>,
     ) -> bool {
         let mut e2 = Env::from_ledger_snapshot(self.env.to_ledger_snapshot());
         e2.set_config(EnvTestConfig {
             capture_snapshot_at_drop: false,
         });
         e2.cost_estimate().budget().reset_unlimited();
+        if UNBUDGETED.with(Cell::get) {
+            // A sizing tool reports a row past a limit rather than failing it.
+            e2.cost_estimate().disable_resource_limits();
+        }
         let target = Address::from_str(&e2, &strkey(contract));
         let root = SorobanAuthorizedInvocation {
             function: SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
@@ -3596,8 +3699,8 @@ impl World {
             }),
             sub_invocations: VecM::default(),
         };
-        let entry = entry(&e2, root);
-        e2.set_auths(&[entry]);
+        let entries = entry(&e2, root.clone());
+        e2.set_auths(&entries);
         let mut vals: Vec<Val> = Vec::new(&e2);
         for a in &args {
             vals.push_back(Val::try_from_val(&e2, a).unwrap());
@@ -3612,10 +3715,101 @@ impl World {
         );
         if ok {
             report(&format!("fork: {label}"), &e2);
+            if SIZES.with(Cell::get) {
+                self.report_sizes(&format!("fork: {label}"), contract, &root, &entries, &e2);
+            }
         } else {
             println!("\n{{\"fork_failed\":\"{label}\"}}");
         }
         ok
+    }
+
+    /// The two sizes [`report`] does not meter, for the row `label` just
+    /// reported on the fork `e2`: the largest contract-data entry `contract`
+    /// holds after the call, against `max_contract_data_entry_size_bytes`,
+    /// and the transaction's size, against `tx_max_size_bytes`: the call and
+    /// its authorization entries (`InvokeHostFunctionOp`, which carries a
+    /// document argument twice, in the call and in the signed invocation),
+    /// the footprint's keys as an RPC-style simulation of it records them,
+    /// and 300 bytes for the envelope, the resources and one signature. A
+    /// budgeted run asserts each within 75%.
+    fn report_sizes(
+        &self,
+        label: &str,
+        contract: &Address,
+        root: &SorobanAuthorizedInvocation,
+        entries: &[SorobanAuthorizationEntry],
+        e2: &Env,
+    ) {
+        use soroban_env_host::{budget::Budget, e2e_invoke, storage::SnapshotSource};
+        use soroban_sdk::xdr::{
+            InvokeHostFunctionOp, LedgerEntryData, LedgerKey, Limits, ScAddress, WriteXdr,
+        };
+        let me: ScAddress = Address::from_str(e2, &strkey(contract)).into();
+        let max_entry = e2
+            .to_ledger_snapshot()
+            .ledger_entries
+            .iter()
+            .filter_map(|(key, (entry, _))| match (&**key, &entry.data) {
+                (LedgerKey::ContractData(k), LedgerEntryData::ContractData(_))
+                    if k.contract == me =>
+                {
+                    Some(entry.to_xdr(Limits::none()).unwrap().len())
+                }
+                _ => None,
+            })
+            .max()
+            .unwrap_or(0);
+        let SorobanAuthorizedFunction::ContractFn(call) = &root.function else {
+            unreachable!("a contract call")
+        };
+        let function = HostFunction::InvokeContract(call.clone());
+        let budget = Budget::default();
+        budget.reset_unlimited().unwrap();
+        let snapshot: std::rc::Rc<dyn SnapshotSource> =
+            std::rc::Rc::new(self.env.to_ledger_snapshot());
+        let out = e2e_invoke::invoke_host_function_in_recording_mode(
+            &budget,
+            false,
+            &function,
+            &AccountId(PublicKey::PublicKeyTypeEd25519(Uint256([7; 32]))),
+            e2e_invoke::RecordingInvocationAuthMode::Enforcing(entries.to_vec()),
+            self.env.ledger().get(),
+            snapshot,
+            [0; 32],
+            &mut std::vec::Vec::new(),
+        )
+        .expect("the simulation runs");
+        assert!(out.invoke_result.is_ok(), "{label}: the simulation fails");
+        let footprint = out.resources.footprint;
+        let keys: usize = footprint
+            .read_only
+            .iter()
+            .chain(footprint.read_write.iter())
+            .map(|k| k.to_xdr(Limits::none()).unwrap().len())
+            .sum();
+        let op = InvokeHostFunctionOp {
+            host_function: function,
+            auth: entries.to_vec().try_into().unwrap(),
+        }
+        .to_xdr(Limits::none())
+        .unwrap()
+        .len();
+        let tx = op + keys + 300;
+        println!(
+            "\n{{\"sizes_of\":\"{label}\",\"max_entry_bytes\":{max_entry},\"tx_bytes\":{tx},\"op_bytes\":{op},\"footprint_key_bytes\":{keys}}}"
+        );
+        if UNBUDGETED.with(Cell::get) {
+            return;
+        }
+        assert!(
+            max_entry as u64 * 100 <= TX_MAX_ENTRY_BYTES * BUDGET_PCT,
+            "{label}: largest entry over budget"
+        );
+        assert!(
+            tx as u64 * 100 <= TX_MAX_SIZE_BYTES * BUDGET_PCT,
+            "{label}: transaction size over budget"
+        );
     }
 
     /// [`World::forked`], authorized by `key` through `rule_id` of `account`.
@@ -3631,7 +3825,7 @@ impl World {
         args: std::vec::Vec<ScVal>,
     ) -> bool {
         self.forked(label, contract, fn_name, args, |e2, root| {
-            auth_entry(
+            std::vec![auth_entry(
                 e2,
                 &Address::from_str(e2, &strkey(account)),
                 &Address::from_str(e2, &strkey(&self.webauthn)),
@@ -3640,7 +3834,7 @@ impl World {
                 self.next_nonce(),
                 e2.ledger().sequence() + 1_000_000,
                 root,
-            )
+            )]
         })
     }
 
@@ -3653,7 +3847,7 @@ impl World {
             if let SorobanCredentials::Address(c) = &mut entry.credentials {
                 c.signature_expiration_ledger = e2.ledger().sequence() + 1_000_000;
             }
-            entry
+            std::vec![entry]
         })
     }
 
@@ -4010,6 +4204,473 @@ fn docsplit_spending_history() {
             1,
             id
         ));
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Grant-document caps: every grant flow at the grant caps (`budgets.md`,
+// "Grant-document caps")
+// ---------------------------------------------------------------------------
+
+/// A grant document's shape: `signers` session passkeys and `rules` rules,
+/// each naming `fan` of the signers (1-of-`fan`, wrapping, so every signer
+/// is some rule's), padded to `bytes` canonical bytes (0: unpadded).
+#[derive(Clone, Copy, Debug)]
+struct GrantShape {
+    signers: usize,
+    rules: usize,
+    fan: usize,
+    bytes: usize,
+    /// 0: every rule a capped `transfer` from the account. 1: every rule a
+    /// bare grant, with the shortest signer ids and rule names: the most
+    /// signer references, each a passkey the account's record of the grant
+    /// document holds, per document byte. 2: as 1, every rule asking all of
+    /// its signers (`all`, shorter than a `threshold`).
+    dense: u8,
+}
+
+impl GrantShape {
+    /// The costliest grant documents the grant caps admit, `dense` or
+    /// capped: every signer a passkey, every rule naming as many signers as
+    /// a rule may (OZ's 15), as many rules as fit the byte cap, padded to it.
+    fn at_caps(w: &World, dense: u8) -> GrantShape {
+        let signers = MAX_GRANT_SIGNERS as usize;
+        let mut shape = GrantShape {
+            signers,
+            rules: MAX_GRANT_RULES as usize,
+            fan: signers.min(MAX_SIGNERS as usize),
+            bytes: 0,
+            dense,
+        };
+        let keys = gkeys(0, signers);
+        while canonical_len(&w.grant_json(&w.target, &keys, shape, "a", false, 0, 0))
+            > MAX_GRANT_CANONICAL_BYTES as usize
+        {
+            shape.rules -= 1;
+        }
+        GrantShape {
+            bytes: MAX_GRANT_CANONICAL_BYTES as usize,
+            ..shape
+        }
+    }
+
+    fn label(&self, what: &str, bytes: usize) -> String {
+        format!(
+            "grant: {what} [{} signers, {} rules, {} per rule, {bytes} bytes{}]",
+            self.signers,
+            self.rules,
+            self.fan,
+            ["", ", dense", ", dense all"][self.dense as usize]
+        )
+    }
+
+    /// Signer `i`'s id: `a`, ..., `z`, `ba`, ... when dense.
+    fn id(&self, i: usize) -> String {
+        if self.dense == 0 {
+            return format!("k{i:02}");
+        }
+        let letter = |n: usize| char::from(b'a' + n as u8);
+        if i < 26 {
+            letter(i).to_string()
+        } else {
+            format!("{}{}", letter(i / 26), letter(i % 26))
+        }
+    }
+
+    /// Rule `k`'s name before padding.
+    fn rule_name(&self, tag: &str, k: usize) -> String {
+        if self.dense > 0 {
+            format!("{tag}{k}")
+        } else {
+            format!("{tag}g{k:02}")
+        }
+    }
+
+    /// The signers rule `k` names, in the order it names them: the `fan`
+    /// from `k * fan` on, wrapping, by id.
+    fn named(&self, k: usize) -> std::vec::Vec<usize> {
+        let mut named: std::vec::Vec<usize> = (0..self.fan)
+            .map(|i| (k * self.fan + i) % self.signers)
+            .collect();
+        named.sort_by_key(|&i| self.id(i));
+        named.dedup();
+        named
+    }
+
+    /// The signers in the order the rules first name them, which normal
+    /// form declares them in.
+    fn declared(&self) -> std::vec::Vec<usize> {
+        let mut order = std::vec![];
+        for k in 0..self.rules {
+            for i in self.named(k) {
+                if !order.contains(&i) {
+                    order.push(i);
+                }
+            }
+        }
+        assert_eq!(
+            order.len(),
+            self.signers,
+            "{self:?} leaves a signer unnamed"
+        );
+        order
+    }
+}
+
+/// `n` session passkeys, from [`gkey`] `first` on.
+fn gkeys(first: usize, n: usize) -> std::vec::Vec<SoftPasskey> {
+    (first..first + n).map(gkey).collect()
+}
+
+impl World {
+    /// The grant document of `shape` over `keys`, one per signer: rule `k`
+    /// lets 1-of-its-named-signers ([`GrantShape::named`]; `all` when it
+    /// names one) call `token`. A capped rule may transfer from the account
+    /// (`is-self` on argument 0) within a cap, and `edit` changes every cap's
+    /// limit and period; a dense rule may call anything, and `edit` asks two
+    /// of its signers where it names three or more. Either edit keeps the
+    /// length. `values` strings in a `string-in` on argument 1 of rule 0 and
+    /// `pad` bytes over the rule names grow it. Normal form, as `apply_grant`
+    /// requires.
+    #[allow(clippy::too_many_arguments)]
+    fn grant_json(
+        &self,
+        token: &Address,
+        keys: &[SoftPasskey],
+        shape: GrantShape,
+        tag: &str,
+        edit: bool,
+        values: usize,
+        pad: usize,
+    ) -> String {
+        let signers: std::vec::Vec<String> = shape
+            .declared()
+            .into_iter()
+            .map(|i| passkey_decl(self, &shape.id(i), &keys[i]))
+            .collect();
+        let mut pad = pad;
+        let mut rules = std::vec![];
+        for k in 0..shape.rules {
+            let named = shape.named(k);
+            let quoted: std::vec::Vec<String> = named
+                .iter()
+                .map(|&i| format!(r#""{}""#, shape.id(i)))
+                .collect();
+            let m = if edit && named.len() >= 3 { 2 } else { 1 };
+            let principals = if named.len() == 1 || shape.dense == 2 {
+                format!(r#"{{"type":"all","signers":[{}]}}"#, quoted.join(","))
+            } else {
+                format!(
+                    r#"{{"type":"threshold","m":{m},"signers":[{}]}}"#,
+                    quoted.join(",")
+                )
+            };
+            let base = shape.rule_name(tag, k);
+            let grow = pad.min(MAX_NAME_SIZE as usize - base.len());
+            pad -= grow;
+            let name = format!("{base}{}", "x".repeat(grow));
+            let mut args = std::vec![];
+            if shape.dense == 0 {
+                args.push(r#"{"index":0,"pred":{"type":"is-self"}}"#.to_string());
+            }
+            if k == 0 && values > 0 {
+                let values: std::vec::Vec<String> =
+                    (0..values).map(|v| format!(r#""v{v:05}""#)).collect();
+                args.push(format!(
+                    r#"{{"index":1,"pred":{{"type":"string-in","values":[{}]}}}}"#,
+                    values.join(",")
+                ));
+            }
+            let mut rule = format!(
+                r#"{{"name":"{name}","scope":{{"type":"contract","address":"{}"}},"principals":{principals}"#,
+                strkey(token)
+            );
+            if !args.is_empty() {
+                rule.push_str(&format!(
+                    r#","functions":["transfer"],"args":[{}]"#,
+                    args.join(",")
+                ));
+            }
+            if shape.dense == 0 {
+                let (limit, period) = if edit {
+                    ("1001", "1001")
+                } else {
+                    ("1000", "1000")
+                };
+                rule.push_str(&format!(
+                    r#","cap":{{"limit":"{limit}","period-ledgers":{period}}}"#
+                ));
+            }
+            rule.push('}');
+            rules.push(rule);
+        }
+        assert_eq!(pad, 0, "the rule names cannot absorb the padding");
+        format!(
+            r#"{{"version":1,"network":"{FIXTURE_NETWORK}","signers":[{}],"rules":[{}]}}"#,
+            signers.join(","),
+            rules.join(",")
+        )
+    }
+
+    /// [`World::grant_json`] padded to exactly `shape.bytes` canonical bytes
+    /// (unpadded at 0): first a `string-in` with as many strings as fit,
+    /// then the rule names. Returns the document and its canonical length.
+    fn grant_shaped(
+        &self,
+        token: &Address,
+        keys: &[SoftPasskey],
+        shape: GrantShape,
+        tag: &str,
+        edit: bool,
+    ) -> (Bytes, usize) {
+        let len = |values: usize, pad: usize| {
+            canonical_len(&self.grant_json(token, keys, shape, tag, edit, values, pad))
+        };
+        let (values, pad) = if shape.bytes == 0 {
+            (0, 0)
+        } else {
+            assert!(len(0, 0) <= shape.bytes, "{shape:?} does not fit its bytes");
+            let room: usize = (0..shape.rules)
+                .map(|k| MAX_NAME_SIZE as usize - shape.rule_name(tag, k).len())
+                .sum();
+            let values = if len(0, 0) + room < shape.bytes {
+                // Each value adds at least eight bytes.
+                let (mut lo, mut hi) = (0usize, shape.bytes / 8 + 1);
+                while lo < hi {
+                    let mid = (lo + hi).div_ceil(2);
+                    if len(mid, 0) <= shape.bytes {
+                        lo = mid;
+                    } else {
+                        hi = mid - 1;
+                    }
+                }
+                lo
+            } else {
+                0
+            };
+            (values, (shape.bytes - len(values, 0)).min(room))
+        };
+        let size = len(values, pad);
+        if shape.bytes > 0 {
+            assert_eq!(
+                size, shape.bytes,
+                "{shape:?}: the padding cannot reach its bytes"
+            );
+        }
+        let json = self.grant_json(token, keys, shape, tag, edit, values, pad);
+        (Bytes::from_slice(&self.env, json.as_bytes()), size)
+    }
+
+    /// The id of the rule named `base`, padded or not, in the grant
+    /// document under `grant`.
+    fn shaped_rule_id(&self, a: &Acct, grant: u32, base: &str) -> u32 {
+        self.account(a)
+            .grant(&grant)
+            .expect("grant exists")
+            .rules
+            .iter()
+            .find(|r| {
+                let mut buf = [0u8; 32];
+                let n = r.name.len() as usize;
+                r.name.copy_into_slice(&mut buf[..n]);
+                let name = std::str::from_utf8(&buf[..n]).unwrap();
+                name.strip_prefix(base)
+                    .is_some_and(|rest| rest.bytes().all(|b| b == b'x'))
+            })
+            .expect("rule exists")
+            .id
+    }
+
+    fn fork_gc_grant(&self, label: &str, a: &Acct, grant: u32) -> bool {
+        self.forked(
+            label,
+            &a.address,
+            "gc_grant",
+            std::vec![self.sc(grant)],
+            |_, _| std::vec![],
+        )
+    }
+}
+
+/// Every grant flow over a grant document of `shape`, each one transaction
+/// on a host forked from the ledger (`World::forked`): `apply_grant`
+/// adding every rule, a transfer through the last rule, every rule edited
+/// in place, every rule replaced (renamed and rekeyed), `remove_grant`,
+/// then, after a lost-key recovery wipes the grant document, `gc_grant` of
+/// it and a re-grant over it. A capped document's rules have each spent
+/// through their cap before the edits, so each holds a spending record to
+/// drop (all but rule 0, whose `string-in` padding no transfer meets).
+fn grant_flows(w: &World, shape: GrantShape, seed: u8) {
+    let owner = canonical_passkey([seed; 32]);
+    let a = w.new_account(canonical_passkey([seed; 32]));
+    assert!(split_stack(w, &a), "needs a stack with grant documents");
+    let token = w.funded_token(&a);
+    let rec = Rec {
+        profile: "loss",
+        mode: Mode::Guardian,
+        zk: None,
+        delay: DELAY,
+        baseline: None,
+    };
+    assert!(w.try_apply(&a, &owner, &w.doc(&owner, Some(&rec)), 0));
+
+    let first = 1000 * (seed as usize % 16);
+    let keys = gkeys(first, shape.signers);
+    let (doc, bytes) = w.grant_shaped(&token, &keys, shape, "a", false);
+    let label = |what: &str| shape.label(what, bytes);
+    assert!(w.fork_apply_grant(&label("apply_grant, every rule added"), &a, &owner, 0, &doc));
+    assert!(
+        w.try_apply_grant(&a, &owner, 0, &doc),
+        "apply_grant of {shape:?}"
+    );
+    let spender = |k: usize| &keys[shape.named(k)[0]];
+    if shape.dense == 0 {
+        for k in 1..shape.rules {
+            let id = w.shaped_rule_id(&a, 0, &shape.rule_name("a", k));
+            assert!(
+                w.spend_id(&a, spender(k), &token, 5, id),
+                "a transfer through rule {k}"
+            );
+        }
+    }
+    let last = shape.rules - 1;
+    let id = w.shaped_rule_id(&a, 0, &shape.rule_name("a", last));
+    // One key signs: an `all` rule of more signers needs every one.
+    let one_signs = shape.dense < 2 || shape.named(last).len() == 1;
+    if one_signs {
+        assert!(w.fork_spend(
+            &label("transfer through the last rule"),
+            &a,
+            spender(last),
+            &token,
+            5,
+            id
+        ));
+    }
+    // An `all` rule has no same-length edit.
+    if shape.dense < 2 {
+        let (edited, _) = w.grant_shaped(&token, &keys, shape, "a", true);
+        assert!(w.fork_apply_grant(
+            &label("apply_grant, every rule edited (names kept)"),
+            &a,
+            &owner,
+            0,
+            &edited
+        ));
+    }
+    let (replaced, _) = w.grant_shaped(
+        &token,
+        &gkeys(first + 200, shape.signers),
+        shape,
+        "b",
+        false,
+    );
+    assert!(w.fork_apply_grant(
+        &label("apply_grant, every rule replaced (renamed, rekeyed)"),
+        &a,
+        &owner,
+        0,
+        &replaced
+    ));
+    assert!(w.fork_remove_grant(&label("remove_grant"), &a, &owner, 0));
+
+    // A lost-key recovery wipes the grant document.
+    let new_owner = canonical_passkey([seed.wrapping_add(1); 32]);
+    let replacements = w.replacements(&new_owner, None);
+    let attempt = w.ctl().begin_lost_key(&a.address, &replacements);
+    w.guardian(1, &a, attempt, EvidenceDomain::Initiate);
+    w.guardian(2, &a, attempt, EvidenceDomain::Initiate);
+    w.advance(DELAY);
+    assert!(w.try_complete(&a, &w.target_bytes(&a, &replacements)));
+    assert_eq!(w.account(&a).grant_generation(), 1);
+    if one_signs {
+        assert!(
+            !w.spend_id(&a, spender(last), &token, 1, id),
+            "a wiped grant"
+        );
+    }
+    assert!(w.fork_gc_grant(&label("gc_grant of the wiped grant document"), &a, 0));
+    let (regrant, _) = w.grant_shaped(
+        &token,
+        &gkeys(first + 400, shape.signers),
+        shape,
+        "c",
+        false,
+    );
+    assert!(w.fork_apply_grant(
+        &label("apply_grant over the wiped grant document (every rule replaced, fresh keys)"),
+        &a,
+        &new_owner,
+        0,
+        &regrant
+    ));
+}
+
+/// The grant flows at the compiled-in grant caps, over the costliest capped
+/// and dense grant documents they admit, each row within 75% of every
+/// metered limit, the largest entry and the transaction's size included.
+#[test]
+#[ignore = "needs the built stack"]
+fn worst_case_grant_flows_at_the_grant_caps() {
+    SIZES.with(|s| s.set(true));
+    for (dense, seed) in [(0, 60), (1, 70), (2, 80)] {
+        let w = world();
+        w.env.cost_estimate().disable_resource_limits();
+        grant_flows(&w, GrantShape::at_caps(&w, dense), seed);
+    }
+    SIZES.with(|s| s.set(false));
+}
+
+/// Size the grant caps: [`grant_flows`] over each
+/// `signers,rules,fan,bytes[,dense]` of `PERCH_GRANT_SWEEP` (`;`-separated;
+/// bytes 0 leaves the document unpadded, dense 1 makes it dense),
+/// unbudgeted. `scripts/cap-sweep.py --grants` runs and tabulates it. The
+/// stack's compiler must admit the shapes: to measure past the grant caps,
+/// build a stack with them raised.
+#[test]
+#[ignore = "sizing tool: PERCH_GRANT_SWEEP=..."]
+fn grant_cap_sweep() {
+    let spec = std::env::var("PERCH_GRANT_SWEEP").unwrap_or_default();
+    UNBUDGETED.with(|u| u.set(true));
+    SIZES.with(|s| s.set(true));
+    for (n, item) in spec.split(';').filter(|s| !s.is_empty()).enumerate() {
+        let v: std::vec::Vec<usize> = item.split(',').map(|x| x.trim().parse().unwrap()).collect();
+        let shape = GrantShape {
+            signers: v[0],
+            rules: v[1],
+            fan: v[2].min(v[0]),
+            bytes: v[3],
+            dense: v.get(4).copied().unwrap_or(0) as u8,
+        };
+        let w = world();
+        w.env.cost_estimate().disable_resource_limits();
+        let own = canonical_len(&w.grant_json(
+            &w.target,
+            &gkeys(0, shape.signers),
+            shape,
+            "a",
+            false,
+            0,
+            0,
+        ));
+        let skip = |why: &str| {
+            println!(
+                "\n{{\"case\":\"skipped\",\"signers\":{},\"rules\":{},\"bytes\":{},\"why\":\"{why} ({own} bytes unpadded)\"}}",
+                shape.signers, shape.rules, shape.bytes
+            )
+        };
+        if shape.signers > MAX_GRANT_SIGNERS as usize
+            || shape.rules > MAX_GRANT_RULES as usize
+            || shape.bytes.max(own) > MAX_GRANT_CANONICAL_BYTES as usize
+        {
+            skip("past this build's grant caps");
+            continue;
+        }
+        if shape.bytes > 0 && own > shape.bytes {
+            skip("does not fit the byte target");
+            continue;
+        }
+        grant_flows(&w, shape, 60 + (n % 16) as u8);
     }
 }
 

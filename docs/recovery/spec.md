@@ -1040,6 +1040,17 @@ Two rules bound that cost:
   amount of prior rule churn. Larger caps are not supported at this
   revision
   ([`DEFERRED.md`](../DEFERRED.md#versioned-policy-backend-and-larger-limits)).
+  These are an **account document's** caps: one with a self-admin rule or a
+  recovery member (`perch_ir::is_account_document`), which every document
+  `apply_doc` applies, every published baseline, and every recovery target
+  is. A **grant document** (§7.6), which no completion compiles or
+  installs, has its own: `MAX_GRANT_SIGNERS` = 15 declared signers (the
+  account's per-rule signer limit, OZ's), `MAX_GRANT_RULES` = 18 rules, and
+  `MAX_GRANT_CANONICAL_BYTES` = 8 192 canonical bytes, with the same
+  rule-name cap. The compiler's `grant_limits` view returns them. They are
+  sized so that every grant flow fits the transaction budget, the ledger's
+  per-entry limit included (`budgets.md`, "Grant-document caps"; the
+  `worst_case_grant_flows_at_the_grant_caps` test holds them in CI).
 - **Bounded revocation writes.** The revoked set is one persistent entry per
   fingerprint, so a completion writes at most one entry per removed
   credential, a number the caps bound.
@@ -1053,7 +1064,7 @@ Two rules bound that cost:
 Besides its applied document, the **account document**, an account holds any
 number of **grant documents**, each under a `u32` grant id its owner
 chooses (one per app grant, say). A grant document is a policy document in
-the same format, compiled by the account's doc compiler under the same caps
+the same format, compiled by the account's doc compiler under its own caps
 (§7.5). It holds rules scoped to other contracts only: app grants and
 session keys. The account document keeps the account's own rules, the
 recovery member, and everything a recovery restores; everything this spec
