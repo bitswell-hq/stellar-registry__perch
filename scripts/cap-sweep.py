@@ -122,6 +122,11 @@ GRANT_SHAPE = re.compile(r"\[(\d+) signers, (\d+) rules, (\d+) per rule, (\d+) b
 GRANT_DENSE = ["", ", dense", ", dense all", ", dense all, quorum rules"]
 
 
+def print_skipped(skipped: list) -> None:
+    for d in skipped:
+        print(f"- skipped {d['signers']} signers, {d['rules']} rules, {d['bytes']} bytes: {d['why']}")
+
+
 def tabulate_grants(log: str, budget: float) -> None:
     limits = dict(LIMITS, **SIZE_LIMITS)
     names = dict(NAMES, **SIZE_NAMES)
@@ -147,6 +152,10 @@ def tabulate_grants(log: str, budget: float) -> None:
                 share = d[k] * 100 / lim
                 if share > row.get(k, (0.0, ""))[0]:
                     row[k] = (share, flow)
+    if not worst:
+        print("No shape was measured: every one was skipped.")
+        print_skipped(skipped)
+        return
     print("| Shape | Signers | Rules | Per rule | Bytes | " + " | ".join(names[k] for k in limits)
           + " | Binding |")
     print("| --- | --- | --- | --- | --- | " + " | ".join("---" for _ in limits) + " | --- |")
@@ -171,8 +180,7 @@ def tabulate_grants(log: str, budget: float) -> None:
             print(f"- {names[k]}: within {budget:g}% everywhere measured "
                   f"(at most {top[1][k][0]:.1f}%, {top[0][0]} signers, {top[0][1]} rules, "
                   f"{top[0][3]} bytes, {top[1][k][1]})")
-    for d in skipped:
-        print(f"- skipped {d['signers']} signers, {d['rules']} rules, {d['bytes']} bytes: {d['why']}")
+    print_skipped(skipped)
 
 
 def tabulate(log: str, budget: float) -> None:
@@ -195,6 +203,10 @@ def tabulate(log: str, budget: float) -> None:
             share = d[k] * 100 / lim
             if share > row.get(k, (0.0, ""))[0]:
                 row[k] = (share, d["case"].split(" [")[0])
+    if not worst:
+        print("No shape was measured: every one was skipped.")
+        print_skipped(skipped)
+        return
     print("| Signers | Rules | " + " | ".join(NAMES[k] for k in LIMITS) + " | Binding |")
     print("| --- | --- | " + " | ".join("---" for _ in LIMITS) + " | --- |")
     for (s, r), row in sorted(worst.items()):
@@ -215,8 +227,7 @@ def tabulate(log: str, budget: float) -> None:
             top = max(worst.items(), key=lambda kv: kv[1][k][0])
             print(f"- {NAMES[k]}: within {budget:g}% everywhere measured "
                   f"(at most {top[1][k][0]:.1f}%, {top[0][0]} signers, {top[0][1]} rules)")
-    for d in skipped:
-        print(f"- skipped {d['signers']} signers, {d['rules']} rules, {d['bytes']} bytes: {d['why']}")
+    print_skipped(skipped)
 
 
 def main() -> None:
