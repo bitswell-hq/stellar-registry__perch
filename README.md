@@ -69,6 +69,9 @@ crates/
                       (off-chain: the differential suites and legacy accounts)
   perch-rule-eval/    Perch's rules as rule-core's evaluator reads them: host-value
                       conversions, storage mirrors, the anti-brick checks
+  perch-review-core/  off-chain: an account's `__check_auth` verdict and cap budgets
+                      for an authorization entry, from a ledger snapshot, as
+                      import-free wasm; npm/ holds its private TypeScript wrapper
   perch-account-types/  the account's signer, `__check_auth` payload, context rule,
                       and error codes, XDR- and spec-identical to OZ's
   perch-doc-compiler/ deployable, stateless: doc JSON → compiled rules (signers,
@@ -175,9 +178,8 @@ docs/schema.md        the PolicyDoc JSON Schema: generation, drift, release path
                       and the boundary between schema-valid and authorized/canonical
 docs/testnet-deployment.md  the `unverified/perch` testnet registry and author account
                       that deployments before 2026-10-22 resolve their infra in
-docs/index.html       reading hub for the published HTML documentation (GitHub Pages):
-                      docs/perch-paper/, docs/oz-walkthrough/, docs/cedar-walkthrough/,
-                      docs/slides/
+docs/index.html       reading hub for the published HTML documentation (GitHub Pages);
+                      it links each paper, walkthrough, simulation, and slide deck
 testdata/             golden vectors shared by the Rust, TypeScript, and Lean suites
                       (frozen); see testdata/README.md
 testdata/schema/      shared PolicyDoc JSON Schema conformance cases (Rust + perch-js suites)

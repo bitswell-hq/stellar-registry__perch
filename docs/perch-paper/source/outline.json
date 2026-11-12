@@ -47,7 +47,8 @@
    "title_latex": "The Authorization Path",
    "nav": "The decision",
    "figures": [
-    "fig-auth-path"
+    "fig-auth-path",
+    "fig-nested"
    ],
    "aliases": [
     "gate",
