@@ -49,6 +49,10 @@ describe('exact authorization root', () => {
     expect(() => checkDocumentCapabilities(fixture, { ...legacy, interfaceVersion: 3, snapshotVersion: 2 })).not.toThrow();
     expect(() => checkDocumentCapabilities(fixture, { ...legacy, interfaceVersion: 4, snapshotVersion: 3 })).not.toThrow();
     expect(() => checkDocumentCapabilities(fixture, { ...legacy, interfaceVersion: 4, snapshotVersion: 4 })).toThrow('snapshot format 4');
+    for (const snapshotVersion of [Number.NaN, 2.5, 0]) {
+      expect(() => checkDocumentCapabilities(fixture, { ...legacy, interfaceVersion: 4, snapshotVersion }))
+        .toThrow(`snapshot format ${snapshotVersion}`);
+    }
     const old = { ...fixture, rules: fixture.rules.map(({ 'auth-root': _, ...r }) => r) };
     expect(() => checkDocumentCapabilities(old, legacy)).not.toThrow();
   });

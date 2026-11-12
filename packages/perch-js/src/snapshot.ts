@@ -128,7 +128,7 @@ export function checkCapabilities(c: AccountCapabilities): void {
   // Snapshot 3 changes only the stored-rule views (`rule_set`,
   // `grant_rule_set`: tuples naming signers by position in `rule_signers`,
   // `grant_signers`), which `readGrantDoc` reads; `configuration()` is as in 2.
-  if (c.snapshotVersion < 1 || c.snapshotVersion > 3) throw new UnsupportedCapability(`snapshot format ${c.snapshotVersion}`);
+  if (![1, 2, 3].includes(c.snapshotVersion)) throw new UnsupportedCapability(`snapshot format ${c.snapshotVersion}`);
 }
 
 /** Which grant entry points the account exposes, from its `applyModes`:

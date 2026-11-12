@@ -127,6 +127,14 @@ def print_skipped(skipped: list) -> None:
         print(f"- skipped {d['signers']} signers, {d['rules']} rules, {d['bytes']} bytes: {d['why']}")
 
 
+def print_unmeasured(skipped: list) -> None:
+    if not skipped:
+        print("No shape was measured.")
+        return
+    print("No shape was measured: every one was skipped.")
+    print_skipped(skipped)
+
+
 def tabulate_grants(log: str, budget: float) -> None:
     limits = dict(LIMITS, **SIZE_LIMITS)
     names = dict(NAMES, **SIZE_NAMES)
@@ -153,8 +161,7 @@ def tabulate_grants(log: str, budget: float) -> None:
                 if share > row.get(k, (0.0, ""))[0]:
                     row[k] = (share, flow)
     if not worst:
-        print("No shape was measured: every one was skipped.")
-        print_skipped(skipped)
+        print_unmeasured(skipped)
         return
     print("| Shape | Signers | Rules | Per rule | Bytes | " + " | ".join(names[k] for k in limits)
           + " | Binding |")
@@ -204,8 +211,7 @@ def tabulate(log: str, budget: float) -> None:
             if share > row.get(k, (0.0, ""))[0]:
                 row[k] = (share, d["case"].split(" [")[0])
     if not worst:
-        print("No shape was measured: every one was skipped.")
-        print_skipped(skipped)
+        print_unmeasured(skipped)
         return
     print("| Signers | Rules | " + " | ".join(NAMES[k] for k in LIMITS) + " | Binding |")
     print("| --- | --- | " + " | ".join("---" for _ in LIMITS) + " | --- |")
