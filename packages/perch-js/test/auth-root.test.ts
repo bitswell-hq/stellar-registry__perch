@@ -47,21 +47,37 @@ describe('exact authorization root', () => {
     const legacy = { interfaceVersion: 2, snapshotVersion: 1, docIdentity: 'canon_v1', authDigest: 'addr_oz_v1', applyModes: ['one_tx'] };
     expect(() => checkDocumentCapabilities(fixture, legacy)).toThrow();
     expect(() => checkDocumentCapabilities(fixture, { ...legacy, interfaceVersion: 3, snapshotVersion: 2 })).not.toThrow();
+    expect(() => checkDocumentCapabilities(fixture, { ...legacy, interfaceVersion: 4, snapshotVersion: 3 })).not.toThrow();
+    expect(() => checkDocumentCapabilities(fixture, { ...legacy, interfaceVersion: 4, snapshotVersion: 4 })).toThrow('snapshot format 4');
     const old = { ...fixture, rules: fixture.rules.map(({ 'auth-root': _, ...r }) => r) };
     expect(() => checkDocumentCapabilities(old, legacy)).not.toThrow();
   });
 
-  it('refuses snapshot 2 metadata loss before rule selection', async () => {
-    const sim = new SimAccount();
+  /** A simulated account reporting `interfaceVersion` and `snapshotVersion`. */
+  const reporting = (sim: SimAccount, interfaceVersion: number, snapshotVersion: number) => {
     const reader = sim.reader();
     const capabilities = reader.capabilities.bind(reader);
     reader.capabilities = async () => {
       const answer = await capabilities();
-      return { ...answer, value: { ...answer.value, interfaceVersion: 3, snapshotVersion: 2 } };
+      return { ...answer, value: { ...answer.value, interfaceVersion, snapshotVersion } };
     };
-    await expect(readSnapshot(reader)).rejects.toThrow('omits auth-root metadata');
+    return reader;
+  };
+
+  it('refuses metadata loss from snapshot 2 on before rule selection', async () => {
+    for (const [interfaceVersion, snapshotVersion] of [[3, 2], [4, 3]] as const) {
+      const sim = new SimAccount();
+      const reader = reporting(sim, interfaceVersion, snapshotVersion);
+      await expect(readSnapshot(reader)).rejects.toThrow(`snapshot ${snapshotVersion} rule omits auth-root metadata`);
+      sim.rules = sim.rules.map((r) => ({ ...r, authRoot: null }));
+      expect((await readSnapshot(reader)).configuration.rules[0]!.authRoot).toBeNull();
+    }
+  });
+
+  it('refuses a snapshot format past the one this reader knows', async () => {
+    const sim = new SimAccount();
     sim.rules = sim.rules.map((r) => ({ ...r, authRoot: null }));
-    expect((await readSnapshot(reader)).configuration.rules[0]!.authRoot).toBeNull();
+    await expect(readSnapshot(reporting(sim, 5, 4))).rejects.toThrow('snapshot format 4');
   });
 
   it('screens the supplied preorder as one entry and keeps a rule per context', () => {

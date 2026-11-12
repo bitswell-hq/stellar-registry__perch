@@ -126,12 +126,13 @@ included) and every executed upgrade, and never anything else. Unlike
 import { accountReader, readSnapshot } from '@stellar-registry/perch';
 import { account, docCompiler, legacyAccount, legacyDocCompiler } from '@stellar-registry/perch-contracts';
 
-// capabilities() has the same ABI in both builds; choose before decoding rules.
+// capabilities() has the same ABI in every build; choose before decoding rules.
 const probe = new account.Client(opts(accountId));
 const { result: capabilities } = await probe.capabilities();
+// Snapshots 2 and 3 share configuration(); 3 changes only the stored-rule views.
 const bindings = capabilities.snapshot_version === 1
   ? { account: legacyAccount, compiler: legacyDocCompiler }
-  : capabilities.snapshot_version === 2
+  : capabilities.snapshot_version === 2 || capabilities.snapshot_version === 3
     ? { account, compiler: docCompiler }
     : undefined;
 if (!bindings) throw new Error('Unsupported snapshot version');
@@ -336,8 +337,10 @@ winning guess selects just the game rule; a direct transfer fails the transfer
 rule's root condition. An outer router with no account authorization is not
 that entry root. General ancestry and root arguments are outside this feature.
 
-`readSnapshot` accepts legacy snapshot 1 and root-aware snapshot 2; every
-snapshot-2 rule must include root metadata. Applying root-bearing documents
+`readSnapshot` accepts legacy snapshot 1, root-aware snapshot 2, and
+snapshot 3 (the compact stored layout, whose `configuration()` is as in 2);
+every rule of snapshot 2 or later must include root metadata, and any other
+snapshot version is refused. Applying root-bearing documents
 requires interface >=3 and snapshot >=2. Canonical bytes/hashes of documents
 without `auth-root` are unchanged. An existing deployment accepts
 root-bearing documents only after a new build and upgrade. See [root semantics and compatibility](../../docs/auth-root.md).
