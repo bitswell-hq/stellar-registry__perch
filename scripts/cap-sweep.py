@@ -15,10 +15,10 @@ Usage:
 With --grants, each S,R,F,B,D is a grant document of S session passkeys and R
 capped grants, each rule naming F of the signers (default: as many as a rule
 may, 15), padded to B canonical bytes (default 0: unpadded); D 1 makes it
-dense (bare rules and the shortest ids: the most signer references, which
-the account's record of the document stores in full, per byte), and D 2
-dense with `all` principals, shorter still, and D 3 that with its last two
-rules capped transfers asking 8 and all of their signers. Every grant flow
+dense (bare rules and the shortest ids: the most rules and signer
+references per document byte), and D 2 dense with `all` principals, shorter
+still, and D 3 that with its last two rules capped transfers asking 8 and
+all of their signers. Every grant flow
 runs on a forked host: apply_grant adding every rule, a capped transfer,
 every cap changed, every rule replaced, remove_grant, and, after a recovery
 wipes the document, gc_grant and a re-grant over it. Two more columns: the
