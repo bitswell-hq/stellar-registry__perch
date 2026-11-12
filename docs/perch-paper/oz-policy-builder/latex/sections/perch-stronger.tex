@@ -24,7 +24,7 @@ window, and replacing a capped rule starts an empty window.
 in the account: rules, grants, spending records and the grant generation
 (Perch \srcpath{lib.rs:597-636}). The decision comes before authentication, so a
 call refused by the evaluator invokes no verifier and writes nothing. A bad
-signature instead fails during authentication. One \code{apply\_scope} installs a
+signature instead fails during authentication. One \code{apply\_grant} installs a
 grant whose rules span several contracts, and a grant rule may name a passkey or
 Ed25519 key as an external signer, which the interpreter refuses in the rules it
 polices. \emph{Caveat:} one point decides only what the evaluator can express

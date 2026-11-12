@@ -26,7 +26,7 @@
   [
    "Installed grant",
    "The rules and metadata stored under a grant ID, stamped with the grant generation",
-   "`apply_scope`, `scope(id)`",
+   "`apply_grant`, `grant(id)`",
    "—"
   ],
   [
@@ -98,7 +98,7 @@
   [
    "Evaluator",
    "The pure function that decides an authorization and returns the next spending records",
-   "`rule_eval::authorize`",
+   "`rule_eval::check_auth`",
    "The interpreter's `enforce`, per policy"
   ],
   [
@@ -134,7 +134,7 @@
   [
    "Grant generation",
    "A counter on the account, 0 at creation, advanced only by a completed recovery; a grant from an older generation refuses",
-   "`scope_generation`, `StaleScope`",
+   "`grant_generation`, `StaleGrant`",
    "—"
   ],
   [
@@ -170,7 +170,7 @@
   [
    "Collection",
    "Removing a stale grant's rules, tags and spending records; anyone may do it",
-   "`gc_scope`",
+   "`gc_grant`",
    "—"
   ],
   [

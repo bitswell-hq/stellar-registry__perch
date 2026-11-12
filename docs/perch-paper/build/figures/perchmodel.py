@@ -1,7 +1,9 @@
 """The paper's model of a Perch rule set, for the explorables' static figures.
 
-A transcription of rule-core cbabe59 (`crates/rule-eval/src/{rule,cap,authorize,
-attenuate,scoped}.rs`; definitions D2-D6) into plain Python. The page's
+A transcription of rule-core a3c92ba (`crates/rule-eval/src/{rule,cap,authorize,
+attenuate,scoped}.rs`; definitions D2-D6) into plain Python. Its rules carry
+no root constraint (`auth_root`), so `check_auth` here omits rule-core's
+entry-root check, which passes for every such rule. The page's
 figures.js carries the same model in JavaScript (`PerchModel`), and
 build/figures/test_model.mjs checks that both give the verdicts these figures
 print. Nothing here describes the chain: amounts are whole XLM, overflow is not
@@ -96,8 +98,8 @@ def charge(rec, limit, period, now, amount):
             'remaining': remaining, 'total': total}
 
 
-def authorize(rules, records, contexts, choices, auth, now, gen):
-    """rule_eval::authorize: three passes; returns ok + records, or the first refusal."""
+def check_auth(rules, records, contexts, choices, auth, now, gen):
+    """rule_eval::check_auth: three passes; returns ok + records, or the first refusal."""
     if len(choices) != len(contexts):
         return {'ok': False, 'check': 'choices', 'i': None}
     if len(records) != len(rules):
@@ -138,7 +140,7 @@ def authorize(rules, records, contexts, choices, auth, now, gen):
 def accepts(rules, ctx, auth, now, gen=0):
     """Whether some rule, named for the context, accepts it alone from empty records."""
     recs = [empty_record() for _ in rules]
-    return any(authorize(rules, recs, [ctx], [j], auth, now, gen)['ok'] for j in range(len(rules)))
+    return any(check_auth(rules, recs, [ctx], [j], auth, now, gen)['ok'] for j in range(len(rules)))
 
 
 # Attenuation steps (attenuate.rs) and the refusals of tab-attenuation.
@@ -244,7 +246,7 @@ PROBES = [
     ('t5', 'transfer 5 to the shop', transfer(SHOP, 5), ['app']),
     ('else', 'transfer 1 elsewhere', transfer(ELSEWHERE, 1), ['app']),
     ('approve', '`approve` on XLM', {'contract': XLM, 'fn': 'approve', 'args': [ACCOUNT, SHOP, 5, 2000]}, ['app']),
-    ('account', 'a call to the account', {'contract': ACCOUNT, 'fn': 'apply_scope', 'args': ['grant']}, ['app']),
+    ('account', 'a call to the account', {'contract': ACCOUNT, 'fn': 'apply_grant', 'args': ['grant']}, ['app']),
     ('helper', 'a transfer signed by `helper` alone', transfer(SHOP, 1), ['helper']),
 ]
 # The static form: three steps the table allows, then one move it refuses.
@@ -281,7 +283,7 @@ def e3_request(req, named='right'):
     if req in ('within', 'over'):
         return [transfer(SHOP, 4 if req == 'within' else 5)], ([0] if named == 'right' else [2])
     if req == 'account':
-        return [{'contract': ACCOUNT, 'fn': 'apply_scope', 'args': ['grant']}], ([0] if named == 'right' else [1])
+        return [{'contract': ACCOUNT, 'fn': 'apply_grant', 'args': ['grant']}], ([0] if named == 'right' else [1])
     raise ValueError(req)
 
 
@@ -290,7 +292,7 @@ def e3_run(req, signer, grant, named):
     rules, records, gen = e3_grant(grant)
     contexts, choices = e3_request(req, named)
     auth = ['stranger'] if signer == 'unlisted' else ['app']
-    d = authorize(rules, records, contexts, choices, auth, E3_T + 1, gen)
+    d = check_auth(rules, records, contexts, choices, auth, E3_T + 1, gen)
     out = {'decision': d, 'choices': choices, 'rules': rules}
     if not d['ok']:
         return dict(out, stage='decide', verifier=False)

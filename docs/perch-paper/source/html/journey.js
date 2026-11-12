@@ -17,7 +17,7 @@
       cap: { arg: 2, limit, period } };
     const record = { history: [{ ledger: 1000, amount: 6 }], total: 6 };
     const request = { contract: 'XLM', fn: 'transfer', args: ['account', s.to, s.amount] };
-    const model = globalThis.PerchModel.authorize([rule], [record], [request], [0], ['app'], 1001, s.generation);
+    const model = globalThis.PerchModel.checkAuth([rule], [record], [request], [0], ['app'], 1001, s.generation);
     const failed = !model.ok ? (model.check === 'generation' ? 0 : model.check === 'charge' ? 2 : 1)
       : !s.signature ? 3 : null;
     const ok = failed === null;

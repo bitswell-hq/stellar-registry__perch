@@ -57,7 +57,7 @@
   [
    "Decision function",
    "The pure function that decides an authorization and returns the next spending records; it reads no storage and checks no signature",
-   "`rule_eval::authorize`",
+   "`rule_eval::check_auth`",
    "Each attached policy's `enforce`"
   ],
   [

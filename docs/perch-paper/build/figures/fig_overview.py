@@ -21,7 +21,7 @@ def wide():
     # from that verifier, so the geometry shows the same ordering as the prose.
     probe = SVG(FID, 760)
     hg = probe.textbox(442, 0, 302, [('Installed grant', 't'), ('rules and spending records', 'm')], 'tested', size=14)
-    hd = probe.textbox(442, 0, 302, [('Decision function', 't'), ('`rule_eval::authorize` checks the rules and the window', 'x')], 'tested', size=14)
+    hd = probe.textbox(442, 0, 302, [('Decision function', 't'), ('`rule_eval::check_auth` checks the rules and the window', 'x')], 'tested', size=14)
     hs = probe.textbox(442, 0, 302, [('Store after both checks pass', 't'), ('the new window record', 'm')], 'tested', size=14)
     yg = 46
     yd = yg + hg + 18
@@ -30,13 +30,13 @@ def wide():
     s.box(428, 10, 330, bottom - 10, 'key', 8)
     s.text(442, 34, 'Perch account', 't', 15)
     s.textbox(442, yg, 302, [('Installed grant', 't'), ('rules and spending records', 'm')], 'tested', size=14)
-    s.textbox(442, yd, 302, [('Decision function', 't'), ('`rule_eval::authorize` checks the rules and the window', 'x')], 'tested', size=14)
+    s.textbox(442, yd, 302, [('Decision function', 't'), ('`rule_eval::check_auth` checks the rules and the window', 'x')], 'tested', size=14)
     s.textbox(442, ys, 302, [('Store after both checks pass', 't'), ('the new window record', 'm')], 'tested', size=14)
     yv = ys
     hv = s.textbox(214, yv, 190, [('Verifier contract', 't'), ('checks the app\u2019s signature', 'm')], 'tested', size=14)
     # 1 install, 2 sign, 3 ask, 4 verify then store
     arrow_right(s, 174, 438, yg + hg / 2, 'fl', 'perch-ah')
-    label(s, 190, yg + hg / 2 - 28, '1  installs a grant (`apply_scope`)', 230)
+    label(s, 190, yg + hg / 2 - 28, '1  installs a grant (`apply_grant`)', 230)
     arrow_right(s, 174, 210, 226, 'fl', 'perch-ah')
     label(s, 174, 179, '2 signs', 60)
     s.path(f'M404 226H416V{num(yd + hd / 2)}H438', 'fl', marker_end='url(#perch-ah)')
@@ -56,10 +56,10 @@ def narrow():
     s.text(2, 16, 'WHO DOES WHAT', 't tag', 14)
     y = 28
     steps = [
-        ([('Owner', 't'), ('installs a grant (`apply_scope`)', 'x')], 'tested'),
+        ([('Owner', 't'), ('installs a grant (`apply_grant`)', 'x')], 'tested'),
         ([('App or agent', 't'), ('signs its own call', 'x')], 'tested'),
         ([('Soroban host', 't'), ('asks the account (`__check_auth`)', 'x')], 'tested'),
-        ([('Decision function', 't'), ('`rule_eval::authorize` checks the installed grant’s rules and window', 'x')], 'tested'),
+        ([('Decision function', 't'), ('`rule_eval::check_auth` checks the installed grant’s rules and window', 'x')], 'tested'),
         ([('Verifier contract', 't'), ('checks the signature, only after the decision accepts', 'x')], 'tested'),
         ([('Store after both checks pass', 't'), ('the new window record', 'x')], 'tested'),
     ]

@@ -19,7 +19,7 @@
 // same controller.
 //
 // Explorables (E1-E3) and theorem instances compute from PerchModel, a plain transcription
-// of rule-core cbabe59 (definitions D2-D6), and say so with a MODEL chip; what comes from a
+// of rule-core a3c92ba (definitions D2-D6; rules without a root constraint), and say so with a MODEL chip; what comes from a
 // recorded run says RECORDED; the embedded simulation says EXECUTED. A model panel never
 // prints an account error code or describes OpenZeppelin behaviour. The static figure stays
 // the print form. build/figures/test_model.mjs checks PerchModel against the static figures
@@ -77,9 +77,9 @@
     return { ok: true, record: { history: [...h.slice(k).map((e) => ({ ...e })), { ledger: now, amount }], total }, remaining, amount, total, limit };
   }
 
-  // authorize.rs: three passes (D3). Returns the next records, or the first refusal; `trace`
+  // authorize.rs check_auth: three passes (D3). Returns the next records, or the first refusal; `trace`
   // lists every check made, in order.
-  function authorize(rules, records, contexts, choices, auth, now, gen) {
+  function checkAuth(rules, records, contexts, choices, auth, now, gen) {
     const trace = [];
     const no = (check, i, extra = {}) => ({ ok: false, check, i, trace, ...extra });
     if (choices.length !== contexts.length) return no('choices', null);
@@ -120,7 +120,7 @@
   }
   // Whether some rule, named for the context, accepts it alone from empty records.
   const acceptingRule = (rules, ctx, auth, now, gen = 0) =>
-    rules.findIndex((_, j) => authorize(rules, rules.map(emptyRecord), [ctx], [j], auth, now, gen).ok);
+    rules.findIndex((_, j) => checkAuth(rules, rules.map(emptyRecord), [ctx], [j], auth, now, gen).ok);
   const accepts = (...a) => acceptingRule(...a) >= 0;
 
   // attenuate.rs: the ten steps; a refusal names the table's reason.
@@ -209,7 +209,7 @@
       ['t5', 'transfer 5 to the shop', transfer(SHOP, 5), ['app']],
       ['else', 'transfer 1 elsewhere', transfer(ELSEWHERE, 1), ['app']],
       ['approve', '`approve` on XLM', { contract: XLM, fn: 'approve', args: [ACCOUNT, SHOP, 5, 2000] }, ['app']],
-      ['account', 'a call to the account', { contract: ACCOUNT, fn: 'apply_scope', args: ['grant'] }, ['app']],
+      ['account', 'a call to the account', { contract: ACCOUNT, fn: 'apply_grant', args: ['grant'] }, ['app']],
       ['helper', 'a transfer signed by `helper` alone', transfer(SHOP, 1), ['helper']],
     ],
     steps: [['restrict_functions', 0, ['guess'], 'restrict `play` to `guess`'],
@@ -227,19 +227,19 @@
       const now = E1.ledger + k;
       let done = null;
       for (let j = 0; j < child.length && !done; j++) {
-        const d = authorize(child, rec, [ctx], [j], auth, now, 0);
+        const d = checkAuth(child, rec, [ctx], [j], auth, now, 0);
         if (d.ok) { rec = d.records; done = { ctx, auth, now, j, ok: true }; }
       }
       if (!done) {
         const j = acceptingRule(child, ctx, auth, now);
-        const d = authorize(child, rec, [ctx], [j >= 0 ? j : 0], auth, now, 0);
+        const d = checkAuth(child, rec, [ctx], [j >= 0 ? j : 0], auth, now, 0);
         done = { ctx, auth, now, j, ok: false, d };
       }
       childRun.push(done);
     });
     let prec = parent.map(emptyRecord);
     const parentRun = childRun.filter((x) => x.ok).map((x) => {
-      const d = authorize(parent, prec, [x.ctx], [origin[x.j]], x.auth, x.now, 0);
+      const d = checkAuth(parent, prec, [x.ctx], [origin[x.j]], x.auth, x.now, 0);
       if (d.ok) prec = d.records;
       return { ...x, pj: origin[x.j], ok: d.ok };
     });
@@ -263,21 +263,21 @@
       const right = named === 'right';
       if (req === 'guess') return { contexts: [{ contract: GAME, fn: 'guess', args: [ACCOUNT, 7] }, transfer(GAME, 1)], choices: right ? [1, 2] : [0, 2] };
       if (req === 'within' || req === 'over') return { contexts: [transfer(SHOP, req === 'within' ? 4 : 5)], choices: right ? [0] : [2] };
-      if (req === 'account') return { contexts: [{ contract: ACCOUNT, fn: 'apply_scope', args: ['grant'] }], choices: right ? [0] : [1] };
+      if (req === 'account') return { contexts: [{ contract: ACCOUNT, fn: 'apply_grant', args: ['grant'] }], choices: right ? [0] : [1] };
       throw new Error(`unknown request ${req}`);
     },
     run(req, signer, grant, named) {
       const { rules, records, gen } = this.grant(grant);
       const { contexts, choices } = this.request(req, named);
       const auth = signer === 'unlisted' ? ['stranger'] : ['app'];
-      const d = authorize(rules, records, contexts, choices, auth, this.t + 1, gen);
+      const d = checkAuth(rules, records, contexts, choices, auth, this.t + 1, gen);
       const stage = !d.ok ? 'decide' : signer === 'forged' ? 'authenticate' : 'store';
       return { stage, decision: d, verifier: d.ok, rules, contexts, choices, auth, gen };
     },
   };
 
   globalThis.PerchModel = {
-    sat, allows, allowsChecks, charge, authorize, accepts, acceptingRule, attenuate, lowerScoped, inWindow, windowTotal,
+    sat, allows, allowsChecks, charge, checkAuth, accepts, acceptingRule, attenuate, lowerScoped, inWindow, windowTotal,
     emptyRecord, REFUSAL, STEPS, E1, E3, replay, transfer, consts: { ACCOUNT, GAME, XLM, SHOP, ELSEWHERE, PIN_SHOP, PIN_GAME },
   };
 })();
@@ -781,7 +781,7 @@
   function whyRefused(rules, ctx, auth) {
     let best = null;
     rules.forEach((r, j) => {
-      const d = M.authorize(rules, rules.map(M.emptyRecord), [ctx], [j], auth, M.E1.ledger, 0);
+      const d = M.checkAuth(rules, rules.map(M.emptyRecord), [ctx], [j], auth, M.E1.ledger, 0);
       if (!d.ok && (!best || d.trace.length > best.d.trace.length)) best = { d, r };
     });
     if (!best) return 'no rule';
@@ -1448,7 +1448,7 @@
     const draw = (say) => {
       out.replaceChildren(h('p', {}, `Account generation: ${gen}.`), h('ul', {}, grants.map(([name, g]) => {
         const rule = { name, contract: 'XLM', functions: { only: ['transfer'] }, conds: [], signers: ['app'], threshold: 1, cap: null, validUntil: null, generation: g };
-        const d = M.authorize([rule], [M.emptyRecord()], [M.transfer('shop', 1)], [0], ['app'], 1000, gen);
+        const d = M.checkAuth([rule], [M.emptyRecord()], [M.transfer('shop', 1)], [0], ['app'], 1000, gen);
         return h('li', {}, `${name}, issued at generation ${g}: `, d.ok ? yes('accepts a transfer') : no(`refuses every nonempty batch (issued at ${g}, current ${gen}); stored until collected`));
       })), ...(say ? [h('p', { class: 'xp-sub' }, say)] : []));
     };

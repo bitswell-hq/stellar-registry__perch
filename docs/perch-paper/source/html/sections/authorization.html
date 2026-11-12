@@ -2,7 +2,7 @@
 {{include:journey.html}}
 <details class="technical"><summary>The full authorization path and signature binding</summary>
 <p>A transaction carries authorization entries, each with a tree of calls. The host gives the account those contexts; the payload selects one rule per context. For ordinary authorization, Perch first applies its account guards, then the evaluator checks eligibility and computes tentative spending records. The shell authenticates the supplied signers and commits records only after success. Recovery completion uses a separate controller path. A failed invocation rolls back. The Lean proof covers the pure evaluator, not all of these surrounding steps. {{cite:cap-0046-11,stellar-custom-account,rule-core}}</p>
-<p>An external signer's digest binds the account and selected rule IDs. A delegated signer uses the host's approval path; the recorded Perch build does not bind rule choice in that delegated path. See the <a href="{{doc:oz-policy-builder}}">comparison</a> for the pinned OpenZeppelin design's different behavior.</p>
+<p>An external signer's digest binds the account and selected rule IDs. A delegated signer uses the host's approval path; Perch does not bind rule choice in that delegated path. See the <a href="{{doc:oz-policy-builder}}">comparison</a> for the pinned OpenZeppelin design's different behavior.</p>
 </details>
 <details class="technical" id="stolen-key"><summary>Owner control, recovery, and a stolen app key</summary>
 <p>The shop grant cannot authorize another recipient, token or function. That is a property of this grant's predicates, not an automatic recipient restriction on every grant. Authority also depends on the other rules installed for the same credential and on the trusted verifier.</p>

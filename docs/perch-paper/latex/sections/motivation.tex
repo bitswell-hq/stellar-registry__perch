@@ -26,26 +26,21 @@ lowering excludes the account and the supplied recovery contracts
 (Theorems~\ref{stmt:acceptance-implies-permission},
 \ref{stmt:cap-window-safety} and~\ref{stmt:grant-target-containment}).
 \emph{Simple} means one document, one install call
-(\code{apply\_scope}) and one decision point, at the cost of fewer conditions.
+(\code{apply\_grant}) and one decision point, at the cost of fewer conditions.
 \emph{Proved} applies to the Lean translation of the Rust decision function,
 not the deployed Wasm or the tested account code around it, the \emph{shell}. \emph{End to end} covers both designs' contract Wasm and
 the token in one local host, not the wallet, RPC, passkeys or fees. A completed
 recovery moves one counter, and every earlier grant stops authorizing.
 
-\paragraph{Status.} The design is an unmerged pull-request stack ending at
-\fact{perch-pr-stack-head}, previewed on testnet through
+\paragraph{Status.} The design is merged into Perch's \code{\fact{perch-branch}} branch, not yet
+\code{main}; an earlier build is previewed on testnet through
 \fact{wallet-name}~\selfcite{nido-preview}, and not audited; we do not recommend it for real
 funds before an audit. An earlier design is on mainnet~\selfcite{perch-deployments}. \ifdefined\anonymous\else
 soroban-sim~\cite{soroban-sim} is published by The Aha Company, where the
 authors work.\fi
 
 \paragraph{Revision boundary.} The claims and recorded artifacts describe the
-pinned revisions in Appendix~\ref{sec:repro}. Their grant API is
-\code{apply\_scope}/\code{remove\_scope}, and their evaluator is
-\code{rule\_eval::authorize}; newer source uses
-\code{apply\_grant}/\code{remove\_grant} and \code{rule\_eval::check\_auth}.
-Renamed APIs do not update the pinned artifacts or extend their evidence to a
-new build.
+pinned revisions in Appendix~\ref{sec:repro}.
 
 \paragraph{Contributions.} (1)~An account design with one decision point and
 account-held spending windows (\S\S\ref{sec:grants}--\ref{sec:authorization});

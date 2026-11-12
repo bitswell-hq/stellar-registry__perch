@@ -23,7 +23,7 @@ each with its own state keyed by account and rule.
 
 \paragraph{Perch.} For ordinary authorization, a Perch account's
 \code{\_\_check\_auth} calls rule-core's
-linked \code{rule\_eval::}\allowbreak\code{authorize} on the selected rules and their spending
+linked \code{rule\_eval::}\allowbreak\code{check\_auth} on the selected rules and their spending
 records, which decides the whole authorization, caps included, before any signer
 is authenticated (Perch \srcpath{gate.rs:93-113}); it then authenticates external
 signers through verifier contracts and delegated signers through the host, and
