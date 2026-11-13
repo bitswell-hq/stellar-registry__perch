@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/perch-fee-budget-core",
+    "crates/perch-fee-budget",
     "crates/perch-ir",
     "crates/perch-schema",
     "crates/perch-program",
