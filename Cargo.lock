@@ -1762,6 +1762,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "perch-fee-budget"
+version = "0.1.0"
+dependencies = [
+ "perch-fee-budget-core",
+ "soroban-sdk",
+]
+
+[[package]]
 name = "perch-fee-budget-core"
 version = "0.1.0"
 

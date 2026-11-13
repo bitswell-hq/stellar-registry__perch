@@ -217,7 +217,7 @@ jobs:
           # crates/<contract>/Cargo.toml in a PR; on merge this tags + publishes
           # it. The constructorless allow-list in publish-plan decides which of
           # these actually publish on-chain (the rest just get a tag).
-          CONTRACTS="perch-interpreter perch-doc-compiler perch-ed25519-verifier perch-spending-limit perch-account perch-constructorless-registry perch-recovery perch-webauthn-verifier perch-zk-pool perch-zk-adapter perch-account-factory perch-mldsa-verifier"
+          CONTRACTS="perch-fee-budget perch-interpreter perch-doc-compiler perch-ed25519-verifier perch-spending-limit perch-account perch-constructorless-registry perch-recovery perch-webauthn-verifier perch-zk-pool perch-zk-adapter perch-account-factory perch-mldsa-verifier"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           releases='[]'
@@ -355,9 +355,10 @@ jobs:
             perch-account-factory) echo "perch-account-factory perch-account perch-smart-account perch-account-types perch-doc-compiler perch-ir perch-registry-resolve perch-registry-resolve-macro perch-recovery-interface perch-rule-eval perch-webauthn-verifier vendor/soroban-flux vendor/soroban-sdk-tools";;
             # The registry contracttraits and admin-sep it composes are vendored.
             perch-constructorless-registry) echo "perch-constructorless-registry vendor/admin-sep vendor/registry-traits";;
+            perch-fee-budget) echo "perch-fee-budget perch-fee-budget-core";;
             *) echo "$1";;
           esac; }
-          CONTRACTS="perch-interpreter perch-doc-compiler perch-ed25519-verifier perch-spending-limit perch-account perch-constructorless-registry perch-recovery perch-webauthn-verifier perch-zk-pool perch-zk-adapter perch-account-factory perch-mldsa-verifier"
+          CONTRACTS="perch-fee-budget perch-interpreter perch-doc-compiler perch-ed25519-verifier perch-spending-limit perch-account perch-constructorless-registry perch-recovery perch-webauthn-verifier perch-zk-pool perch-zk-adapter perch-account-factory perch-mldsa-verifier"
           # The committed build-time hash pins (crates/*/wasm/*.sha256) move
           # only after a source change that already bumped the contract, in
           # the deploy(<network>) commit recording that deployment: never a
