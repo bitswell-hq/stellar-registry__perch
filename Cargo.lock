@@ -1762,6 +1762,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "perch-fee-budget-core"
+version = "0.1.0"
+
+[[package]]
 name = "perch-golden"
 version = "0.1.1"
 dependencies = [
