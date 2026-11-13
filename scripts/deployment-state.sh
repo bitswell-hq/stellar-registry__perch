@@ -52,6 +52,7 @@ paths=(
     crates/perch-ed25519-verifier
     crates/perch-mldsa-verifier
     crates/perch-spending-limit
+    crates/perch-fee-budget crates/perch-fee-budget-core
     crates/perch-account crates/perch-smart-account
     crates/perch-registry-resolve crates/perch-registry-resolve-macro
     crates/perch-constructorless-registry
