@@ -2,13 +2,16 @@
 //! (`docs/recovery/spec.md` §7.5).
 //!
 //! The account's own records are its rule registry: every context rule it
-//! installs is an [`InstalledRule`], in `installed_rules` for the admin
-//! document and in its scope's record for a scoped document, under an id the
-//! account's counter allocates and never reuses ([`allocate`]). What a
-//! document rule allows is the stored rule-eval rule beside its record
-//! (`rule_set`). The recovery rule carries the adopted controller as its one
-//! policy. `apply_doc` matches the compiled document's rules against those
-//! records (document rules by name and scope, the recovery rule by role) and
+//! installs is one [`RuleRecord`], in `rule_set` for the admin document and
+//! in its scope's record for a scoped document, under an id the account's
+//! counter allocates and never reuses ([`allocate`]). A record holds the
+//! rule's id, name and policies and the stored rule-eval rule that decides
+//! what it allows (`rule_set`); its scope, signers and last ledger are that
+//! rule's, and it is the recovery rule when its id is the account's
+//! `recovery_rule` ([`RuleRecord::installed`]). The recovery rule carries the
+//! adopted controller as its one policy. `apply_doc` matches the compiled
+//! document's rules against those records, read as [`InstalledRule`]s
+//! (document rules by name and scope, the recovery rule by role), and
 //! changes only what differs:
 //!
 //! - a rule present in both, with the same signers, policies, and expiry,
@@ -25,7 +28,7 @@
 //!
 //! Every rule added or edited is held to OZ's install-time limits
 //! ([`check`]), which a compiled document always meets. The recovery rule's
-//! controller is asked to install it, as OZ asks a rule's policies; a
+//! controller is told of it when it is installed (`rcv_install`); a
 //! completion reads the rule from its record (`auth::authorize_completion`).
 //!
 //! The authorization the result grants is exactly what a full replace of
@@ -34,10 +37,11 @@
 //! unchanged (`gate::drop_records`). Everything runs in the one `apply_doc`
 //! invocation, so a failure anywhere reverts every edit.
 
-use crate::auth;
 use crate::PerchStorage;
 use perch_account_types::{ContextRule, ContextRuleType, Signer};
 use perch_doc_compiler::{CompiledDoc, CompiledRule, RuleScope};
+use perch_recovery_interface::controller::{RecoveryHooksClient, RecoveryRule};
+use perch_rule_eval::StoredRule;
 use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{contracttype, Address, BytesN, Env, IntoVal, String, Val, Vec};
 
@@ -105,6 +109,75 @@ pub struct DeltaSummary {
     pub policies_removed: u32,
 }
 
+/// One installed rule as the account stores it: its id, name and policies,
+/// and the rule-eval rule that decides what it allows.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RuleRecord {
+    pub id: u32,
+    pub name: String,
+    pub policies: Vec<InstalledPolicy>,
+    pub rule: StoredRule,
+}
+
+impl RuleRecord {
+    /// The record as the views give it: the stored rule's contract, last
+    /// ledger and signers, and `recovery` whether it is the recovery rule.
+    pub(crate) fn installed(&self, recovery: bool) -> InstalledRule {
+        InstalledRule {
+            id: self.id,
+            recovery,
+            name: self.name.clone(),
+            context_type: ContextRuleType::CallContract(self.rule.contract.clone()),
+            valid_until: self.rule.valid_until,
+            signers: self.rule.signers.clone(),
+            policies: self.policies.clone(),
+        }
+    }
+}
+
+/// `records` as [`InstalledRule`]s, the one whose id is `recovery` the
+/// recovery rule: each record read once, into the reconcile's working list.
+pub(crate) fn installed(records: &Vec<RuleRecord>, recovery: Option<u32>) -> RuleList {
+    records
+        .iter()
+        .map(|r| r.installed(recovery == Some(r.id)))
+        .collect()
+}
+
+/// [`installed`] as the views return it.
+pub(crate) fn installed_view(
+    e: &Env,
+    records: &Vec<RuleRecord>,
+    recovery: Option<u32>,
+) -> Vec<InstalledRule> {
+    let mut out = Vec::new(e);
+    for r in installed(records, recovery) {
+        out.push_back(r);
+    }
+    out
+}
+
+/// The records of the rules `next` (a reconcile's result), each with the
+/// stored rule at its index in `rules`, which the lowering aligns with it
+/// (`rule_set`).
+pub(crate) fn records(e: &Env, next: &[InstalledRule], rules: &Vec<StoredRule>) -> Vec<RuleRecord> {
+    let mut out = Vec::new(e);
+    for (i, r) in next.iter().enumerate() {
+        out.push_back(RuleRecord {
+            id: r.id,
+            name: r.name.clone(),
+            policies: r.policies.clone(),
+            rule: rules.get_unchecked(i as u32),
+        });
+    }
+    out
+}
+
+/// A list of rules the reconcile works on, held in the contract's memory so
+/// that comparing them decodes nothing.
+pub(crate) type RuleList = alloc::vec::Vec<InstalledRule>;
+
 /// One context rule as the account installed it.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -143,8 +216,8 @@ impl InstalledRule {
         rule
     }
 
-    /// The rule as the `ContextRule` OZ's views and policy hooks name: its
-    /// signers and policies with their positions as their ids.
+    /// The rule as the `ContextRule` OZ's views name: its signers and
+    /// policies with their positions as their ids.
     pub(crate) fn context_rule(&self, e: &Env) -> ContextRule {
         let mut policies = Vec::new(e);
         for p in self.policies.iter() {
@@ -159,6 +232,18 @@ impl InstalledRule {
             policy_ids: positions(e, policies.len()),
             policies,
             valid_until: self.valid_until,
+        }
+    }
+
+    /// The rule as its recovery controller's hooks are told of it: how many
+    /// signers it requires, and the contract its calls are on.
+    pub(crate) fn recovery_rule(&self) -> RecoveryRule {
+        RecoveryRule {
+            signers: self.signers.len(),
+            contract: match &self.context_type {
+                ContextRuleType::CallContract(contract) => Some(contract.clone()),
+                _ => None,
+            },
         }
     }
 }
@@ -235,20 +320,20 @@ pub(crate) fn expired(e: &Env, valid_until: Option<u32>) -> bool {
 /// The rules `compiled` asks for, with each policy's install parameters
 /// (aligned with `rule.policies`). Ids are unset. A document rule whose
 /// `not-after-ledger` has already passed ([`expired`]) is dropped.
-pub(crate) fn desired(e: &Env, compiled: &CompiledDoc) -> (Vec<InstalledRule>, Vec<Vec<Val>>) {
-    let mut rules = Vec::new(e);
-    let mut params = Vec::new(e);
+pub(crate) fn desired(e: &Env, compiled: &CompiledDoc) -> (RuleList, alloc::vec::Vec<Vec<Val>>) {
+    let mut rules = RuleList::new();
+    let mut params = alloc::vec::Vec::new();
     for rule in compiled.rules.iter() {
         if expired(e, rule.valid_until) {
             continue;
         }
-        rules.push_back(document_rule(e, &rule));
-        params.push_back(Vec::new(e));
+        rules.push(document_rule(e, &rule));
+        params.push(Vec::new(e));
     }
     if let Some(recovery) = compiled.recovery.first() {
         let mut p: Vec<Val> = Vec::new(e);
         p.push_back(recovery.config_hash.clone().into_val(e));
-        rules.push_back(InstalledRule {
+        rules.push(InstalledRule {
             id: 0,
             recovery: true,
             name: String::from_str(e, "recovery"),
@@ -263,7 +348,7 @@ pub(crate) fn desired(e: &Env, compiled: &CompiledDoc) -> (Vec<InstalledRule>, V
                 }],
             ),
         });
-        params.push_back(p);
+        params.push(p);
     }
     (rules, params)
 }
@@ -306,35 +391,34 @@ pub enum Mode {
 /// differs. Returns the new records, in `desired` order.
 pub(crate) fn reconcile(
     e: &Env,
-    current: &Vec<InstalledRule>,
-    desired: &Vec<InstalledRule>,
-    params: &Vec<Vec<Val>>,
+    current: &[InstalledRule],
+    desired: &[InstalledRule],
+    params: &[Vec<Val>],
     mode: Mode,
-) -> (Vec<InstalledRule>, DeltaSummary) {
+) -> (RuleList, DeltaSummary) {
     let delta = mode == Mode::Delta;
     let mut sum = DeltaSummary::default();
-    for c in current.iter() {
-        if !(delta && desired.iter().any(|d| c.same_slot(&d))) {
+    for c in current {
+        if !(delta && desired.iter().any(|d| c.same_slot(d))) {
             sum.rules_removed += 1;
         }
     }
-    let mut next = Vec::new(e);
-    for (i, d) in desired.iter().enumerate() {
-        let p = params.get_unchecked(i as u32);
-        let matched = current.iter().find(|c| delta && c.same_slot(&d));
+    let mut next = RuleList::new();
+    for (d, p) in desired.iter().zip(params) {
+        let matched = current.iter().find(|c| delta && c.same_slot(d));
         let id = match matched {
-            None => add(e, &d, &p, &mut sum),
-            Some(c) if unchanged(&c, &d) => c.id,
-            Some(c) if keeps_id(&c, &d) => {
-                edit(e, &c, &d.with_id(c.id), &p, &mut sum);
+            None => add(e, d, p, &mut sum),
+            Some(c) if unchanged(c, d) => c.id,
+            Some(c) if keeps_id(c, d) => {
+                edit(e, c, &d.with_id(c.id), p, &mut sum);
                 c.id
             }
             Some(_) => {
                 sum.rules_removed += 1;
-                add(e, &d, &p, &mut sum)
+                add(e, d, p, &mut sum)
             }
         };
-        next.push_back(d.with_id(id));
+        next.push(d.with_id(id));
     }
     (next, sum)
 }
@@ -397,14 +481,14 @@ fn edit(e: &Env, c: &InstalledRule, d: &InstalledRule, params: &Vec<Val>, sum: &
     }
 }
 
-/// Install recovery rule `rule` (with its id): its controller's `install`
-/// checks the rule's shape and that it is installed for the configuration
-/// `rcv_sync` stored.
+/// Install recovery rule `rule`: its controller's `rcv_install` checks the
+/// rule's shape and that it is installed for the configuration `rcv_sync`
+/// stored, the hash that is the rule's one install parameter.
 fn install(e: &Env, rule: &InstalledRule, params: &Vec<Val>) {
-    auth::PolicyClient::new(e, &rule.policies.get_unchecked(0).policy).install(
-        &params.get_unchecked(0),
-        &rule.context_rule(e),
+    RecoveryHooksClient::new(e, &rule.policies.get_unchecked(0).policy).rcv_install(
         &e.current_contract_address(),
+        &params.get_unchecked(0).into_val(e),
+        &rule.recovery_rule(),
     );
 }
 

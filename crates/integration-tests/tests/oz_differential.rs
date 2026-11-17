@@ -4,14 +4,22 @@
 //! signers. That build is loaded from `PERCH_OZ_ACCOUNT_WASM`, and runs
 //! against the same infra this source registers natively: build it with
 //! `stellar contract build --package perch-account` from the commit before
-//! the change, so it pins the same committed infra hashes.
+//! the change, so it pins the same committed infra hashes. It calls its
+//! recovery controller through OZ's `Policy` hooks, so it runs in a world of
+//! its own beside the controller built from that commit
+//! (`PERCH_OZ_CONTROLLER_WASM`), at the address this account's world gives
+//! this source's controller.
 //!
 //! - Generated admin documents, scoped documents and scope removals, applied
 //!   to both: the same outcomes, the same rule ids allocated (the counter
 //!   included), the same views (`configuration`, the records, the stored
 //!   rule sets, every scope, the rule count, and `get_context_rule` for
 //!   every id ever given, its signer and policy ids aside), and the same
-//!   events.
+//!   events. Each scope's text, which that build stores (`scope_doc`), is
+//!   the one this build rebuilds from its records and signer ids
+//!   (`perch_testkit::rebuild`). A scoped document not in normal form, which
+//!   that build applies and this one refuses (`NotNormalForm`), runs on this
+//!   build alone, and must change nothing.
 //! - Generated authorizations through each account's real `__check_auth`
 //!   (`try_invoke_contract_check_auth`) after every step: the same verdict
 //!   and error code, completion-shaped selections of the recovery rule
@@ -26,8 +34,10 @@
 //!
 //! ```text
 //! git archive <base> | tar -x -C <dir>
-//! (cd <dir> && stellar contract build --package perch-account --out-dir <out>)
+//! (cd <dir> && stellar contract build --package perch-account --out-dir <out> \
+//!   && stellar contract build --package perch-recovery --out-dir <out>)
 //! PERCH_OZ_ACCOUNT_WASM=<out>/perch_account.wasm \
+//! PERCH_OZ_CONTROLLER_WASM=<out>/perch_recovery.wasm \
 //!   cargo test -p perch-integration-tests --test oz_differential -- --ignored --nocapture
 //! ```
 
@@ -42,7 +52,8 @@ use perch_recovery_interface::RecoveryAction;
 use perch_rule_eval::StoredFunctions;
 use perch_smart_account::StoredRule;
 use perch_testkit::delta::{
-    external_key, render, DeltaWorld, DocModel, KeyModel, ScopeOp, FUNCTIONS, SCOPE_IDS,
+    external_key, raw_entries, render, DeltaWorld, DocModel, KeyModel, ScopeOp, FUNCTIONS,
+    SCOPE_IDS,
 };
 use proptest::prelude::*;
 use soroban_sdk::auth::{Context, ContractContext};
@@ -54,14 +65,23 @@ use std::sync::OnceLock;
 use stellar_accounts::smart_account::SmartAccountStorageKey;
 use support::{world_with, Mode, Opts, DELAY};
 
+fn wasm(var: &'static str, cell: &'static OnceLock<std::vec::Vec<u8>>) -> &'static [u8] {
+    cell.get_or_init(|| {
+        let path = std::env::var(var).unwrap_or_else(|_| panic!("{var} (module docs)"));
+        std::fs::read(&path).unwrap_or_else(|e| panic!("{path}: {e}"))
+    })
+}
+
 /// The OZ-backed build's bytes.
 fn oz_wasm() -> &'static [u8] {
     static WASM: OnceLock<std::vec::Vec<u8>> = OnceLock::new();
-    WASM.get_or_init(|| {
-        let path = std::env::var("PERCH_OZ_ACCOUNT_WASM")
-            .expect("PERCH_OZ_ACCOUNT_WASM: the OZ-backed account's wasm (module docs)");
-        std::fs::read(&path).unwrap_or_else(|e| panic!("{path}: {e}"))
-    })
+    wasm("PERCH_OZ_ACCOUNT_WASM", &WASM)
+}
+
+/// The bytes of the controller the OZ-backed build calls.
+fn oz_controller() -> &'static [u8] {
+    static WASM: OnceLock<std::vec::Vec<u8>> = OnceLock::new();
+    wasm("PERCH_OZ_CONTROLLER_WASM", &WASM)
 }
 
 fn cases(default: u32) -> u32 {
@@ -115,8 +135,9 @@ fn next_id(env: &Env, account: &Address, oz: bool) -> u32 {
     })
 }
 
-/// Everything the views say about `account`, normalized.
-fn views(env: &Env, account: &Address) -> BTreeMap<String, String> {
+/// Everything the views say about `account`, normalized; `oz` for the
+/// OZ-backed build, which stores each scope's text.
+fn views(env: &Env, account: &Address, oz: bool) -> BTreeMap<String, String> {
     let c = PerchAccountClient::new(env, account);
     let mut out = BTreeMap::new();
     out.insert(
@@ -133,7 +154,19 @@ fn views(env: &Env, account: &Address) -> BTreeMap<String, String> {
             format!("scope_rule_set {s}"),
             norm(env, account, c.scope_rule_set(&s)),
         );
-        out.insert(format!("scope_doc {s}"), format!("{:?}", c.scope_doc(&s)));
+        let text: Option<Bytes> = if oz {
+            env.invoke_contract(
+                account,
+                &Symbol::new(env, "scope_doc"),
+                vec![env, s.into_val(env)],
+            )
+        } else {
+            perch_testkit::rebuild::read(env, account, s)
+                .unwrap()
+                .map(|st| perch_testkit::rebuild::text(env, &st).unwrap())
+                .map(|t| Bytes::from_slice(env, t.as_bytes()))
+        };
+        out.insert(format!("scope_doc {s}"), format!("{text:?}"));
     }
     out
 }
@@ -194,33 +227,47 @@ fn run(w: &DeltaWorld, account: &Address, op: &ScopeOp) -> Result<(), String> {
     }
 }
 
-/// The two accounts in one world: this build (`w.delta`) and the OZ-backed
-/// one, constructed with the same admin.
-fn worlds() -> (DeltaWorld, Address) {
+/// This build's world (its account is `w.delta`), and the OZ-backed one's:
+/// the same pools and addresses, the controller built beside it, and the
+/// account, constructed with the same admin.
+fn worlds() -> (DeltaWorld, DeltaWorld, Address) {
     let w = DeltaWorld::new();
-    let admin = vec![&w.env, Signer::Delegated(w.keys[0].clone())];
-    let oz = w.env.register(oz_wasm(), (admin,));
-    (w, oz)
+    let ow = DeltaWorld::with_controller(Some(oz_controller()));
+    assert_eq!(ow.controller, w.controller);
+    let admin = vec![&ow.env, Signer::Delegated(ow.keys[0].clone())];
+    let oz = ow.env.register(oz_wasm(), (admin,));
+    (w, ow, oz)
 }
 
 /// Run `op` on both accounts and check outcomes, events, ids and views.
-/// Returns how many rules' signer or policy ids differ.
-fn step(w: &DeltaWorld, oz: &Address, op: &ScopeOp) -> (bool, usize) {
+/// Returns how many rules' signer or policy ids differ. A scoped document
+/// this build refuses for its form alone runs on it alone.
+fn step(w: &DeltaWorld, ow: &DeltaWorld, oz: &Address, op: &ScopeOp) -> (bool, usize) {
+    if let ScopeOp::Apply(_, d) = op {
+        let scoped = d.recovery.is_none() && d.rules.iter().all(|r| r.scope.is_some());
+        if scoped && !d.normal_form(w.env.ledger().sequence()) {
+            let before = raw_entries(&w.env);
+            let out = run(w, &w.delta, op);
+            assert!(out.is_err(), "{op:?} not in normal form, applied");
+            assert_eq!(raw_entries(&w.env), before, "the refused {op:?} wrote");
+            return (false, 0);
+        }
+    }
     let a = run(w, &w.delta, op);
     let ea = events(&w.env, &w.delta);
-    let b = run(w, oz, op);
-    let eb = events(&w.env, oz);
+    let b = run(ow, oz, op);
+    let eb = events(&ow.env, oz);
     assert_eq!(a, b, "outcome of {op:?}");
     assert_eq!(ea, eb, "events of {op:?}");
     let next = next_id(&w.env, &w.delta, false);
-    assert_eq!(next, next_id(&w.env, oz, true), "ids allocated by {op:?}");
+    assert_eq!(next, next_id(&ow.env, oz, true), "ids allocated by {op:?}");
     assert_eq!(
-        views(&w.env, &w.delta),
-        views(&w.env, oz),
+        views(&w.env, &w.delta, false),
+        views(&ow.env, oz, true),
         "views after {op:?}"
     );
     let (fa, ia) = rules_by_id(&w.env, &w.delta, next);
-    let (fb, ib) = rules_by_id(&w.env, oz, next);
+    let (fb, ib) = rules_by_id(&ow.env, oz, next);
     assert_eq!(fa, fb, "get_context_rule after {op:?}");
     let differ = ia.iter().zip(&ib).filter(|(x, y)| x != y).count();
     (a.is_ok(), differ)
@@ -240,11 +287,12 @@ proptest! {
     fn generated_documents_give_the_same_ids_views_and_events(
         bytes in proptest::collection::vec(any::<u8>(), 0..4096)
     ) {
-        let (w, oz) = worlds();
+        let (w, ow, oz) = worlds();
         let mut differ = 0;
         for (advance, op) in ScopeOp::sequence(&mut Unstructured::new(&bytes), 8).unwrap() {
             w.advance(advance);
-            differ += step(&w, &oz, &op).1;
+            ow.advance(advance);
+            differ += step(&w, &ow, &oz, &op).1;
         }
         println!("{{\"signer_or_policy_ids_differ\":{differ}}}");
     }
@@ -256,18 +304,19 @@ proptest! {
     fn generated_authorizations_get_the_same_verdicts(
         bytes in proptest::collection::vec(any::<u8>(), 0..4096)
     ) {
-        let (w, oz) = worlds();
+        let (w, ow, oz) = worlds();
         let mut u = Unstructured::new(&bytes);
         let ops = ScopeOp::sequence(&mut u, 6).unwrap();
         let (mut accepted, mut refused, mut escalations) = (0, 0, 0);
         let escalation = format!("{:?}", soroban_sdk::Error::from(PerchAuthError::ScopeEscalation));
         for (advance, op) in ops {
             w.advance(advance);
-            step(&w, &oz, &external_op(op));
+            ow.advance(advance);
+            step(&w, &ow, &oz, &external_op(op));
             for _ in 0..6 {
                 let auth = Authorization::generate(&mut u, &w);
                 let a = auth.check(&w, &w.delta);
-                let b = auth.check(&w, &oz);
+                let b = auth.check(&ow, &oz);
                 assert_eq!(a, b, "{auth:?}");
                 match &a {
                     Ok(()) => accepted += 1,
@@ -539,6 +588,7 @@ fn recovery_transcript(oz: bool) -> std::vec::Vec<String> {
         fixed_addresses: true,
         skip_snapshot: true,
         account_wasm: oz.then(oz_wasm),
+        controller_wasm: oz.then(oz_controller),
         ..Opts::default()
     });
     let mut t = std::vec::Vec::new();
