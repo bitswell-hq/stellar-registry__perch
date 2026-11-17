@@ -6,14 +6,17 @@
 //!   where storage needs them.
 //! - [`StoredRule`] and [`StoredRecord`]: `#[contracttype]` mirrors of
 //!   `rule_eval::Rule` and `rule_eval::SpendRecord`, for an account's
-//!   storage.
+//!   storage, a stored one read back from its XDR ([`mirror`]).
 //! - [`CompiledModel`]: a `#[contracttype]` mirror of `rule_eval::Doc`, the
 //!   part of a policy document rule-eval's lowering reads. [`doc_of`] reads
 //!   it as a `Doc`; with the `ir` feature, [`model_of`] builds it from a
 //!   validated `perch_ir::PolicyDoc`.
-//! - [`denote`]: the `rule_eval::Rule` an installed Perch rule enforces (an
-//!   OpenZeppelin context rule, the interpreter's program and the spending
-//!   limit's parameters).
+//! - [`denote`]: the `rule_eval::Rule` a Perch rule enforces when installed
+//!   as an OpenZeppelin context rule with the interpreter's program and the
+//!   spending limit's parameters, as accounts installed it before rule-eval
+//!   decided their authorizations.
+//! - [`admin_survives`] and [`guarded`]: the account's anti-brick check and
+//!   its signer-sufficiency invariant, on rule-eval's rules.
 //!
 //! Its tests check the mirrors round-trip and, in `perch-integration-tests`
 //! (`tests/perch_rule_eval.rs`), that `rule_eval::lower(doc_of(model_of(d)))`
@@ -24,15 +27,18 @@
 
 extern crate alloc;
 
+mod admin;
 pub mod convert;
 mod denote;
+pub mod mirror;
 mod model;
 mod stored;
 
+pub use admin::{admin_survives, guarded};
 pub use denote::{denote, Installed};
 pub use model::{
-    doc_of, CompiledModel, ModelArg, ModelCap, ModelPred, ModelPrincipals, ModelRecovery,
-    ModelRule, ModelScope, ModelSigner, ModelZk,
+    doc_of, doc_of_in, CompiledModel, ModelArg, ModelCap, ModelPred, ModelPrincipals,
+    ModelRecovery, ModelRule, ModelScope, ModelSigner, ModelZk,
 };
 #[cfg(feature = "ir")]
 pub use model::{model_of, ModelError};

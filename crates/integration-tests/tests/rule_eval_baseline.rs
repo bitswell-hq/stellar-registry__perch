@@ -15,8 +15,15 @@
 //!
 //! The test replays every trace on a fresh account and on one with a
 //! predecessor document, and fails on any difference from the recorded
-//! verdicts, records or lowering. The file is the behaviour of the build it
-//! was recorded on; it is not re-recorded to absorb a change.
+//! verdicts, records or lowering, when the account's stored rule-eval rule
+//! set after an apply differs from the lowering of the document's model or
+//! from the denotation of what is installed (`perch_testkit::rule_set`), and
+//! when, after an accepted authorization, the account keeps a spending
+//! record for a rule stored without a cap or no longer installed
+//! (`rule_core/mod.rs`). The file is the behaviour of the build it was
+//! recorded on, where OZ's spending limit kept the records; it is not
+//! re-recorded to absorb a change, so the account's own records are
+//! compared with the ones OZ recorded.
 //! `PERCH_RECORD_BASELINE=1 cargo test -p perch-integration-tests --test
 //! rule_eval_baseline` writes it from the current build. The test also
 //! checks that the generator still produces the recorded inputs.
@@ -552,12 +559,18 @@ fn perch_reproduces_the_recorded_baseline() {
     );
 
     let (mut authorizations, mut accepted, mut delegated, mut external) = (0, 0, 0, 0);
+    let (mut rule_sets, mut stored_rules) = (0, 0);
+    let (mut records, mut charged) = (0, 0);
     let mut failures = vec![];
     for t in traces {
         let t = parse(t);
         for start in [Start::Fresh, Start::AfterPredecessor] {
             match run(&t, start) {
                 Ok(r) => {
+                    rule_sets += r.rule_sets;
+                    stored_rules += r.stored_rules;
+                    records += r.records_compared;
+                    charged += r.records_charged;
                     if start == Start::Fresh {
                         authorizations += r.verdicts.len();
                         accepted += r
@@ -578,11 +591,16 @@ fn perch_reproduces_the_recorded_baseline() {
     }
     println!(
         "documents: {}, authorizations: {authorizations} (accepted: {accepted}, with a delegated \
-         signer: {delegated}, with an external signer: {external}), differences: {}",
+         signer: {delegated}, with an external signer: {external}), rule sets checked: \
+         {rule_sets} ({stored_rules} rules), records compared: {records} (holding a spend: \
+         {charged}), differences: {}",
         traces.len(),
         failures.len()
     );
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+    assert!(charged > 0, "no charged record compared");
+    // One apply on a fresh account, two after a predecessor.
+    assert_eq!(rule_sets, 3 * DOCUMENTS);
 }
 
 /// rule-eval at the pinned rev, run on the recorded traces (its lowering,

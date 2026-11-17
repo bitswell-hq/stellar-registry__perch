@@ -8,8 +8,14 @@
 //! under the trace's admin document and generation. Whether Perch refuses
 //! the document, its lowering of the document's rules, each verdict, and
 //! each accepted authorization's spending records must equal the trace's,
-//! which rule-core's Lean model computed. Every difference is reported, by
-//! trace and authorization.
+//! which rule-core's Lean model computed: the records are the ones the
+//! account keeps, which rule-eval charges. After every apply the account's
+//! stored rule-eval rule set for the document must equal the lowering of its
+//! model and the denotation of what it installed (`perch_testkit::rule_set`).
+//! `__check_auth` decides with rule-eval over those sets, and after every
+//! accepted authorization the account must keep a record only for a rule
+//! stored with a cap (`perch_testkit::rule_set::check_records`). Every
+//! difference is reported, by trace and authorization.
 
 mod rule_core;
 mod support;
@@ -23,6 +29,8 @@ fn every_document_trace_agrees_with_perch() {
         .unwrap_or_else(|e| panic!("{e}"));
     let (mut admin, mut scoped, mut refused, mut recovery) = (0, 0, 0, 0);
     let (mut authorizations, mut delegated, mut external, mut empty) = (0, 0, 0, 0);
+    let (mut rule_sets, mut stored_rules) = (0, 0);
+    let (mut records, mut charged) = (0, 0);
     let mut failures = vec![];
     for (_, t) in &traces {
         if t.scoped.is_some() {
@@ -39,6 +47,10 @@ fn every_document_trace_agrees_with_perch() {
                     delegated += r.delegated;
                     external += r.external;
                     empty += r.empty;
+                    rule_sets += r.rule_sets;
+                    stored_rules += r.stored_rules;
+                    records += r.records_compared;
+                    charged += r.records_charged;
                     for d in differences(t, &r) {
                         failures.push(format!("{} ({start:?}): {d}", t.name));
                     }
@@ -51,13 +63,19 @@ fn every_document_trace_agrees_with_perch() {
         "traces: {}, admin traces run: {admin} (with recovery: {recovery}), scoped traces run: \
          {scoped} (refused: {refused}), authorizations run: {authorizations} (with a delegated \
          signer: {delegated}, with an external signer: {external}, of an empty batch: {empty}), \
-         differences: {}",
+         rule sets checked: {rule_sets} ({stored_rules} rules), records compared: {records} \
+         (holding a spend: {charged}), differences: {}",
         traces.len(),
         failures.len()
     );
     assert!(admin > 0, "no admin trace found");
     assert!(scoped > refused, "no scoped trace that authorizes found");
+    assert!(charged > 0, "no charged record compared");
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+    // An admin trace applies one document on a fresh account and two after
+    // a predecessor; a scoped trace also applies its admin document first,
+    // and a scoped document Perch refuses stores nothing.
+    assert_eq!(rule_sets, 3 * admin + 5 * (scoped - refused) + 3 * refused);
 }
 
 /// The comparison is not vacuous: a trace whose expected verdict, records or

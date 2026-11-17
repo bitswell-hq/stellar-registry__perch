@@ -1,10 +1,13 @@
 //! A recorded corpus of authorization outcomes, replayed against the build
 //! under test: `tests/corpus/auth-outcomes.json`.
 //!
-//! Each scenario drives the real account, compiler, interpreter, spending
-//! limit, and recovery controller under ENFORCING authorization (hand-built
-//! auth entries through `set_auths`, so every account's real `__check_auth`
-//! runs; see `support/mod.rs`). Every step records
+//! Each scenario drives the real account, compiler, and recovery controller
+//! under ENFORCING authorization (hand-built auth entries through
+//! `set_auths`, so every account's real `__check_auth` runs; see
+//! `support/mod.rs`). The corpus was recorded when the account installed
+//! the interpreter and spending-limit policies; the build under test decides
+//! with rule-eval, and the differences that brings are declared. Every step
+//! records
 //!
 //! - the outcome: the returned value, or the error the host surfaced;
 //! - the contract events the step published;
@@ -26,6 +29,15 @@
 //! contracts carry an SDK-assigned code hash, which is not contract
 //! behaviour.
 //!
+//! After every accepted `apply_doc` step, once the step is recorded, the
+//! applying account's stored rule-eval rule set must equal the lowering of
+//! the applied document's model and the denotation of OZ's rules with the
+//! programs and caps the compiler emits (`perch_testkit::rule_set`). After
+//! every accepted step, the account must keep a spending record only for a
+//! rule stored with a cap, and none for a removed rule
+//! (`rule_set::check_records`); what the records hold is in the recorded
+//! storage.
+//!
 //! `PERCH_RECORD_CORPUS=1 cargo test -p perch-integration-tests --test
 //! auth_corpus` rewrites the corpus from the current build.
 
@@ -45,6 +57,7 @@ use soroban_sdk::{
     contract, contractimpl, symbol_short, vec, Address, Bytes, Env, IntoVal, Symbol, TryFromVal,
     Val,
 };
+use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use stellar_accounts::smart_account::{AuthPayload, Signer};
@@ -52,6 +65,14 @@ use support::*;
 
 const CORPUS: &str = "tests/corpus/auth-outcomes.json";
 const DECLARED: &str = "tests/corpus/declared-differences.json";
+
+thread_local! {
+    /// The stored rule sets this thread's corpus run checked.
+    static RULE_SETS: Cell<usize> = const { Cell::new(0) };
+    /// The capped rules' records this thread's corpus run checked, and
+    /// those holding a spend.
+    static RECORDS: Cell<(usize, usize)> = const { Cell::new((0, 0)) };
+}
 
 // ---------------------------------------------------------------------------
 // Stand-in token
@@ -314,6 +335,17 @@ impl<'a> Recorder<'a> {
             "events": events,
             "storage": storage,
         }));
+        if f == "apply_doc" && val.is_some() {
+            perch_testkit::rule_set::check(env, contract)
+                .unwrap_or_else(|x| panic!("{step}: the stored rule set: {x}"));
+            RULE_SETS.set(RULE_SETS.get() + 1);
+        }
+        if val.is_some() {
+            let r = perch_testkit::rule_set::check_records(env, &self.w.account)
+                .unwrap_or_else(|x| panic!("{step}: the spending records: {x}"));
+            let (n, charged) = RECORDS.get();
+            RECORDS.set((n + r.capped, charged + r.charged));
+        }
         val
     }
 
@@ -1019,7 +1051,16 @@ fn declared() -> std::vec::Vec<Difference> {
 #[test]
 fn authorization_outcomes_match_the_recorded_corpus() {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(CORPUS);
+    RULE_SETS.set(0);
+    RECORDS.set((0, 0));
     let got = corpus();
+    assert!(RULE_SETS.get() > 0, "no accepted apply_doc step");
+    let (records, charged) = RECORDS.get();
+    assert!(charged > 0, "no charged record compared");
+    println!(
+        "stored rule sets checked: {}, records compared: {records} (holding a spend: {charged})",
+        RULE_SETS.get()
+    );
     if std::env::var("PERCH_RECORD_CORPUS").as_deref() == Ok("1") {
         let text = serde_json::to_string_pretty(&got).unwrap() + "\n";
         std::fs::write(&path, text).unwrap();
