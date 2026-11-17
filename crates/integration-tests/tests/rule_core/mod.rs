@@ -157,6 +157,7 @@ stand_ins!(
     execute,
     f,
     g,
+    guess,
     mint,
     publish,
     send,
@@ -321,7 +322,9 @@ impl<'w> Lab<'w> {
                 "controller" => w.controller.clone(),
                 "adapter" => w.adapter.clone(),
                 "pool" => w.pool.clone(),
-                "verifier" => e.register(PerchEd25519Verifier, ()),
+                // Where `perch/verifiers` deploys one, named, as an admin
+                // document's must be.
+                "verifier" => perch_testkit::verifiers::deploy_auto(e, PerchEd25519Verifier),
                 "delegate" => e.register(Key, ()),
                 _ => e.register(StandIn, ()),
             };
@@ -439,11 +442,12 @@ impl<'w> Lab<'w> {
                     address: self.strkey(&decode_hex(address)?),
                 },
                 JsonSigner::External { verifier, key } => {
-                    let v = self.strkey(&decode_hex(verifier)?);
+                    let v = self.address(&decode_hex(verifier)?);
                     let k = self.key(&decode_hex(key)?);
                     SignerMethod::External {
-                        verifier: v,
+                        verifier: support::strkey(&v),
                         key: hex::encode(k.verifying_key().to_bytes()),
+                        verifier_name: Some(perch_testkit::verifiers::auto_name(&v)),
                     }
                 }
             };
@@ -507,6 +511,16 @@ impl<'w> Lab<'w> {
                 principals,
                 functions,
                 args,
+                auth_root: r
+                    .auth_root
+                    .as_ref()
+                    .map(|root| {
+                        Ok::<_, String>(perch_ir::AuthRoot {
+                            contract: self.strkey(&decode_hex(&root.contract)?),
+                            function: utf8(&root.function)?,
+                        })
+                    })
+                    .transpose()?,
                 not_after_ledger: r.not_after_ledger,
                 cap: r.cap.as_ref().map(|c| CapConstraint {
                     token: None,
@@ -591,6 +605,7 @@ impl<'w> Lab<'w> {
                     principals: owner(),
                     functions: None,
                     args: None,
+                    auth_root: None,
                     not_after_ledger: None,
                     cap: None,
                 },
@@ -600,6 +615,7 @@ impl<'w> Lab<'w> {
                     principals: owner(),
                     functions: Some(vec!["transfer".into()]),
                     args: None,
+                    auth_root: None,
                     not_after_ledger: None,
                     cap: Some(CapConstraint {
                         token: None,
@@ -616,6 +632,7 @@ impl<'w> Lab<'w> {
                         index: 0,
                         pred: ArgPred::IsSelf(IsSelfPred {}),
                     }]),
+                    auth_root: None,
                     not_after_ledger: Some(10_000),
                     cap: None,
                 },
@@ -768,6 +785,7 @@ impl<'w> Lab<'w> {
             threshold,
             cap,
             valid_until: l.valid_until,
+            auth_root: None,
             generation: None,
         }
     }
@@ -927,13 +945,25 @@ pub fn run(t: &Trace, start: Start) -> Result<Run, String> {
     perch_ir::validate(&doc).map_err(|es| format!("perch_ir::validate refuses: {es:?}"))?;
     let plan = compile(
         &e,
-        &doc,
+        &perch_testkit::rpn::local_projection(&doc),
         &CompileConfig {
             interpreter_wasm_hash: BytesN::from_array(&e, &[0; 32]),
         },
     )
     .map_err(|x| format!("perch_compile::compile refuses: {x:?}"))?;
-    let mut lowered: Vec<ERule> = plan.rules.iter().map(|l| lab.denote(l)).collect();
+    let mut lowered: Vec<ERule> = plan
+        .rules
+        .iter()
+        .zip(&doc.rules)
+        .map(|(l, d)| {
+            let mut rule = lab.denote(l);
+            rule.auth_root = d.auth_root.as_ref().map(|root| rule_eval::AuthRoot {
+                contract: lab.abs_of(&Address::from_str(&e, &root.contract)),
+                function: root.function.as_bytes().to_vec(),
+            });
+            rule
+        })
+        .collect();
     let canonical = |d: &PolicyDoc| Bytes::from_slice(&e, perch_ir::canonical_json(d).as_bytes());
 
     // Every rule is installed at ledger 0, before any authorization's ledger.

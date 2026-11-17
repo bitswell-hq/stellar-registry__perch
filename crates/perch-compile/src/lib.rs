@@ -172,6 +172,12 @@ pub fn compile(env: &Env, doc: &PolicyDoc, cfg: &CompileConfig) -> Result<Plan, 
 }
 
 fn lower_rule(env: &Env, doc: &PolicyDoc, rule: &Rule) -> Result<LoweredRule, LowerError> {
+    if rule.auth_root.is_some() {
+        return Err(LowerError::Unsupported {
+            rule: rule.name.clone(),
+            reason: "auth-root requires the account batch evaluator; the legacy per-call interpreter cannot enforce it",
+        });
+    }
     let scope = match &rule.scope {
         Scope::Contract(c) => ScopeSpec::Contract(c.address.clone()),
         Scope::SelfAdmin(_) => ScopeSpec::SelfAdmin,
@@ -198,7 +204,7 @@ fn lower_rule(env: &Env, doc: &PolicyDoc, rule: &Rule) -> Result<LoweredRule, Lo
             }
         })?;
         signers.push(match &decl.method {
-            perch_ir::SignerMethod::External { verifier, key } => SignerSpec::External {
+            perch_ir::SignerMethod::External { verifier, key, .. } => SignerSpec::External {
                 verifier: verifier.clone(),
                 key_hex: key.clone(),
             },

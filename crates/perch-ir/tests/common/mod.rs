@@ -28,6 +28,7 @@ pub fn signer(id: &str, verifier: &str, key: &str) -> SignerDecl {
         method: SignerMethod::External {
             verifier: verifier.into(),
             key: key.into(),
+            verifier_name: None,
         },
     }
 }
@@ -73,6 +74,7 @@ pub fn rule(name: &str, scope: Scope, signers: &[&str]) -> Rule {
         functions: None,
         args: None,
         not_after_ledger: None,
+        auth_root: None,
         cap: None,
     }
 }

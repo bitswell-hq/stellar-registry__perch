@@ -44,7 +44,7 @@ use perch_smart_account::infra;
 use perch_testkit::delta::{strkey, DeltaWorld, DocModel};
 use perch_testkit::denote::{denote, Installed};
 use perch_testkit::rpn::{self, Policies};
-use perch_testkit::{AnyKeyVerifier, FIXTURE_NETWORK};
+use perch_testkit::{verifiers, AnyKeyVerifier, FIXTURE_NETWORK};
 use rule_eval::{Cond, Rule as ERule, Signer as ESigner, Val as EVal};
 use rule_eval_conformance::documents::{
     self, JsonDoc, JsonPred, JsonPrincipals, JsonScope, Lowered, Trace,
@@ -113,11 +113,13 @@ fn check(
     let lowered = rule_eval::lower(&doc_of(e, &model).ok_or("doc_of refuses")?, &me_x);
 
     rpn::check_compiled(e, d, &compiled)?;
-    let attached = rpn::policies_of(e, d)?;
+    let attached = rpn::batch_policies_of(e, d)?;
     let mut denoted = vec![];
     for (i, (r, p)) in compiled.rules.iter().zip(&attached).enumerate() {
-        denoted
-            .push(denote(e, me, &installed(me, &r, p)).ok_or(format!("denote refuses rule {i}"))?);
+        let mut rule =
+            denote(e, me, &installed(me, &r, p)).ok_or(format!("denote refuses rule {i}"))?;
+        rule.auth_root = rpn::root_of(e, &p.auth_root);
+        denoted.push(rule);
     }
     let n = denoted.len();
     let recovery = !compiled.recovery.is_empty();
@@ -189,13 +191,15 @@ struct Names<'w> {
 
 impl<'w> Names<'w> {
     /// The renaming for `d` on a trace whose account is `account`: each
-    /// verifier `d` declares is a registered `AnyKeyVerifier`.
+    /// verifier `d` declares is an `AnyKeyVerifier` where `perch/verifiers`
+    /// deploys one, named ([`verifiers::auto_name`]), as an admin document's
+    /// must be.
     fn new(w: &'w DeltaWorld, account: &str, d: &JsonDoc) -> Names<'w> {
         let mut addr = BTreeMap::from([(unhex(account), w.delta.clone())]);
         for s in &d.signers {
             if let JsonSigner::External { verifier, .. } = &s.signer {
                 addr.entry(unhex(verifier))
-                    .or_insert_with(|| w.env.register(AnyKeyVerifier, ()));
+                    .or_insert_with(|| verifiers::deploy_auto(&w.env, AnyKeyVerifier));
             }
         }
         Names { w, addr }
@@ -231,10 +235,14 @@ impl<'w> Names<'w> {
                 JsonSigner::Delegated { address } => SignerMethod::Delegated {
                     address: self.strkey(address),
                 },
-                JsonSigner::External { verifier, key } => SignerMethod::External {
-                    verifier: self.strkey(verifier),
-                    key: key.clone(),
-                },
+                JsonSigner::External { verifier, key } => {
+                    let v = self.address(&unhex(verifier));
+                    SignerMethod::External {
+                        verifier: strkey(&v),
+                        key: key.clone(),
+                        verifier_name: Some(verifiers::auto_name(&v)),
+                    }
+                }
             };
             signers.push(SignerDecl { id, method });
         }
@@ -295,6 +303,16 @@ impl<'w> Names<'w> {
                     Some(fs) => Some(fs.iter().map(|f| utf8(f)).collect::<Result<_, _>>()?),
                 },
                 args,
+                auth_root: r
+                    .auth_root
+                    .as_ref()
+                    .map(|root| {
+                        Ok::<_, String>(perch_ir::AuthRoot {
+                            contract: self.strkey(&root.contract),
+                            function: utf8(&root.function)?,
+                        })
+                    })
+                    .transpose()?,
                 not_after_ledger: r.not_after_ledger,
                 cap: r.cap.as_ref().map(|c| CapConstraint {
                     token: None,
@@ -368,6 +386,10 @@ impl<'w> Names<'w> {
             .collect();
         ERule {
             contract: self.xdr(&r.contract),
+            auth_root: r.auth_root.map(|root| rule_eval::AuthRoot {
+                contract: self.xdr(&root.contract),
+                function: root.function,
+            }),
             conds,
             signers,
             ..r

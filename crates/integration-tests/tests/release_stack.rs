@@ -18,6 +18,10 @@
 //! cargo test -p perch-integration-tests --test release_stack -- --ignored --nocapture
 //! ```
 //!
+//! A rehearsal's stack, built from dev registry paths, adds `--skip
+//! one_build_resolves_each_networks_own_registry`, which checks the canonical
+//! registries.
+//!
 //! Each transaction-shaped call prints one `{"case": ...}` JSON line with its
 //! metered resources (the in-process estimate of the on-chain cost), and is
 //! asserted to fit within the budget rule's 75% of the per-transaction limits
@@ -46,7 +50,7 @@ use perch_testkit::FIXTURE_NETWORK;
 use perch_zk_pool::{PerchZkPoolClient, PoolKey, TreeState};
 use perch_zk_primitives::{contract_id, ZERO_HASHES};
 use perch_zk_prover::{Inputs, Toolchain, Tree};
-use soroban_sdk::testutils::{EnvTestConfig, Ledger as _};
+use soroban_sdk::testutils::{Address as _, EnvTestConfig, Ledger as _};
 use soroban_sdk::token::{StellarAssetClient, TokenClient};
 use soroban_sdk::xdr::{
     AccountId, HostFunction, InvokeContractArgs, PublicKey, ScVal, SorobanAddressCredentials,
@@ -82,6 +86,8 @@ thread_local! {
     /// While set, [`World::shaped_json`] changes every interpreter program
     /// (`.0`) and every spending cap (`.1`): the keep-names thieves.
     static REPARAM: Cell<(bool, bool)> = const { Cell::new((false, false)) };
+    /// Include the maximum-size exact root on every ordinary sizing rule.
+    static ROOT_CONDITIONS: Cell<bool> = const { Cell::new(false) };
     /// While set, every `apply_doc` is first simulated the way RPC simulation
     /// runs it, and its metered footprint checked against the simulated one
     /// ([`World::check_footprint`]).
@@ -192,6 +198,7 @@ fn repo() -> PathBuf {
 struct Stack {
     registry: String,
     wasm: HashMap<String, std::vec::Vec<u8>>,
+    versions: HashMap<String, String>,
     pins: HashMap<String, HashMap<String, String>>,
 }
 
@@ -220,9 +227,15 @@ fn load_stack() -> Stack {
         }))
         .expect("build.json");
     let mut wasm = HashMap::new();
+    let mut versions = HashMap::new();
     let mut pins = HashMap::new();
     for a in build["artifacts"].as_array().expect("artifacts") {
         let package = a["package"].as_str().unwrap().to_string();
+        // A fetched stack's registry code carries no version.
+        versions.insert(
+            package.clone(),
+            a["version"].as_str().unwrap_or_default().to_string(),
+        );
         let bytes = std::fs::read(dir.join(a["wasm"].as_str().unwrap())).expect("artifact wasm");
         assert_eq!(
             sha256_hex(&bytes),
@@ -241,6 +254,7 @@ fn load_stack() -> Stack {
     let stack = Stack {
         registry: build["registry"].as_str().unwrap().to_string(),
         wasm,
+        versions,
         pins,
     };
     // Every consumer was built against the exact bytes this stack carries.
@@ -267,7 +281,10 @@ struct World {
     env: Env,
     stack: Stack,
     factory: Address,
+    /// The WebAuthn verifier, which `perch/verifiers` deployed, and the
+    /// `verifier-name` a document names it by.
     webauthn: Address,
+    webauthn_name: String,
     compiler: Address,
     controller: Address,
     adapter: Address,
@@ -348,7 +365,35 @@ fn world() -> World {
     let compiler = content("perch-doc-compiler");
     content("perch-interpreter");
     content("perch-spending-limit");
-    let webauthn = content("perch-webauthn-verifier");
+    // `perch/verifiers`: the stack's registry code at the address the
+    // account, the compiler and the factory derive, and the WebAuthn verifier
+    // published and `deploy_stateless`'d through it, as a deployment does. A
+    // document names the verifier, which the compiler resolves through the
+    // registry's own `fetch_hash`.
+    let verifiers = perch_smart_account::verifier_registry(&env);
+    let manager = Address::generate(&env);
+    env.register_at(
+        &verifiers,
+        stack.wasm["perch-constructorless-registry"].as_slice(),
+        (
+            Address::generate(&env),
+            manager.clone(),
+            Address::generate(&env),
+        ),
+    );
+    let webauthn_version = stack.versions["perch-webauthn-verifier"].clone();
+    let webauthn = {
+        let name = soroban_sdk::String::from_str(&env, "perch-webauthn-verifier");
+        let version = soroban_sdk::String::from_str(&env, &webauthn_version);
+        let hash = env
+            .deployer()
+            .upload_contract_wasm(stack.wasm["perch-webauthn-verifier"].as_slice());
+        env.mock_all_auths();
+        let reg =
+            perch_constructorless_registry::ConstructorlessRegistryClient::new(&env, &verifiers);
+        reg.publish_hash(&name, &manager, &hash, &version);
+        reg.deploy_stateless(&name, &Some(version), &None)
+    };
     let pool = content("perch-zk-pool");
     let adapter = content("perch-zk-adapter");
     let controller = content("perch-recovery");
@@ -365,6 +410,7 @@ fn world() -> World {
         stack,
         factory,
         webauthn,
+        webauthn_name: format!("perch-webauthn-verifier@{webauthn_version}"),
         compiler,
         controller,
         adapter,
@@ -588,8 +634,9 @@ impl World {
             .unwrap_or_default();
         let signer = |id: &str, key: &SoftPasskey| {
             format!(
-                r#"{{"id":"{id}","verifier":"{}","key":"{}"}}"#,
+                r#"{{"id":"{id}","verifier":"{}","verifier-name":"{}","key":"{}"}}"#,
                 strkey(&self.webauthn),
+                self.webauthn_name,
                 hex(&key.key_data())
             )
         };
@@ -1009,10 +1056,17 @@ impl World {
         let (reprogram, recap) = REPARAM.with(Cell::get);
         let function = if reprogram { "protectee" } else { "protected" };
         let limit = if recap { "11" } else { "10" };
-        let scope = format!(
+        let mut scope = format!(
             r#""scope":{{"type":"contract","address":"{}"}}"#,
             strkey(&self.target)
         );
+        if ROOT_CONDITIONS.with(Cell::get) {
+            scope.push_str(&format!(
+                r#","auth-root":{{"contract":"{}","function":"{}"}}"#,
+                strkey(&self.target),
+                "x".repeat(32)
+            ));
+        }
         // Rule `k` (0 is `target`) names `fan` signers starting at
         // `k * fan`, wrapping, so every signer is some rule's, and
         // `target` starts with the owner.
@@ -1034,8 +1088,9 @@ impl World {
             .zip(keys)
             .map(|(id, key)| {
                 format!(
-                    r#"{{"id":"{id}","verifier":"{}","key":"{}"}}"#,
+                    r#"{{"id":"{id}","verifier":"{}","verifier-name":"{}","key":"{}"}}"#,
                     strkey(&self.webauthn),
+                    self.webauthn_name,
                     hex(&key.key_data())
                 )
             })
@@ -1664,32 +1719,43 @@ fn the_stack_compiler_hashes_the_canonical_recovery_text() {
 }
 
 /// One built account and factory, unchanged, under several networks: each
-/// resolves `perch/constructorless` under that network's own Stellar Registry
-/// root, and the content addresses of the stack's own tier-0 bytes there. The
-/// registries are written out here, not derived (`registry_path.rs` derives
-/// them hop by hop).
+/// resolves `perch/constructorless` and `perch/verifiers` under that
+/// network's own Stellar Registry root, the stack's own infra bytes at their
+/// content addresses in the first, and its WebAuthn verifier's in the
+/// second. The registries are written out here, not derived
+/// (`registry_path.rs` derives them hop by hop), so a rehearsal's stack,
+/// built from dev registry paths, fails it by design: run the suite on one
+/// with `--skip one_build_resolves_each_networks_own_registry`.
 #[test]
 #[ignore = "needs the built stack"]
 fn one_build_resolves_each_networks_own_registry() {
     use perch_smart_account::InfraPins;
-    const NETWORKS: [(&str, &str); 3] = [
+    const NETWORKS: [(&str, &str, &str); 3] = [
         (
             "Test SDF Network ; September 2015",
             "CDZGU4AIND6QRCGAN72I7DCS2EKRZ76JSKYY7KKJR4CG5IR2AMFIBZTM",
+            "CCHJ7RWPMO33JB5PS74B64N4LVTWCGLEMH5IAKYCV32X56MXGYLHN5HW",
         ),
         (
             "Public Global Stellar Network ; September 2015",
             "CC236AK2RX7MUO7BV7JYDDW5KHZ3X7YYJOJKCVDC543BQBNNSUCZB7NN",
+            "CCDCKRUV4W4DQYBWFWT4FNQ2QXQPGUQ7EXOZHIHSSLB6YJHMLHPMGDPH",
         ),
         (
             "Test SDF Future Network ; October 2022",
             "CBPWEPHLO2QDXWMWMHLOWCLRKQT24EFH7GYW6G3UOFY45RYOHS32A5JP",
+            "CCARW6UKQLFDEJZHML2QTHFJNL4RKSSY6JEUCAC4IX5RJ3GTZ75SOGXW",
         ),
     ];
     let stack = load_stack();
     // build-stack.sh builds for one network's registry; the bytes are the
     // same on every network.
-    assert!(NETWORKS.iter().any(|(_, r)| *r == stack.registry));
+    assert!(
+        NETWORKS.iter().any(|(_, r, _)| *r == stack.registry),
+        "the stack was built for {}, no canonical registry: a rehearsal's stack \
+         (--skip one_build_resolves_each_networks_own_registry)",
+        stack.registry
+    );
     let env = Env::new_with_config(EnvTestConfig {
         capture_snapshot_at_drop: false,
     });
@@ -1701,14 +1767,15 @@ fn one_build_resolves_each_networks_own_registry() {
     let account = factory.create(&BytesN::from_array(&env, &[7; 32]), &admin);
     let account = PerchAccountClient::new(&env, &account);
 
-    for (passphrase, registry) in NETWORKS {
+    for (passphrase, registry, verifiers) in NETWORKS {
         let id = env
             .crypto()
             .sha256(&Bytes::from_slice(&env, passphrase.as_bytes()))
             .to_array();
         env.ledger().with_mut(|l| l.network_id = id);
         let registry = Address::from_str(&env, registry);
-        let content = |pkg: &str| {
+        let verifiers = Address::from_str(&env, verifiers);
+        let content_in = |registry: &Address, pkg: &str| {
             let hash = env
                 .crypto()
                 .sha256(&Bytes::from_slice(&env, &stack.wasm[pkg]))
@@ -1717,6 +1784,7 @@ fn one_build_resolves_each_networks_own_registry() {
                 .with_address(registry.clone(), hash)
                 .deployed_address()
         };
+        let content = |pkg: &str| content_in(&registry, pkg);
         assert_eq!(
             account.infra(),
             InfraPins {
@@ -1728,7 +1796,7 @@ fn one_build_resolves_each_networks_own_registry() {
         );
         assert_eq!(
             factory.webauthn_verifier(),
-            content("perch-webauthn-verifier"),
+            content_in(&verifiers, "perch-webauthn-verifier"),
             "{passphrase}"
         );
     }
@@ -2619,8 +2687,9 @@ impl World {
             .iter()
             .map(|(id, key)| {
                 format!(
-                    r#"{{"id":"{id}","verifier":"{}","key":"{}"}}"#,
+                    r#"{{"id":"{id}","verifier":"{}","verifier-name":"{}","key":"{}"}}"#,
                     strkey(&self.webauthn),
+                    self.webauthn_name,
                     hex(key)
                 )
             })
@@ -2990,8 +3059,9 @@ fn grant_rule(name: &str, signer: &str, token: &Address, limit: u32) -> String {
 
 fn passkey_decl(w: &World, id: &str, key: &SoftPasskey) -> String {
     format!(
-        r#"{{"id":"{id}","verifier":"{}","key":"{}"}}"#,
+        r#"{{"id":"{id}","verifier":"{}","verifier-name":"{}","key":"{}"}}"#,
         strkey(&w.webauthn),
+        w.webauthn_name,
         hex(&key.key_data())
     )
 }
@@ -4106,4 +4176,155 @@ fn census_of_the_preview_grant() {
     assert!(census_spend(&w, &a, &census_key(2), &token, &game, id));
     report_unbudgeted("census: 1 XLM transfer through app 2's guess-xlm", &w.env);
     census_dump(&w, &a, "grant");
+}
+
+/// A deterministic native game; compiler/account/verifier run their built
+/// Wasm. Setup may mock registry/token admin, but every tested game entry is
+/// enforced and carries a real WebAuthn signature.
+#[soroban_sdk::contract]
+struct RootGame;
+#[soroban_sdk::contractimpl]
+impl RootGame {
+    pub fn guess(e: Env, account: Address, token: Address, win: bool) {
+        account.require_auth();
+        let me = e.current_contract_address();
+        if win {
+            TokenClient::new(&e, &token).transfer(&me, &account, &1);
+        } else {
+            TokenClient::new(&e, &token).transfer(&account, &me, &1);
+        }
+    }
+}
+
+#[test]
+#[ignore = "needs the built stack"]
+fn exact_root_wasm_game_and_cap_costs() {
+    use perch_testkit::passkey::auth_entry_for_rules;
+    let w = world();
+    let e = &w.env;
+    let a = w.new_account(canonical_passkey([61; 32]));
+    let token = w.funded_token(&a);
+    let game = e.register(RootGame, ());
+    let original = w.doc(&a.owner, None);
+    let mut text = std::vec![0; original.len() as usize];
+    original.copy_into_slice(&mut text);
+    let mut doc = perch_ir::from_json(&String::from_utf8(text).unwrap()).unwrap();
+    let mut game_rule = doc.rules[1].clone();
+    game_rule.name = "game".into();
+    game_rule.scope = perch_ir::Scope::contract(strkey(&game));
+    game_rule.functions = Some(std::vec!["guess".into()]);
+    let mut pay = game_rule.clone();
+    pay.name = "pay".into();
+    pay.scope = perch_ir::Scope::contract(strkey(&token));
+    pay.functions = Some(std::vec!["transfer".into()]);
+    pay.auth_root = Some(perch_ir::AuthRoot {
+        contract: strkey(&game),
+        function: "guess".into(),
+    });
+    pay.cap = Some(perch_ir::CapConstraint {
+        token: None,
+        limit: "2".into(),
+        period_ledgers: 100,
+    });
+    doc.rules = std::vec![doc.rules[0].clone(), game_rule, pay];
+    let bytes = Bytes::from_slice(e, perch_ir::canonical_json(&doc).as_bytes());
+    assert!(w.try_apply(&a, &a.owner, &bytes, 0));
+    report("exact root: apply game grant", e);
+    assert_eq!(w.account(&a).capabilities().interface_version, 3);
+    let ids = [w.rule_id(&a.address, "game"), w.rule_id(&a.address, "pay")];
+    for win in [false, true] {
+        let mut root = w.invocation(
+            &game,
+            "guess",
+            std::vec![w.sc(a.address.clone()), w.sc(token.clone()), w.sc(win)],
+        );
+        if !win {
+            root.sub_invocations = std::vec![w.invocation(
+                &token,
+                "transfer",
+                std::vec![w.sc(a.address.clone()), w.sc(game.clone()), w.sc(1i128)]
+            )]
+            .try_into()
+            .unwrap();
+        }
+        let selected = if win { &ids[..1] } else { &ids[..] };
+        e.set_auths(&[auth_entry_for_rules(
+            e,
+            &a.address,
+            &w.webauthn,
+            &a.owner,
+            selected,
+            w.next_nonce(),
+            w.ledger() + 1000,
+            root,
+        )]);
+        assert!(RootGameClient::new(e, &game)
+            .try_guess(&a.address, &token, &win)
+            .is_ok());
+        report(
+            if win {
+                "exact root: winning guess"
+            } else {
+                "exact root: losing guess"
+            },
+            e,
+        );
+        e.set_auths(&[]);
+        assert_eq!(w.window(&a, ids[1]).unwrap().total, 1);
+    }
+    assert!(!w.spend(&a, &a.owner, &token, 1));
+    report("exact root: direct transfer refused below cap", e);
+    assert_eq!(w.window(&a, ids[1]).unwrap().total, 1);
+}
+
+#[test]
+#[ignore = "needs the built stack"]
+fn exact_root_wasm_at_document_caps() {
+    let w = world();
+    let shape = worst_shape();
+    let keys = passkeys(65, shape.signers);
+    let a = w.new_account(canonical_passkey([65; 32]));
+    let rec = Rec {
+        profile: "loss",
+        mode: Mode::Guardian,
+        zk: None,
+        delay: DELAY,
+        baseline: None,
+    };
+    ROOT_CONDITIONS.with(|x| x.set(true));
+    let doc = w.shaped_doc(&keys, &rec, shape, MAX_DOC_CANONICAL_BYTES as usize, true);
+    ROOT_CONDITIONS.with(|x| x.set(false));
+    assert_eq!(doc.len(), MAX_DOC_CANONICAL_BYTES);
+    assert!(w.try_apply(&a, &a.owner, &doc, 0));
+    report("exact root: maximum-sized document apply", &w.env);
+    let stored = w.account(&a).rule_set();
+    assert_eq!(
+        stored.iter().filter(|r| r.auth_root.is_some()).count(),
+        MAX_DOC_RULES as usize - 1
+    );
+    let replacement_keys = passkeys(90, shape.signers);
+    let replacements = w.replacing_all(&replacement_keys, None);
+    let attempt = w.ctl().begin_lost_key(&a.address, &replacements);
+    let target = w.target_bytes(&a, &replacements);
+    report(
+        "exact root: maximum-sized recovery target derivation",
+        &w.env,
+    );
+    for guardian in [0, 1] {
+        w.guardian(guardian, &a, attempt, EvidenceDomain::Initiate);
+    }
+    w.advance(DELAY);
+    assert!(w.try_complete(&a, &target));
+    report(
+        "exact root: maximum-sized guardian recovery completion",
+        &w.env,
+    );
+    assert_eq!(
+        w.account(&a)
+            .rule_set()
+            .iter()
+            .filter(|r| r.auth_root.is_some())
+            .count(),
+        MAX_DOC_RULES as usize - 1
+    );
 }

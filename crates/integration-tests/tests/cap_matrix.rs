@@ -55,6 +55,7 @@ fn cap_doc(pubkey_hex: &str) -> perch_ir::PolicyDoc {
             method: SignerMethod::External {
                 verifier: ED25519_VERIFIER.into(),
                 key: pubkey_hex.into(),
+                verifier_name: None,
             },
         }],
         rules: std::vec![Rule {
@@ -66,6 +67,7 @@ fn cap_doc(pubkey_hex: &str) -> perch_ir::PolicyDoc {
             functions: Some(std::vec!["transfer".into()]),
             args: None,
             not_after_ledger: None,
+            auth_root: None,
             cap: Some(CapConstraint {
                 token: None, // denominate in the scope contract (TOKEN)
                 limit: LIMIT.to_string(),
