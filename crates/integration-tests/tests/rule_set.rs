@@ -8,8 +8,8 @@
 //!
 //! - the constructor's admin rule;
 //! - a document that only reorders a rule's signers (fork issue #22): the
-//!   stored rule, OZ's context rule and the account's record agree on the
-//!   new order;
+//!   stored rule, the context-rule view and the account's record agree on
+//!   the new order;
 //! - the check reports a stored set that differs from what is installed;
 //! - the account's anti-brick check on the stored rules against the one on
 //!   the compiled rules, on generated documents;
@@ -18,6 +18,7 @@
 //!   or to a set with no admin rule.
 
 use perch_account::{PerchAccount, PerchAccountClient};
+use perch_account_types::Signer;
 use perch_doc_compiler::{
     admin_survives, CompiledDoc, DocCompilerClient, DocCompilerError, PerchDocCompiler,
 };
@@ -32,7 +33,6 @@ use perch_testkit::rule_set::check;
 use perch_testkit::FIXTURE_NETWORK;
 use soroban_sdk::testutils::{Address as _, EnvTestConfig, Ledger as _};
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, Bytes, Env, Symbol, Vec as SVec};
-use stellar_accounts::smart_account::Signer;
 
 fn bytes(e: &Env, json: &str) -> Bytes {
     Bytes::from_slice(e, json.as_bytes())
@@ -78,10 +78,10 @@ fn the_constructor_stores_its_admin_rule() {
     assert_eq!(admin.threshold, 1);
 }
 
-/// Fork issue #22: a document that only reorders a rule's signers. OZ keeps
-/// a context rule's signers in the order given, so the reorder is a change:
-/// OZ's rule, the account's record and the stored rule all take the new
-/// order.
+/// Fork issue #22: a document that only reorders a rule's signers. A
+/// context rule keeps its signers in the order given, so the reorder is a
+/// change: the context-rule view, the account's record and the stored rule
+/// all take the new order.
 #[test]
 fn reordering_a_rules_signers_reorders_it_everywhere() {
     let w = DeltaWorld::new();

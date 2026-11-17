@@ -34,7 +34,7 @@
 //! rule-eval check reads) must equal the facade's.
 //!
 //! `__check_auth` decides with rule-eval's `authorize` over the stored rule
-//! sets and OZ's `authenticate` of every signer
+//! sets and the account's `authenticate` of every signer
 //! (`perch_smart_account::check_auth`), so a refusal by either is a refused
 //! verdict. An accepted verdict carries the spending records the account
 //! keeps for rule-eval, one per rule the trace lowers to (empty for an
@@ -46,15 +46,15 @@
 //!
 //! After every `apply_doc` and `apply_scope`, the account's stored
 //! rule-eval rule set for that document must equal both the lowering of the
-//! document's model and the denotation of OZ's rules with the programs and
-//! caps the compiler emits for them (`perch_testkit::rule_set`); a
+//! document's model and the denotation of its context rules with the
+//! programs and caps the compiler emits for them (`perch_testkit::rule_set`); a
 //! difference fails the run.
 //!
 //! A scoped trace's document goes through `apply_scope` instead: the harness
 //! applies the trace's admin document with `apply_doc`, sets the scope
 //! generation to the one the trace issues the document in, and applies the
 //! document under one scope id, authorized through the admin document's
-//! self-admin rule. Choices name the scope's rules, by their OZ ids in its
+//! self-admin rule. Choices name the scope's rules, by their ids in its
 //! record. Perch refuses every scoped document rule-core's lowering refuses
 //! with one error, `ScopeEscalation`.
 #![allow(dead_code)]
@@ -63,6 +63,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use ed25519_dalek::{Signer as _, SigningKey};
+use perch_account_types::{AuthPayload, Signer};
 use perch_compile::{compile, CompileConfig, LoweredRule, ScopeSpec, SignerSpec};
 use perch_ed25519_verifier::PerchEd25519Verifier;
 use perch_ir::{
@@ -94,7 +95,6 @@ use soroban_sdk::{
     contract, contractimpl, Address, Bytes, BytesN, Env, IntoVal, Map, String as SString, Symbol,
     Val, Vec as SVec,
 };
-use stellar_accounts::smart_account::{AuthPayload, Signer};
 
 use crate::support::{self, Key, Opts, World};
 use perch_account::PerchAccountError;
@@ -934,7 +934,7 @@ pub fn run(t: &Trace, start: Start) -> Result<Run, String> {
     let canonical = |d: &PolicyDoc| Bytes::from_slice(&e, perch_ir::canonical_json(d).as_bytes());
 
     // Every rule is installed at ledger 0, before any authorization's ledger.
-    // Rule index (the document's, then the recovery rule) to OZ id, read
+    // Rule index (the document's, then the recovery rule) to rule id, read
     // while the account still serves its views.
     e.ledger().with_mut(|l| l.sequence_number = 0);
     let missing = u32::MAX;

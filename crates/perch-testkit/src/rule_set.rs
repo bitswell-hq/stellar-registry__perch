@@ -6,14 +6,16 @@
 //!   rules `apply_doc` does not install); before any document, the
 //!   constructor's admin rule;
 //! - **the installed rules**: for each installed-rule record, in order, the
-//!   denotation (`denote`) of OZ's context rule
-//!   (`get_context_rule`: contract, signers in OZ's order, last ledger) with
-//!   the interpreter program and spending cap Perch's RPN lowering gives the
+//!   denotation (`denote`) of its context rule (`get_context_rule`:
+//!   contract, signers in the record's order, last ledger) with the
+//!   interpreter program and spending cap Perch's RPN lowering gives the
 //!   same document rule (`rpn::policies` of the applied canonical document):
 //!   what the interpreter and the spending limit enforce when attached. A
-//!   document rule's OZ rule must carry no policy. The recovery rule's record
-//!   must be a zero-signer rule whose one policy is the adopted controller,
-//!   and its stored rule rule-eval's recovery rule.
+//!   document rule must carry no policy. The recovery rule's record must be
+//!   a zero-signer rule whose one policy is the adopted controller, and its
+//!   stored rule rule-eval's recovery rule.
+//! - **OZ's registry**: no rule. A completion reads the recovery rule from
+//!   its record.
 //!
 //! The doc compiler's rules for the applied document are checked against the
 //! same RPN lowering first (`rpn::check_compiled`).
@@ -39,6 +41,7 @@
 use crate::denote::{denote, Installed};
 use crate::rpn::{self, Policies};
 use perch_account::PerchAccountClient;
+use perch_account_types::ContextRuleType;
 use perch_doc_compiler::{CompiledDoc, PerchDocCompilerClient};
 use perch_rule_eval::convert::{address, signers};
 use perch_rule_eval::{doc_of, model_of, StoredRule};
@@ -48,7 +51,6 @@ use soroban_sdk::{Address, Bytes, Env};
 use std::format;
 use std::string::{String, ToString};
 use std::vec::Vec;
-use stellar_accounts::smart_account::ContextRuleType;
 use stellar_accounts::smart_account::SmartAccountStorageKey;
 
 /// What one [`check`] compared.
@@ -206,7 +208,7 @@ pub fn check_scope(e: &Env, account: &Address, scope: u32) -> Result<Checked, St
 }
 
 /// `stored` against `lowered` and against the denotation of each of
-/// `records`, read back from OZ with the program and cap `attached` (the
+/// `records`, read back from its view with the program and cap `attached` (the
 /// RPN lowering of the applied document, `None` before any document) gives
 /// it, carrying `generation`.
 #[allow(clippy::too_many_arguments)]
@@ -248,31 +250,45 @@ fn compare(
     }
 
     for (i, record) in records.iter().enumerate() {
-        let oz = client.get_context_rule(&record.id);
+        let view = client.get_context_rule(&record.id);
+        let oz = e.as_contract(account, || {
+            e.storage()
+                .persistent()
+                .has(&SmartAccountStorageKey::ContextRuleData(record.id))
+        });
+        if oz {
+            return Err(format!("rule {i}: OZ's registry holds the rule"));
+        }
         let denoted = if record.recovery {
             let controller = client
                 .recovery_controller()
                 .ok_or("a recovery rule and no controller")?;
-            if !oz.signers.is_empty() || oz.policies != soroban_sdk::vec![e, controller] {
+            if !view.signers.is_empty() || view.policies != soroban_sdk::vec![e, controller.clone()]
+            {
                 return Err(format!(
-                    "rule {i}: the recovery rule's OZ rule has other signers or policies"
+                    "rule {i}: the recovery rule has other signers or policies"
+                ));
+            }
+            if view.valid_until.is_some()
+                || view.context_type != ContextRuleType::CallContract(account.clone())
+            {
+                return Err(format!(
+                    "rule {i}: the recovery rule is not an unbounded rule on the account"
                 ));
             }
             checked.recovery = true;
             rule_eval::recovery_rule(&me)
         } else {
-            let ContextRuleType::CallContract(contract) = oz.context_type.clone() else {
+            let ContextRuleType::CallContract(contract) = view.context_type.clone() else {
                 return Err(format!("rule {i}: not a contract-call rule"));
             };
-            if !oz.policies.is_empty() {
-                return Err(format!(
-                    "rule {i}: a document rule's OZ rule carries a policy"
-                ));
+            if !view.policies.is_empty() {
+                return Err(format!("rule {i}: a document rule carries a policy"));
             }
             let mut rule = Installed {
                 contract,
-                signers: oz.signers.clone(),
-                valid_until: oz.valid_until,
+                signers: view.signers.clone(),
+                valid_until: view.valid_until,
                 program: None,
                 cap: None,
             };
@@ -281,7 +297,7 @@ fn compare(
                     .get(i)
                     .ok_or(format!("rule {i}: no document rule installs it"))?;
                 if soroban_sdk::String::from_str(e, &c.name) != record.name
-                    || c.valid_until != oz.valid_until
+                    || c.valid_until != view.valid_until
                 {
                     return Err(format!("rule {i}: the document rule is another"));
                 }
@@ -379,12 +395,7 @@ pub fn check_records(e: &Env, account: &Address) -> Result<Records, String> {
         }
         out.charged += usize::from(!kept.history.is_empty());
     }
-    let next: u32 = e.as_contract(account, || {
-        e.storage()
-            .instance()
-            .get(&SmartAccountStorageKey::NextId)
-            .unwrap_or(0)
-    });
+    let next = e.as_contract(account, || perch_smart_account::testutils::next_rule_id(e));
     for id in 0..next {
         let kept = e.as_contract(account, || {
             perch_smart_account::testutils::spend_record(e, id)

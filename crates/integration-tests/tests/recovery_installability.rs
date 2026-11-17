@@ -165,8 +165,7 @@ fn an_expiring_admin_rule_is_refused_by_the_anti_brick_check() {
 #[test]
 fn admin_survives_requires_an_unbounded_admin_rule() {
     let env = Env::default();
-    let signer =
-        stellar_accounts::smart_account::Signer::Delegated(soroban_sdk::Address::generate(&env));
+    let signer = perch_account_types::Signer::Delegated(soroban_sdk::Address::generate(&env));
     let ids = soroban_sdk::vec![&env, String::from_str(&env, "owner")];
     let all = ModelRule {
         scope: ModelScope::SelfAdmin,
@@ -391,11 +390,9 @@ fn delta_and_full_replace_agree_after_a_rule_expires() {
 }
 
 /// After a rule expires, an edit to it (a signer change) must be accepted the
-/// same way on the in-place path and the replacement path: both drop the dead
-/// rule, so the outcome no longer depends on which path the cost model prices
-/// lower.
+/// same way by the delta and the full replace: both drop the dead rule.
 #[test]
-fn an_expired_rule_edit_does_not_depend_on_the_reconcile_path() {
+fn an_expired_rule_edit_is_accepted_as_under_the_full_replace() {
     let a = DocModel {
         signers: std::vec![signer("owner", 0), signer("s1", 1), signer("s2", 2)],
         rules: std::vec![
@@ -407,16 +404,15 @@ fn an_expired_rule_edit_does_not_depend_on_the_reconcile_path() {
     };
     let mut b = a.clone();
     b.rules[1].signers = std::vec![1, 2];
-    let run = |in_place: bool| {
-        let w = DeltaWorld::new();
-        assert!(w.apply_forced(&a, in_place).is_ok());
-        w.env.ledger().with_mut(|l| l.sequence_number = 1_100);
-        w.apply_forced(&b, in_place)
-    };
-    let (edit, replace) = (run(true), run(false));
+    let w = DeltaWorld::new();
+    assert!(w.apply(&w.delta, &a).is_ok());
+    assert!(w.apply(&w.oracle, &a).is_ok());
+    w.env.ledger().with_mut(|l| l.sequence_number = 1_100);
+    let (delta, oracle) = (w.apply(&w.delta, &b), w.apply(&w.oracle, &b));
     assert_eq!(
-        edit.is_ok(),
-        replace.is_ok(),
-        "in-place edit {edit:?} vs replacement {replace:?} of an expired rule"
+        delta.is_ok(),
+        oracle.is_ok(),
+        "delta {delta:?} vs full replace {oracle:?} of an expired rule"
     );
+    assert!(delta.is_ok(), "both drop the dead r1: {delta:?}");
 }
