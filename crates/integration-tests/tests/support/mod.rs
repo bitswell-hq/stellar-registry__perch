@@ -8,7 +8,7 @@
 //!
 //! The contracts are the real ones (`PerchAccount`, the doc compiler and
 //! interpreter at their pinned content addresses, the `PerchRecovery`
-//! controller, the WS2 membership pool), except:
+//! controller, the membership pool), except:
 //!
 //! - the owner's key and the guardians are [`Key`] stand-ins: custom
 //!   accounts whose `__check_auth` approves until [`Key::deny`] is called.
@@ -231,12 +231,7 @@ pub fn enrollment(e: &Env, n: u8) -> ZkEnrollment {
 // Documents
 // ---------------------------------------------------------------------------
 
-pub fn strkey(a: &Address) -> String {
-    let s = a.to_string();
-    let mut buf = std::vec![0u8; s.len() as usize];
-    s.copy_into_slice(&mut buf);
-    String::from_utf8(buf).unwrap()
-}
+pub use perch_testkit::delta::strkey;
 
 pub fn hex32(b: &BytesN<32>) -> String {
     hex::encode(b.to_array())
@@ -696,6 +691,71 @@ impl World {
         root: SorobanAuthorizedInvocation,
     ) -> SorobanAuthorizationEntry {
         self.delegated_entry(&self.account, key, self.rule_id(&self.account, rule), root)
+    }
+
+    /// `s` as the bytes of a document.
+    pub fn json(&self, s: String) -> Bytes {
+        Bytes::from_slice(&self.env, s.as_bytes())
+    }
+
+    /// Install `account`'s authorization of `root` through its admin rule,
+    /// signed by its delegated owner key.
+    pub fn as_owner(&self, account: &Address, owner: &Address, root: SorobanAuthorizedInvocation) {
+        self.env.set_auths(&[self.delegated_entry(
+            account,
+            owner,
+            self.rule_id(account, "admin"),
+            root,
+        )]);
+    }
+
+    /// B's authorization of `root` through B's rule `b_rule`, whose signer is
+    /// the Perch account A; A approves through its rule `a_rule`, whose signer
+    /// is `key` (CAP-0071 nesting, all in B's one entry).
+    #[allow(clippy::too_many_arguments)]
+    pub fn via_delegate(
+        &self,
+        nonce: i64,
+        b: &Address,
+        b_rule: u32,
+        a: &Address,
+        a_rule: u32,
+        key: &Address,
+        root: SorobanAuthorizedInvocation,
+    ) -> SorobanAuthorizationEntry {
+        let e = &self.env;
+        SorobanAuthorizationEntry {
+            credentials: SorobanCredentials::AddressWithDelegates(
+                SorobanAddressCredentialsWithDelegates {
+                    address_credentials: SorobanAddressCredentials {
+                        address: b.clone().into(),
+                        nonce,
+                        signature_expiration_ledger: self.ledger() + 1_000,
+                        signature: self.payload(
+                            map![e, (Signer::Delegated(a.clone()), Bytes::new(e))],
+                            b_rule,
+                        ),
+                    },
+                    delegates: std::vec![SorobanDelegateSignature {
+                        address: a.clone().into(),
+                        signature: self.payload(
+                            map![e, (Signer::Delegated(key.clone()), Bytes::new(e))],
+                            a_rule,
+                        ),
+                        nested_delegates: std::vec![SorobanDelegateSignature {
+                            address: key.clone().into(),
+                            signature: ScVal::Void,
+                            nested_delegates: VecM::default(),
+                        }]
+                        .try_into()
+                        .unwrap(),
+                    }]
+                    .try_into()
+                    .unwrap(),
+                },
+            ),
+            root_invocation: root,
+        }
     }
 
     /// Anyone's selection of the zero-signer recovery rule for `root`.

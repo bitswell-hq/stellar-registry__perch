@@ -9,20 +9,32 @@
 //! signers against OpenZeppelin's digest, so wallets sign the bytes they
 //! sign for an OpenZeppelin account, and the records `check_auth` charged are
 //! stored.
+//!
 //! Each chosen rule id is read as the stored rule its record holds, among
 //! the account document's records, or its grant's when a grant document
-//! installed it (its tag). `check_auth` reads only the rules its
-//! choices name, so running it over the chosen rules alone gives the verdict
-//! and records of running it over the whole stored set. A chosen id that names no installed rule refuses with
-//! `ContextRuleNotFound` (#3000), as OZ refuses it, which wallets read as a
-//! selection the configuration has since left. rule-eval's refusal of a
-//! chosen rule issued under another grant generation (`StaleGeneration`: a
-//! grant rule a recovery completion wiped) refuses with `StaleGrant`; any
-//! other refusal, a chosen recovery rule, or a batch soroban-facade cannot
-//! read refuses the authorization with `RuleEvalRefused`. The recovery rule's stored form
-//! allows every `apply_doc` the controller could; the controller decides
-//! a completion (`auth::authorize_completion`), and no other authorization
-//! may choose it.
+//! installed it (its tag). `check_auth` reads only the rules its choices
+//! name, so running it over the chosen rules alone gives the verdict and
+//! records of running it over the whole stored set. A chosen id that names
+//! no installed rule refuses with `ContextRuleNotFound` (#3000), as OZ
+//! refuses it, which wallets read as a selection the configuration has since
+//! left. rule-eval's refusal of a chosen rule issued under another grant
+//! generation (`StaleGeneration`: a grant rule a recovery completion wiped)
+//! refuses with `StaleGrant`; any other refusal, a chosen recovery rule, or
+//! a batch soroban-facade cannot read refuses the authorization with
+//! `RuleEvalRefused`. The recovery rule's stored form allows every
+//! `apply_doc` the controller could; the controller decides a completion
+//! (`auth::authorize_completion`), and no other authorization may choose it.
+//!
+//! A capped rule meters the account's own transfers: a context chosen under
+//! a capped rule is refused with `RuleEvalRefused` unless its argument 0 is
+//! the account. A context chosen under a grant document's rule (a grant,
+//! one carrying a generation) for a token function whose argument 0 is the
+//! owner ([`OWNER_FNS`]) is refused the same way. As a CAP-0071 delegate the
+//! account is handed the delegating account's contexts
+//! (`docs/recovery/cap-0071.md` C2), so neither kind of rule authorizes that
+//! account's calls to these functions. A grant's rule for any other function
+//! matches as its argument predicates say; a grant author pins the
+//! account's argument with `is-self`.
 //!
 //! Each capped rule keeps one record. It is kept across an apply exactly
 //! when its rule keeps both its id and its cap: a changed cap, or a
@@ -42,7 +54,9 @@ use perch_account_types::{AuthPayload, SmartAccountError};
 use crate::auth::{
     authenticate, SMART_ACCOUNT_EXTEND_AMOUNT as EXTEND, SMART_ACCOUNT_TTL_THRESHOLD as THRESHOLD,
 };
-use crate::{extend_persistent, grant_generation, PerchAuthError, PerchStorage, RuleRecord};
+use crate::{
+    extend_persistent, grant_generation, PerchAuthError, PerchStorage, RuleRecord, OWNER_FNS,
+};
 
 fn refused() -> soroban_sdk::Error {
     PerchAuthError::RuleEvalRefused.into()
@@ -89,6 +103,14 @@ pub(crate) fn authorize(
         choices.push(j as u32);
     }
     let contexts = convert::calls(e, contexts).ok_or_else(refused)?;
+    let me = convert::address(e, &e.current_contract_address()).ok_or_else(refused)?;
+    for (ctx, j) in contexts.iter().zip(&choices) {
+        let rule = &rules[*j as usize];
+        let own = rule.cap.is_some() || (rule.generation.is_some() && owner_fn(ctx));
+        if own && !from_self(ctx, &me) {
+            return Err(refused());
+        }
+    }
     let signers = convert::signers(e, &payload.signers.keys()).ok_or_else(refused)?;
     let after = rule_eval::check_auth(
         &rules,
@@ -120,6 +142,18 @@ pub(crate) fn authorize(
         }
     }
     Ok(())
+}
+
+/// Whether `ctx` calls one of [`OWNER_FNS`].
+fn owner_fn(ctx: &rule_eval::Context) -> bool {
+    matches!(ctx, rule_eval::Context::Call { function, .. }
+        if OWNER_FNS.iter().any(|n| function.as_slice() == n.as_bytes()))
+}
+
+/// Whether `ctx` is a call whose argument 0 is the address `me`.
+fn from_self(ctx: &rule_eval::Context, me: &[u8]) -> bool {
+    matches!(ctx, rule_eval::Context::Call { args, .. }
+        if matches!(args.first(), Some(rule_eval::Val::Address(a)) if a.as_slice() == me))
 }
 
 /// Whether two records hold the same spends and total.
