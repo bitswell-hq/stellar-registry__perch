@@ -53,9 +53,8 @@ use stellar_accounts::smart_account::{self, ContextRuleType, Signer, MAX_POLICIE
 pub struct InstalledPolicy {
     /// The policy contract.
     pub policy: Address,
-    /// `sha256` of the install parameters' XDR. A policy whose parameters
-    /// change is uninstalled and installed again; one whose parameters are
-    /// unchanged is left alone.
+    /// `sha256` of the install parameters' XDR.
+    // docs/account-interface.md, "Types".
     pub params: BytesN<32>,
 }
 
@@ -83,12 +82,12 @@ pub struct DeltaSummary {
 pub struct InstalledRule {
     /// The OZ context-rule id.
     pub id: u32,
-    /// The zero-signer recovery rule. Document rules are matched by name;
-    /// the recovery rule by this flag, so a document rule that happens to be
-    /// named `recovery` is never confused with it.
+    /// Whether this is the zero-signer recovery rule.
+    // docs/account-interface.md, "Types".
     pub recovery: bool,
-    /// The rule's name: the document rule's, `admin` for the constructor's,
-    /// `recovery` for the recovery rule.
+    /// The rule's name.
+    // The document rule's, `admin` for the constructor's, `recovery` for the
+    // recovery rule.
     pub name: String,
     /// The rule's OZ scope.
     pub context_type: ContextRuleType,
