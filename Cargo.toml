@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/perch-fee-budget-core",
     "crates/perch-ir",
     "crates/perch-schema",
     "crates/perch-program",

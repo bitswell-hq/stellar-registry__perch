@@ -1,0 +1,3 @@
+'plan_safe' depends on axioms: [propext, Classical.choice, Quot.sound]
+'accepted_refill' depends on axioms: [propext, Classical.choice, Quot.sound]
+'lifetime_budget' depends on axioms: [propext, Classical.choice, Quot.sound]

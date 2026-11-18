@@ -1,0 +1,25 @@
+{
+  "checkedAt": "2026-11-13T20:19:54.385439+00:00",
+  "image": "sha256:459d72ce3dca6dcc62e4b00d49be6869619f27935ec5b9076f8d06dc77822db2",
+  "imageId": "sha256:459d72ce3dca6dcc62e4b00d49be6869619f27935ec5b9076f8d06dc77822db2",
+  "aeneas": "0d21a9ec7bbbb110110cacc14464a47fd71c8705",
+  "charonRust": "nightly-2026-09-17",
+  "lean": "4.36.0-rc2",
+  "sourceHashes": {
+    "crates/perch-fee-budget-core/src/lib.rs": "1d418625e4b1178e2612aff2f38c076e9fde3954ae3e9b71e2bfae828834e4e7",
+    "crates/perch-fee-budget-core/proof/RefillProof.lean": "242b0d5929187156d50c483c28c87e8f6e5441070edc5da81ca8dc6cb42cc56e",
+    "crates/perch-fee-budget-core/proof/generated/RefillCore.lean": "4cf3f8490e3e88eaeda4194e8011d321741fb82df088f026d7e74837713ebba2"
+  },
+  "theorems": [
+    "plan_safe",
+    "accepted_refill",
+    "lifetime_budget"
+  ],
+  "standardLeanAxioms": [
+    "propext",
+    "Classical.choice",
+    "Quot.sound"
+  ],
+  "addedAxioms": [],
+  "scope": "Extracted Rust plan and committed-plan trace. Storage/token/auth integration tested, not formally extracted. Compiler, extraction, Soroban host, SAC and key custody remain trusted."
+}
