@@ -133,7 +133,9 @@ pub fn run(
         // the account itself and need no entry of their own.
         sub_invocations: vec![],
     };
-    if let Some(submitted) = tx::run_signed(sim, passphrase, key, &auth_spec, &spec, broadcast)? {
+    if let Some(submitted) =
+        tx::run_signed(sim, passphrase, key, &auth_spec, &spec, None, broadcast)?
+    {
         println!(
             "applied document {doc_hash} over revision {revision} in tx {} at ledger {}",
             submitted.tx_hash, submitted.ledger

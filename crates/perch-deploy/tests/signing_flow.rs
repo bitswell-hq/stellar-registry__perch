@@ -8,14 +8,15 @@ mod support;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use perch_deploy::keys::{SeedKey, SignKey};
+use perch_deploy::publish::{self, PublishArgs};
 use perch_deploy::rpc::{Broadcast, Rpc};
 use perch_deploy::scv;
 use perch_deploy::tx::{run_signed, run_upload, AuthMode, AuthSpec, InvokeSpec};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use stellar_xdr::{
-    AccountEntry, AccountEntryExt, AccountId, InvokeContractArgs, LedgerEntryData, LedgerFootprint,
-    Limits, OperationBody, PublicKey, ReadXdr, ScSymbol, ScVal, SequenceNumber,
+    AccountEntry, AccountEntryExt, AccountId, HostFunction, InvokeContractArgs, LedgerEntryData,
+    LedgerFootprint, Limits, OperationBody, PublicKey, ReadXdr, ScSymbol, ScVal, SequenceNumber,
     SorobanAddressCredentials, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
     SorobanAuthorizedInvocation, SorobanCredentials, SorobanResources, SorobanTransactionData,
     SorobanTransactionDataExt, Thresholds, TransactionEnvelope, TransactionSignaturePayload,
@@ -313,6 +314,7 @@ fn a_mismatched_tree_is_refused_before_signing_on_every_signing_path() {
                     AuthMode::Delegated => AuthMode::Delegated,
                 }),
                 &intended_call(),
+                None,
                 Some(&net_rpc as &dyn Broadcast),
             )
             .err()
@@ -348,6 +350,7 @@ fn a_dry_run_never_invokes_the_signer() {
             &auth_spec(mode),
             &intended_call(),
             None,
+            None,
         )
         .unwrap();
         assert!(out.is_none());
@@ -368,6 +371,7 @@ fn a_dry_run_still_refuses_a_mismatched_tree() {
         &key,
         &auth_spec(AuthMode::Delegated),
         &intended_call(),
+        None,
         None,
     )
     .unwrap_err();
@@ -391,6 +395,7 @@ fn the_live_path_simulates_locally_and_only_broadcasts_and_confirms_remotely() {
             &key,
             &auth_spec(mode),
             &intended_call(),
+            None,
             Some(&net_rpc as &dyn Broadcast),
         )
         .unwrap()
@@ -442,6 +447,7 @@ fn a_broadcast_hash_that_is_not_the_transaction_is_an_error() {
         &key,
         &auth_spec(AuthMode::Delegated),
         &intended_call(),
+        None,
         Some(&net_rpc as &dyn Broadcast),
     )
     .unwrap_err();
@@ -493,4 +499,126 @@ fn an_upload_simulates_locally_and_only_broadcasts_and_confirms_remotely() {
     .unwrap();
     assert_eq!(sim.methods(), ["getLedgerEntries", "simulateTransaction"]);
     assert_eq!(net.methods(), ["sendTransaction", "getTransaction"]);
+}
+
+/// The host function and sequence number of every envelope in `calls`.
+fn envelopes(calls: &[Value]) -> Vec<(HostFunction, i64)> {
+    calls
+        .iter()
+        .map(|p| {
+            let env = TransactionEnvelope::from_xdr_base64(
+                p["transaction"].as_str().unwrap(),
+                Limits::none(),
+            )
+            .unwrap();
+            let TransactionEnvelope::Tx(v1) = env else {
+                panic!("v1 envelope")
+            };
+            match &v1.tx.operations[0].body {
+                OperationBody::InvokeHostFunction(op) => {
+                    (op.host_function.clone(), v1.tx.seq_num.0)
+                }
+                _ => panic!("invoke op"),
+            }
+        })
+        .collect()
+}
+
+/// A publish of wasm over the inline limit sends two transactions from one
+/// fee payer while the simulator's state stays at the ledger it forked: the
+/// `publish_hash` must take the sequence number after the upload's.
+#[test]
+fn a_publish_after_an_upload_takes_the_next_sequence_number() {
+    let key = CountingKey::new();
+    let registry = c(6);
+    let wasm = b"\0asm-larger-than-the-inline-limit".to_vec();
+    let wasm_hash: [u8; 32] = Sha256::digest(&wasm).into();
+    let publish_hash_tree = invocation(
+        &registry,
+        "publish_hash",
+        vec![
+            scv::string("perch-demo").unwrap(),
+            scv::address(&account()).unwrap(),
+            scv::bytes(&wasm_hash).unwrap(),
+            scv::string("1.0.0").unwrap(),
+        ],
+        vec![],
+    );
+    let entry = address_entry(&account(), publish_hash_tree);
+    let acct = account_entry(key.public());
+    let sim = FakeRpc::start(move |method, params| match method {
+        "getLedgerEntries" => json!({ "entries": [{ "xdr": acct }] }),
+        "simulateTransaction" => {
+            let (function, _) = envelopes(std::slice::from_ref(params)).remove(0);
+            let auth = match function {
+                HostFunction::UploadContractWasm(_) => vec![],
+                HostFunction::InvokeContract(call)
+                    if call.function_name.0.as_slice() == b"fetch_hash" =>
+                {
+                    return json!({
+                        "latestLedger": 100,
+                        "error": "HostError: Error(Contract, #1)",
+                    })
+                }
+                _ => vec![entry.clone()],
+            };
+            json!({
+                "latestLedger": 100,
+                "minResourceFee": "1000",
+                "transactionData": tx_data(),
+                "results": [{ "auth": auth, "xdr": "AAAAAQ==" }],
+            })
+        }
+        other => json!({ "error": { "code": -32601, "message": format!("unexpected {other}") } }),
+    });
+    let net = network();
+    let net_rpc = Rpc::new(&net.url);
+
+    let dir = std::env::temp_dir().join(format!("perch-deploy-publish-seq-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let wasm_path = dir.join("demo.wasm");
+    std::fs::write(&wasm_path, &wasm).unwrap();
+    let args = PublishArgs {
+        wasm: wasm_path,
+        wasm_name: "perch-demo".into(),
+        binver: "1.0.0".into(),
+        registry,
+        author: account(),
+        verifier: None,
+        rule_id: 0,
+        dry_run: false,
+        public_key: None,
+        state: Default::default(),
+        receipt: dir.join("receipt.json"),
+        inline_max_bytes: 8,
+    };
+    let signer = || Ok(Box::new(SeedKey::from_seed([9u8; 32])) as Box<dyn SignKey>);
+    publish::run(
+        &Rpc::new(&sim.url),
+        PASSPHRASE,
+        &signer,
+        &args,
+        Some(&net_rpc as &dyn Broadcast),
+    )
+    .unwrap();
+
+    // The simulator's account stays at 41 throughout; the network has
+    // applied the upload at 42 by the time `publish_hash` is built.
+    let sent = envelopes(&net.params("sendTransaction"));
+    assert_eq!(sent.len(), 2);
+    assert!(matches!(sent[0].0, HostFunction::UploadContractWasm(_)));
+    assert_eq!(sent[0].1, 42);
+    assert!(matches!(sent[1].0, HostFunction::InvokeContract(_)));
+    assert_eq!(sent[1].1, 43);
+    assert_eq!(
+        net.methods(),
+        [
+            "sendTransaction",
+            "getTransaction",
+            "sendTransaction",
+            "getTransaction"
+        ]
+    );
+    assert!(dir.join("receipt.json").is_file());
 }

@@ -140,18 +140,27 @@ pub fn sign_envelope(
 /// stops after the authorization tree is checked and never calls
 /// `signer.sign`; otherwise the signed transaction is sent there and polled
 /// to SUCCESS. Every read and both simulations go to `sim`.
+///
+/// `prior_seq` is the sequence number of a transaction this process already
+/// sent from the same fee payer ([`run_upload`]'s), which `sim`'s state does
+/// not reflect; this transaction takes the next one. `None` reads the fee
+/// payer's sequence from `sim`.
 pub fn run_signed(
     sim: &dyn Simulate,
     passphrase: &str,
     signer: &dyn SignKey,
     auth_spec: &AuthSpec,
     spec: &InvokeSpec,
+    prior_seq: Option<i64>,
     broadcast: Option<&dyn Broadcast>,
 ) -> Result<Option<Submitted>> {
     let payer = signer.public();
-    let seq = sim
-        .account_seq(&payer)
-        .with_context(|| format!("fee payer {}", signer.account()))?;
+    let seq = match prior_seq {
+        Some(seq) => seq,
+        None => sim
+            .account_seq(&payer)
+            .with_context(|| format!("fee payer {}", signer.account()))?,
+    };
     let mut tx = build_tx(payer, seq + 1, spec)?;
 
     let sim1 = sim.simulate(&envelope_b64(&tx)?)?;
@@ -305,23 +314,23 @@ fn build_upload_tx(source_pubkey: [u8; 32], seq: i64, wasm: &[u8]) -> Result<Tra
 /// (the whole binary would overflow the transaction envelope): the caller
 /// uploads here, then records name→hash with `publish_hash`. `publish_hash` does
 /// NOT re-check the upload, so this MUST precede it. Idempotent — re-uploading
-/// identical bytes is a cheap no-op success. Returns the wasm hash (sha256 of
-/// the bytes, the ledger's content id); `None` is never returned — the `Option`
-/// mirrors `run_signed` so `--dry-run` (`broadcast` = `None`) short-circuits
-/// uniformly, and on dry run it simulates only and returns the hash without
-/// signing or sending.
+/// identical bytes is a cheap no-op success. Returns the sequence number the
+/// sent upload consumed, for the `run_signed` that follows it. A dry run
+/// (`broadcast` = `None`) simulates only, signs and sends nothing, and
+/// returns `None`.
 pub fn run_upload(
     sim: &dyn Simulate,
     passphrase: &str,
     payer: &dyn SignKey,
     wasm: &[u8],
     broadcast: Option<&dyn Broadcast>,
-) -> Result<Option<[u8; 32]>> {
+) -> Result<Option<i64>> {
     let hash: [u8; 32] = Sha256::digest(wasm).into();
     let seq = sim
         .account_seq(&payer.public())
-        .with_context(|| format!("fee payer {}", payer.account()))?;
-    let mut tx = build_upload_tx(payer.public(), seq + 1, wasm)?;
+        .with_context(|| format!("fee payer {}", payer.account()))?
+        + 1;
+    let mut tx = build_upload_tx(payer.public(), seq, wasm)?;
 
     // One simulation suffices: with no auth entry to sign, the footprint doesn't
     // change under signing (unlike run_signed's verifier/policy cross-calls).
@@ -352,7 +361,7 @@ pub fn run_upload(
             tx.fee, sim.min_resource_fee
         );
         println!("DRY RUN OK (upload {}, nothing signed)", hex::encode(hash));
-        return Ok(Some(hash));
+        return Ok(None);
     };
 
     let submitted = submit(broadcast, &tx, passphrase, payer)?;
@@ -362,7 +371,7 @@ pub fn run_upload(
         submitted.tx_hash,
         submitted.ledger
     );
-    Ok(Some(hash))
+    Ok(Some(seq))
 }
 
 /// Outcome of a read-only simulation: a value, or a *contract* error (which

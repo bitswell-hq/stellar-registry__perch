@@ -56,8 +56,8 @@ impl SignKey for PublicKeyOnly {
 }
 
 /// The key a command signs with: the seed in `var` for a live run, or only
-/// the public key `public` for a dry run, which never reads `var`. A live
-/// run that is also given `public` checks the seed matches it.
+/// the public key `public` for a dry run, which never reads `var`. `public`
+/// is refused on a live run.
 pub fn signing_key(var: &str, public: Option<&str>, dry_run: bool) -> Result<Box<dyn SignKey>> {
     if dry_run {
         let public = public.with_context(|| {
@@ -65,13 +65,10 @@ pub fn signing_key(var: &str, public: Option<&str>, dry_run: bool) -> Result<Box
         })?;
         return Ok(Box::new(PublicKeyOnly::from_strkey(public)?));
     }
-    let key = SeedKey::from_env(var)?;
-    if let Some(public) = public {
-        if PublicKeyOnly::from_strkey(public)?.public != key.public {
-            bail!("{var} is not the key of --public-key {public}");
-        }
+    if public.is_some() {
+        bail!("--public-key goes with --dry-run; a live run signs with {var}");
     }
-    Ok(Box::new(key))
+    Ok(Box::new(SeedKey::from_env(var)?))
 }
 
 pub struct SeedKey {

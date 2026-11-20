@@ -17,7 +17,8 @@ pub struct FakeRpc {
 
 impl FakeRpc {
     /// `handler(method, params)` returns the JSON-RPC `result`, or a value
-    /// with a top-level `"error"` key to answer with that error instead.
+    /// whose top-level `"error"` is an object to answer with that error
+    /// instead.
     pub fn start(handler: impl Fn(&str, &Value) -> Value + Send + Sync + 'static) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind loopback");
         let url = format!("http://{}", listener.local_addr().unwrap());
@@ -94,7 +95,7 @@ fn serve(stream: TcpStream, handler: &Handler, recorded: &Mutex<Vec<(String, Val
             .unwrap()
             .push((method.clone(), params.clone()));
         let answer = handler(&method, &params);
-        let response = match answer.get("error") {
+        let response = match answer.get("error").filter(|e| e.is_object()) {
             Some(e) => json!({ "jsonrpc": "2.0", "id": 1, "error": e }),
             None => json!({ "jsonrpc": "2.0", "id": 1, "result": answer }),
         };

@@ -43,9 +43,9 @@ pub struct PublishArgs {
     /// sends nothing, and never reads PERCH_CI_KEY (needs --public-key).
     #[arg(long)]
     pub dry_run: bool,
-    /// PERCH_CI_KEY's public key (G…): required with --dry-run; checked
-    /// against the seed otherwise.
-    #[arg(long)]
+    /// PERCH_CI_KEY's public key (G…): required with --dry-run, and
+    /// accepted only with it.
+    #[arg(long, requires = "dry_run")]
     pub public_key: Option<String>,
     #[command(flatten)]
     pub state: crate::sim::StateArgs,
@@ -171,8 +171,8 @@ pub fn run(
     // large wasm is uploaded first, then bound to its name with `publish_hash` —
     // both calls are the same author-authorized registry invoke, so the auth
     // spec is identical. The CI rule scopes both `publish` and `publish_hash`.
-    let spec = if wasm.len() as u64 <= args.inline_max_bytes {
-        InvokeSpec {
+    let (spec, upload_seq) = if wasm.len() as u64 <= args.inline_max_bytes {
+        let spec = InvokeSpec {
             contract: args.registry.clone(),
             func: "publish".to_string(),
             args: vec![
@@ -181,15 +181,16 @@ pub fn run(
                 scv::bytes(&wasm)?,
                 scv::string(&args.binver)?,
             ],
-        }
+        };
+        (spec, None)
     } else {
         println!(
             "wasm is {} bytes (> {} inline max): upload then publish_hash",
             wasm.len(),
             args.inline_max_bytes
         );
-        tx::run_upload(sim, passphrase, key.as_ref(), &wasm, broadcast)?;
-        InvokeSpec {
+        let upload_seq = tx::run_upload(sim, passphrase, key.as_ref(), &wasm, broadcast)?;
+        let spec = InvokeSpec {
             contract: args.registry.clone(),
             func: "publish_hash".to_string(),
             args: vec![
@@ -198,10 +199,19 @@ pub fn run(
                 scv::bytes(&local_hash)?,
                 scv::string(&args.binver)?,
             ],
-        }
+        };
+        (spec, upload_seq)
     };
 
-    let Some(submitted) = tx::run_signed(sim, passphrase, key.as_ref(), &auth, &spec, broadcast)?
+    let Some(submitted) = tx::run_signed(
+        sim,
+        passphrase,
+        key.as_ref(),
+        &auth,
+        &spec,
+        upload_seq,
+        broadcast,
+    )?
     else {
         return Ok(()); // dry run
     };

@@ -217,6 +217,44 @@ fn the_cli_requires_an_explicit_state_source() {
     assert!(broadcast.methods().is_empty(), "{:?}", broadcast.methods());
 }
 
+#[test]
+fn a_public_key_is_accepted_only_with_a_dry_run() {
+    let account = "CAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQC526";
+    let public = "GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQC5HR";
+    let commands: [&[&str]; 2] = [
+        &["apply", "--account", account, "--doc", "doc.json"],
+        &[
+            "publish",
+            "--wasm",
+            "demo.wasm",
+            "--wasm-name",
+            "demo",
+            "--binver",
+            "1.0.0",
+            "--registry",
+            account,
+            "--author",
+            account,
+            "--rule-id",
+            "0",
+        ],
+    ];
+    for command in commands {
+        let out = Command::new(env!("CARGO_BIN_EXE_perch-deploy"))
+            .env_remove("PERCH_STATE_RPC_URL")
+            .env_remove("PERCH_STATE_SNAPSHOT")
+            .args(["--rpc-url", "http://127.0.0.1:1"])
+            .args(["--network-passphrase", PASSPHRASE])
+            .args(command)
+            .args(["--public-key", public])
+            .output()
+            .unwrap();
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(!out.status.success(), "{}: {stderr}", command[0]);
+        assert!(stderr.contains("--dry-run"), "{}: {stderr}", command[0]);
+    }
+}
+
 /// The real simulator, when one is installed (`SOROBAN_SIM`), against a
 /// state RPC nothing listens on.
 #[test]

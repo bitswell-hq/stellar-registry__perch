@@ -63,9 +63,9 @@ enum Cmd {
         /// --public-key).
         #[arg(long)]
         dry_run: bool,
-        /// PERCH_ADMIN_KEY's public key (G…): required with --dry-run;
-        /// checked against the seed otherwise.
-        #[arg(long)]
+        /// PERCH_ADMIN_KEY's public key (G…): required with --dry-run, and
+        /// accepted only with it.
+        #[arg(long, requires = "dry_run")]
         public_key: Option<String>,
         #[command(flatten)]
         state: sim::StateArgs,

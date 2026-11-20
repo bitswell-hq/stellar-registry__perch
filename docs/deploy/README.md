@@ -594,9 +594,11 @@ inputs, never from an RPC's answer:
 
    There is no default and no fallback. The command stops before it reads a
    key when no source is named, or when soroban-sim (`--soroban-sim`,
-   `SOROBAN_SIM`, else `soroban-sim` on `PATH`; checked against commit
-   `96ecb5a`, the one `scripts/rehearse-migration.sh` installs) cannot start,
-   cannot read the source, or reports another network or ledger.
+   `SOROBAN_SIM`, else `soroban-sim` on `PATH`) cannot start, cannot read the
+   source, or reports another network or ledger. `perch-deploy` does not
+   verify which soroban-sim revision the binary is; the revision
+   `scripts/rehearse-migration.sh` pins (`SOROBAN_SIM_REV`) is the one to
+   install.
 2. **The authorization tree is checked before anything is signed.**
    `perch-deploy` builds the tree it means to authorize: the smart account
    authorizing `contract.function(args)`, with exactly the expected
@@ -612,8 +614,8 @@ inputs, never from an RPC's answer:
    envelope (`sendTransaction`) and answers the confirmation polls
    (`getTransaction`). If the hash it accepts is not the transaction's, the
    command fails.
-4. **A dry run signs nothing.** `--dry-run` takes `--public-key G…` and never
-   reads `PERCH_ADMIN_KEY` or `PERCH_CI_KEY`. It runs the recording
+4. **A dry run signs nothing.** `--dry-run` takes `--public-key G…` (a flag
+   only a dry run accepts) and never reads `PERCH_ADMIN_KEY` or `PERCH_CI_KEY`. It runs the recording
    simulation and the tree check, then prints the unsigned footprint and
    resource fee. That is not the live run's estimate: the live run
    re-simulates with the signed entry, which adds the calls the signature
@@ -629,16 +631,20 @@ What is still trusted:
   intended call; whether that call does on chain what the simulation showed
   depends on the state being the chain's. Use a node you run or trust, or a
   snapshot you made from one.
-- **The soroban-sim build**, which runs the host. Install the pinned commit.
+- **The soroban-sim build**, which runs the host. Its revision is not
+  verified: install the one `scripts/rehearse-migration.sh` pins.
 - **Confirmation.** Success is what the broadcast RPC's `getTransaction`
   reports. Check the outcome against the trusted node as well:
   `perch-deploy verify --rpc-url <trusted node>`, or the account's
   `applied_doc_hash`.
 - **Freshness.** The sequence number and the signature expiration (120
   ledgers after the source's latest ledger) come from the state source. A
-  stale snapshot makes the network refuse the envelope (`txBAD_SEQ`, or an
-  expired signature) rather than apply anything unexpected, so a snapshot
-  source suits dry runs and rehearsals; a live send needs the current ledger.
+  stale sequence number makes the network refuse the envelope (`txBAD_SEQ`).
+  A signature that expired before inclusion makes the transaction fail on
+  chain, and it still costs its fee. Neither applies anything unexpected, so
+  a snapshot source suits dry runs and rehearsals; a live send needs the
+  current ledger. A `publish` that uploads its wasm first sends two
+  transactions; the second takes the sequence number after the upload's.
 
 On a fork rehearsal the trusted state is the fork's:
 `scripts/rehearse-migration.sh` points `PERCH_STATE_RPC_URL` at its own

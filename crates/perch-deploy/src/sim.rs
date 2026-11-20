@@ -24,10 +24,6 @@ use serde_json::{json, Value};
 
 use crate::rpc::{Rpc, Simulate, Simulation};
 
-/// The soroban-sim revision this tool is checked against
-/// (`scripts/rehearse-migration.sh` installs the same one).
-pub const SOROBAN_SIM_REV: &str = "96ecb5a9530df5d2a7b36f60a7146153144cf6a0";
-
 /// How long `soroban-sim serve` may take to open its fork: it reads the
 /// network's settings and latest ledger, and a checkpoint fork also reads
 /// every ledger since its pin.
@@ -164,8 +160,9 @@ impl LocalSim {
             .stderr(Stdio::piped());
         let mut child = cmd.spawn().with_context(|| {
             format!(
-                "start the local simulator {} (soroban-sim {SOROBAN_SIM_REV}; name another \
-                 binary with --soroban-sim or SOROBAN_SIM)",
+                "start the local simulator {} (scripts/rehearse-migration.sh pins the \
+                 soroban-sim revision it installs; name another binary with --soroban-sim or \
+                 SOROBAN_SIM)",
                 soroban_sim.display()
             )
         })?;
