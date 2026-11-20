@@ -218,6 +218,37 @@ fn the_cli_requires_an_explicit_state_source() {
 }
 
 #[test]
+fn apply_starts_the_simulator_before_it_reads_the_key() {
+    let dir = scratch("key-order");
+    let doc = dir.join("doc.json");
+    std::fs::write(&doc, "{}").unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_perch-deploy"))
+        .env_remove("PERCH_STATE_SNAPSHOT")
+        .env_remove("PERCH_STATE_LEDGER")
+        .env_remove("PERCH_STATE_SNAPSHOT_LEDGER")
+        .env("PERCH_ADMIN_KEY", "not-a-key")
+        .args(["--rpc-url", "http://127.0.0.1:1"])
+        .args(["--network-passphrase", PASSPHRASE])
+        .args([
+            "apply",
+            "--account",
+            "CAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQC526",
+            "--state-rpc-url",
+            "http://127.0.0.1:1",
+        ])
+        .arg("--doc")
+        .arg(&doc)
+        .arg("--soroban-sim")
+        .arg(dir.join("no-such-soroban-sim"))
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(!out.status.success(), "{stderr}");
+    assert!(stderr.contains("start the local simulator"), "{stderr}");
+    assert!(!stderr.contains("PERCH_ADMIN_KEY"), "{stderr}");
+}
+
+#[test]
 fn a_public_key_is_accepted_only_with_a_dry_run() {
     let account = "CAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQC526";
     let public = "GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQC5HR";

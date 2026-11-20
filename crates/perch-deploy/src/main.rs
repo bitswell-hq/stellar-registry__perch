@@ -141,8 +141,8 @@ fn main() -> Result<ExitCode> {
             let passphrase = cli.passphrase()?;
             let broadcast = cli.broadcast(*dry_run)?;
             let source = state.source()?;
-            let key = keys::signing_key("PERCH_ADMIN_KEY", public_key.as_deref(), *dry_run)?;
             let sim = local_sim(state, &source, passphrase)?;
+            let key = keys::signing_key("PERCH_ADMIN_KEY", public_key.as_deref(), *dry_run)?;
             apply::run(
                 &sim,
                 passphrase,
