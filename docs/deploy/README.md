@@ -555,7 +555,10 @@ only with `--allow-unattested perch-constructorless-registry`.
 - **`--admin-key`** (default: the source's key) is each author's admin.
   `PERCH_ADMIN_KEY`, its secret, signs `apply_doc` through this checkout's
   `perch-deploy apply`, the one tool here that signs the `addr_oz_v1` digest a
-  design-A account checks. Its account pays for the apply.
+  design-A account checks. Its account pays for the apply. `--send` also
+  needs `PERCH_STATE_RPC_URL` or `PERCH_STATE_SNAPSHOT`, the ledger state
+  `perch-deploy` simulates over
+  ([perch-deploy's trust boundary](#perch-deploys-trust-boundary)).
   `--admin-signer delegated` gives a `Delegated(G)` admin instead, and the
   script then prints the `apply_doc` for a CAP-71 signer and refuses `--send`
   for it.
@@ -566,6 +569,94 @@ only with `--allow-unattested perch-constructorless-registry`.
   `--ci-expiry-ledger` is the rule's `not-after-ledger`. Mainnet closes about
   17,280 ledgers a day, and renewing the rule means re-applying the document
   ([#145](https://github.com/stellar-registry/perch/issues/145)).
+
+### perch-deploy's trust boundary
+
+`perch-deploy apply` and `perch-deploy publish` sign with keys that hold an
+account's admin or CI authority. They decide what to sign from their own
+inputs, never from an RPC's answer:
+
+1. **Simulation is local, over a named state source.** Both simulations, the
+   recording one that discovers the authorization entry and the enforcing one
+   that meters the signed entry's verifier and policy calls, run in a
+   `soroban-sim serve` that `perch-deploy` starts on loopback and stops when
+   it exits. So do the reads they depend on: the account's
+   `configuration()` for `apply`, the registry's `fetch_hash` preflight for
+   `publish`, and the fee payer's sequence number. The ledger state comes
+   from exactly one source the operator names:
+   - `--state-rpc-url URL` (`PERCH_STATE_RPC_URL`): a node you trust, read at
+     its latest ledger, or pinned with `--state-ledger N`
+     (`PERCH_STATE_LEDGER`, soroban-sim's checkpoint fork, which needs the
+     node to serve every ledger since N).
+   - `--state-snapshot FILE --state-snapshot-ledger N`
+     (`PERCH_STATE_SNAPSHOT`, `PERCH_STATE_SNAPSHOT_LEDGER`): a soroban-sim
+     snapshot file of ledger N. A file of any other ledger is refused.
+
+   There is no default and no fallback. The command stops before it reads a
+   key when no source is named, or when soroban-sim (`--soroban-sim`,
+   `SOROBAN_SIM`, else `soroban-sim` on `PATH`) cannot start, cannot read the
+   source, or reports another network or ledger. `perch-deploy` does not
+   verify which soroban-sim revision the binary is; the revision
+   `scripts/rehearse-migration.sh` pins (`SOROBAN_SIM_REV`) is the one to
+   install.
+2. **The authorization tree is checked before anything is signed.**
+   `perch-deploy` builds the tree it means to authorize: the smart account
+   authorizing `contract.function(args)`, with exactly the expected
+   sub-invocations. For `apply_doc` and the registry's `publish` and
+   `publish_hash` that is none, because the contracts `apply_doc` calls are
+   called by the account itself and need no entry of their own. The
+   simulated entry must equal that tree. A different contract, function,
+   argument or sub-invocation, another address, a second entry, or a
+   source-account entry (which the envelope signature would authorize) is an
+   error naming the difference, and nothing is signed. The check runs on both
+   signing paths, `External` and CAP-71 `Delegated`.
+3. **The broadcast RPC only broadcasts.** `--rpc-url` receives the signed
+   envelope (`sendTransaction`) and answers the confirmation polls
+   (`getTransaction`). If the hash it accepts is not the transaction's, the
+   command fails.
+4. **A dry run signs nothing.** `--dry-run` takes `--public-key G…` (a flag
+   only a dry run accepts) and never reads `PERCH_ADMIN_KEY` or `PERCH_CI_KEY`. It runs the recording
+   simulation and the tree check, then prints the unsigned footprint and
+   resource fee. That is not the live run's estimate: the live run
+   re-simulates with the signed entry, which adds the calls the signature
+   check makes, and a dry run has no signature to measure them with. The
+   output says so. For the same reason a dry run never runs the account's
+   `__check_auth`, so it does not show that a key satisfies its rule. To
+   check that, run the command without `--dry-run` against a local
+   `soroban-sim serve` fork, with the fork as both `--rpc-url` and the state
+   source: `scripts/bootstrap-testnet.sh` rehearses the CI publish this way
+   before it rotates the manager, and `scripts/rehearse-migration.sh` runs
+   `apply` this way.
+
+What is still trusted:
+
+- **The state source.** soroban-sim executes locally, but on the contract
+  code and storage it reads. A source serving wrong state can change what a
+  simulation computes: the admin rule id and verifier `apply` reads, the
+  footprint, the fee. The tree check still limits any signature to the
+  intended call; whether that call does on chain what the simulation showed
+  depends on the state being the chain's. Use a node you run or trust, or a
+  snapshot you made from one.
+- **The soroban-sim build**, which runs the host. Its revision is not
+  verified: install the one `scripts/rehearse-migration.sh` pins.
+  `perch-deploy` starts it without `PERCH_ADMIN_KEY` and `PERCH_CI_KEY` in
+  its environment.
+- **Confirmation.** Success is what the broadcast RPC's `getTransaction`
+  reports. Check the outcome against the trusted node as well:
+  `perch-deploy verify --rpc-url <trusted node>`, or the account's
+  `applied_doc_hash`.
+- **Freshness.** The sequence number and the signature expiration (120
+  ledgers after the source's latest ledger) come from the state source. A
+  stale sequence number makes the network refuse the envelope (`txBAD_SEQ`).
+  A signature that expired before inclusion makes the transaction fail on
+  chain, and it still costs its fee. Neither applies anything unexpected, so
+  a snapshot source suits dry runs and rehearsals; a live send needs the
+  current ledger. A `publish` that uploads its wasm first sends two
+  transactions; the second takes the sequence number after the upload's.
+
+On a fork rehearsal the trusted state is the fork's:
+`scripts/rehearse-migration.sh` points `PERCH_STATE_RPC_URL` at its own
+facade, and `perch-deploy`'s simulator forks that facade in turn.
 
 ### The author cycle, and how the order breaks it
 

@@ -169,6 +169,7 @@ export GH_CONFIG_DIR="${GH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/gh}"
 # --- soroban-sim, pinned -----------------------------------------------------
 
 SIM="${SOROBAN_SIM:-$REPO/target/soroban-sim/$SOROBAN_SIM_REV/bin/soroban-sim}"
+SIM_LABEL="${SOROBAN_SIM:-$SOROBAN_SIM_REV}"
 if [ ! -x "$SIM" ]; then
     [ -z "${SOROBAN_SIM:-}" ] || die "SOROBAN_SIM=$SOROBAN_SIM is not executable"
     log "installing soroban-sim $SOROBAN_SIM_REV"
@@ -381,8 +382,12 @@ rehearse() {
     [ "$(rpc getNetwork '{}' | jq -r .passphrase)" = "$passphrase" ] || die "the fork is not $network"
     protocol="$(rpc fork_info '{}' | jq -r .fork.protocolVersion)"
     log "$network: facade at $url, $(rpc fork_info '{}' | jq -r '"a fork of ledger \(.fork.ledger)"') on protocol $protocol"
-    note "Fork of ledger $(rpc fork_info '{}' | jq -r .fork.ledger), protocol $protocol (soroban-sim ${SOROBAN_SIM:-$SOROBAN_SIM_REV})"
+    note "Fork of ledger $(rpc fork_info '{}' | jq -r .fork.ledger), protocol $protocol (soroban-sim $SIM_LABEL)"
     export STELLAR_RPC_URL="$url" STELLAR_NETWORK_PASSPHRASE="$passphrase"
+    # perch-deploy simulates in a soroban-sim of its own; on a rehearsal the
+    # ledger it trusts is this fork's.
+    export PERCH_STATE_RPC_URL="$url" SOROBAN_SIM="$SIM"
+    unset PERCH_STATE_LEDGER PERCH_STATE_SNAPSHOT PERCH_STATE_SNAPSHOT_LEDGER
     local net=(--rpc-url "$url" --network-passphrase "$passphrase")
 
     read -r root perch constructorless <<<"$("$DERIVE" chain "$passphrase" | tr '\n' ' ')"

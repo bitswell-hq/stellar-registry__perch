@@ -1,24 +1,32 @@
-//! The write path: build one InvokeHostFunction transaction, capture the smart
-//! account's auth entry from simulation, sign it with the OZ digest, then
-//! re-simulate — the signed auth runs verifier + policy cross-calls, so the
-//! first simulation's footprint is insufficient — and sign/send/poll.
+//! The write path: build one InvokeHostFunction transaction, simulate it in
+//! recording mode to discover the smart account's auth entry, check that
+//! entry's whole invocation tree against the call this tool means to make,
+//! sign it with the OZ digest, then re-simulate in enforcing mode (the signed
+//! auth runs verifier + policy cross-calls, so the first simulation's
+//! footprint is insufficient) and sign/send/poll.
+//!
+//! Both simulations go to a [`Simulate`] (in `perch-deploy`, the local
+//! soroban-sim over an explicit state source, [`crate::sim`]); only the
+//! signed envelope goes to the [`Broadcast`] RPC, which then answers the
+//! confirmation polls. A dry run stops after the tree check: it signs
+//! nothing and reports the unsigned simulation's estimate.
 
 use std::time::{Duration, Instant};
 
 use anyhow::{bail, Context, Result};
-use ed25519_dalek::Signer as _;
 use sha2::{Digest, Sha256};
 use stellar_xdr::{
     DecoratedSignature, HostFunction, InvokeContractArgs, InvokeHostFunctionOp, Limits, Memo,
     MuxedAccount, Operation, OperationBody, Preconditions, ReadXdr, ScSymbol, ScVal,
-    SequenceNumber, Signature, SignatureHint, SorobanAuthorizationEntry, SorobanCredentials,
-    SorobanTransactionData, Transaction, TransactionEnvelope, TransactionExt,
-    TransactionSignaturePayload, TransactionSignaturePayloadTaggedTransaction,
+    SequenceNumber, Signature, SignatureHint, SorobanAuthorizationEntry,
+    SorobanAuthorizedInvocation, SorobanTransactionData, Transaction, TransactionEnvelope,
+    TransactionExt, TransactionSignaturePayload, TransactionSignaturePayloadTaggedTransaction,
     TransactionV1Envelope, Uint256, WriteXdr,
 };
 
-use crate::keys::SeedKey;
-use crate::rpc::{Rpc, TxStatus};
+use crate::authz::{self, IntendedAuth};
+use crate::keys::SignKey;
+use crate::rpc::{Broadcast, Simulate, TxStatus};
 use crate::{auth, scv};
 
 /// One contract invocation: `contract.func(args)`.
@@ -40,16 +48,21 @@ pub enum AuthMode {
 }
 
 /// How to satisfy the smart account's auth entry: in which mode, selecting
-/// which context rule, for which account address. The signing key is
-/// `run_signed`'s single key — it signs both the auth entry and the fee
-/// envelope.
+/// which context rule, for which account address, over which tree. The
+/// signing key is `run_signed`'s single key — it signs both the auth entry
+/// and the fee envelope.
 pub struct AuthSpec {
     pub mode: AuthMode,
     pub rule_id: u32,
     /// The smart account expected to be the (single) address credential.
     pub account: String,
+    /// The exact sub-invocations the account authorizes beneath the call.
+    /// Empty for every call this tool makes: a contract the account calls
+    /// itself is authorized as the direct invoker, not through the entry.
+    pub sub_invocations: Vec<SorobanAuthorizedInvocation>,
 }
 
+#[derive(Debug)]
 pub struct Submitted {
     pub tx_hash: String,
     pub ledger: u32,
@@ -103,16 +116,17 @@ pub fn envelope_b64(tx: &Transaction) -> Result<String> {
 pub fn sign_envelope(
     tx: &Transaction,
     passphrase: &str,
-    payer: &SeedKey,
+    payer: &dyn SignKey,
 ) -> Result<(String, String)> {
     let payload = TransactionSignaturePayload {
         network_id: stellar_xdr::Hash(auth::network_id(passphrase)),
         tagged_transaction: TransactionSignaturePayloadTaggedTransaction::Tx(tx.clone()),
     };
     let hash: [u8; 32] = Sha256::digest(payload.to_xdr(Limits::none())?).into();
-    let sig = payer.signing.sign(&hash).to_bytes();
+    let sig = payer.sign(&hash)?;
+    let public = payer.public();
     let decorated = DecoratedSignature {
-        hint: SignatureHint(payer.public[28..32].try_into().expect("4 bytes")),
+        hint: SignatureHint(public[28..32].try_into().expect("4 bytes")),
         signature: Signature(sig.to_vec().try_into()?),
     };
     let envelope = TransactionEnvelope::Tx(TransactionV1Envelope {
@@ -122,62 +136,53 @@ pub fn sign_envelope(
     Ok((envelope.to_xdr_base64(Limits::none())?, hex::encode(hash)))
 }
 
-/// The full signed write flow. Returns `None` on `--dry-run` (stops after the
-/// second simulation), `Some(Submitted)` once the network reports SUCCESS.
+/// The full signed write flow. `broadcast` is `None` for a dry run, which
+/// stops after the authorization tree is checked and never calls
+/// `signer.sign`; otherwise the signed transaction is sent there and polled
+/// to SUCCESS. Every read and both simulations go to `sim`.
+///
+/// `prior_seq` is the sequence number of a transaction this process already
+/// sent from the same fee payer ([`run_upload`]'s), which `sim`'s state does
+/// not reflect; this transaction takes the next one. `None` reads the fee
+/// payer's sequence from `sim`.
 pub fn run_signed(
-    rpc: &Rpc,
+    sim: &dyn Simulate,
     passphrase: &str,
-    payer: &SeedKey,
+    signer: &dyn SignKey,
     auth_spec: &AuthSpec,
     spec: &InvokeSpec,
-    dry_run: bool,
+    prior_seq: Option<i64>,
+    broadcast: Option<&dyn Broadcast>,
 ) -> Result<Option<Submitted>> {
-    let seq = rpc
-        .account_seq(&payer.public)
-        .with_context(|| format!("fee payer {}", payer.account()))?;
-    let mut tx = build_tx(payer.public, seq + 1, spec)?;
+    let payer = signer.public();
+    let seq = match prior_seq {
+        Some(seq) => seq,
+        None => sim
+            .account_seq(&payer)
+            .with_context(|| format!("fee payer {}", signer.account()))?,
+    };
+    let mut tx = build_tx(payer, seq + 1, spec)?;
 
-    let sim1 = rpc.simulate(&envelope_b64(&tx)?)?;
+    let sim1 = sim.simulate(&envelope_b64(&tx)?)?;
     if let Some(e) = sim1.error {
         bail!("simulation failed: {e}");
     }
 
-    // Exactly one address-credential entry, and it must be the smart account.
-    // Source-account credential entries (if any) pass through untouched.
-    let mut address_entries = Vec::new();
-    let mut source_entries = Vec::new();
-    for b64 in &sim1.auth {
-        let entry = SorobanAuthorizationEntry::from_xdr_base64(b64, Limits::none())?;
-        match entry.credentials {
-            SorobanCredentials::Address(_) => address_entries.push(entry),
-            SorobanCredentials::SourceAccount => source_entries.push(entry),
-            // Recording-mode simulation never runs __check_auth, so it always
-            // emits plain Address credential templates — WE build the CAP-71
-            // AddressWithDelegates form from them (sign_delegated_auth_entry).
-            // A pre-formed CAP-71 entry coming back from simulation would mean
-            // an RPC behavior change; fail loudly rather than mis-sign.
-            SorobanCredentials::AddressV2(_) | SorobanCredentials::AddressWithDelegates(_) => {
-                bail!("unexpected CAP-71 credential entry in simulation output")
-            }
-        }
-    }
-    if address_entries.len() != 1 {
-        bail!(
-            "expected exactly one address-credential auth entry, got {}",
-            address_entries.len()
-        );
-    }
-    let mut entry = address_entries.pop().expect("len checked");
-    let expected_addr = scv::contract(&auth_spec.account)?;
-    if let SorobanCredentials::Address(c) = &entry.credentials {
-        if c.address != expected_addr {
-            bail!(
-                "auth entry credential {:?} is not the smart account {}",
-                c.address,
-                auth_spec.account
-            );
-        }
-    }
+    // The tree this tool means to authorize, from its own inputs, against
+    // what simulation asks for: nothing is signed unless they are equal.
+    let intended = IntendedAuth::new(
+        &auth_spec.account,
+        &spec.contract,
+        &spec.func,
+        &spec.args,
+        auth_spec.sub_invocations.clone(),
+    )?;
+    let mut entry = authz::checked_entry(&sim1.auth, &intended)?;
+
+    let Some(broadcast) = broadcast else {
+        dry_run_report(&entry, &sim1)?;
+        return Ok(None);
+    };
 
     let expiration = sim1.latest_ledger + 120;
     match &auth_spec.mode {
@@ -185,7 +190,7 @@ pub fn run_signed(
             &mut entry,
             passphrase,
             expiration,
-            payer,
+            signer,
             verifier,
             auth_spec.rule_id,
         )?,
@@ -193,18 +198,15 @@ pub fn run_signed(
             &mut entry,
             passphrase,
             expiration,
-            payer,
+            signer,
             auth_spec.rule_id,
         )?,
     }
-
-    let mut auth_entries = vec![entry];
-    auth_entries.extend(source_entries);
-    set_auth(&mut tx, auth_entries)?;
+    set_auth(&mut tx, vec![entry])?;
 
     // Re-simulate with the signed auth: verifier + policy cross-calls inflate
     // the footprint, so only THIS simulation's resources are trustworthy.
-    let sim2 = rpc.simulate(&envelope_b64(&tx)?)?;
+    let sim2 = sim.simulate(&envelope_b64(&tx)?)?;
     if let Some(e) = sim2.error {
         bail!("re-simulation with signed auth failed: {e}");
     }
@@ -215,34 +217,59 @@ pub fn run_signed(
     // 15% headroom over the simulated resource fee, rounded up.
     let fee = 100u64 + (sim2.min_resource_fee * 115).div_ceil(100);
     tx.fee = u32::try_from(fee).context("computed fee overflows u32")?;
-    tx.ext = TransactionExt::V1(soroban_data.clone());
+    tx.ext = TransactionExt::V1(soroban_data);
 
-    if dry_run {
-        println!("footprint: {:?}", soroban_data.resources.footprint);
-        println!(
-            "fee: {} stroops (min resource fee {})",
-            tx.fee, sim2.min_resource_fee
-        );
-        println!("DRY RUN OK");
-        return Ok(None);
+    Ok(Some(submit(broadcast, &tx, passphrase, signer)?))
+}
+
+/// What a dry run can say without a signature: the checked authorization,
+/// and the unsigned simulation's footprint and fee, which leave out the
+/// signature check's own calls.
+fn dry_run_report(entry: &SorobanAuthorizationEntry, sim1: &crate::rpc::Simulation) -> Result<()> {
+    println!(
+        "authorization tree checked: the smart account authorizes exactly {} and {} \
+         sub-invocations",
+        authz::describe(&entry.root_invocation),
+        entry.root_invocation.sub_invocations.len()
+    );
+    if let Some(td) = &sim1.transaction_data {
+        let data = SorobanTransactionData::from_xdr_base64(td, Limits::none())?;
+        println!("unsigned footprint: {:?}", data.resources.footprint);
+        println!("unsigned instructions: {}", data.resources.instructions);
     }
-
-    Ok(Some(submit(rpc, &tx, passphrase, payer)?))
+    println!(
+        "unsigned min resource fee: {} stroops",
+        sim1.min_resource_fee
+    );
+    println!(
+        "note: this estimate is from the unsigned (recording) simulation. The live run \
+         re-simulates with the signed entry, which adds the verifier and policy calls the \
+         signature check makes, so its footprint, instructions, and fee differ from these. A \
+         dry run holds no signing key, so it cannot produce that signed estimate."
+    );
+    println!("DRY RUN OK (nothing signed)");
+    Ok(())
 }
 
 /// Sign a fully-prepared tx (fee + soroban data already set), send it, and poll
 /// to SUCCESS. Shared by the smart-account invoke flow (`run_signed`) and the
-/// plain wasm upload (`run_upload`).
-pub fn submit(rpc: &Rpc, tx: &Transaction, passphrase: &str, payer: &SeedKey) -> Result<Submitted> {
-    let (envelope, local_hash) = sign_envelope(tx, passphrase, payer)?;
-    let hash = rpc.send(&envelope)?;
-    if hash != local_hash {
-        eprintln!("warning: rpc tx hash {hash} != locally computed {local_hash}");
+/// plain wasm upload (`run_upload`). The broadcast RPC sees only this signed
+/// envelope and the hash polled for.
+pub fn submit(
+    broadcast: &dyn Broadcast,
+    tx: &Transaction,
+    passphrase: &str,
+    payer: &dyn SignKey,
+) -> Result<Submitted> {
+    let (envelope, hash) = sign_envelope(tx, passphrase, payer)?;
+    let accepted = broadcast.send(&envelope)?;
+    if accepted != hash {
+        bail!("the broadcast RPC answered tx hash {accepted}, not this transaction's {hash}");
     }
 
     let deadline = Instant::now() + Duration::from_secs(60);
     loop {
-        match rpc.get_transaction(&hash)? {
+        match broadcast.get_transaction(&hash)? {
             TxStatus::Success { ledger, .. } => {
                 return Ok(Submitted {
                     tx_hash: hash,
@@ -287,28 +314,37 @@ fn build_upload_tx(source_pubkey: [u8; 32], seq: i64, wasm: &[u8]) -> Result<Tra
 /// (the whole binary would overflow the transaction envelope): the caller
 /// uploads here, then records name→hash with `publish_hash`. `publish_hash` does
 /// NOT re-check the upload, so this MUST precede it. Idempotent — re-uploading
-/// identical bytes is a cheap no-op success. Returns the wasm hash (sha256 of
-/// the bytes, the ledger's content id); `None` is never returned — the `Option`
-/// mirrors `run_signed` so `--dry-run` short-circuits uniformly, and on dry run
-/// it simulates only and returns the hash without sending.
+/// identical bytes is a cheap no-op success. Returns the sequence number the
+/// sent upload consumed, for the `run_signed` that follows it. A dry run
+/// (`broadcast` = `None`) simulates only, signs and sends nothing, and
+/// returns `None`.
 pub fn run_upload(
-    rpc: &Rpc,
+    sim: &dyn Simulate,
     passphrase: &str,
-    payer: &SeedKey,
+    payer: &dyn SignKey,
     wasm: &[u8],
-    dry_run: bool,
-) -> Result<Option<[u8; 32]>> {
+    broadcast: Option<&dyn Broadcast>,
+) -> Result<Option<i64>> {
     let hash: [u8; 32] = Sha256::digest(wasm).into();
-    let seq = rpc
-        .account_seq(&payer.public)
-        .with_context(|| format!("fee payer {}", payer.account()))?;
-    let mut tx = build_upload_tx(payer.public, seq + 1, wasm)?;
+    let seq = sim
+        .account_seq(&payer.public())
+        .with_context(|| format!("fee payer {}", payer.account()))?
+        + 1;
+    let mut tx = build_upload_tx(payer.public(), seq, wasm)?;
 
     // One simulation suffices: with no auth entry to sign, the footprint doesn't
     // change under signing (unlike run_signed's verifier/policy cross-calls).
-    let sim = rpc.simulate(&envelope_b64(&tx)?)?;
+    let sim = sim.simulate(&envelope_b64(&tx)?)?;
     if let Some(e) = sim.error {
         bail!("upload simulation failed: {e}");
+    }
+    // An upload is authorized by the envelope signature alone; any auth
+    // entry here would be authorized by that signature too.
+    if !sim.auth.is_empty() {
+        bail!(
+            "upload simulation asks for {} authorization entries; an upload needs none",
+            sim.auth.len()
+        );
     }
     let td = sim
         .transaction_data
@@ -318,24 +354,24 @@ pub fn run_upload(
     tx.fee = u32::try_from(fee).context("computed upload fee overflows u32")?;
     tx.ext = TransactionExt::V1(soroban_data.clone());
 
-    if dry_run {
+    let Some(broadcast) = broadcast else {
         println!("upload footprint: {:?}", soroban_data.resources.footprint);
         println!(
             "upload fee: {} stroops (min resource fee {})",
             tx.fee, sim.min_resource_fee
         );
-        println!("DRY RUN OK (upload {})", hex::encode(hash));
-        return Ok(Some(hash));
-    }
+        println!("DRY RUN OK (upload {}, nothing signed)", hex::encode(hash));
+        return Ok(None);
+    };
 
-    let submitted = submit(rpc, &tx, passphrase, payer)?;
+    let submitted = submit(broadcast, &tx, passphrase, payer)?;
     println!(
         "uploaded wasm {} in tx {} at ledger {}",
         hex::encode(hash),
         submitted.tx_hash,
         submitted.ledger
     );
-    Ok(Some(hash))
+    Ok(Some(seq))
 }
 
 /// Outcome of a read-only simulation: a value, or a *contract* error (which
@@ -358,7 +394,7 @@ pub fn contract_error_code(message: &str) -> Option<u32> {
 /// Simulate `contract.func(args)` read-only. The source is the all-zero
 /// G-account: simulation needs a well-formed envelope, not a funded account.
 pub fn simulate_read(
-    rpc: &Rpc,
+    sim: &dyn Simulate,
     contract: &str,
     func: &str,
     args: Vec<ScVal>,
@@ -369,7 +405,7 @@ pub fn simulate_read(
         args,
     };
     let tx = build_tx([0u8; 32], 0, &spec)?;
-    let sim = rpc.simulate(&envelope_b64(&tx)?)?;
+    let sim = sim.simulate(&envelope_b64(&tx)?)?;
     if let Some(e) = sim.error {
         if e.contains("Error(Contract") {
             return Ok(ReadOutcome::ContractError {

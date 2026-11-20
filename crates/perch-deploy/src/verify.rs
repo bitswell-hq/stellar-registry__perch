@@ -25,7 +25,7 @@ use anyhow::{bail, Context, Result};
 use stellar_xdr::{Limits, ReadXdr, ScMap, ScVal};
 
 use crate::compose::{parse_hash32, ComposeOutput, RuleEntry};
-use crate::rpc::Rpc;
+use crate::rpc::{Rpc, Simulate};
 use crate::tx::{simulate_read, ReadOutcome};
 use crate::{auth, scv};
 
@@ -78,7 +78,10 @@ fn fmt_id(id: Option<u32>) -> String {
 /// The account's configuration snapshot (`configuration()`): its revision
 /// and every installed rule with its OZ id, read at one ledger. Rules are
 /// found by name in it, never by probing ids.
-pub(crate) fn read_configuration(rpc: &Rpc, account: &str) -> Result<(u64, Vec<(u32, ScMap)>)> {
+pub(crate) fn read_configuration(
+    rpc: &dyn Simulate,
+    account: &str,
+) -> Result<(u64, Vec<(u32, ScMap)>)> {
     let m = match simulate_read(rpc, account, "configuration", vec![])? {
         ReadOutcome::Value(ScVal::Map(Some(m))) => m,
         ReadOutcome::Value(other) => bail!("configuration returned {other:?}"),

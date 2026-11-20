@@ -8,12 +8,16 @@
 //! account's `configuration()` — the one thing the stock stellar CLI cannot
 //! sign yet). The apply names the revision it read as `expected_revision`,
 //! so it never overwrites a change made after that read.
+//!
+//! The account's configuration is read, and both simulations run, in the
+//! local simulator over the configured state source; the broadcast RPC only
+//! receives the signed transaction and answers the confirmation polls.
 
 use anyhow::{bail, Context, Result};
 use stellar_xdr::{ScBytes, ScVal};
 
-use crate::keys::SeedKey;
-use crate::rpc::Rpc;
+use crate::keys::SignKey;
+use crate::rpc::{Broadcast, Simulate};
 use crate::tx::{AuthSpec, InvokeSpec};
 use crate::verify::read_configuration;
 use crate::{scv, tx};
@@ -22,8 +26,12 @@ use crate::{scv, tx};
 /// `configuration()` snapshot): its id, the verifier of its
 /// `Signer::External` whose key is `pubkey`, and the snapshot's revision.
 /// Rule ids move when a rule is replaced, so the id is read, never assumed.
-fn onchain_admin(rpc: &Rpc, account: &str, pubkey: &[u8; 32]) -> Result<(u32, String, u64)> {
-    let (revision, rules) = read_configuration(rpc, account)
+fn onchain_admin(
+    sim: &dyn Simulate,
+    account: &str,
+    pubkey: &[u8; 32],
+) -> Result<(u32, String, u64)> {
+    let (revision, rules) = read_configuration(sim, account)
         .context("read the account's configuration — is the account deployed?")?;
     let me = scv::address(account)?;
     let name = scv::string("admin")?;
@@ -56,15 +64,19 @@ fn onchain_admin(rpc: &Rpc, account: &str, pubkey: &[u8; 32]) -> Result<(u32, St
             return Ok((*id, scv::address_to_string(verifier)?, revision));
         }
     }
-    bail!("PERCH_ADMIN_KEY's public key matches no External signer on the on-chain admin rule")
+    bail!("the signing key matches no External signer on the on-chain admin rule")
 }
 
+/// Apply the document at `doc_path` to `account`, signed by `key` selecting
+/// the account's admin rule. `broadcast` is `None` for a dry run, which
+/// signs nothing.
 pub fn run(
-    rpc: &Rpc,
+    sim: &dyn Simulate,
     passphrase: &str,
+    key: &dyn SignKey,
     account: &str,
     doc_path: &std::path::Path,
-    dry_run: bool,
+    broadcast: Option<&dyn Broadcast>,
 ) -> Result<()> {
     let doc_json = std::fs::read_to_string(doc_path)
         .with_context(|| format!("read {}", doc_path.display()))?;
@@ -87,8 +99,7 @@ pub fn run(
     let doc_hash = perch_ir::doc_hash_hex(&doc);
     println!("canonical doc_hash: {doc_hash}");
 
-    let key = SeedKey::from_env("PERCH_ADMIN_KEY")?;
-    let (rule_id, verifier, revision) = onchain_admin(rpc, account, &key.public)?;
+    let (rule_id, verifier, revision) = onchain_admin(sim, account, &key.public())?;
 
     // The document bytes, an `approval_valid_until` of 0, and the revision
     // the admin rule was read at: the account resolves the compiler +
@@ -118,8 +129,13 @@ pub fn run(
         mode: tx::AuthMode::External { verifier },
         rule_id,
         account: account.to_string(),
+        // apply_doc's own calls (compiler, recovery hooks, pool) are made by
+        // the account itself and need no entry of their own.
+        sub_invocations: vec![],
     };
-    if let Some(submitted) = tx::run_signed(rpc, passphrase, &key, &auth_spec, &spec, dry_run)? {
+    if let Some(submitted) =
+        tx::run_signed(sim, passphrase, key, &auth_spec, &spec, None, broadcast)?
+    {
         println!(
             "applied document {doc_hash} over revision {revision} in tx {} at ledger {}",
             submitted.tx_hash, submitted.ledger

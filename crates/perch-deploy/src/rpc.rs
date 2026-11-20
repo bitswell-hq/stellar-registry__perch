@@ -1,6 +1,13 @@
 //! Hand-rolled JSON-RPC over ureq for the five soroban-rpc methods this tool
 //! needs. Deliberately not stellar-rpc-client: five methods by hand keep
 //! sdk/client version skew out of the build.
+//!
+//! The signing flows reach an RPC through one of two roles. [`Simulate`]
+//! reads ledger state and simulates; `perch-deploy` gives it only the local
+//! simulator ([`crate::sim::LocalSim`]). [`Broadcast`] submits and confirms
+//! and nothing else, so the RPC a transaction is sent to never supplies the
+//! authorization entries that get signed and never receives them before the
+//! signed envelope.
 
 use anyhow::{anyhow, bail, Context, Result};
 use serde_json::{json, Value};
@@ -12,6 +19,40 @@ use stellar_xdr::{
 pub struct Rpc {
     url: String,
     agent: ureq::Agent,
+}
+
+/// Ledger reads and simulation: the source of every fact a signing flow
+/// signs over.
+pub trait Simulate {
+    fn simulate(&self, envelope_b64: &str) -> Result<Simulation>;
+    /// Current sequence number of a classic G-account (the fee payer).
+    fn account_seq(&self, pubkey: &[u8; 32]) -> Result<i64>;
+}
+
+/// Submission and confirmation: the only calls a signing flow makes to the
+/// network it sends to.
+pub trait Broadcast {
+    /// Returns the tx hash on acceptance; bails on immediate rejection.
+    fn send(&self, envelope_b64: &str) -> Result<String>;
+    fn get_transaction(&self, hash_hex: &str) -> Result<TxStatus>;
+}
+
+impl Simulate for Rpc {
+    fn simulate(&self, envelope_b64: &str) -> Result<Simulation> {
+        Rpc::simulate(self, envelope_b64)
+    }
+    fn account_seq(&self, pubkey: &[u8; 32]) -> Result<i64> {
+        Rpc::account_seq(self, pubkey)
+    }
+}
+
+impl Broadcast for Rpc {
+    fn send(&self, envelope_b64: &str) -> Result<String> {
+        Rpc::send(self, envelope_b64)
+    }
+    fn get_transaction(&self, hash_hex: &str) -> Result<TxStatus> {
+        Rpc::get_transaction(self, hash_hex)
+    }
 }
 
 /// The subset of a simulateTransaction response the flows consume. `error` is
@@ -47,15 +88,22 @@ pub enum TxStatus {
 
 impl Rpc {
     pub fn new(url: &str) -> Self {
+        Self::with_timeout(url, std::time::Duration::from_secs(30))
+    }
+
+    pub fn with_timeout(url: &str, timeout: std::time::Duration) -> Self {
         Self {
             url: url.to_string(),
-            agent: ureq::AgentBuilder::new()
-                .timeout(std::time::Duration::from_secs(30))
-                .build(),
+            agent: ureq::AgentBuilder::new().timeout(timeout).build(),
         }
     }
 
-    fn call(&self, method: &str, params: Value) -> Result<Value> {
+    pub fn url(&self) -> &str {
+        &self.url
+    }
+
+    /// A raw JSON-RPC call; the `result` member on success.
+    pub fn call(&self, method: &str, params: Value) -> Result<Value> {
         let body = json!({ "jsonrpc": "2.0", "id": 1, "method": method, "params": params });
         let resp: Value = self
             .agent
