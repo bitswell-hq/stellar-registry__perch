@@ -489,7 +489,7 @@ deploy_env=(env STELLAR_RPC_URL="$RPC_URL" STELLAR_NETWORK_PASSPHRASE="$PASSPHRA
 # anti-brick, and swaps the entire rule set atomically. PERCH_ADMIN_KEY must
 # be in the environment (never in argv).
 run "${deploy_env[@]}" "$PERCH_DEPLOY" apply \
-    --account "$SA" --doc "$DOC" --compiler "$COMPILER" --interpreter "$INTERPRETER"
+    --account "$SA" --doc "$DOC"
 run "${deploy_env[@]}" "$PERCH_DEPLOY" verify \
     --account "$SA" --rules "$RULES_OUT"
 # The rule id CI signs under comes from the CHAIN, never hard-coded: rule ids
@@ -529,7 +529,8 @@ rehearse_ci_publish() { # wasm version
     command -v curl >/dev/null 2>&1 || die "curl not found on PATH"
     serve_log="$(mktemp -t perch-rehearsal-fork)"
     receipt="$(mktemp -t perch-rehearsal-receipt)"
-    "$sim" serve --fork "$PERCH_STATE_RPC_URL" --network-passphrase "$PASSPHRASE" \
+    env -u PERCH_ADMIN_KEY -u PERCH_CI_KEY \
+        "$sim" serve --fork "$PERCH_STATE_RPC_URL" --network-passphrase "$PASSPHRASE" \
         --fork-mode head --host 127.0.0.1 --port 0 >"$serve_log" 2>&1 &
     pid=$!
     for _ in $(seq 1 180); do

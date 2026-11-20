@@ -248,6 +248,47 @@ fn apply_starts_the_simulator_before_it_reads_the_key() {
     assert!(!stderr.contains("PERCH_ADMIN_KEY"), "{stderr}");
 }
 
+#[cfg(unix)]
+#[test]
+fn the_simulator_is_started_without_the_signing_keys() {
+    let dir = scratch("sim-env");
+    let doc = dir.join("doc.json");
+    std::fs::write(&doc, "{}").unwrap();
+    let seen = dir.join("env.txt");
+    let sim = fake_sim(&dir, &format!("env > '{}'; exit 1", seen.display()));
+    let out = Command::new(env!("CARGO_BIN_EXE_perch-deploy"))
+        .env_remove("PERCH_STATE_SNAPSHOT")
+        .env_remove("PERCH_STATE_LEDGER")
+        .env_remove("PERCH_STATE_SNAPSHOT_LEDGER")
+        .env("PERCH_ADMIN_KEY", "admin-seed")
+        .env("PERCH_CI_KEY", "ci-seed")
+        .env("PERCH_TEST_MARKER", "inherited")
+        .args(["--rpc-url", "http://127.0.0.1:1"])
+        .args(["--network-passphrase", PASSPHRASE])
+        .args([
+            "apply",
+            "--account",
+            "CAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQC526",
+            "--state-rpc-url",
+            "http://127.0.0.1:1",
+        ])
+        .arg("--doc")
+        .arg(&doc)
+        .arg("--soroban-sim")
+        .arg(&sim)
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    let env = std::fs::read_to_string(&seen).expect("the simulator ran");
+    assert!(env.contains("PERCH_TEST_MARKER=inherited"), "{env}");
+    assert!(!env.contains("PERCH_ADMIN_KEY"), "{env}");
+    assert!(!env.contains("PERCH_CI_KEY"), "{env}");
+    assert!(
+        !env.contains("admin-seed") && !env.contains("ci-seed"),
+        "{env}"
+    );
+}
+
 #[test]
 fn a_public_key_is_accepted_only_with_a_dry_run() {
     let account = "CAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQC526";

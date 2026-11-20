@@ -134,6 +134,7 @@ pub struct LocalSim {
 impl LocalSim {
     pub fn start(soroban_sim: &Path, source: &StateSource, passphrase: &str) -> Result<Self> {
         let mut cmd = Command::new(soroban_sim);
+        cmd.env_remove("PERCH_ADMIN_KEY").env_remove("PERCH_CI_KEY");
         cmd.args(["serve", "--host", "127.0.0.1", "--port", "0", "--quiet"]);
         match source {
             StateSource::Rpc { url, ledger } => {

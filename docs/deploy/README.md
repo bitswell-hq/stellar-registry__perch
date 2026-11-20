@@ -639,6 +639,8 @@ What is still trusted:
   snapshot you made from one.
 - **The soroban-sim build**, which runs the host. Its revision is not
   verified: install the one `scripts/rehearse-migration.sh` pins.
+  `perch-deploy` starts it without `PERCH_ADMIN_KEY` and `PERCH_CI_KEY` in
+  its environment.
 - **Confirmation.** Success is what the broadcast RPC's `getTransaction`
   reports. Check the outcome against the trusted node as well:
   `perch-deploy verify --rpc-url <trusted node>`, or the account's
