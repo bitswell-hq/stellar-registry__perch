@@ -620,7 +620,13 @@ inputs, never from an RPC's answer:
    resource fee. That is not the live run's estimate: the live run
    re-simulates with the signed entry, which adds the calls the signature
    check makes, and a dry run has no signature to measure them with. The
-   output says so.
+   output says so. For the same reason a dry run never runs the account's
+   `__check_auth`, so it does not show that a key satisfies its rule. To
+   check that, run the command without `--dry-run` against a local
+   `soroban-sim serve` fork, with the fork as both `--rpc-url` and the state
+   source: `scripts/bootstrap-testnet.sh` rehearses the CI publish this way
+   before it rotates the manager, and `scripts/rehearse-migration.sh` runs
+   `apply` this way.
 
 What is still trusted:
 

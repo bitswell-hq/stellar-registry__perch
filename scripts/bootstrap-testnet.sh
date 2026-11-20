@@ -17,7 +17,8 @@
 #                    then apply the WHOLE document in one transaction
 #                    (perch-deploy apply → the account's apply_doc), signed by
 #                    the admin key; verify reconciles installed == reviewed.
-#   6. Rotate      — rehearse the CI publish path (simulation only), then
+#   6. Rotate      — rehearse the CI publish path on a local soroban-sim fork
+#                    (signed by the CI key; nothing reaches the network), then
 #                    set_manager(smart account). After this, every initial
 #                    publish/deploy/register in the perch sub needs a
 #                    smart-account auth entry (perch-deploy), even for humans.
@@ -33,10 +34,16 @@
 # Required env for phase 5/6:
 #   PERCH_ADMIN_KEY — S... seed matching ADMIN_PK (perch-deploy signs installs)
 #   PERCH_STATE_RPC_URL — a trusted node perch-deploy's local simulation
-#                     (soroban-sim) reads ledger state from, or PERCH_STATE_SNAPSHOT
-#                     with PERCH_STATE_SNAPSHOT_LEDGER; STELLAR_RPC_URL only
-#                     receives the signed transaction (docs/deploy/README.md,
-#                     "perch-deploy's trust boundary")
+#                     (soroban-sim) reads ledger state from; STELLAR_RPC_URL
+#                     only receives the signed transaction
+#                     (docs/deploy/README.md, "perch-deploy's trust boundary").
+#                     Phase 5 also takes PERCH_STATE_SNAPSHOT with
+#                     PERCH_STATE_SNAPSHOT_LEDGER instead; phase 6 forks this
+#                     node at its latest ledger, so it needs the URL
+#   PERCH_CI_KEY    — S... seed whose G-account is CI_G (phase-6 rehearsal;
+#                     it signs only transactions sent to the local fork)
+#   soroban-sim     — SOROBAN_SIM, or on PATH (scripts/rehearse-migration.sh
+#                     pins the revision it installs), and curl, for phase 6
 #
 # Optional env:
 #   PERCH_CONSTRUCTORLESS=1 — route the ed25519-verifier / doc-compiler /
@@ -99,7 +106,7 @@ for arg in "$@"; do
         --execute)    DRY_RUN=0 ;;
         -n|--dry-run) DRY_RUN=1 ;;
         -h|--help)
-            sed -n '2,44p' "$0" | sed 's/^# \{0,1\}//'
+            sed -n '2,51p' "$0" | sed 's/^# \{0,1\}//'
             exit 0
             ;;
         *) echo "Unknown option: $arg" >&2; exit 1 ;;
@@ -509,18 +516,58 @@ log "Phase 6: rehearsal + set_manager"
 # auth (still the deployer here) and never touches __check_auth. And it must use
 # DIFFERENT wasm bytes: publish_hash rejects a known hash BEFORE require_auth,
 # so identical bytes would short-circuit without exercising the CI key either.
-# Appending a benign custom section keeps the wasm valid and changes the hash;
-# --dry-run stops at the authorization check, signs nothing and never reads
-# PERCH_CI_KEY, so the bumped version is never actually taken.
+# Appending a benign custom section keeps the wasm valid and changes the hash.
+# A perch-deploy dry run signs nothing, so it never runs __check_auth; the
+# rehearsal is therefore a live-path publish signed by PERCH_CI_KEY whose
+# broadcast RPC and state source are both a local soroban-sim fork of
+# PERCH_STATE_RPC_URL. The fork applies it and is then stopped, so the bumped
+# version is never taken on the network.
+rehearse_ci_publish() { # wasm version
+    local sim="${SOROBAN_SIM:-soroban-sim}" serve_log receipt pid url="" line status=0
+    [ -n "${PERCH_CI_KEY:-}" ] || die "PERCH_CI_KEY (the S... seed of $CI_G) is required for the phase-6 rehearsal"
+    [ -n "${PERCH_STATE_RPC_URL:-}" ] || die "PERCH_STATE_RPC_URL is required for the phase-6 rehearsal, which forks it"
+    command -v curl >/dev/null 2>&1 || die "curl not found on PATH"
+    serve_log="$(mktemp -t perch-rehearsal-fork)"
+    receipt="$(mktemp -t perch-rehearsal-receipt)"
+    "$sim" serve --fork "$PERCH_STATE_RPC_URL" --network-passphrase "$PASSPHRASE" \
+        --fork-mode head --host 127.0.0.1 --port 0 >"$serve_log" 2>&1 &
+    pid=$!
+    for _ in $(seq 1 180); do
+        line="$(grep -o 'facade on http://127\.0\.0\.1:[0-9]*' "$serve_log" || true)"
+        [ -z "$line" ] || { url="${line#facade on }"; break; }
+        kill -0 "$pid" 2>/dev/null || break
+        sleep 1
+    done
+    if [ -z "$url" ]; then
+        cat "$serve_log" >&2
+        kill "$pid" 2>/dev/null || true
+        die "soroban-sim serve ($sim) did not start a fork of $PERCH_STATE_RPC_URL"
+    fi
+    if [[ "$(curl -fsS "$url" -H 'content-type: application/json' \
+        -d '{"jsonrpc":"2.0","id":1,"method":"fork_info","params":{}}' | jq -r .result.facade)" != soroban-sim* ]]; then
+        kill "$pid" 2>/dev/null || true
+        die "$url is not a soroban-sim facade"
+    fi
+    log "rehearsing the CI publish on a local fork at $url"
+    env -u PERCH_STATE_LEDGER -u PERCH_STATE_SNAPSHOT -u PERCH_STATE_SNAPSHOT_LEDGER \
+        STELLAR_RPC_URL="$url" STELLAR_NETWORK_PASSPHRASE="$PASSPHRASE" \
+        PERCH_STATE_RPC_URL="$url" SOROBAN_SIM="$sim" \
+        "$PERCH_DEPLOY" publish \
+        --wasm "$1" --wasm-name perch-interpreter --binver "$2" \
+        --registry "$PERCH_SUB" --author "$SA" --rule-id "$CI_RULE_ID" \
+        --receipt "$receipt" || status=$?
+    kill "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+    rm -f "$serve_log" "$receipt"
+    return "$status"
+}
 REHEARSAL_WASM="$(mktemp -t perch-rehearsal)"
 cp "$WASM_DIR/perch_interpreter.wasm" "$REHEARSAL_WASM"
 printf '\x00\x08\x07rehears' >> "$REHEARSAL_WASM"
 CURRENT_VERSION="$(stellar registry current-version perch-interpreter "${net_args[@]}" 2>/dev/null || echo '0.1.0')"
 REHEARSAL_VERSION="$(awk -F. '{ printf "%d.%d.%d", $1, $2, $3 + 1 }' <<<"$CURRENT_VERSION")"
-run "${deploy_env[@]}" "$PERCH_DEPLOY" publish --dry-run --public-key "$CI_G" \
-    --wasm "$REHEARSAL_WASM" --wasm-name perch-interpreter --binver "$REHEARSAL_VERSION" \
-    --registry "$PERCH_SUB" --author "$SA" --rule-id "$CI_RULE_ID" \
-    || die "CI-path rehearsal FAILED — do not rotate the manager until this passes"
+run rehearse_ci_publish "$REHEARSAL_WASM" "$REHEARSAL_VERSION" \
+    || die "CI-path rehearsal FAILED on the local fork — do not rotate the manager until this passes"
 rm -f "$REHEARSAL_WASM"
 
 current_manager="$(stellar contract invoke --id "$PERCH_SUB" "${net_args[@]}" -- manager 2>/dev/null | tr -d '"' || true)"
