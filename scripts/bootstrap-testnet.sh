@@ -32,7 +32,11 @@
 #               host-authenticated; it is also the CI fee payer (fund it)
 # Required env for phase 5/6:
 #   PERCH_ADMIN_KEY — S... seed matching ADMIN_PK (perch-deploy signs installs)
-#   PERCH_CI_KEY    — S... seed whose G-account is CI_G (phase-6 rehearsal)
+#   PERCH_STATE_RPC_URL — a trusted node perch-deploy's local simulation
+#                     (soroban-sim) reads ledger state from, or PERCH_STATE_SNAPSHOT
+#                     with PERCH_STATE_SNAPSHOT_LEDGER; STELLAR_RPC_URL only
+#                     receives the signed transaction (docs/deploy/README.md,
+#                     "perch-deploy's trust boundary")
 #
 # Optional env:
 #   PERCH_CONSTRUCTORLESS=1 — route the ed25519-verifier / doc-compiler /
@@ -506,13 +510,14 @@ log "Phase 6: rehearsal + set_manager"
 # DIFFERENT wasm bytes: publish_hash rejects a known hash BEFORE require_auth,
 # so identical bytes would short-circuit without exercising the CI key either.
 # Appending a benign custom section keeps the wasm valid and changes the hash;
-# --dry-run stops at simulation, so the bumped version is never actually taken.
+# --dry-run stops at the authorization check, signs nothing and never reads
+# PERCH_CI_KEY, so the bumped version is never actually taken.
 REHEARSAL_WASM="$(mktemp -t perch-rehearsal)"
 cp "$WASM_DIR/perch_interpreter.wasm" "$REHEARSAL_WASM"
 printf '\x00\x08\x07rehears' >> "$REHEARSAL_WASM"
 CURRENT_VERSION="$(stellar registry current-version perch-interpreter "${net_args[@]}" 2>/dev/null || echo '0.1.0')"
 REHEARSAL_VERSION="$(awk -F. '{ printf "%d.%d.%d", $1, $2, $3 + 1 }' <<<"$CURRENT_VERSION")"
-run "${deploy_env[@]}" "$PERCH_DEPLOY" publish --dry-run \
+run "${deploy_env[@]}" "$PERCH_DEPLOY" publish --dry-run --public-key "$CI_G" \
     --wasm "$REHEARSAL_WASM" --wasm-name perch-interpreter --binver "$REHEARSAL_VERSION" \
     --registry "$PERCH_SUB" --author "$SA" --rule-id "$CI_RULE_ID" \
     || die "CI-path rehearsal FAILED — do not rotate the manager until this passes"

@@ -5,8 +5,13 @@
 //! publishes wasm to the registry signed by the scoped CI key. Everything
 //! else is the stock `stellar` CLI. Key material comes ONLY from
 //! PERCH_ADMIN_KEY / PERCH_CI_KEY env variables.
+//!
+//! `apply` and `publish` simulate locally (soroban-sim over an explicit
+//! state source, `--state-rpc-url` or `--state-snapshot`) and check the
+//! simulated authorization tree against the intended call before signing;
+//! `--rpc-url` then only broadcasts the signed transaction and confirms it.
 
-use perch_deploy::{apply, compose, publish, rpc, verify};
+use perch_deploy::{apply, compose, keys, publish, rpc, sim, verify};
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -18,7 +23,9 @@ use soroban_sdk::Env;
 #[derive(Parser)]
 #[command(name = "perch-deploy", about, version)]
 struct Cli {
-    /// Soroban RPC endpoint.
+    /// Soroban RPC endpoint. `apply` and `publish` only send the signed
+    /// transaction there and poll it (state and simulation come from
+    /// --state-rpc-url or --state-snapshot); `verify` reads from it.
     #[arg(long, env = "STELLAR_RPC_URL", global = true)]
     rpc_url: Option<String>,
     /// Network passphrase (hashed into every signature).
@@ -51,9 +58,17 @@ enum Cmd {
         /// Path to the PolicyDoc JSON — the same file the review approved.
         #[arg(long)]
         doc: PathBuf,
-        /// Stop after simulation; print footprint and fee.
+        /// Check the authorization and print the unsigned estimate; signs
+        /// and sends nothing, and never reads PERCH_ADMIN_KEY (needs
+        /// --public-key).
         #[arg(long)]
         dry_run: bool,
+        /// PERCH_ADMIN_KEY's public key (G…): required with --dry-run;
+        /// checked against the seed otherwise.
+        #[arg(long)]
+        public_key: Option<String>,
+        #[command(flatten)]
+        state: sim::StateArgs,
     },
     /// Publish wasm to the registry, signed by PERCH_CI_KEY selecting --rule-id.
     Publish(publish::PublishArgs),
@@ -85,6 +100,25 @@ impl Cli {
             .as_deref()
             .context("--network-passphrase or STELLAR_NETWORK_PASSPHRASE required")
     }
+
+    /// The RPC a live run broadcasts to; a dry run has none.
+    fn broadcast(&self, dry_run: bool) -> Result<Option<rpc::Rpc>> {
+        if dry_run {
+            return Ok(None);
+        }
+        Ok(Some(self.rpc()?))
+    }
+}
+
+/// The local simulator over `source`, announced on stderr.
+fn local_sim(
+    state: &sim::StateArgs,
+    source: &sim::StateSource,
+    passphrase: &str,
+) -> Result<sim::LocalSim> {
+    let sim = sim::LocalSim::start(&state.soroban_sim, source, passphrase)?;
+    eprintln!("{}", sim.describe());
+    Ok(sim)
 }
 
 fn main() -> Result<ExitCode> {
@@ -101,8 +135,38 @@ fn main() -> Result<ExitCode> {
             account,
             doc,
             dry_run,
-        } => apply::run(&cli.rpc()?, cli.passphrase()?, account, doc, *dry_run)?,
-        Cmd::Publish(args) => publish::run(&cli.rpc()?, cli.passphrase()?, args)?,
+            public_key,
+            state,
+        } => {
+            let passphrase = cli.passphrase()?;
+            let broadcast = cli.broadcast(*dry_run)?;
+            let source = state.source()?;
+            let key = keys::signing_key("PERCH_ADMIN_KEY", public_key.as_deref(), *dry_run)?;
+            let sim = local_sim(state, &source, passphrase)?;
+            apply::run(
+                &sim,
+                passphrase,
+                key.as_ref(),
+                account,
+                doc,
+                broadcast.as_ref().map(|b| b as &dyn rpc::Broadcast),
+            )?
+        }
+        Cmd::Publish(args) => {
+            let passphrase = cli.passphrase()?;
+            let broadcast = cli.broadcast(args.dry_run)?;
+            let source = args.state.source()?;
+            let sim = local_sim(&args.state, &source, passphrase)?;
+            let key =
+                || keys::signing_key("PERCH_CI_KEY", args.public_key.as_deref(), args.dry_run);
+            publish::run(
+                &sim,
+                passphrase,
+                &key,
+                args,
+                broadcast.as_ref().map(|b| b as &dyn rpc::Broadcast),
+            )?
+        }
         Cmd::Verify {
             account,
             rules,

@@ -93,8 +93,13 @@
 # Env: STELLAR_RPC_URL overrides the network's RPC (a rehearsal points it at a
 # soroban-sim fork: scripts/rehearse-migration.sh). PERCH_ADMIN_KEY, the admin
 # key's secret, signs and pays each author's apply_doc through this checkout's
-# perch-deploy (--send only). Simulations use the source's address and never
-# load a secret.
+# perch-deploy (--send only). perch-deploy simulates locally with soroban-sim
+# (SOROBAN_SIM, or soroban-sim on PATH) over the ledger state it is told to
+# trust: PERCH_STATE_RPC_URL, a trusted node (PERCH_STATE_LEDGER pins a
+# ledger), or PERCH_STATE_SNAPSHOT with PERCH_STATE_SNAPSHOT_LEDGER, and only
+# sends the signed apply_doc to the RPC (docs/deploy/README.md, "perch-deploy's
+# trust boundary"). Simulations use the source's address and never load a
+# secret.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -983,9 +988,11 @@ cmd_create_author() {
         [ "$SEND" != 1 ] || die "--send with a Delegated admin: this script has no signer for it"
         return 0
     fi
-    plan "sign: PERCH_ADMIN_KEY=<secret of $ADMIN_KEY_G> cargo run -p perch-deploy -- --rpc-url $RPC_URL --network-passphrase '$PASSPHRASE' apply --account $author --doc $docfile (that key also pays)"
+    plan "sign: PERCH_ADMIN_KEY=<secret of $ADMIN_KEY_G> PERCH_STATE_RPC_URL=<trusted node> cargo run -p perch-deploy -- --rpc-url $RPC_URL --network-passphrase '$PASSPHRASE' apply --account $author --doc $docfile (that key also pays; perch-deploy simulates locally over the trusted state and sends only the signed transaction to $RPC_URL)"
     [ "$SEND" = 1 ] || return 0
     [ -n "${PERCH_ADMIN_KEY:-}" ] || die "--send needs PERCH_ADMIN_KEY, the secret of $ADMIN_KEY_G"
+    [ -n "${PERCH_STATE_RPC_URL:-}${PERCH_STATE_SNAPSHOT:-}" ] ||
+        die "--send needs PERCH_STATE_RPC_URL (a trusted node) or PERCH_STATE_SNAPSHOT: the ledger state perch-deploy simulates over before signing"
     mainnet_gate "the $project author's apply_doc" "$(fee_of "$author" apply_doc --doc_json "$hex" --approval_valid_until 0 --expected_revision "$rev")"
     cargo run --locked --manifest-path "$REPO/Cargo.toml" -q -p perch-deploy -- --rpc-url "$RPC_URL" --network-passphrase "$PASSPHRASE" \
         apply --account "$author" --doc "$docfile" </dev/null || die "submitting the $project author's apply_doc failed"

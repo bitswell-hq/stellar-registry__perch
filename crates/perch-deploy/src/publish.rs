@@ -1,7 +1,9 @@
 //! `publish`: idempotent CI publish to the registry. A read-only `fetch_hash`
 //! preflight decides between no-op (same bytes already published), hard error
 //! (same name+version, different bytes — a republish would be a supply-chain
-//! smell), and proceeding with the CI-key-signed `publish` call.
+//! smell), and proceeding with the CI-key-signed `publish` call. The
+//! preflight read and every simulation run in the local simulator; the
+//! broadcast RPC only receives signed transactions and answers polls.
 
 use std::path::PathBuf;
 
@@ -10,8 +12,8 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use stellar_xdr::ScVal;
 
-use crate::keys::SeedKey;
-use crate::rpc::Rpc;
+use crate::keys::SignKey;
+use crate::rpc::{Broadcast, Simulate};
 use crate::tx::{simulate_read, AuthSpec, InvokeSpec, ReadOutcome};
 use crate::{scv, tx};
 
@@ -37,9 +39,16 @@ pub struct PublishArgs {
     /// The account context rule the CI key signs under.
     #[arg(long)]
     pub rule_id: u32,
-    /// Stop after simulation; print footprint and fee.
+    /// Check the authorization and print the unsigned estimate; signs and
+    /// sends nothing, and never reads PERCH_CI_KEY (needs --public-key).
     #[arg(long)]
     pub dry_run: bool,
+    /// PERCH_CI_KEY's public key (G…): required with --dry-run; checked
+    /// against the seed otherwise.
+    #[arg(long)]
+    pub public_key: Option<String>,
+    #[command(flatten)]
+    pub state: crate::sim::StateArgs,
     #[arg(long, default_value = "publish-receipt.json")]
     pub receipt: PathBuf,
     /// Wasm at or below this many bytes is published inline — the bytes ride in
@@ -97,13 +106,21 @@ struct Receipt<'a> {
     ledger: u32,
 }
 
-pub fn run(rpc: &Rpc, passphrase: &str, args: &PublishArgs) -> Result<()> {
+/// `broadcast` is `None` for a dry run, which signs nothing; `key` gives the
+/// signer only once the preflight decides to publish.
+pub fn run(
+    sim: &dyn Simulate,
+    passphrase: &str,
+    key: &dyn Fn() -> Result<Box<dyn SignKey>>,
+    args: &PublishArgs,
+    broadcast: Option<&dyn Broadcast>,
+) -> Result<()> {
     let wasm =
         std::fs::read(&args.wasm).with_context(|| format!("read wasm {}", args.wasm.display()))?;
     let local_hash: [u8; 32] = Sha256::digest(&wasm).into();
 
     let outcome = simulate_read(
-        rpc,
+        sim,
         &args.registry,
         "fetch_hash",
         // Option<String>: Some(v) encodes as the inner value.
@@ -136,7 +153,7 @@ pub fn run(rpc: &Rpc, passphrase: &str, args: &PublishArgs) -> Result<()> {
         PreflightDecision::Proceed => {}
     }
 
-    let key = SeedKey::from_env("PERCH_CI_KEY")?;
+    let key = key()?;
     let auth = AuthSpec {
         mode: match &args.verifier {
             Some(v) => tx::AuthMode::External {
@@ -146,6 +163,8 @@ pub fn run(rpc: &Rpc, passphrase: &str, args: &PublishArgs) -> Result<()> {
         },
         rule_id: args.rule_id,
         account: args.author.clone(),
+        // The registry asks the author's authorization for this one call.
+        sub_invocations: vec![],
     };
 
     // Small wasm rides inline in `publish` (the registry uploads the bytes);
@@ -169,7 +188,7 @@ pub fn run(rpc: &Rpc, passphrase: &str, args: &PublishArgs) -> Result<()> {
             wasm.len(),
             args.inline_max_bytes
         );
-        tx::run_upload(rpc, passphrase, &key, &wasm, args.dry_run)?;
+        tx::run_upload(sim, passphrase, key.as_ref(), &wasm, broadcast)?;
         InvokeSpec {
             contract: args.registry.clone(),
             func: "publish_hash".to_string(),
@@ -182,7 +201,8 @@ pub fn run(rpc: &Rpc, passphrase: &str, args: &PublishArgs) -> Result<()> {
         }
     };
 
-    let Some(submitted) = tx::run_signed(rpc, passphrase, &key, &auth, &spec, args.dry_run)? else {
+    let Some(submitted) = tx::run_signed(sim, passphrase, key.as_ref(), &auth, &spec, broadcast)?
+    else {
         return Ok(()); // dry run
     };
 

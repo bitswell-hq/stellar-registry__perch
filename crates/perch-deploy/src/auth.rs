@@ -4,7 +4,6 @@
 //! below — a `#[contracttype]` derive change upstream fails here, not on chain.
 
 use anyhow::{bail, Result};
-use ed25519_dalek::Signer as _;
 use sha2::{Digest, Sha256};
 use stellar_xdr::{
     Hash, HashIdPreimage, HashIdPreimageSorobanAuthorization,
@@ -13,7 +12,7 @@ use stellar_xdr::{
     SorobanAuthorizedInvocation, SorobanCredentials, SorobanDelegateSignature, WriteXdr,
 };
 
-use crate::keys::SeedKey;
+use crate::keys::SignKey;
 use crate::scv;
 
 pub fn network_id(passphrase: &str) -> [u8; 32] {
@@ -168,7 +167,7 @@ pub fn sign_delegated_auth_entry(
     entry: &mut SorobanAuthorizationEntry,
     passphrase: &str,
     signature_expiration_ledger: u32,
-    key: &SeedKey,
+    key: &dyn SignKey,
     rule_id: u32,
 ) -> Result<()> {
     let invocation = entry.root_invocation.clone();
@@ -183,7 +182,7 @@ pub fn sign_delegated_auth_entry(
         &invocation,
         &creds.address,
     )?;
-    let sig = key.signing.sign(&payload).to_bytes();
+    let sig = key.sign(&payload)?;
     entry.credentials =
         SorobanCredentials::AddressWithDelegates(SorobanAddressCredentialsWithDelegates {
             address_credentials: SorobanAddressCredentials {
@@ -194,7 +193,7 @@ pub fn sign_delegated_auth_entry(
             },
             delegates: vec![SorobanDelegateSignature {
                 address: g_address(&delegate_g)?,
-                signature: account_signature_scval(&key.public, &sig)?,
+                signature: account_signature_scval(&key.public(), &sig)?,
                 nested_delegates: Default::default(),
             }]
             .try_into()?,
@@ -218,7 +217,7 @@ pub fn sign_auth_entry(
     entry: &mut SorobanAuthorizationEntry,
     passphrase: &str,
     signature_expiration_ledger: u32,
-    key: &SeedKey,
+    key: &dyn SignKey,
     verifier: &str,
     rule_id: u32,
 ) -> Result<()> {
@@ -237,14 +236,15 @@ pub fn sign_auth_entry(
         &invocation,
     )?;
     let digest = perch_auth_digest(&account_id, &payload, &[rule_id])?;
-    let sig = key.signing.sign(&digest).to_bytes();
-    creds.signature = auth_payload_scval(verifier, &key.public, &sig, rule_id)?;
+    let sig = key.sign(&digest)?;
+    creds.signature = auth_payload_scval(verifier, &key.public(), &sig, rule_id)?;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ed25519_dalek::Signer as _;
     use soroban_sdk::auth::{Context, ContractContext};
     use soroban_sdk::testutils::Address as _;
     use soroban_sdk::xdr::ToXdr;

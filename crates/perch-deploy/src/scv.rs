@@ -78,3 +78,17 @@ pub fn map_get<'a>(map: &'a ScMap, key: &str) -> Option<&'a ScVal> {
         _ => None,
     })
 }
+
+/// The strkey (G…) of an account address, if it is one.
+pub fn account_to_string(a: &ScAddress) -> Option<String> {
+    use stellar_xdr::{AccountId, PublicKey, Uint256};
+    match a {
+        ScAddress::Account(AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(k)))) => Some(
+            stellar_strkey::ed25519::PublicKey(*k)
+                .to_string()
+                .as_str()
+                .into(),
+        ),
+        _ => None,
+    }
+}

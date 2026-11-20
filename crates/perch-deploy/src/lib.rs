@@ -3,10 +3,12 @@
 
 pub mod apply;
 pub mod auth;
+pub mod authz;
 pub mod compose;
 pub mod keys;
 pub mod publish;
 pub mod rpc;
 pub mod scv;
+pub mod sim;
 pub mod tx;
 pub mod verify;
