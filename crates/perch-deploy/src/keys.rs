@@ -56,17 +56,14 @@ impl SignKey for PublicKeyOnly {
 }
 
 /// The key a command signs with: the seed in `var` for a live run, or only
-/// the public key `public` for a dry run, which never reads `var`. `public`
-/// is refused on a live run.
+/// the public key `public` for a dry run, which never reads `var`. The
+/// command line accepts `public` only with a dry run.
 pub fn signing_key(var: &str, public: Option<&str>, dry_run: bool) -> Result<Box<dyn SignKey>> {
     if dry_run {
         let public = public.with_context(|| {
             format!("--dry-run needs --public-key G… (a dry run never reads {var})")
         })?;
         return Ok(Box::new(PublicKeyOnly::from_strkey(public)?));
-    }
-    if public.is_some() {
-        bail!("--public-key goes with --dry-run; a live run signs with {var}");
     }
     Ok(Box::new(SeedKey::from_env(var)?))
 }
