@@ -106,7 +106,7 @@ for arg in "$@"; do
         --execute)    DRY_RUN=0 ;;
         -n|--dry-run) DRY_RUN=1 ;;
         -h|--help)
-            sed -n '2,51p' "$0" | sed 's/^# \{0,1\}//'
+            awk 'NR > 1 { if (!/^#/) exit; sub(/^# ?/, ""); print }' "$0"
             exit 0
             ;;
         *) echo "Unknown option: $arg" >&2; exit 1 ;;
